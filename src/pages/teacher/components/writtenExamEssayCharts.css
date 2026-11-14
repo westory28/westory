@@ -1,0 +1,114 @@
+.wea-chart {
+  min-width: 0;
+  max-width: 100%;
+  margin: 24px 0;
+}
+.wea-chart-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  background: transparent;
+  box-shadow: none;
+}
+.wea-chart-heading h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+.wea-chart-unit,
+.wea-chart-x-unit,
+.wea-chart-axis {
+  color: var(--ws-text-muted, #64748b);
+  font-size: 12px;
+}
+.wea-chart-x-unit {
+  margin-top: 8px;
+  text-align: center;
+}
+.wea-chart-frame {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+}
+.wea-chart-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 160px;
+  margin-top: 48px;
+  padding-right: 8px;
+  text-align: right;
+  line-height: 1;
+}
+.wea-chart-scroll {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 4px;
+}
+.wea-chart-scroll:focus-visible,
+.wea-chart-column:focus-visible {
+  outline: 2px solid var(--ws-primary, #2563eb);
+  outline-offset: -2px;
+}
+.qaa-histogram.wea-chart-plot {
+  height: 256px;
+  padding: 24px 8px 0;
+  margin: 0;
+  border-bottom: 0;
+  align-items: flex-start;
+}
+.qaa-histogram-column.wea-chart-column {
+  min-width: 64px;
+  height: auto;
+  justify-content: flex-start;
+  padding-top: 24px;
+}
+.wea-chart-track > .wea-chart-value {
+  position: absolute;
+  width: 100%;
+  text-align: center;
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  color: var(--ws-text, #1f2937);
+}
+.wea-chart-column > .wea-chart-track {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 160px;
+  background: transparent;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+}
+.wea-chart-bar {
+  width: 100%;
+  max-width: 112px;
+  background: var(--ws-primary, #2563eb);
+}
+.wea-chart-column > small {
+  position: static;
+  min-height: 40px;
+  max-width: 100%;
+  padding-top: 8px;
+  font-size: 12px;
+  text-align: center;
+  white-space: normal;
+  transform: none;
+  overflow-wrap: anywhere;
+  color: var(--ws-text, #1f2937);
+}
+.wea-chart-empty {
+  margin: 16px 0;
+  color: var(--ws-text-muted, #64748b);
+  font-size: 14px;
+}
+@media print {
+  .wea-chart-scroll {
+    overflow: visible;
+  }
+  .qaa-histogram.wea-chart-plot {
+    min-width: 0 !important;
+  }
+}

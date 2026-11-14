@@ -45,29 +45,101 @@
 .wea-table tbody th {
   text-align: left;
 }
-.wea-student-name,
-.wea-school {
-  display: block;
-}
 .wea-student-name {
-  overflow-wrap: anywhere;
-  white-space: normal;
+  white-space: nowrap;
 }
 .wea-table tbody th:first-child {
   min-width: 136px;
 }
 .wea-feedback {
-  min-width: 256px;
-  max-width: 480px;
-  white-space: normal !important;
+  white-space: nowrap;
+  text-align: left;
+}
+.wea-feedback-button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-border, #e2e8f0);
+  border-radius: 8px;
+  background: white;
+  color: var(--ws-primary, #2563eb);
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.wea-feedback-button:hover {
+  background: var(--ws-bg, #f8fafc);
+}
+.wea-feedback-button:focus-visible,
+.wea-page-button:focus-visible {
+  outline: 2px solid var(--ws-primary, #2563eb);
+  outline-offset: 2px;
+}
+.wea-blank-items {
+  color: var(--ws-text-muted, #64748b);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.wea-pagination {
+  border: 1px solid var(--ws-border, #e2e8f0);
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+  background: white;
+}
+.wea-pagination .student-list-pagination__class {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ws-text-muted, #64748b);
+}
+.wea-page-button {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: white;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 900;
+  transition: background-color 150ms;
+}
+.wea-page-button:hover {
+  background: #f8fafc;
+}
+.wea-page-button.is-active {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: white;
+}
+.wea-feedback-dialog {
+  width: min(640px, calc(100vw - 32px));
+  text-align: left;
+  background: white;
+}
+.wea-feedback-dialog .written-exam-dialog-heading {
+  margin-bottom: 16px;
+}
+.wea-feedback-dialog .written-exam-dialog-heading h2 {
+  margin: 0;
+}
+.wea-feedback-text {
+  text-align: left;
+  white-space: normal;
   overflow-wrap: anywhere;
+  font-size: 16px;
+  line-height: 1.7;
+  margin: 0;
 }
-.wea-feedback p {
-  margin: 0 0 8px;
-  white-space: pre-wrap;
+.wea-blank-summary {
+  text-align: left;
+  margin: 0 0 16px;
+  line-height: 1.7;
 }
-.wea-feedback p:last-child {
-  margin-bottom: 0;
+.wea-blank-summary strong,
+.wea-blank-summary span {
+  display: block;
 }
 .wea-distribution {
   display: flex;

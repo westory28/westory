@@ -3,6 +3,7 @@ import type {
   PerformanceScoreRoster,
   PerformanceScoreRosterRow,
 } from "./performanceScores";
+import { parseWrittenExamEssayFeedback } from "./writtenExamFeedback";
 
 export interface EssayScoreSummary {
   count: number;
@@ -52,6 +53,26 @@ const school = (value: unknown) =>
     .replace(/^0+(?=\d)/, "");
 const text = (value: unknown) =>
   typeof value === "string" ? value.trim() : "";
+
+/** A teacher's explicit marker is evidence; a zero or missing score is not. */
+const markedBlank = (feedback: string) => {
+  // Evaluate explicit statements separately so a later instruction does not
+  // erase a preceding marker. This is a narrow text marker, not an answer diagnosis.
+  return feedback
+    .normalize("NFKC")
+    .split(/[.!?。！？\r\n]+/)
+    .some((sentence) => {
+      const compact = sentence.replace(/\s/g, "");
+      return (
+        /백지|미작성/.test(compact) &&
+        !/(?:백지|미작성)(?:답안|상태)?(?:가|는|은|이)?(?:아니|아님|아닙|아닌)/.test(
+          compact,
+        ) &&
+        !/(?:백지|미작성)(?:로|를)?(?:제출)?하지(?:않|마)/.test(compact) &&
+        !/(?:백지|미작성)(?:로|를)?(?:내|두|남기)지(?:않|마)/.test(compact)
+      );
+    });
+};
 
 export function buildWrittenExamEssayAnalysis(
   rows: readonly PerformanceScoreRosterRow[],
@@ -126,6 +147,26 @@ export function buildWrittenExamEssayAnalysis(
         : enteredCount === items.length
           ? "complete"
           : "partial";
+      const feedback = text(row.feedback) || text(row.evidence);
+      const hasItemFeedback = [...values.values()].some((item) =>
+        text(item.feedback),
+      );
+      // Older uploads only stored one numbered feedback string. Do not let an
+      // old full string override a newer set of explicit item-level feedback.
+      const legacyFeedback = hasItemFeedback
+        ? null
+        : parseWrittenExamEssayFeedback(feedback);
+      const itemFeedback = items.flatMap(({ key: id, label }) => {
+        const value =
+          text(values.get(id)?.feedback) ||
+          legacyFeedback?.byItemKey.get(id) ||
+          (items.length === 1 ? legacyFeedback?.generalFeedback : "") ||
+          "";
+        return value ? [{ key: id, label, feedback: value }] : [];
+      });
+      const blankItems = itemFeedback.filter((item) =>
+        markedBlank(item.feedback),
+      );
       return {
         key,
         uid: row.uid,
@@ -138,16 +179,18 @@ export function buildWrittenExamEssayAnalysis(
         partialSum,
         status,
         total: status === "complete" ? partialSum : null,
-        feedback: text(row.feedback) || text(row.evidence),
-        itemFeedback: items.flatMap(({ key: id, label }) => {
-          const feedback = text(values.get(id)?.feedback);
-          return feedback ? [{ key: id, label, feedback }] : [];
-        }),
+        feedback,
+        itemFeedback,
+        blankItems,
+        blankCount: blankItems.length,
       };
     })
     .sort((a, b) => a.key.localeCompare(b.key, "ko", { numeric: true }));
   const selectedSummary = (selected: typeof students) => ({
     studentCount: selected.length,
+    blankCount: selected.reduce((sum, student) => sum + student.blankCount, 0),
+    blankStudentCount: selected.filter((student) => student.blankCount > 0)
+      .length,
     completeCount: selected.filter((student) => student.status === "complete")
       .length,
     partialCount: selected.filter((student) => student.status === "partial")
@@ -161,6 +204,9 @@ export function buildWrittenExamEssayAnalysis(
     ),
     items: items.map((item, index) => ({
       ...item,
+      blankCount: selected.filter((student) =>
+        student.blankItems.some((blank) => blank.key === item.key),
+      ).length,
       summary: summarizeEssayScores(
         selected.flatMap((student) =>
           student.scores[index] === null ? [] : [student.scores[index]!],

@@ -225,6 +225,193 @@ check(
     assert.equal(JSON.stringify(rows), before);
   },
 );
+check(
+  "blank marks require teacher feedback, independently of zero, positive or missing scores",
+  () => {
+    const changed = structuredClone(rows);
+    changed[0].items[0].feedback = "백지";
+    changed[1].items[0].feedback = "백지 답안";
+    changed[2].items[1].feedback = "백지";
+    const data = analyze(changed, definitions);
+    assert.equal(data.blankCount, 3);
+    assert.equal(data.blankStudentCount, 3);
+    assert.equal(data.items[0].blankCount, 2);
+    assert.equal(data.items[1].blankCount, 1);
+    assert.equal(data.classes[0].blankCount, 3);
+    assert.equal(data.classes[0].blankStudentCount, 3);
+    assert.equal(data.classes[1].blankCount, 0);
+    assert.equal(data.students[0].blankItems[0].key, "1-(1)");
+    assert.equal(data.students[0].blankItems[0].label, "1-(1)");
+    assert.equal(data.students[0].blankItems[0].feedback, "백지");
+    assert.equal(data.students[0].total, 8);
+    assert.equal(data.students[2].scores[1], null);
+    assert.equal(analyze(rows, definitions).blankCount, 0);
+  },
+);
+check(
+  "multiple blank items count separately while blank students count once",
+  () => {
+    const changed = structuredClone(rows);
+    changed[0].items[0].feedback = "백지";
+    changed[0].items[1].feedback = "백지";
+    const data = analyze(changed, definitions);
+    assert.equal(data.blankCount, 2);
+    assert.equal(data.blankStudentCount, 1);
+    assert.equal(data.students[0].blankCount, 2);
+  },
+);
+check(
+  "explicit negation of a blank answer does not create a blank mark",
+  () => {
+    for (const feedback of [
+      "백지가 아님",
+      "백지는 아니지만 설명이 부족함",
+      "백지 아님",
+      "백지가 아닙니다.",
+      "백지가 아닌 답안",
+      "백지로 제출하지 않음",
+      "백지 답안이 아닙니다. 설명이 부족합니다.",
+      "백지 상태는 아님. 근거만 빠졌습니다.",
+      "백지로 제출하지 마세요. 지금 답안의 근거를 보완하세요.",
+      "백지로 내지 마세요. 근거를 보완하세요.",
+      "미작성이 아님. 설명이 부족합니다.",
+      "미작성 답안이 아닙니다. 근거만 빠졌습니다.",
+      "다음에는 미작성하지 마세요. 지금 답안의 근거를 보완하세요.",
+    ]) {
+      const changed = structuredClone(rows);
+      changed[0].items[0].feedback = feedback;
+      assert.equal(
+        analyze(changed, definitions).students[0].blankCount,
+        0,
+        feedback,
+      );
+    }
+  },
+);
+check(
+  "a real blank statement remains marked when a separate sentence gives future guidance",
+  () => {
+    for (const feedback of [
+      "백지입니다. 다음에는 백지로 제출하지 마세요.",
+      "다음에는 백지로 제출하지 마세요. 이번 답안은 백지입니다.",
+      "백지\n다음에는 백지로 제출하지 마세요.",
+      "백지 답안입니다! 다음에는 백지로 내지 마세요.",
+      "미작성하여 1점 감점함. 다음에는 미작성하지 마세요.",
+      "다음에는 미작성하지 마세요. 이번 답안은 미작성입니다.",
+    ]) {
+      const changed = structuredClone(rows);
+      changed[0].items[0].feedback = feedback;
+      const before = changed[0].items.map((item) => item.score);
+      const data = analyze(changed, definitions);
+      assert.equal(data.students[0].blankCount, 1, feedback);
+      assert.equal(data.students[0].blankItems[0].feedback, feedback);
+      assert.deepEqual(Array.from(data.students[0].scores), before.slice(0, 2));
+      assert.deepEqual(
+        changed[0].items.map((item) => item.score),
+        before,
+      );
+    }
+  },
+);
+check(
+  "legacy numbered feedback is mapped to its own item without changing stored text",
+  () => {
+    const changed = structuredClone(rows);
+    const original =
+      "전체 안내\r\n(1) 백지\r\n(2) 백지가 아님. 일반 사유에서 (1)을 언급함.";
+    changed[0].items.forEach((item) => {
+      delete item.feedback;
+    });
+    changed[0].feedback = original;
+    const data = analyze(changed, definitions);
+    assert.equal(data.students[0].blankCount, 1);
+    assert.equal(data.students[0].blankItems[0].key, "1-(1)");
+    assert.equal(
+      data.students[0].itemFeedback[1].feedback,
+      "백지가 아님. 일반 사유에서 (1)을 언급함.",
+    );
+    assert.equal(changed[0].feedback, original);
+    changed[0].feedback = "1-(1): 백지가 아님\n1-(2): 백지";
+    assert.equal(
+      analyze(changed, definitions).students[0].blankItems[0].key,
+      "1-(2)",
+    );
+  },
+);
+check(
+  "explicit item feedback takes precedence over stale full feedback",
+  () => {
+    const changed = structuredClone(rows);
+    changed[0].feedback = "(1) 백지\n(2) 백지";
+    changed[0].items[0].feedback = "백지가 아님";
+    changed[0].items[1].feedback = "근거를 잘 제시함";
+    assert.equal(analyze(changed, definitions).students[0].blankCount, 0);
+  },
+);
+check(
+  "unassigned general blank feedback is not copied onto every question",
+  () => {
+    const changed = structuredClone(rows);
+    changed[0].items.forEach((item) => {
+      delete item.feedback;
+    });
+    changed[0].feedback = "백지";
+    assert.equal(analyze(changed, definitions).students[0].blankCount, 0);
+    changed[0].items = [changed[0].items[0]];
+    assert.equal(
+      analyze([changed[0]], [definitions[0]]).students[0].blankCount,
+      1,
+    );
+  },
+);
+check(
+  "confirmed unwritten feedback marks all four items without treating zero alone as blank or duplicating popup feedback",
+  () => {
+    const localDefinitions = [1, 3, 1, 5].map((points, index) => ({
+      name: `1-(${index + 1})`,
+      itemKey: `1-(${index + 1})`,
+      examSection: "essay",
+      maxScore: points,
+    }));
+    const fullText = localDefinitions
+      .map(
+        (item, index) => `(${index + 1}) 미작성하여 ${item.maxScore}점 감점함.`,
+      )
+      .join("\n");
+    for (const directItemFeedback of [false, true]) {
+      const changed = structuredClone(rows[0]);
+      changed.feedback = fullText;
+      changed.items = localDefinitions.map((item) => ({
+        ...item,
+        score: 0,
+        scoreEntered: true,
+        ...(directItemFeedback
+          ? { feedback: `미작성하여 ${item.maxScore}점 감점함.` }
+          : {}),
+      }));
+      const data = analyze([changed], localDefinitions);
+      assert.equal(data.blankCount, 4);
+      assert.equal(data.blankStudentCount, 1);
+      assert.equal(data.classes[0].blankCount, 4);
+      assert.equal(data.students[0].blankItems.length, 4);
+      assert.ok(data.items.every((item) => item.blankCount === 1));
+      assert.equal(data.students[0].total, 0);
+      assert.equal(data.students[0].feedback, fullText);
+      // The popup only appends item feedback absent from the stored full text.
+      assert.equal(
+        data.students[0].itemFeedback.filter(
+          (item) => !data.students[0].feedback.includes(item.feedback),
+        ).length,
+        0,
+      );
+      changed.feedback = "";
+      changed.items.forEach((item) => {
+        delete item.feedback;
+      });
+      assert.equal(analyze([changed], localDefinitions).blankCount, 0);
+    }
+  },
+);
 console.log(JSON.stringify({ unitChecks: checks, passed: checks }));
 
 if (process.argv.includes("--browser")) {
@@ -293,7 +480,7 @@ if (process.argv.includes("--browser")) {
         ? route.continue()
         : route.abort(),
     );
-    for (const width of [390, 768, 1280]) {
+    for (const width of [390, 768, 1280, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(origin);
       await page.getByRole("heading", { name: "논술형 전체 결과" }).waitFor();
@@ -328,16 +515,45 @@ if (process.argv.includes("--browser")) {
         assert.equal(layout.headingShadow, "none");
         assert.ok(layout.tables.every((table) => table.overflow === "auto"));
         if (index === 3) {
-          assert.equal(await page.locator(".wea-table tbody tr").count(), 5);
+          assert.equal(await page.locator(".wea-table tbody tr").count(), 4);
           assert.equal(
             await page.getByText("부분합 1", { exact: true }).count(),
             1,
           );
-          assert.ok(
-            (await page
-              .getByText("교사가 직접 저장한 피드백입니다.", { exact: true })
-              .count()) > 0,
+          assert.equal(await page.locator(".wea-feedback-text").count(), 0);
+          const feedbackButton = page.getByRole("button", {
+            name: "동명이름(30101) 교사 피드백 보기",
+            exact: true,
+          });
+          await feedbackButton.click();
+          await page
+            .getByRole("dialog", { name: "동명이름(30101) 교사 피드백" })
+            .waitFor();
+          const feedback = await page
+            .locator(".wea-feedback-text")
+            .evaluate((element) => ({
+              text: element.textContent,
+              align: getComputedStyle(element).textAlign,
+              whiteSpace: getComputedStyle(element).whiteSpace,
+            }));
+          assert.ok(feedback.text.includes("교사가 직접 저장한 피드백입니다."));
+          assert.equal(feedback.align, "left");
+          assert.equal(feedback.whiteSpace, "normal");
+          await page.keyboard.press("Escape");
+          assert.equal(
+            await feedbackButton.evaluate(
+              (element) => element === document.activeElement,
+            ),
+            true,
           );
+          await page
+            .getByRole("button", { name: "2페이지, 3학년 2반", exact: true })
+            .click();
+          assert.equal(await page.locator(".wea-table tbody tr").count(), 1);
+          await page
+            .getByRole("button", { name: "1페이지, 3학년 1반", exact: true })
+            .click();
+          assert.equal(await page.locator(".wea-table tbody tr").count(), 4);
           await page.screenshot({
             path: path.join(evidence, `students-${width}.png`),
             fullPage: true,

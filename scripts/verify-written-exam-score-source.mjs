@@ -177,6 +177,10 @@ await check("two class refreshes: fresh selected UID docs, zero retained, absent
       value.totalScore = 6;
       value.feedback = "최신 교사 피드백";
       value.evidence = "최신 근거";
+      // The normal edit transaction updates the ledger and score record together.
+      const ledgerRow = h.docs.get(rosterPath).rows.find(row => row.uid === "a");
+      ledgerRow.feedback = value.feedback;
+      ledgerRow.evidence = value.evidence;
     });
     await api.listWrittenExamScoreSources(config);
     const data = await api.loadWrittenExamScoreAnalysis(config, examId, { classId: "3-1" });
@@ -215,7 +219,7 @@ await check("NEIS multiple answers, circled choices and separators reuse the exi
   const info = copy(data.metadata.questions); info[0].answer = "3,1";
   assert.equal(api.mergeScoreSourceQuestions(data.metadata.questions, info)[0].answer, "13");
 });
-await check("legacy and tagged essay items hydrate together, including actual zero, without migration", async () => {
+await check("legacy and tagged essay items load from the atomic roster, including actual zero, without migration", async () => {
   const roster = h.docs.get(rosterPath);
   delete roster.scoreContentKind;
   roster.items = [{ name: "논술형", shortName: "논술형", maxScore: 10 }, { name: "1-(1)", itemKey: "1-(1)", groupKey: "1", maxScore: 3 }];
@@ -224,6 +228,7 @@ await check("legacy and tagged essay items hydrate together, including actual ze
     value.items = roster.items.map((item, index) => ({ ...item, score: uid === "b" ? 0 : index + 1, scoreEntered: true,
       ...(index === 1 ? { examSection: "essay" } : {}) }));
   });
+  roster.rows = roster.rows.map(row => ({ ...row, items: copy(h.docs.get(scorePath(row.uid))?.items || []) }));
   const data = await api.loadWrittenExamScoreAnalysis(config, examId, { classId: "3-1" });
   assert.equal(data.students.length, 0);
   assert.ok(data.scoreItems.every(item => item.examSection === "essay"));
@@ -231,7 +236,83 @@ await check("legacy and tagged essay items hydrate together, including actual ze
   assert.equal(data.scoreRows[1].items[0].score, 0);
   assert.equal(data.scoreRows[1].items[0].scoreEntered, true);
   assert.equal(h.docs.get(rosterPath).items[0].examSection, undefined);
+  assert.deepEqual(h.reads, [rosterPath]);
   assert.equal(h.writes.length, 0);
+});
+const addEssayRows = () => {
+  const roster = h.docs.get(rosterPath);
+  const definition = { name: "1-(1)", itemKey: "1-(1)", examSection: "essay", maxScore: 4 };
+  roster.scoreContentKind = "mixed";
+  roster.items.push(definition);
+  roster.rows = roster.rows.map(row => ({ ...row,
+    items: [{ ...definition, score: row.uid === "a" || row.uid === "c" ? 4 : 0, scoreEntered: row.uid !== "absent", feedback: `합성 항목 피드백 ${row.uid}` }],
+    feedback: `합성 전체 피드백 ${row.uid}`,
+  }));
+  return roster;
+};
+await check("objective results hydrate answers while essay rows retain the atomic roster snapshot", async () => {
+  const roster = addEssayRows();
+  mutateScore("a", score => {
+    score.scoreContentKind = "mixed";
+    score.items.push({ ...roster.rows[0].items[0], score: 2, feedback: "다른 조회시점 학생문서 피드백" });
+    score.feedback = "다른 조회시점 전체 피드백";
+  });
+  const data = await api.loadWrittenExamScoreAnalysis(config, examId, { analysisKind: "objective", classId: "3-1" });
+  assert.equal(data.students[0].totalScore, 10);
+  assert.equal(data.students[0].responses[0].answer, "1");
+  assert.equal(data.scoreRows[0].items[0].score, 4);
+  assert.equal(data.scoreRows[0].items[0].feedback, "합성 항목 피드백 a");
+  assert.equal(data.scoreRows[0].feedback, "합성 전체 피드백 a");
+  assert.equal(h.reads.length, 5);
+  assert.equal(h.writes.length, 0);
+});
+await check("essay whole-grade analysis reads exactly one atomic roster and preserves every student", async () => {
+  const roster = addEssayRows();
+  h.failRead = materialPath;
+  h.docs.delete(scorePath("a"));
+  const data = await api.loadWrittenExamScoreAnalysis(config, examId, { analysisKind: "essay" });
+  assert.deepEqual(h.reads, [rosterPath]); assert.equal(h.writes.length, 0);
+  assert.deepEqual(Array.from(data.scoreRows, row => row.uid), ["a", "b", "absent", "c"]);
+  assert.equal(data.metadata.studentCount, 4); assert.equal(data.students.length, 0);
+  assert.equal(data.metadata.questions.length, 0); assert.equal(data.metadata.files.length, 0);
+  assert.equal(data.scoreRows[0].feedback, roster.rows[0].feedback);
+  assert.equal(data.scoreRows[1].items[0].score, 0);
+  assert.equal(data.scoreRows[1].items[0].scoreEntered, true);
+  assert.equal(data.scoreRows[2].items[0].scoreEntered, false);
+});
+await check("essay selected class refreshes use one server roster each and reflect current scores and feedback", async () => {
+  const roster = addEssayRows();
+  for (let iteration = 0; iteration < 2; iteration++) {
+    if (iteration) {
+      roster.rows[0].items[0].score = 2;
+      roster.rows[0].feedback = "수정된 합성 교사 피드백";
+      roster.updatedAt = "synthetic-new-version";
+    }
+    const data = await api.loadWrittenExamScoreAnalysis(config, examId, { analysisKind: "essay", classId: "3-1" });
+    assert.deepEqual(Array.from(data.scoreRows, row => row.uid), ["a", "b", "absent"]);
+    assert.equal(data.scoreRows[0].items[0].score, iteration ? 2 : 4);
+    assert.equal(data.metadata.updatedAt, iteration ? "synthetic-new-version" : "synthetic-time");
+    if (iteration) assert.equal(data.scoreRows[0].feedback, "수정된 합성 교사 피드백");
+  }
+  assert.deepEqual(h.reads, [rosterPath, rosterPath]); assert.equal(h.writes.length, 0);
+});
+await check("objective tab without objective definitions reads neither paper nor student documents", async () => {
+  const roster = addEssayRows();
+  roster.scoreContentKind = "essay";
+  roster.items = roster.items.filter(item => item.examSection === "essay");
+  const data = await api.loadWrittenExamScoreAnalysis(config, examId, { analysisKind: "objective" });
+  assert.deepEqual(h.reads, [rosterPath]); assert.equal(h.writes.length, 0);
+  assert.equal(data.hasObjectiveScores, false); assert.equal(data.students.length, 0);
+  assert.equal(data.metadata.questions.length, 0); assert.equal(data.scoreRows.length, 4);
+});
+await check("essay mode retains semester, class, and complete-roster boundaries", async () => {
+  const roster = addEssayRows();
+  await assert.rejects(api.loadWrittenExamScoreAnalysis(config, examId, { analysisKind: "essay", classId: "3-9" }));
+  roster.semester = "1";
+  await assert.rejects(api.loadWrittenExamScoreAnalysis(config, examId, { analysisKind: "essay" }));
+  roster.semester = "2"; roster.rowCount++;
+  await assert.rejects(api.loadWrittenExamScoreAnalysis(config, examId, { analysisKind: "essay" }));
+  assert.ok(h.reads.every(path => path === rosterPath)); assert.equal(h.writes.length, 0);
 });
 await check("foreign-semester roster is rejected before reading student score documents", async () => {
   h.docs.get(rosterPath).semester = "1";
@@ -321,6 +402,6 @@ await check("materials stale expectedRevision cannot replace the published revis
 
 const failures = results.filter((result) => !result.pass);
 console.log(JSON.stringify({ checks: results.length, passed: results.length - failures.length, failed: failures,
-  readContract: { selectedClassPerRefresh: "1 metadata REST query + 1 roster get + 1 materials get + 3 selected UID gets", twoRefreshes: "2 REST queries + 10 fresh SDK get calls", wholeGrade: "1 roster get + 1 materials get + 4 linked UID gets" },
+  readContract: { selectedClassPerRefresh: "1 metadata REST query + 1 roster get + 1 materials get + 3 selected UID gets", twoRefreshes: "2 REST queries + 10 fresh SDK get calls", wholeGrade: "1 roster get + 1 materials get + 4 linked UID gets", essayPerRefresh: "1 roster get, 0 materials/student gets, 0 writes", objectiveWithoutItems: "1 roster get, 0 materials/student gets" },
   limitation: "Mock transport verifies source/store logic and read calls, not Firebase rules or live billing." }, null, 2));
 if (failures.length) process.exitCode = 1;

@@ -34,6 +34,7 @@ const {
   parseWrittenExamFeedbackByItemKey,
 } = await load("src/lib/writtenExamEssayScoreWorkbook.ts", {
   "./performanceScores": scoreHelpers,
+  "./writtenExamFeedback": await load("src/lib/writtenExamFeedback.ts", {}),
 });
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const criteria = [
