@@ -29,9 +29,11 @@
 .wis-investment-board__empty strong { font-size: 16px; font-weight: 600; word-break: keep-all; overflow-wrap: anywhere; }
 .wis-investment-board__empty p { max-width: 440px; margin: 12px 0 0; font-size: 14px; line-height: 1.6; color: var(--ws-text-muted, #6b7280); word-break: keep-all; }
 .wis-investment-board__pagination { justify-content: flex-end; margin-top: 12px; font-size: 14px; }
-.wis-investment-board:fullscreen { display: flex; flex-direction: column; padding: 24px; margin: 0; background: var(--ws-bg, #f9fafb); overflow: auto; }
-.wis-investment-board:fullscreen .wis-investment-board__table { flex: 1; min-height: 240px; }
-.wis-investment-board:fullscreen h2 { font-size: 24px; margin: 0 16px 0 0; }
+.wis-investment-board-dialog { inset: 0; width: 100dvw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; border-radius: 0; background: var(--ws-bg, #f9fafb); color: inherit; }
+.wis-investment-board-dialog > .wis-investment-board { height: 100%; }
+.wis-investment-board.is-fullscreen { display: flex; flex-direction: column; padding: 24px; margin: 0; background: var(--ws-bg, #f9fafb); overflow: auto; }
+.wis-investment-board.is-fullscreen .wis-investment-board__table { flex: 1; min-height: 240px; }
+.wis-investment-board.is-fullscreen h2 { font-size: 24px; margin: 0 16px 0 0; }
 @media (max-width: 1199px) { .wis-investment-board__stats { grid-template-columns: repeat(3,minmax(0,1fr)); } }
 @media (max-width: 599px) {
  .wis-investment-board__stats { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px 8px; }
@@ -39,5 +41,5 @@
  .wis-investment-board__screen { margin-left: 0; }
  .wis-investment-board__list-heading label { width: 100%; }
  .wis-investment-board__table { height: 360px; }
- .wis-investment-board:fullscreen { padding: 12px; }
+ .wis-investment-board.is-fullscreen { padding: 12px; }
 }

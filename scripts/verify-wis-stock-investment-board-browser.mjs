@@ -443,6 +443,134 @@ try {
   checks.push(
     "Reduced-motion first feed and revision update keep number opacity at 1; no animated text movement.",
   );
+  for (const [width, mode] of [
+    [320, "rejected"],
+    [390, "rejected"],
+    [768, "rejected"],
+    [1280, "rejected"],
+    [1440, "rejected"],
+    [1440, "unavailable"],
+  ]) {
+    const fallback = await open(width);
+    await push(fallback);
+    const initialBodyOverflow = await fallback.evaluate(
+      () => document.body.style.overflow,
+    );
+    await fallback.evaluate((mode) => {
+      Object.defineProperty(Element.prototype, "requestFullscreen", {
+        configurable: true,
+        value:
+          mode === "unavailable"
+            ? undefined
+            : async () => {
+                throw new DOMException(
+                  "Synthetic fullscreen policy rejection",
+                  "NotAllowedError",
+                );
+              },
+      });
+    }, mode);
+    const openBoard = () =>
+      fallback.getByRole("button", { name: "전광판 보기", exact: true });
+    const assertFocusRestored = async () => {
+      await fallback.waitForFunction(
+        () => document.activeElement?.textContent?.trim() === "전광판 보기",
+      );
+      assert.equal(
+        await openBoard().evaluate(
+          (element) => element === document.activeElement,
+        ),
+        true,
+      );
+    };
+    await openBoard().click();
+    await fallback.locator("dialog[open]").waitFor();
+    assert.equal(
+      await fallback.getByLabel("이름 숨김", { exact: true }).isChecked(),
+      true,
+    );
+    assert.equal(await firstName(fallback), "검•••");
+    assert.equal(
+      await fallback.evaluate(() => Boolean(document.fullscreenElement)),
+      false,
+    );
+    const bounds = await fallback
+      .locator("dialog[open]")
+      .evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          width: innerWidth,
+          height: innerHeight,
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+          clientWidth: element.clientWidth,
+          scrollWidth: element.scrollWidth,
+        };
+      });
+    assert(
+      Math.abs(bounds.left) <= 1 && Math.abs(bounds.top) <= 1,
+      JSON.stringify(bounds),
+    );
+    assert(
+      Math.abs(bounds.right - bounds.width) <= 1 &&
+        Math.abs(bounds.bottom - bounds.height) <= 1,
+      JSON.stringify(bounds),
+    );
+    assert(
+      bounds.scrollWidth <= bounds.clientWidth + 1,
+      JSON.stringify(bounds),
+    );
+    await fallback.keyboard.press("Tab");
+    assert.equal(
+      await fallback.evaluate(() =>
+        Boolean(document.activeElement?.closest("dialog[open]")),
+      ),
+      true,
+    );
+    if (mode === "rejected" && [390, 1440].includes(width))
+      await fallback.screenshot({
+        path: path.join(output, `board-dialog-${width}.png`),
+        fullPage: true,
+      });
+    await fallback.keyboard.press("Escape");
+    await fallback.locator("dialog[open]").waitFor({ state: "hidden" });
+    await assertFocusRestored();
+    await openBoard().click();
+    await fallback.locator("dialog[open]").waitFor();
+    await fallback
+      .getByRole("button", { name: "전체 화면 닫기", exact: true })
+      .click();
+    await fallback.locator("dialog[open]").waitFor({ state: "hidden" });
+    await assertFocusRestored();
+    assert.equal(
+      await fallback.evaluate(() => document.body.style.overflow),
+      initialBodyOverflow,
+    );
+    assert.deepEqual(
+      await fallback.evaluate(() => [
+        window.boardQa.subscriptions,
+        window.boardQa.stops,
+        window.boardQa.active(),
+      ]),
+      [1, 0, 1],
+    );
+    await openBoard().click();
+    await fallback.locator("dialog[open]").waitFor();
+    await fallback.evaluate(() => window.boardQa.leave());
+    await fallback.waitForFunction(() => window.boardQa.active() === 0);
+    assert.equal(await fallback.locator("dialog[open]").count(), 0);
+    assert.equal(await fallback.locator(".wis-investment-board").count(), 0);
+    assert.equal(
+      await fallback.evaluate(() => document.body.style.overflow),
+      initialBodyOverflow,
+    );
+    await fallback.close();
+  }
+  checks.push(
+    "Native fullscreen rejection at five widths and missing API use an actual modal dialog covering the viewport; names start masked, keyboard focus stays inside, Escape/explicit close restore focus, and unmount removes the modal without extra subscriptions or scroll locks.",
+  );
   assert.deepEqual(errors, []);
   assert.deepEqual(blocked, []);
   assert.deepEqual(

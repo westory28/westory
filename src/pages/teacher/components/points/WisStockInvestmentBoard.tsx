@@ -30,6 +30,8 @@ export default function WisStockInvestmentBoard({
   semester: string;
 }) {
   const root = useRef<HTMLDivElement>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const restoreFocus = useRef(false);
   const [data, setData] = useState<WisStockInvestmentBoardState | null>(null);
   const [classes, setClasses] = useState<
     WisStockInvestmentBoardState["classes"]
@@ -43,7 +45,9 @@ export default function WisStockInvestmentBoard({
   const [page, setPage] = useState(0);
   const [maskNames, setMaskNames] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [pageFullscreen, setPageFullscreen] = useState(false);
   const [screenError, setScreenError] = useState("");
+  const expanded = fullscreen || pageFullscreen;
   useEffect(() => {
     setError("");
     setData(null);
@@ -75,6 +79,27 @@ export default function WisStockInvestmentBoard({
     document.addEventListener("fullscreenchange", changed);
     return () => document.removeEventListener("fullscreenchange", changed);
   }, []);
+  useEffect(() => {
+    if (!pageFullscreen) {
+      if (restoreFocus.current) {
+        root.current
+          ?.querySelector<HTMLButtonElement>(".wis-investment-board__screen")
+          ?.focus();
+        restoreFocus.current = false;
+      }
+      return;
+    }
+    const modal = dialog.current;
+    if (!modal) return;
+    const overflow = document.body.style.overflow;
+    modal.showModal();
+    document.body.style.overflow = "hidden";
+    restoreFocus.current = true;
+    return () => {
+      modal.close();
+      document.body.style.overflow = overflow;
+    };
+  }, [pageFullscreen]);
   const revision = data?.revision;
   useEffect(() => {
     if (data?.status !== "READY") return;
@@ -132,17 +157,27 @@ export default function WisStockInvestmentBoard({
             : "투자 자료 연결 전";
   const screen = async () => {
     setScreenError("");
-    try {
-      if (document.fullscreenElement === root.current)
+    if (pageFullscreen) {
+      setPageFullscreen(false);
+      return;
+    }
+    if (document.fullscreenElement === root.current) {
+      try {
         await document.exitFullscreen();
-      else if (root.current?.requestFullscreen) {
-        setMaskNames(true);
+      } catch {
+        setScreenError("전체 화면을 닫지 못했습니다. Esc 키로 닫아 주세요.");
+      }
+      return;
+    }
+    setMaskNames(true);
+    try {
+      if (root.current?.requestFullscreen)
         await root.current.requestFullscreen();
-      } else setScreenError("이 브라우저에서는 전체 화면을 지원하지 않습니다.");
+      else setPageFullscreen(true);
     } catch {
-      setScreenError(
-        "전체 화면을 열지 못했습니다. 브라우저 설정을 확인해 주세요.",
-      );
+      // Preserve presentation, focus trap and Escape when native fullscreen is
+      // denied, without changing permissions or adding a data subscription.
+      setPageFullscreen(true);
     }
   };
   const stats = [
@@ -158,14 +193,14 @@ export default function WisStockInvestmentBoard({
       pnl: true,
     },
   ];
-  return (
+  const content = (
     <div
       ref={root}
-      className={`wis-investment-board${fullscreen ? " is-fullscreen" : ""}`}
+      className={`wis-investment-board${expanded ? " is-fullscreen" : ""}`}
       aria-label="학생 투자 현황 전광판"
     >
       <div className="wis-investment-board__toolbar">
-        <h2 className={fullscreen ? "" : "sr-only"}>학생 투자 현황</h2>
+        <h2 className={expanded ? "" : "sr-only"}>학생 투자 현황</h2>
         <label>
           학급
           <select
@@ -208,7 +243,7 @@ export default function WisStockInvestmentBoard({
           className="wis-investment-board__screen"
           onClick={() => void screen()}
         >
-          {fullscreen ? "전체 화면 닫기" : "전광판 보기"}
+          {expanded ? "전체 화면 닫기" : "전광판 보기"}
         </button>
       </div>
       <div className="wis-investment-board__status" role="status">
@@ -364,5 +399,20 @@ export default function WisStockInvestmentBoard({
         </button>
       </div>
     </div>
+  );
+  return pageFullscreen ? (
+    <dialog
+      ref={dialog}
+      className="wis-investment-board-dialog"
+      aria-label="학생 투자 현황 전광판"
+      onCancel={(event) => {
+        event.preventDefault();
+        setPageFullscreen(false);
+      }}
+    >
+      {content}
+    </dialog>
+  ) : (
+    content
   );
 }
