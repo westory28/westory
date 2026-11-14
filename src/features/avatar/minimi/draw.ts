@@ -1,6 +1,14 @@
 import type { AvatarLook, AvatarSlot } from "../catalog";
 import { TOPS, BOTTOMS, SHOES, HAIR_BASES } from "./wardrobe";
 import { drawHairDetails, drawTopDetails } from "./details";
+import {
+  HANBOK_ACCESSORIES,
+  hanbokHatHairLine,
+  drawHanbokSleeve,
+  drawHanbokTop,
+  drawHanbokBottom,
+  drawHanbokAccessory,
+} from "./hanbok";
 
 export const MINIMI_WIDTH = 80;
 export const MINIMI_HEIGHT = 112;
@@ -74,7 +82,13 @@ export const MINIMI_VALUES = Object.freeze({
     "mm-loafers",
     ...Object.keys(SHOES),
   ],
-  accessory: ["mm-none", "mm-glasses", "mm-ribbon", "mm-cap"],
+  accessory: [
+    "mm-none",
+    "mm-glasses",
+    "mm-ribbon",
+    "mm-cap",
+    ...HANBOK_ACCESSORIES,
+  ],
 });
 
 type Point = readonly [number, number];
@@ -190,6 +204,15 @@ export function drawMinimi(
   const customTop = TOPS[look.top];
   const customBottom = BOTTOMS[look.bottom];
   const customShoe = SHOES[look.shoes];
+  const hatLine = bodyVisible ? hanbokHatHairLine(look.accessory) : 0;
+  const clipHair = () => {
+    ctx.save();
+    if (hatLine) {
+      ctx.beginPath();
+      ctx.rect(0, hatLine, MINIMI_WIDTH, MINIMI_HEIGHT - hatLine);
+      ctx.clip();
+    }
+  };
   const skin = SKIN[look.skinTone] || SKIN["mm-ivory"];
   const hair = HAIR[look.hairTone] || HAIR["mm-ink"];
   const winter =
@@ -215,6 +238,7 @@ export function drawMinimi(
 
   // Hair behind the head/body has the same top silhouette as its front fringe.
   if (headVisible) {
+    clipHair();
     drawHairDetails(pen, look.hairStyle, hair, false);
     if (style === "mm-long" || style === "mm-wave") {
       poly(
@@ -321,6 +345,7 @@ export function drawMinimi(
       line([62, 23], [62, 30], hair[0]);
       rect(56, 23, 5, 3, "#d67d8d");
     }
+    ctx.restore();
   }
 
   // Legs and shoes are a single fixed family of anchors, independent of pose.
@@ -352,7 +377,20 @@ export function drawMinimi(
     const bottomShade =
       customBottom?.palette[2] ||
       (trouser ? (denim ? "#365776" : "#8e98a5") : "#26364c");
-    if (look.bottom === "mm-skirt-navy" || customBottom?.cut === "skirt") {
+    if (
+      customBottom &&
+      drawHanbokBottom(
+        pen,
+        customBottom.cut,
+        customBottom.detail,
+        customBottom.palette,
+      )
+    ) {
+      // Dedicated full-length silhouettes cover the same fixed leg anchors.
+    } else if (
+      look.bottom === "mm-skirt-navy" ||
+      customBottom?.cut === "skirt"
+    ) {
       poly(
         [
           [31, 70],
@@ -438,7 +476,7 @@ export function drawMinimi(
         }
       }
     }
-    if (customBottom) {
+    if (customBottom && !["chima", "baji"].includes(customBottom.cut)) {
       line([31, 72], [49, 72], customBottom.palette[3]);
       rect(39, 72, 3, 2, "#e7cc92");
       if (customBottom.detail === "cargo")
@@ -461,7 +499,10 @@ export function drawMinimi(
           : look.shoes === "mm-sneakers-navy"
             ? "#415976"
             : "#fffdf2");
-      if (customShoe && ["boot", "high"].includes(customShoe.cut)) {
+      if (
+        customShoe &&
+        ["boot", "high", "traditionalBoot"].includes(customShoe.cut)
+      ) {
         poly(
           [
             [x + 3, 91],
@@ -493,7 +534,7 @@ export function drawMinimi(
         102,
         11,
         2,
-        customShoe?.cut === "boot"
+        ["boot", "traditionalBoot"].includes(customShoe?.cut || "")
           ? customShoe.palette[3]
           : look.shoes === "mm-loafers"
             ? "#3f3434"
@@ -515,6 +556,24 @@ export function drawMinimi(
           rect(x + 8, 102, 2, 1, customShoe.palette[2]);
         }
         if (customShoe.cut === "canvas") rect(x, 100, 3, 2, "#fff4dc");
+        if (customShoe.cut === "flower" || customShoe.cut === "straw") {
+          const toe = right ? x + 11 : x - 1;
+          line([toe, 98], [toe, 102], INK, 2);
+          rect(toe, 99, 1, 2, customShoe.palette[0]);
+          if (customShoe.cut === "flower") {
+            rect(x + 4, 98, 2, 4, "#f7dab4");
+            rect(x + 3, 99, 4, 2, "#f7dab4");
+            rect(x + 4, 99, 1, 1, "#9d7458");
+          } else {
+            for (const offset of [2, 5, 8])
+              line(
+                [x + offset, 99],
+                [x + offset - 1, 102],
+                customShoe.palette[3],
+              );
+            line([x + 2, 101], [x + 9, 101], customShoe.palette[0]);
+          }
+        }
       }
       if (!customShoe) {
         line([x + 4, 98], [x + 7, 100], "#8c9aa8");
@@ -572,6 +631,7 @@ export function drawMinimi(
         fabric[0],
         2,
       );
+      if (customTop) drawHanbokSleeve(pen, customTop.cut, s, e, w, fabric);
       if (winter) {
         for (const offset of [-2, 0, 2]) {
           line(
@@ -660,7 +720,8 @@ export function drawMinimi(
     );
     line([32, 73], [46, 73], fabric[0]);
     if (customTop) {
-      drawTopDetails(pen, customTop.cut, fabric);
+      if (!drawHanbokTop(pen, customTop.cut, fabric))
+        drawTopDetails(pen, customTop.cut, fabric);
     } else if (winter) {
       line([31, 72], [49, 72], fabric[3]);
       if (look.top === "mm-school-hoodie") {
@@ -975,6 +1036,8 @@ export function drawMinimi(
       rect(43, 43, 1, 1, "#98665e");
     }
 
+    // Full hats cover the crown even when the selected hair has a high bun.
+    clipHair();
     // The hair cap shares the head outline; fringe geometry grows from that cap.
     const bob = style === "mm-bob";
     poly(
@@ -1300,10 +1363,13 @@ export function drawMinimi(
     }
 
     drawHairDetails(pen, look.hairStyle, hair, true);
+    ctx.restore();
   }
 
   if (bodyVisible || only === "accessory") {
-    if (look.accessory === "mm-glasses") {
+    if (drawHanbokAccessory(pen, look.accessory)) {
+      // Traditional headwear shares the exact head anchors of all hairstyles.
+    } else if (look.accessory === "mm-glasses") {
       for (const x of [27, 44]) {
         line([x + 1, 32], [x + 8, 32], INK);
         line([x, 33], [x, 39], INK);

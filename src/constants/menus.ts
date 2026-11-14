@@ -3,6 +3,10 @@ import {
   normalizeWeplayGameTitle,
   WEPLAY_STUDENT_URL,
 } from "../lib/weplayTitle";
+import {
+  STUDENT_AVATAR_SHOP_URL,
+  TEACHER_AVATAR_SHOP_URL,
+} from "../lib/avatarRoutes";
 
 export interface MenuChild {
   name: string;
@@ -69,6 +73,7 @@ export const MENUS: MenuConfig = {
         { name: "내 위스", url: "/student/points" },
         { name: "명예의 전당", url: "/student/points?tab=hall-of-fame" },
         { name: "위스 상점", url: "/student/points?tab=shop" },
+        { name: "아바타 상점", url: STUDENT_AVATAR_SHOP_URL },
         { name: "구매 내역", url: "/student/points?tab=orders" },
       ],
     },
@@ -78,7 +83,7 @@ export const MENUS: MenuConfig = {
       icon: "M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4.418 0-8 1.79-8 4v1h16v-1c0-2.21-3.582-4-8-4z",
       children: [
         { name: "내 정보", url: "/student/mypage" },
-        { name: "아바타 꾸미기", url: "/student/mypage?menu=avatar" },
+        { name: "아바타 옷장", url: "/student/mypage?menu=avatar" },
         { name: "내 성적", url: "/student/mypage?menu=score" },
         { name: "오답 노트", url: "/student/mypage?menu=wrong_note" },
       ],
@@ -139,6 +144,7 @@ export const MENUS: MenuConfig = {
         { name: "운영 정책", url: "/teacher/points?tab=policy" },
         { name: "명예의 전당 관리", url: "/teacher/points?tab=hall-of-fame" },
         { name: "상품 관리", url: "/teacher/points?tab=products" },
+        { name: "아바타 아이템 관리", url: TEACHER_AVATAR_SHOP_URL },
         { name: "구매 요청 관리", url: "/teacher/points?tab=requests" },
         { name: "위스 주식", url: "/teacher/points?tab=stocks" },
       ],
@@ -244,6 +250,8 @@ const normalizeMenuName = (
   )
     return "공부의 神문고";
   if (customized) return name;
+  if (url === "/student/mypage?menu=avatar" && name === "아바타 꾸미기")
+    return "아바타 옷장";
   const [path, query = ""] = url.split("?");
   // Older settings overwrote both the score group and its first child.
   if (path === "/student/score" && name === "점수 계산기") return "점수";

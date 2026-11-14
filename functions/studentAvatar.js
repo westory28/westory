@@ -3,7 +3,7 @@ const { Timestamp } = require('firebase-admin/firestore');
 const { HttpsError } = require('firebase-functions/v2/https');
 const sharp = require('sharp');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
-const { readStudentMenuAccess } = require('./studentMenuVisibility');
+const { readStudentMenuAccess, assertStudentMenuVisible } = require('./studentMenuVisibility');
 const { createStudentWisWallet } = require('./studentWisWallet');
 const { catalog, items, defaultLook, validateLook, restoreStoredLook, lookHash } = require('./studentAvatarCatalog');
 const { readAvatarPricing, assertAvatarIdentity, readAvatarTeacher, ownedLookIds, canUsePricedLook } = require('./avatarCatalogPricing');
@@ -37,6 +37,34 @@ const privateState = state => {
     ...(state.requiresThumbnailRefresh || current.lookHash !== lookHash(state.look) ? { requiresThumbnailRefresh: true } : {}) };
 };
 const walletState = account => Object.fromEntries(['semesterId', 'accountId', 'balance', 'earnedTotal', 'rankEarnedTotal', 'spentTotal', 'adjustedTotal', 'revision'].map(key => [key, account[key]]));
+
+// The new shop has its own visibility key; wardrobe reads and saves keep their
+// existing gate. Older settings need one menu read until the next atomic menu save.
+const readAvatarShopAccess = async (tx, db) => {
+  const config = (await tx.get(db.doc('site_settings/config'))).data();
+  assertStudentMenuVisible(config, ['mypage', 'avatar', 'avatar_shop']);
+  if (config?.studentMenuVisibility && Object.hasOwn(config.studentMenuVisibility, 'avatar_shop')) return;
+  const menu = (await tx.get(db.doc('site_settings/menu_config'))).data();
+  if (!Array.isArray(menu?.student)) return;
+  const parse = value => {
+    const [raw = '', query = ''] = String(value || '').trim().split('?');
+    const path = (raw.startsWith('/') ? raw : `/${raw}`).replace(/\/{2,}/g, '/').replace(/\/+$/, '');
+    return { path, params: new URLSearchParams(query) };
+  };
+  const shopTarget = value => {
+    const { path, params } = parse(value);
+    return path === '/student/points' && params.get('tab') === 'shop'
+      && (!params.has('shop') || params.get('shop') === 'avatar');
+  };
+  const hidden = menu.student.some(item => {
+    if (!item || typeof item !== 'object') return false;
+    const children = Array.isArray(item.children) ? item.children : [];
+    return (item.hidden === true && (parse(item.url).path === '/student/points'
+      || children.some(child => shopTarget(child?.url))))
+      || children.some(child => child?.hidden === true && shopTarget(child.url));
+  });
+  if (hidden) fail('permission-denied', '지금은 이 메뉴를 이용할 수 없습니다.', 'STUDENT_MENU_HIDDEN');
+};
 
 async function encodeThumbnail(input) {
   if (typeof input !== 'string' || input.length > 175000 || !/^data:image\/webp;base64,[A-Za-z0-9+/]+={0,2}$/.test(input)) invalid();
@@ -194,7 +222,7 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
     const receiptRef = db.doc(`${collection}/${uid}/requests/${key}`);
     return db.runTransaction(async tx => {
       await readStudent(tx, uid, identity);
-      await readStudentMenuAccess(tx, db, ['mypage', 'avatar']);
+      await readAvatarShopAccess(tx, db);
       const previous = await readReceipt(tx, receiptRef, uid, digest);
       if (previous) return previous;
       const state = await readState(tx, uid);

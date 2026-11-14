@@ -229,9 +229,11 @@ const SettingsAccess: React.FC = () => {
                     colSpan={TABLE_COLUMN_COUNT}
                     className="px-4 py-10 text-center text-gray-400"
                   >
-                    {hasSearchQuery
-                      ? "검색 결과가 없습니다."
-                      : "현재 세부 권한이 부여된 계정이 없습니다. 검색해서 권한을 부여하세요."}
+                    <span>
+                      {hasSearchQuery
+                        ? "검색 결과가 없습니다."
+                        : "현재 세부 권한이 부여된 계정이 없습니다. 검색해서 권한을 부여하세요."}
+                    </span>
                   </td>
                 </tr>
               ) : (

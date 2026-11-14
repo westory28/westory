@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Navigate, useSearchParams } from "react-router-dom";
 import PortalWorkspace from "../../components/common/PortalWorkspace";
 import { InlineLoading } from "../../components/common/LoadingState";
 import TeacherSubNavigation from "./components/TeacherSubNavigation";
@@ -13,15 +14,12 @@ import SettingsAccess from "./components/SettingsAccess";
 import SettingsNotifications from "./components/SettingsNotifications";
 import SettingsSemesterArchive from "./components/SettingsSemesterArchive";
 import { lazyWithRetry } from "../../lib/lazyWithRetry";
+import { TEACHER_AVATAR_SHOP_URL } from "../../lib/avatarRoutes";
 import "./teacherSettings.css";
 
 const SettingsMyPage = lazyWithRetry(
   () => import("./components/SettingsMyPage"),
   "teacher-my-page",
-);
-const SettingsAvatarPricing = lazyWithRetry(
-  () => import("./components/SettingsAvatarPricing"),
-  "teacher-avatar-pricing",
 );
 
 const settingSections = [
@@ -30,7 +28,6 @@ const settingSections = [
   { id: "archive", label: "이전 학기 조회", icon: "history" },
   { id: "school", label: "학교/학년/학기", icon: "school" },
   { id: "interface", label: "인터페이스 설정", icon: "palette" },
-  { id: "avatar-pricing", label: "아바타 아이템 관리", icon: "wis" },
   { id: "access", label: "세부 권한 관리", icon: "access" },
   { id: "notifications", label: "알림 관리", icon: "bell" },
   { id: "privacy", label: "개인정보 동의 관리", icon: "privacy" },
@@ -80,13 +77,9 @@ const Settings: React.FC = () => {
         aria-label={activeSection.label}
       >
         <h1 className="sr-only">관리자 설정 · {activeSection.label}</h1>
-        {(activeTab === "my-page" || activeTab === "avatar-pricing") && (
+        {activeTab === "my-page" && (
           <React.Suspense fallback={<InlineLoading />}>
-            {activeTab === "my-page" ? (
-              <SettingsMyPage />
-            ) : (
-              <SettingsAvatarPricing />
-            )}
+            <SettingsMyPage />
           </React.Suspense>
         )}
         {activeTab === "general" && (
@@ -103,4 +96,13 @@ const Settings: React.FC = () => {
   );
 };
 
-export default Settings;
+export default function SettingsRoute() {
+  const [params] = useSearchParams();
+  if (
+    [params.get("tab"), params.get("section"), params.get("menu")].includes(
+      "avatar-pricing",
+    )
+  )
+    return <Navigate to={TEACHER_AVATAR_SHOP_URL} replace />;
+  return <Settings />;
+}

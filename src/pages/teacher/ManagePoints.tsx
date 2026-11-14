@@ -67,6 +67,9 @@ import PointRequestsTab from "./components/points/PointRequestsTab";
 import PointsOverviewTab from "./components/points/PointsOverviewTab";
 import HallOfFameManagementTab from "./components/points/HallOfFameManagementTab";
 import TeacherWisStocks from "./components/points/TeacherWisStocks";
+import TeacherAvatarShopPage from "./components/points/TeacherAvatarShopPage";
+import WisShopNavigation from "../../components/common/WisShopNavigation";
+import { isTeacherAvatarShop } from "../../lib/avatarRoutes";
 
 type TeacherPointTab = keyof typeof TEACHER_POINT_TAB_LABELS;
 type GrantMode = "grant" | "reclaim";
@@ -2184,6 +2187,9 @@ const ManagePoints: React.FC = () => {
         )}
 
         <div className="min-w-0">
+          {activeTab === "products" && (
+            <WisShopNavigation portal="teacher" active="products" />
+          )}
           {loading && (
             <InlineLoading
               message="위스 정보를 불러오는 중입니다."
@@ -2466,4 +2472,12 @@ const ManagePoints: React.FC = () => {
   );
 };
 
-export default ManagePoints;
+export default function TeacherPointsRoute() {
+  const [params] = useSearchParams();
+  // Item editing must not trigger unrelated class wallets, orders or policy reads.
+  return isTeacherAvatarShop(params) ? (
+    <TeacherAvatarShopPage />
+  ) : (
+    <ManagePoints />
+  );
+}

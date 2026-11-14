@@ -10,7 +10,15 @@ export type TopCut =
   | "stripe"
   | "star"
   | "royal"
-  | "hanbok";
+  | "hanbok"
+  | "hanbok-flower"
+  | "saekdong"
+  | "hanbok-ink"
+  | "durumagi"
+  | "dopo"
+  | "royal-hanbok"
+  | "dangui"
+  | "scholar";
 export const TOPS: Record<
   string,
   { palette: PixelPalette; cut: TopCut; long: boolean }
@@ -65,12 +73,52 @@ export const TOPS: Record<
     cut: "hanbok",
     long: true,
   },
+  "mm-hanbok-plum": {
+    palette: ["#fff3ce", "#e5b2b6", "#b8748b", "#79465e"],
+    cut: "hanbok-flower",
+    long: true,
+  },
+  "mm-hanbok-saekdong": {
+    palette: ["#fff4ca", "#e6c78b", "#b59664", "#765939"],
+    cut: "saekdong",
+    long: true,
+  },
+  "mm-hanbok-ink": {
+    palette: ["#bcc1d0", "#505465", "#333747", "#222331"],
+    cut: "hanbok-ink",
+    long: true,
+  },
+  "mm-hanbok-mooncoat": {
+    palette: ["#fffdf1", "#e8e5d9", "#b5bbbd", "#737c8d"],
+    cut: "durumagi",
+    long: true,
+  },
+  "mm-hanbok-jade-dopo": {
+    palette: ["#e1f3dc", "#8eb9ad", "#5e8d89", "#3b5d67"],
+    cut: "dopo",
+    long: true,
+  },
+  "mm-hanbok-royal-red": {
+    palette: ["#f5c695", "#b94f5c", "#843448", "#512739"],
+    cut: "royal-hanbok",
+    long: true,
+  },
+  "mm-hanbok-dangui": {
+    palette: ["#f2edb8", "#79a793", "#50776d", "#334d50"],
+    cut: "dangui",
+    long: true,
+  },
+  "mm-hanbok-scholar": {
+    palette: ["#a1afc4", "#414e66", "#2c354c", "#1e2435"],
+    cut: "scholar",
+    long: true,
+  },
 };
 export const BOTTOMS: Record<
   string,
   {
     palette: PixelPalette;
-    cut: "skirt" | "trousers" | "shorts" | "culottes";
+    cut: "skirt" | "trousers" | "shorts" | "culottes" | "chima" | "baji";
     detail: string;
   }
 > = {
@@ -114,12 +162,51 @@ export const BOTTOMS: Record<
     cut: "skirt",
     detail: "star",
   },
+  "mm-hanbok-chima-red": {
+    palette: ["#ffcbad", "#d76773", "#ac405e", "#752b49"],
+    cut: "chima",
+    detail: "flower",
+  },
+  "mm-hanbok-chima-plum": {
+    palette: ["#f1c7e0", "#b987b5", "#8c5a94", "#593d6d"],
+    cut: "chima",
+    detail: "petal",
+  },
+  "mm-hanbok-chima-jade": {
+    palette: ["#daf1dc", "#8db6a8", "#5d8e86", "#3a6065"],
+    cut: "chima",
+    detail: "ribbon",
+  },
+  "mm-hanbok-chima-ivory": {
+    palette: ["#fffef0", "#e7dfc9", "#c2b39d", "#8d7a71"],
+    cut: "chima",
+    detail: "gold",
+  },
+  "mm-hanbok-baji-ivory": {
+    palette: ["#fff6dc", "#dfcfaa", "#b3a17f", "#776754"],
+    cut: "baji",
+    detail: "wrap",
+  },
+  "mm-hanbok-baji-indigo": {
+    palette: ["#a5b9d6", "#687d9f", "#485b7c", "#303e5c"],
+    cut: "baji",
+    detail: "wrap",
+  },
 };
 export const SHOES: Record<
   string,
   {
     palette: PixelPalette;
-    cut: "flat" | "boot" | "high" | "runner" | "buckle" | "canvas";
+    cut:
+      | "flat"
+      | "boot"
+      | "high"
+      | "runner"
+      | "buckle"
+      | "canvas"
+      | "flower"
+      | "straw"
+      | "traditionalBoot";
   }
 > = {
   "mm-ribbon-flats": {
@@ -145,6 +232,22 @@ export const SHOES: Record<
   "mm-canvas-red": {
     palette: ["#ffd2c4", "#ce706a", "#a44853", "#653641"],
     cut: "canvas",
+  },
+  "mm-hanbok-flower-red": {
+    palette: ["#ffe4d0", "#c96e82", "#99445e", "#683149"],
+    cut: "flower",
+  },
+  "mm-hanbok-flower-lilac": {
+    palette: ["#f0e1ff", "#b199ce", "#8669a6", "#57466e"],
+    cut: "flower",
+  },
+  "mm-hanbok-mokhwa": {
+    palette: ["#acb0bc", "#4c5062", "#323647", "#202330"],
+    cut: "traditionalBoot",
+  },
+  "mm-hanbok-jipsin": {
+    palette: ["#fff0b4", "#c9a56f", "#987147", "#654e3a"],
+    cut: "straw",
   },
 };
 

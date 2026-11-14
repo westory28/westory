@@ -50,6 +50,10 @@ import StudentPointHallOfFameTab from "./components/points/StudentPointHallOfFam
 import StudentPointOrdersTab from "./components/points/StudentPointOrdersTab";
 import StudentPointShopTab from "./components/points/StudentPointShopTab";
 import StudentPointSummaryTab from "./components/points/StudentPointSummaryTab";
+import StudentPointNavigation from "./components/points/StudentPointNavigation";
+import StudentAvatarShopPage from "./components/points/StudentAvatarShopPage";
+import WisShopNavigation from "../../components/common/WisShopNavigation";
+import { isStudentAvatarShop } from "../../lib/avatarRoutes";
 
 type StudentPointTab = keyof typeof STUDENT_POINT_TAB_LABELS;
 type HistoryFilter = keyof typeof POINT_HISTORY_FILTER_LABELS;
@@ -726,28 +730,10 @@ const Points: React.FC = () => {
         <header className="ws-page-header mb-4">
           <h1>{pageTitle}</h1>
         </header>
-        <div className="mb-6 overflow-x-auto">
-          <nav className="ws-page-tabs" aria-label={`${pageTitle} 메뉴`}>
-            {(Object.keys(STUDENT_POINT_TAB_LABELS) as StudentPointTab[]).map(
-              (tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => handleTabChange(tab)}
-                  aria-current={activeTab === tab ? "page" : undefined}
-                >
-                  {getStudentMenuLabel(
-                    menuConfig,
-                    tab === "overview"
-                      ? "/student/points"
-                      : `/student/points?tab=${tab}`,
-                    STUDENT_POINT_TAB_LABELS[tab],
-                  )}
-                </button>
-              ),
-            )}
-          </nav>
-        </div>
+        <StudentPointNavigation activeTab={activeTab} pageTitle={pageTitle} />
+        {activeTab === "shop" && (
+          <WisShopNavigation portal="student" active="products" />
+        )}
 
         <div className="min-w-0">
           {!isHallOfFameTab && loading && (
@@ -880,4 +866,8 @@ const Points: React.FC = () => {
   );
 };
 
-export default Points;
+export default function StudentPointsRoute() {
+  const [params] = useSearchParams();
+  // The avatar shop owns its single studio read; do not mount the regular wallet/order loaders.
+  return isStudentAvatarShop(params) ? <StudentAvatarShopPage /> : <Points />;
+}

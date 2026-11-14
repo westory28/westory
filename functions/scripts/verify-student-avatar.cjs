@@ -96,6 +96,83 @@ const save = async (overrides = {}) => req({ look: defaultLook(), expectedRevisi
 const reason = expected => error => error.details?.reason === expected;
 
 if (require.main === module) {
+test('closed avatar-shop projection rejects paid, free and receipt replays without writes or menu reads', async () => {
+  const state = fixture();
+  state.documents.set('site_settings/config', { studentMenuVisibility: { mypage: true, avatar: true, avatar_shop: true } });
+  await state.api.purchaseStudentAvatarItem(purchase());
+  const balance = state.documents.get(accountPath).balance;
+  const owned = [...state.documents.get(avatarPath).ownedItemIds];
+  const receiptCount = [...state.documents.keys()].filter(path => path.startsWith(`${avatarPath}/requests/`)).length;
+  state.documents.set('site_settings/config', { studentMenuVisibility: { mypage: true, avatar: true, avatar_shop: false } });
+  state.writes.length = 0; state.reads.length = 0;
+  for (const input of [purchase(), purchase(paid[1], 'closed-new-item'), purchase(catalog.items[0], 'closed-free-item')]) {
+    await assert.rejects(state.api.purchaseStudentAvatarItem(input), reason('STUDENT_MENU_HIDDEN'));
+  }
+  assert.equal(state.writes.length, 0);
+  assert.equal(state.documents.get(accountPath).balance, balance);
+  assert.deepEqual(state.documents.get(avatarPath).ownedItemIds, owned);
+  assert.equal([...state.documents.keys()].filter(path => path.startsWith(`${avatarPath}/requests/`)).length, receiptCount);
+  assert.equal(state.reads.filter(path => path === 'site_settings/config').length, 3);
+  assert.equal(state.reads.includes('site_settings/menu_config'), false);
+  assert.equal(state.reads.some(path => path.startsWith(`${avatarPath}/requests/`)), false);
+});
+
+test('legacy shop hiding checks one menu document before any receipt, wallet or ownership writes', async () => {
+  const blockedMenus = [
+    { student: [{ url: '/student/points', hidden: true }] },
+    ...['/student/points?tab=shop', '/student/points?tab=shop&shop=avatar',
+      '/student/points?shop=avatar&tab=shop', '/student/points/?shop=avatar&tab=shop&extra=fixture'].map(url => ({
+      student: [{ url: '/student/points', children: [{ url, hidden: true }] }],
+    })),
+  ];
+  for (const menu of blockedMenus) {
+    const state = fixture();
+    state.documents.set('site_settings/config', { studentMenuVisibility: { mypage: true, avatar: true } });
+    state.documents.set('site_settings/menu_config', menu);
+    await assert.rejects(state.api.purchaseStudentAvatarItem(purchase()), reason('STUDENT_MENU_HIDDEN'));
+    assert.equal(state.writes.length, 0);
+    assert.equal(state.documents.get(accountPath).balance, 1000);
+    assert.equal(state.documents.has(avatarPath), false);
+    assert.equal(state.reads.filter(path => path === 'site_settings/config').length, 1);
+    assert.equal(state.reads.filter(path => path === 'site_settings/menu_config').length, 1);
+    assert.equal(state.reads.some(path => path.startsWith(`${avatarPath}/requests/`)), false);
+  }
+});
+
+test('published projection avoids fallback reads; missing legacy menus stay compatible', async () => {
+  const projected = fixture();
+  projected.documents.set('site_settings/config', { studentMenuVisibility: { avatar_shop: true } });
+  projected.documents.set('site_settings/menu_config', { student: [{ url: '/student/points', hidden: true }] });
+  assert.equal((await projected.api.purchaseStudentAvatarItem(purchase())).charged, paid[0].price);
+  assert.equal(projected.reads.filter(path => path === 'site_settings/config').length, 1);
+  assert.equal(projected.reads.includes('site_settings/menu_config'), false);
+  const legacy = fixture();
+  assert.equal((await legacy.api.purchaseStudentAvatarItem(purchase())).charged, paid[0].price);
+  assert.equal(legacy.reads.filter(path => path === 'site_settings/config').length, 1);
+  assert.equal(legacy.reads.filter(path => path === 'site_settings/menu_config').length, 1);
+});
+
+test('closed shop preserves wardrobe reads and saves while original avatar and mypage gates remain enforced', async () => {
+  for (const projected of [false, true]) {
+    const state = fixture();
+    state.documents.set('site_settings/config', { studentMenuVisibility: {
+      mypage: true, avatar: true, ...(projected ? { avatar_shop: false } : {}),
+    } });
+    state.documents.set('site_settings/menu_config', { student: [{ url: '/student/points', hidden: true }] });
+    assert.equal((await state.api.getAvatarStudioState(req({ year: '2026', semester: '2' }))).balance, 1000);
+    assert.equal((await state.api.saveStudentAvatar(await save())).revision, 1);
+    assert.equal(state.reads.includes('site_settings/menu_config'), false);
+    assert.equal(state.documents.get(accountPath).balance, 1000);
+  }
+  for (const key of ['mypage', 'avatar']) {
+    const state = fixture();
+    state.documents.set('site_settings/config', { studentMenuVisibility: { avatar_shop: true, [key]: false } });
+    await assert.rejects(state.api.purchaseStudentAvatarItem(purchase()), reason('STUDENT_MENU_HIDDEN'));
+    assert.equal(state.writes.length, 0);
+    assert.equal(state.reads.includes('site_settings/menu_config'), false);
+  }
+});
+
 test('default, free catalog choices and private state never return another identity', async () => {
   const state = fixture(); const result = await state.api.getStudentAvatar(req({}));
   assert.deepEqual(result.look, defaultLook()); assert.equal(result.revision, 0); assert.deepEqual(result.ownedItemIds, []);
