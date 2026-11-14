@@ -637,7 +637,7 @@ async function sidebarChecks(page, portal, width) {
       : "#/student/points?tab=shop&shop=avatar";
   await navigateHash(currentHash);
   const currentGroup = sidebar.getByRole("button", {
-    name: "위스 상점",
+    name: "위스 마을",
     exact: true,
   });
   await expanded(
@@ -709,6 +709,32 @@ async function sidebarChecks(page, portal, width) {
     currentGroup,
     true,
     "Back from a different destination restores its group",
+  );
+  const village = sidebar.locator(`#${portal}-menu-shop`);
+  assert.equal(await village.getByRole("link").count(), portal === "teacher" ? 3 : 2);
+  assert.deepEqual(
+    await village.getByRole("link").allTextContents(),
+    portal === "teacher"
+      ? ["위스 상점", "아바타 상점", "위스피(WsPI)"]
+      : ["위스 상점", "아바타 상점"],
+  );
+  if (portal === "teacher") {
+    await navigateHash("#/teacher/points?tab=stocks");
+    await expanded(currentGroup, true, "WsPI belongs to the village");
+    assert.equal(
+      await village.getByRole("link", { name: "위스피(WsPI)", exact: true }).getAttribute("aria-current"),
+      "page",
+    );
+    assert.equal(await sidebar.locator('#teacher-menu-points a[href*="tab=stocks"]').count(), 0);
+    await navigateHash("#/teacher/points?tab=requests");
+  } else {
+    assert.equal(await sidebar.locator('a[href*="tab=stocks"]').count(), 0);
+    await navigateHash("#/student/points?tab=orders");
+  }
+  await expanded(currentGroup, true, "Preserved request/order links select the shop");
+  assert.equal(
+    await village.getByRole("link", { name: "위스 상점", exact: true }).getAttribute("aria-current"),
+    "page",
   );
   await page.screenshot({
     path: path.join(evidence, `${portal}-sidebar-${width}.png`),

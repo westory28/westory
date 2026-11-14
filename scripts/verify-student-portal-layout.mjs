@@ -51,7 +51,7 @@ const load = (filename) => {
         assert(fs.existsSync(asset), `Missing image asset: ${name}`);
         return { __esModule: true, default: asset };
       }
-      if (name === "react") return React;
+      if (name === "react") return { ...React, useLayoutEffect: React.useEffect };
       if (name === "react-router-dom") return router;
       const stub = stubs[path.basename(name)];
       if (stub) return { __esModule: true, ...stub };
@@ -81,6 +81,7 @@ const render = (portal, collapsed = false) => renderToStaticMarkup(React.createE
   teacherLayout: portal === "teacher", studentLayout: portal === "student", sidebarCollapsed: collapsed,
 }));
 const urls = (html) => [...html.matchAll(/href="#([^"]+)"/g)].map(match => match[1]);
+const submenu = (html, portal, group) => html.match(new RegExp(`id="${portal}-menu-${group}"[\\s\\S]*?<div class="teacher-sidebar-children"[^>]*>([\\s\\S]*?)</div>`))?.[1] || "";
 
 for (const small of [false, true]) {
   mobile = small;
@@ -132,5 +133,43 @@ for (const small of [false, true]) {
   assert(html.includes('aria-label="우리 학교 학생"'));
   assert(html.includes('aria-label="수업 용어 사전"'));
   assert(html.includes('class="teacher-sidebar-compact-label" aria-hidden="true">우리 학교 학생</span>'));
+
+  setup("teacher", "/teacher/points", "?tab=stocks");
+  const legacyWis = auth.menuConfig.teacher.find(item => item.url === "/teacher/points");
+  legacyWis.children.find(child => child.url.endsWith("tab=stocks")).name = "위스 주식";
+  legacyWis.children.find(child => child.url.endsWith("tab=products")).name = "상품 관리";
+  legacyWis.children.find(child => child.url.endsWith("shop=avatar")).name = "아바타 아이템 관리";
+  auth.menuConfig = sanitizeMenuConfig(sanitizeMenuConfig(auth.menuConfig));
+  html = render("teacher");
+  const village = submenu(html, "teacher", "shop");
+  assert(html.includes('aria-label="위스 마을"'));
+  assert.equal(urls(village).length, 3, "Village has only shop, avatar shop and WsPI destinations");
+  assert(village.includes("위스 상점") && village.includes("아바타 상점") && village.includes("위스피(WsPI)"));
+  assert.equal(urls(village).filter(url => url === "/teacher/points?tab=stocks").length, 1);
+  assert(!submenu(html, "teacher", "points").includes("tab=stocks"), "WsPI leaves the Wis-management group");
+  assert(!village.includes("tab=requests"), "Purchase requests are an internal shop tab");
+  assert.match(village, /<a(?=[^>]*href="#\/teacher\/points\?tab=stocks")(?=[^>]*aria-current="page")[^>]*>/);
+  location.search = "?tab=requests";
+  assert.match(submenu(render("teacher"), "teacher", "shop"), /<a(?=[^>]*href="#\/teacher\/points\?tab=products")(?=[^>]*aria-current="page")[^>]*>/, "Old request bookmark selects the shop parent");
+  const stockMenu = auth.menuConfig.teacher.find(item => item.url === "/teacher/points").children.find(child => child.url.endsWith("tab=stocks"));
+  Object.assign(stockMenu, { name: "우리 반 투자실", nameCustomized: true });
+  auth.menuConfig = sanitizeMenuConfig(auth.menuConfig);
+  assert(submenu(render("teacher"), "teacher", "shop").includes("우리 반 투자실"), "Explicit custom labels survive migration");
+  auth.currentUser.email = "staff@fixture.invalid";
+  auth.userData = { role: "staff", teacherPortalEnabled: true, staffPermissions: ["point_read"] };
+  html = render("teacher");
+  assert(urls(html).includes("/teacher/points?tab=stocks"));
+  assert(!urls(html).some(url => url.includes("shop=avatar")), "Avatar administration stays restricted");
+  auth.userData.staffPermissions = ["lesson_read"];
+  assert(!urls(render("teacher")).some(url => url.includes("/teacher/points")), "Staff without point access cannot see village destinations");
+
+  setup("student", "/student/points", "?tab=orders");
+  html = render("student");
+  const studentVillage = submenu(html, "student", "shop");
+  assert(html.includes('aria-label="위스 마을"'));
+  assert.equal(urls(studentVillage).length, 2, "Student village keeps only the currently released shops");
+  assert(studentVillage.includes("위스 상점") && studentVillage.includes("아바타 상점"));
+  assert(!html.includes("tab=stocks") && !html.includes("위스피"), "Renaming never publishes student WsPI");
+  assert.match(studentVillage, /<a(?=[^>]*href="#\/student\/points\?tab=shop")(?=[^>]*aria-current="page")[^>]*>/, "Order history bookmark selects the shop parent");
 }
-console.log("PASS: student/teacher route separation, configured names and visibility, active routes, mobile/desktop navigation and collapse rendering; no backend calls.");
+console.log("PASS: student/teacher route separation, configured labels, village destinations, preserved bookmarks, point/avatar permissions, closed student WsPI, mobile/desktop/collapsed navigation; no backend calls.");

@@ -1,0 +1,23 @@
+.wis-stocks .wispi-price-chart {
+  min-width: 0;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  background: #fff;
+}
+.wis-stocks .wispi-price-chart__instructions { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.wis-stocks .wispi-price-chart__canvas { position: relative; width: 100%; min-width: 0; height: 304px; touch-action: pan-y; border-radius: inherit; }
+.wis-stocks .wispi-price-chart__canvas:focus-visible { outline: 2px solid var(--ws-ring, #3b82f6); outline-offset: 3px; }
+.wis-stocks .wispi-price-chart svg { display: block; width: 100%; height: 304px; max-height: none; overflow: hidden; }
+.wis-stocks .wispi-price-chart__minor { stroke: #e8edf4; stroke-width: 1; }
+.wis-stocks .wispi-price-chart__major { stroke: #d7e0eb; stroke-width: 1; }
+.wis-stocks .wispi-price-chart__axes { fill: var(--ws-text-muted, #6b7280); font-size: 11px; font-family: inherit; font-variant-numeric: tabular-nums; pointer-events: none; }
+.wis-stocks .wispi-price-chart__axes line { stroke: #94a3b8; stroke-width: 1; }
+.wis-stocks .wispi-price-chart__caption { font-size: 11px; }
+.wis-stocks .wispi-price-chart .wis-stock-chart__plot { stroke: currentColor; fill: currentColor; stroke-width: 2.25; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.wis-stocks .wispi-price-chart__selection { pointer-events: none; }
+.wis-stocks .wispi-price-chart__selection line { stroke: #64748b; stroke-width: 1; stroke-dasharray: 3 4; }
+.wis-stocks .wispi-price-chart__selection circle { fill: #fff; stroke: currentColor; stroke-width: 2; }
+.wis-stocks .wispi-price-chart__tooltip { position: absolute; z-index: 1; box-sizing: border-box; padding: 10px 12px; border-radius: 8px; background: var(--ws-text-strong, #111827); color: #fff; pointer-events: none; box-shadow: 0 3px 10px rgb(15 23 42 / 12%); overflow-wrap: anywhere; }
+.wis-stocks .wispi-price-chart__tooltip time { display: block; font-size: 11px; line-height: 1.5; color: #e2e8f0; font-variant-numeric: tabular-nums; }
+.wis-stocks .wispi-price-chart__tooltip strong { display: block; margin-top: 4px; font-size: 16px; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.wis-stocks .wispi-price-chart__empty { position: absolute; inset: 90px 16px auto 76px; margin: 0; padding: 12px; background: rgb(255 255 255 / 92%); color: var(--ws-text-muted, #6b7280); text-align: center; font-size: 13px; }

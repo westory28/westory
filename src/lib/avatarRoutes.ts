@@ -12,7 +12,7 @@ export const isTeacherAvatarShop = (params: URLSearchParams) =>
 export const getWisShopMenuKey = (
   url: string,
   portal: "student" | "teacher",
-): "products" | "avatar" | "orders" | "requests" | "" => {
+): "products" | "avatar" | "orders" | "requests" | "stocks" | "" => {
   const [pathname, query = ""] = url.split("?");
   if (pathname !== `/${portal}/points`) return "";
   const params = new URLSearchParams(query);
@@ -23,5 +23,6 @@ export const getWisShopMenuKey = (
   }
   if (isTeacherAvatarShop(params)) return "avatar";
   if (params.get("tab") === "products") return "products";
+  if (params.get("tab") === "stocks") return "stocks";
   return params.get("tab") === "requests" ? "requests" : "";
 };

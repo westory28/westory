@@ -378,6 +378,76 @@ try {
     assert.equal(duplicate.duplicate, true); assert.equal(totalWrites(), writes);
   }
   checks.push('Rule save, new registration and 8 tick workers race atomically: one teacher CAS winner at most, one price transition, exact market/receipt write budget, winner retry writes zero');
+  clock += 3600000;
+  const beforeEmergency = await api.getWisStockManagement(request({})), emergencyWrites = totalWrites();
+  const stopCommand = request({ halted: true, expectedRevision: 0, requestId: 'concurrent-emergency-stop-1' });
+  const editingDuringStop = request({ rules: { ...beforeEmergency.rules, buyFeeBps: 127, halted: false },
+    expectedRevision: beforeEmergency.revision, requestId: 'rules-during-emergency-01' });
+  const emergencyRace = await Promise.allSettled([
+    ...Array.from({ length: 8 }, () => api.setWisStockMarketHalted(stopCommand)),
+    api.saveWisStockMarketRules(editingDuringStop), ...Array.from({ length: 4 }, () => api.advanceWisStockPrices()),
+  ]);
+  assert(emergencyRace.slice(0, 8).every(item => item.status === 'fulfilled'));
+  assert.equal(emergencyRace.slice(0, 8).filter(item => item.value.changed).length, 1);
+  const rulesRace = emergencyRace[8];
+  assert(rulesRace.status === 'fulfilled' || rulesRace.reason.details?.reason === 'WIS_STOCK_REVISION_CONFLICT');
+  assert(emergencyRace.slice(9).every(item => item.status === 'fulfilled'));
+  const ticksWon = emergencyRace.slice(9).filter(item => item.value.changed).length;
+  assert(ticksWon <= 1);
+  let afterEmergency = await api.getWisStockManagement(request({}));
+  assert.equal(afterEmergency.rules.halted, true); assert.equal(afterEmergency.studentOpen, false);
+  assert.equal(afterEmergency.revision, beforeEmergency.revision + 1 + (rulesRace.status === 'fulfilled' ? 1 : 0) + ticksWon);
+  assert.equal(totalWrites() - emergencyWrites, 2 + (rulesRace.status === 'fulfilled' ? 2 : 0) + ticksWon);
+  const afterEmergencyWrites = totalWrites();
+  assert.equal((await api.setWisStockMarketHalted(stopCommand)).duplicate, true);
+  assert.equal(totalWrites(), afterEmergencyWrites);
+  const freshStop = await api.setWisStockMarketHalted(request({ halted: true, expectedRevision: 0, requestId: 'emergency-stop-fence-001' }));
+  assert.equal(freshStop.changed, true); assert.equal(freshStop.revision, afterEmergency.revision + 1);
+  assert.equal(commits.at(-1).reads, 6); assert.equal(totalWrites(), afterEmergencyWrites + 2);
+  afterEmergency = freshStop;
+  assert.equal((await api.advanceWisStockPrices()).changed, false); assert.equal(totalWrites(), afterEmergencyWrites + 2);
+  checks.push('Eight duplicate emergency stops race with draft save and tick workers: stale stop succeeds once with exact revision/write budget; receipt retry/tick write zero, a distinct stop records a new fence even if already halted');
+
+  const legacyRules = { ...afterEmergency.rules, sellFeeBps: 126 }; delete legacyRules.halted;
+  const preserved = await api.saveWisStockMarketRules(request({ rules: legacyRules, expectedRevision: afterEmergency.revision, requestId: 'legacy-rule-during-halt01' }));
+  assert.equal(preserved.rules.halted, true); assert.equal(preserved.rules.sellFeeBps, 126);
+  const legacyWrites = totalWrites();
+  const ignoredHalt = await api.saveWisStockMarketRules(request({ rules: { ...preserved.rules, halted: false }, expectedRevision: preserved.revision, requestId: 'ignored-rule-unhalt-001' }));
+  assert.equal(ignoredHalt.changed, false); assert.equal(ignoredHalt.rules.halted, true); assert.equal(totalWrites(), legacyWrites);
+  await assert.rejects(api.setWisStockMarketHalted(request({ halted: false, expectedRevision: 0, requestId: 'stale-resume-denied-001' })), error => error.details?.reason === 'WIS_STOCK_REVISION_CONFLICT');
+  const resumeCommand = request({ halted: false, expectedRevision: preserved.revision, requestId: 'explicit-resume-once-01' });
+  const resumed = await api.setWisStockMarketHalted(resumeCommand); assert.equal(resumed.rules.halted, false);
+  await api.setWisStockMarketHalted(request({ halted: true, expectedRevision: 0, requestId: 'new-emergency-stop-0001' }));
+  const writesBeforeResumeRetry = totalWrites();
+  const oldResumeReplay = await api.setWisStockMarketHalted(resumeCommand);
+  assert.equal(oldResumeReplay.duplicate, true); assert.equal(oldResumeReplay.rules.halted, true);
+  await assert.rejects(api.setWisStockMarketHalted(request({ halted: false, expectedRevision: preserved.revision, requestId: 'late-resume-denied-001' })), error => error.details?.reason === 'WIS_STOCK_REVISION_CONFLICT');
+  await assert.rejects(api.saveWisStockMarketRules(request({ rules: preserved.rules, expectedRevision: preserved.revision, requestId: stopCommand.data.requestId })), error => error.details?.reason === 'WIS_STOCK_REQUEST_CONFLICT');
+  assert.equal(totalWrites(), writesBeforeResumeRetry);
+  checks.push('Legacy rule payloads and stale false flags preserve the dedicated halt; only explicit current-revision resume works, and late/duplicate resume cannot undo a newer stop');
+  const haltedBeforeHeldResume = await api.getWisStockManagement(request({}));
+  assert.equal(haltedBeforeHeldResume.rules.halted, true);
+  let releaseResume, enteredResume;
+  const resumeGate = new Promise(resolve => { releaseResume = resolve; });
+  const enteredGate = new Promise(resolve => { enteredResume = resolve; });
+  const delayedApi = createWisStockHandlers({ db: observedDb, now: () => clock, assertSession: async request => {
+    enteredResume(); await resumeGate;
+    return { uid: request.auth.uid, email: request.auth.token.email };
+  } });
+  const heldResume = delayedApi.setWisStockMarketHalted(request({ halted: false, expectedRevision: haltedBeforeHeldResume.revision,
+    requestId: 'held-resume-before-fence01' }));
+  const rejectedHeldResume = assert.rejects(heldResume, error => error.details?.reason === 'WIS_STOCK_REVISION_CONFLICT');
+  await enteredGate;
+  const beforeFenceWrites = totalWrites();
+  const reassertStop = request({ halted: true, expectedRevision: 0, requestId: 'reassert-already-halted01' });
+  const fenceResult = await api.setWisStockMarketHalted(reassertStop);
+  assert.equal(fenceResult.revision, haltedBeforeHeldResume.revision + 1); assert.equal(fenceResult.rules.halted, true);
+  assert.equal(totalWrites(), beforeFenceWrites + 2);
+  releaseResume(); await rejectedHeldResume;
+  assert.equal((await api.getWisStockManagement(request({}))).rules.halted, true);
+  assert.equal((await api.setWisStockMarketHalted(reassertStop)).duplicate, true);
+  assert.equal(totalWrites(), beforeFenceWrites + 2);
+  checks.push('Held old resume against an already halted market is rejected after a distinct new stop commits its fence; market stays halted, new stop costs two writes, receipt retry costs zero');
   const receiptId = (await db.collection(`${root}/wis_stock_receipts`).limit(1).get()).docs[0].id;
   for (const uid of ['manager', 'student', 'admin']) {
     const client = env.authenticatedContext(uid, { email: uid === 'admin' ? 'westoria28@gmail.com' : `${uid}@yongshin-ms.ms.kr`, auth_time: authTime }).firestore();
@@ -390,17 +460,20 @@ try {
   }
   await assert.rejects(api.getWisStockManagement({ ...request({}), auth: { uid: 'student', token: { email: 'student@yongshin-ms.ms.kr' } } }), error => error.details?.reason === 'WIS_STOCK_TEACHER_REQUIRED');
   await assert.rejects(api.saveWisStockMarketRules({ ...rulesCommand, auth: { uid: 'student', token: { email: 'student@yongshin-ms.ms.kr' } } }), error => error.details?.reason === 'WIS_STOCK_TEACHER_REQUIRED');
+  await assert.rejects(api.setWisStockMarketHalted({ ...stopCommand, auth: { uid: 'student', token: { email: 'student@yongshin-ms.ms.kr' } } }), error => error.details?.reason === 'WIS_STOCK_TEACHER_REQUIRED');
   const deniedWrites = totalWrites();
   await db.doc('users/reader').set({ role: 'staff', teacherPortalEnabled: true, staffPermissions: ['point_read'] });
   const reader = { ...request({}), auth: { uid: 'reader', token: { email: 'reader@yongshin-ms.ms.kr' } } };
   assert.equal((await api.getWisStockManagement(reader)).studentOpen, false);
   await assert.rejects(api.saveWisStock({ ...command, auth: reader.auth }), error => error.details?.reason === 'WIS_STOCK_TEACHER_REQUIRED');
   await assert.rejects(api.saveWisStockMarketRules({ ...rulesCommand, auth: reader.auth }), error => error.details?.reason === 'WIS_STOCK_TEACHER_REQUIRED');
+  await assert.rejects(api.setWisStockMarketHalted({ ...stopCommand, auth: reader.auth }), error => error.details?.reason === 'WIS_STOCK_TEACHER_REQUIRED');
   await assert.rejects(api.getWisStockManagement(request({ semester: '1' })), error => error.details?.reason === 'WIS_STOCK_SCOPE_CHANGED');
   await assert.rejects(api.saveWisStockMarketRules(request({ ...rulesCommand.data, semester: '1' })), error => error.details?.reason === 'WIS_STOCK_SCOPE_CHANGED');
   await db.doc('site_settings/semester_active').set({ semesterId: '2026-1' });
   await assert.rejects(api.getWisStockManagement(request({})), error => error.details?.reason === 'WIS_STOCK_SCOPE_CHANGED');
   await assert.rejects(api.saveWisStockMarketRules(rulesCommand), error => error.details?.reason === 'WIS_STOCK_SCOPE_CHANGED');
+  await assert.rejects(api.setWisStockMarketHalted(stopCommand), error => error.details?.reason === 'WIS_STOCK_SCOPE_CHANGED');
   assert.equal((await api.advanceWisStockPrices()).changed, false);
   assert.equal(totalWrites(), deniedWrites, 'Read-only staff and inactive scope cannot cause writes, including receipt replay');
   await db.doc('site_settings/semester_active').set({ semesterId: '2026-2' });
@@ -410,6 +483,7 @@ try {
   await assert.rejects(api.getWisStockManagement(request({})), error => error.details?.reason === 'WIS_STOCK_TEACHER_REQUIRED');
   await assert.rejects(api.saveWisStock(command), error => error.details?.reason === 'WIS_STOCK_TEACHER_REQUIRED');
   await assert.rejects(api.saveWisStockMarketRules(rulesCommand), error => error.details?.reason === 'WIS_STOCK_TEACHER_REQUIRED');
+  await assert.rejects(api.setWisStockMarketHalted(stopCommand), error => error.details?.reason === 'WIS_STOCK_TEACHER_REQUIRED');
   assert.deepEqual((await db.doc(`${root}/wis_stock_markets/current`).get()).data(), beforeDenied.data());
   for (const [path, data] of protectedDocuments) assert.deepEqual((await db.doc(path).get()).data(), data, `${path} unchanged`);
   assert(commits.flatMap(commit => commit.writes).every(write =>

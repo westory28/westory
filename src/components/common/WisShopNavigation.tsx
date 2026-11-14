@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { getStudentMenuLabel } from "../../constants/menus";
-import { canManageSettings } from "../../lib/permissions";
+import { canManageSettings, canReadPoints } from "../../lib/permissions";
 import { getStudentRouteAccess } from "../../lib/studentMenuAccess";
 import {
   STUDENT_AVATAR_SHOP_URL,
@@ -13,7 +13,7 @@ export default function WisShopNavigation({
   active,
 }: {
   portal: "student" | "teacher";
-  active: "products" | "avatar";
+  active: "products" | "avatar" | "stocks";
 }) {
   const { currentUser, userData, config, menuConfig } = useAuth();
   const avatarAllowed =
@@ -30,7 +30,7 @@ export default function WisShopNavigation({
           menuConfig,
         ).allowed;
   return (
-    <nav className="ws-page-tabs mb-4" aria-label="위스 상점 상품 종류">
+    <nav className="ws-page-tabs mb-4" aria-label="위스 마을">
       <Link
         to={
           portal === "student"
@@ -43,9 +43,9 @@ export default function WisShopNavigation({
           ? getStudentMenuLabel(
               menuConfig,
               "/student/points?tab=shop",
-              "일반 상품",
+              "위스 상점",
             )
-          : "상품 관리"}
+          : "위스 상점"}
       </Link>
       {avatarAllowed && (
         <Link
@@ -62,7 +62,15 @@ export default function WisShopNavigation({
                 STUDENT_AVATAR_SHOP_URL,
                 "아바타 상점",
               )
-            : "아바타 아이템 관리"}
+            : "아바타 상점"}
+        </Link>
+      )}
+      {portal === "teacher" && canReadPoints(userData, currentUser?.email) && (
+        <Link
+          to="/teacher/points?tab=stocks"
+          aria-current={active === "stocks" ? "page" : undefined}
+        >
+          위스피(WsPI)
         </Link>
       )}
     </nav>

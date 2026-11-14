@@ -337,6 +337,19 @@ const Header: React.FC<{
         : -1;
     }
     for (const [key, value] of queryParams.entries()) {
+      // Purchase/request history belongs to the shop's internal tabs while
+      // its existing bookmarked URL stays unchanged.
+      if (
+        key === "tab" &&
+        queryParams.size === 1 &&
+        ((path === "/teacher/points" &&
+          value === "products" &&
+          currentParams.get("tab") === "requests") ||
+          (path === "/student/points" &&
+            value === "shop" &&
+            currentParams.get("tab") === "orders"))
+      )
+        continue;
       if (currentParams.get(key) !== value) return -1;
     }
 
@@ -473,14 +486,17 @@ const Header: React.FC<{
         canManageSettings(userData, currentUser?.email)) &&
       !configuredShopTabs.has(getShopTab(child.resolvedUrl)),
   );
-  const shopChildren = [...configuredShopChildren, ...defaultShopChildren];
+  const shopChildren = [
+    ...configuredShopChildren,
+    ...defaultShopChildren,
+  ].filter((child) => getShopTab(child.resolvedUrl) !== "requests");
   if (
     resolvedTeacherMenus.some((item) => item.url === "/teacher/points") &&
     shopChildren.length
   )
     teacherSidebarGroups.push({
       id: "shop",
-      name: "위스 상점",
+      name: "위스 마을",
       icon: "shop",
       secondary: true,
       children: shopChildren,
@@ -565,17 +581,15 @@ const Header: React.FC<{
         .flatMap((item) =>
           getResolvedChildUrls(item.url, getVisibleChildren(item), "student"),
         )
-        .filter((child) => getWisShopMenuKey(child.resolvedUrl, "student"))
-        .map((child) =>
-          child.name === "위스 상점" && !child.nameCustomized
-            ? { ...child, name: "일반 상품" }
-            : child,
-        )
+        .filter((child) => {
+          const key = getWisShopMenuKey(child.resolvedUrl, "student");
+          return key && key !== "orders";
+        })
     : [];
   if (studentShopChildren.length)
     studentSidebarGroups.push({
       id: "shop",
-      name: "위스 상점",
+      name: "위스 마을",
       icon: "shop",
       children: studentShopChildren,
     });

@@ -228,12 +228,50 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
         return { ...state(market), duplicate: true, changed: false };
       }
       if (market.revision !== input.expectedRevision) fail('aborted', '가격이나 시장 규칙이 변경되었습니다. 새로고침 후 다시 저장해 주세요.', 'WIS_STOCK_REVISION_CONFLICT');
-      if (JSON.stringify(market.rules) === JSON.stringify(rules)) return { ...state(market), duplicate: false, changed: false };
-      const updated = { ...market, rules, priceSeed: market.priceSeed || newPriceSeed,
+      // General rule saves (including old clients) never change the emergency
+      // switch. Only the dedicated stop/resume command owns this flag.
+      const effectiveRules = { ...rules, halted: market.rules.halted };
+      if (JSON.stringify(market.rules) === JSON.stringify(effectiveRules)) return { ...state(market), duplicate: false, changed: false };
+      const updated = { ...market, rules: effectiveRules, priceSeed: market.priceSeed || newPriceSeed,
         revision: market.revision + 1, updatedAtMs: atMs };
       tx.set(marketRef, updated);
       tx.create(receiptRef, { schemaVersion: 1, commandType: 'saveWisStockMarketRules', semesterId: scope.semesterId,
-        actorUid: actor.uid, payloadHash, revision: updated.revision, previousRules: market.rules, rules, createdAtMs: atMs });
+        actorUid: actor.uid, payloadHash, revision: updated.revision, previousRules: market.rules, rules: effectiveRules, createdAtMs: atMs });
+      return { ...state(updated), duplicate: false, changed: true };
+    });
+  };
+  const setWisStockMarketHalted = async request => {
+    const actor = await identity(request, true), input = request.data;
+    if (!allowed(input, ['year', 'semester', '_session', 'requestId', 'expectedRevision', 'halted'])
+      || typeof input.halted !== 'boolean' || !safeInt(input.expectedRevision, 0, Number.MAX_SAFE_INTEGER - 1)
+      || typeof input.requestId !== 'string' || !/^[A-Za-z0-9_-]{16,80}$/.test(input.requestId)) invalid();
+    const scope = scopeInput(input), atMs = now();
+    const payloadHash = hash(JSON.stringify(['setWisStockMarketHalted', scope.semesterId, input.expectedRevision, input.halted]));
+    return db.runTransaction(async tx => {
+      await authority(tx, actor, true);
+      await activeScope(tx, scope);
+      const marketRef = db.doc(marketPath(scope)), receiptRef = db.doc(receiptPath(scope, actor.uid, input.requestId));
+      const [snapshot, receipt] = await Promise.all([tx.get(marketRef), tx.get(receiptRef)]);
+      const market = readMarket(snapshot, scope);
+      if (receipt.exists) {
+        if (receipt.data().commandType !== 'setWisStockMarketHalted' || receipt.data().payloadHash !== payloadHash)
+          fail('already-exists', '같은 거래 정지 요청의 내용이 달라졌습니다. 화면을 다시 열어 주세요.', 'WIS_STOCK_REQUEST_CONFLICT');
+        return { ...state(market), duplicate: true, changed: false };
+      }
+      // Stopping must survive concurrent price/rule writes. Resuming requires
+      // the observed revision so a delayed resume cannot override a new stop.
+      if (!input.halted && market.revision !== input.expectedRevision)
+        fail('aborted', '시장 상태가 변경되었습니다. 최신 자료를 확인한 뒤 거래 재개를 다시 확인해 주세요.', 'WIS_STOCK_REVISION_CONFLICT');
+      // A NEW stop is also a fence against any resume that observed the old
+      // revision, even when trading was already stopped. Only the receipt
+      // replay above is a zero-write stop; an unchanged resume remains a no-op.
+      if (!input.halted && !market.rules.halted) return { ...state(market), duplicate: false, changed: false };
+      const updated = { ...market, rules: { ...market.rules, halted: input.halted }, revision: market.revision + 1, updatedAtMs: atMs };
+      if (snapshot.exists) tx.update(marketRef, { 'rules.halted': input.halted, revision: updated.revision, updatedAtMs: atMs });
+      else tx.set(marketRef, updated);
+      tx.create(receiptRef, { schemaVersion: 1, commandType: 'setWisStockMarketHalted', semesterId: scope.semesterId,
+        actorUid: actor.uid, payloadHash, revision: updated.revision, previousHalted: market.rules.halted,
+        halted: input.halted, createdAtMs: atMs });
       return { ...state(updated), duplicate: false, changed: true };
     });
   };
@@ -252,7 +290,7 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
     tx.set(db.doc(marketPath(scope)), updated);
     return { changed: true, revision: updated.revision };
   });
-  return { getWisStockManagement, saveWisStock, saveWisStockMarketRules, advanceWisStockPrices };
+  return { getWisStockManagement, saveWisStock, saveWisStockMarketRules, setWisStockMarketHalted, advanceWisStockPrices };
 }
 module.exports = { createWisStockHandlers, MAX_STOCKS, HISTORY_LIMIT, MAX_PRICE, marketPath, receiptPath,
   normalizeSettings, nextPrice, advanceMarket, blankMarket };

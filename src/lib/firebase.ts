@@ -202,6 +202,7 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
       "getWisStockManagement",
       "saveWisStock",
       "saveWisStockMarketRules",
+      "setWisStockMarketHalted",
       "executeThinkCloudResponseFast",
       "getThinkCloudStateFast",
       "getStudentAvatar",

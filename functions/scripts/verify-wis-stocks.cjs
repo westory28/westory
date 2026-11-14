@@ -22,6 +22,16 @@ function fixture() {
     const result = await callback({
       get: async ref => { reads.push(ref.path); return { exists: documents.has(ref.path), data: () => structuredClone(documents.get(ref.path)) }; },
       set: (ref, data) => changes.push({ path: ref.path, data: structuredClone(data) }),
+      update: (ref, patch) => {
+        assert(documents.has(ref.path));
+        const data = structuredClone(documents.get(ref.path));
+        for (const [key, value] of Object.entries(patch)) {
+          const parts = key.split('.'); let target = data;
+          for (const part of parts.slice(0, -1)) target = target[part] ||= {};
+          target[parts.at(-1)] = value;
+        }
+        changes.push({ path: ref.path, data });
+      },
       create: (ref, data) => { assert(!documents.has(ref.path)); changes.push({ path: ref.path, data: structuredClone(data) }); },
     });
     changes.forEach(change => { documents.set(change.path, change.data); writes.push(change); });
@@ -216,4 +226,87 @@ test('rule and issuance failures are closed and cannot open student trading or a
     await assert.rejects(f.api.saveWisStock(saveInput({ ...initial(), ...settings })), reason('WIS_STOCK_INPUT_INVALID'));
   assert.equal(f.writes.length, 0);
   assert.equal(typeof f.api.placeOrder, 'undefined');
+});
+
+test('emergency stop ignores stale revisions and changes only the halt flag, revision and audit metadata', async () => {
+  const f = fixture(); await f.api.saveWisStock(saveInput());
+  const before = structuredClone(f.documents.get(marketPath(scope)));
+  f.reads.length = 0; f.writes.length = 0;
+  const input = req({ halted: true, expectedRevision: 0, requestId: 'market-emergency-0001' });
+  const stopped = await f.api.setWisStockMarketHalted(input);
+  assert.equal(stopped.rules.halted, true); assert.equal(stopped.revision, 2); assert.equal(stopped.studentOpen, false);
+  assert.equal(f.reads.length, 6); assert.equal(f.writes.length, 2);
+  assert.deepEqual(f.sessions.at(-1), { highRisk: true, recentAuth: true });
+  const after = f.documents.get(marketPath(scope));
+  assert.deepEqual(after, { ...before, rules: { ...before.rules, halted: true }, revision: 2, updatedAtMs: after.updatedAtMs });
+  assert.equal((await f.api.setWisStockMarketHalted(input)).duplicate, true);
+  const newStop = await f.api.setWisStockMarketHalted(req({ halted: true, expectedRevision: 0, requestId: 'market-emergency-fence' }));
+  assert.equal(newStop.changed, true); assert.equal(newStop.revision, 3);
+  assert.equal(f.writes.length, 4);
+  assert(f.reads.every(path => !/wis_accounts|wis_ledger|point_wallet|wis_balance/.test(path)));
+  assert(f.writes.every(write => /wis_stock_(markets|receipts)/.test(write.path)));
+});
+
+test('general rule saves and legacy payloads cannot stop or resume the market', async () => {
+  const f = fixture(); const defaults = normalizeWisStockMarketRules();
+  assert.equal((await f.api.saveWisStockMarketRules(req({ rules: { ...defaults, halted: true }, expectedRevision: 0, requestId: 'market-rules-stop-001' }))).changed, false);
+  assert.equal(f.writes.length, 0);
+  await f.api.setWisStockMarketHalted(req({ halted: true, expectedRevision: 0, requestId: 'market-emergency-0001' }));
+  await assert.rejects(f.api.saveWisStockMarketRules(req({ rules: { ...defaults, buyFeeBps: 200 }, expectedRevision: 0, requestId: 'market-rules-stale-01' })), reason('WIS_STOCK_REVISION_CONFLICT'));
+  const omitted = { ...defaults, buyFeeBps: 200 }; delete omitted.halted;
+  const changed = await f.api.saveWisStockMarketRules(req({ rules: omitted, expectedRevision: 1, requestId: 'market-rules-edit-001' }));
+  assert.equal(changed.rules.halted, true); assert.equal(changed.rules.buyFeeBps, 200);
+  const noop = await f.api.saveWisStockMarketRules(req({ rules: { ...changed.rules, halted: false }, expectedRevision: 2, requestId: 'market-rules-noop-001' }));
+  assert.equal(noop.changed, false); assert.equal(noop.rules.halted, true); assert.equal(f.writes.length, 4);
+});
+
+test('resume requires the observed revision and receipt replay cannot undo a subsequent stop', async () => {
+  const f = fixture();
+  await f.api.setWisStockMarketHalted(req({ halted: true, expectedRevision: 0, requestId: 'market-emergency-0001' }));
+  await assert.rejects(f.api.setWisStockMarketHalted(req({ halted: false, expectedRevision: 0, requestId: 'market-resume-stale01' })), reason('WIS_STOCK_REVISION_CONFLICT'));
+  const resume = req({ halted: false, expectedRevision: 1, requestId: 'market-resume-0000001' });
+  assert.equal((await f.api.setWisStockMarketHalted(resume)).rules.halted, false);
+  await f.api.setWisStockMarketHalted(req({ halted: true, expectedRevision: 0, requestId: 'market-emergency-0002' }));
+  const replay = await f.api.setWisStockMarketHalted(resume);
+  assert.equal(replay.duplicate, true); assert.equal(replay.rules.halted, true); assert.equal(f.writes.length, 6);
+  await assert.rejects(f.api.setWisStockMarketHalted(req({ halted: false, expectedRevision: 1, requestId: 'market-resume-stale02' })), reason('WIS_STOCK_REVISION_CONFLICT'));
+  const fresh = req({ halted: false, expectedRevision: 3, requestId: 'market-resume-0000002' });
+  assert.equal((await f.api.setWisStockMarketHalted(fresh)).rules.halted, false);
+  assert.equal((await f.api.setWisStockMarketHalted(req({ halted: false, expectedRevision: 4, requestId: 'market-resume-noop001' }))).changed, false);
+  assert.equal(f.writes.length, 8);
+});
+
+test('a new stop fences an old resume even if the market was already halted', async () => {
+  const f = fixture();
+  const stopped = await f.api.setWisStockMarketHalted(req({ halted: true, expectedRevision: 0, requestId: 'market-first-stop-001' }));
+  const delayedResume = req({ halted: false, expectedRevision: stopped.revision, requestId: 'market-delayed-resume1' });
+  const newStop = req({ halted: true, expectedRevision: 0, requestId: 'market-second-stop01' });
+  const fenced = await f.api.setWisStockMarketHalted(newStop);
+  assert.equal(fenced.rules.halted, true); assert.equal(fenced.revision, stopped.revision + 1);
+  assert.equal(f.writes.length, 4);
+  await assert.rejects(f.api.setWisStockMarketHalted(delayedResume), reason('WIS_STOCK_REVISION_CONFLICT'));
+  const retry = await f.api.setWisStockMarketHalted(newStop);
+  assert.equal(retry.duplicate, true); assert.equal(retry.revision, fenced.revision); assert.equal(f.writes.length, 4);
+  assert.equal(f.documents.get(marketPath(scope)).rules.halted, true);
+});
+
+test('emergency command keeps authority, active scope, receipt isolation and input validation fail-closed', async () => {
+  const f = fixture(), input = req({ halted: true, expectedRevision: 0, requestId: 'market-emergency-0001' });
+  for (const profile of [{ role: 'student', teacherPortalEnabled: true, staffPermissions: ['point_manage'] },
+    { role: 'staff', teacherPortalEnabled: true, staffPermissions: ['point_read'] }, { role: 'teacher', disabled: true }]) {
+    f.documents.set('users/manager', profile);
+    await assert.rejects(f.api.setWisStockMarketHalted(input), reason('WIS_STOCK_TEACHER_REQUIRED'));
+  }
+  f.documents.set('users/manager', { role: 'teacher' });
+  for (const patch of [{ halted: 1 }, { expectedRevision: -1 }, { studentOpen: true }, { rules: {} }])
+    await assert.rejects(f.api.setWisStockMarketHalted(req({ ...input.data, ...patch })), reason('WIS_STOCK_INPUT_INVALID'));
+  assert.equal(f.writes.length, 0);
+  await f.api.saveWisStock(saveInput(initial(), 0, '', input.data.requestId));
+  await assert.rejects(f.api.setWisStockMarketHalted(input), reason('WIS_STOCK_REQUEST_CONFLICT'));
+  const stop = req({ ...input.data, requestId: 'market-emergency-0002' });
+  await f.api.setWisStockMarketHalted(stop);
+  await assert.rejects(f.api.setWisStockMarketHalted(req({ ...stop.data, halted: false })), reason('WIS_STOCK_REQUEST_CONFLICT'));
+  f.documents.set('site_settings/semester_active', { semesterId: '2027-1' });
+  await assert.rejects(f.api.setWisStockMarketHalted(stop), reason('WIS_STOCK_SCOPE_CHANGED'));
+  assert.equal(f.writes.length, 4);
 });

@@ -1,0 +1,53 @@
+.wis-stocks .wis-stock-emergency {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.wis-stock-emergency > span {
+  color: var(--ws-danger, #dc2626);
+  font-size: 13px;
+  font-weight: 700;
+}
+.wis-stocks button.wis-stock-emergency__button {
+  min-height: 44px;
+  border-color: var(--ws-danger, #dc2626);
+  background: var(--ws-danger, #dc2626);
+  color: #fff;
+  font-weight: 700;
+}
+.wis-stocks button.wis-stock-emergency__button:hover {
+  background: var(--ws-danger, #dc2626);
+  color: #fff;
+}
+.wis-stocks .wis-stock-emergency button:focus-visible {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: 2px;
+}
+.wis-stocks__add-action {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+@media (max-width: 767px) {
+  .wis-stocks .teacher-sub-navigation--tabs .teacher-settings-sections {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+  .wis-stocks .teacher-sub-navigation--tabs .teacher-settings-section {
+    flex: 1 1 auto;
+    padding-inline: 8px;
+    font-size: 14px;
+  }
+  .wis-stocks .wis-stock-emergency {
+    flex: 0 0 100%;
+    justify-content: flex-end;
+    margin-left: 0;
+  }
+  .wis-stocks .wis-stock-emergency > span {
+    display: none;
+  }
+}
