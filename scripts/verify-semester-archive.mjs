@@ -327,6 +327,13 @@ function checkImportAndTransportInventory() {
         ) {
           fetchCount++;
           const options = node.arguments[1];
+          // Firestore runQuery uses POST for a read-only server projection. Keep
+          // this exception bound to the exact endpoint and structuredQuery body.
+          const scoreProjection =
+            name === "src/lib/writtenExamScoreSource.ts" &&
+            ts.isTemplateExpression(node.arguments[0]) &&
+            node.arguments[0].templateSpans.at(-1)?.literal.text ===
+              ":runQuery";
           if (options) {
             assert.ok(
               ts.isObjectLiteralExpression(options),
@@ -340,6 +347,27 @@ function checkImportAndTransportInventory() {
               const key = property.name
                 ?.getText(source)
                 .replaceAll(/["']/g, "");
+              if (scoreProjection && key === "body") {
+                const body = property.initializer;
+                assert.ok(
+                  ts.isCallExpression(body) &&
+                    body.expression.getText(source) === "JSON.stringify",
+                );
+                const payload = body.arguments[0];
+                assert.ok(
+                  ts.isObjectLiteralExpression(payload) &&
+                    payload.properties.length === 1,
+                );
+                assert.equal(
+                  payload.properties[0].name.getText(source),
+                  "structuredQuery",
+                );
+                assert.match(
+                  node.arguments[0].getText(source),
+                  /\/databases\/\(default\)\/documents\/years\/\$\{year\}\/semesters\/\$\{semester\}:runQuery/,
+                );
+                continue;
+              }
               assert.notEqual(
                 key,
                 "body",
@@ -349,7 +377,9 @@ function checkImportAndTransportInventory() {
                 assert.ok(
                   ts.isPropertyAssignment(property) &&
                     ts.isStringLiteralLike(property.initializer) &&
-                    /^(GET|HEAD)$/i.test(property.initializer.text),
+                    (scoreProjection ? /^(POST)$/ : /^(GET|HEAD)$/i).test(
+                      property.initializer.text,
+                    ),
                   `${name}: new write transport needs archive protection`,
                 );
               }

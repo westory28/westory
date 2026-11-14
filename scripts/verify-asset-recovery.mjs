@@ -40,7 +40,6 @@ async function check(name, overrides, expected, counts) {
     reservations = 0;
   const env = {
     online: () => true,
-    hasDraft: () => false,
     currentEntry: () => "https://fixture.invalid/assets/old.js",
     latestEntry: async () => {
       reads++;
@@ -76,11 +75,20 @@ await check("offline performs no check", { online: () => false }, "offline", {
   reloads: 0,
   reservations: 0,
 });
-await check("editing performs no check", { hasDraft: () => true }, "draft", {
-  reads: 0,
-  reloads: 0,
-  reservations: 0,
-});
+await check(
+  "save failure prevents navigation",
+  {
+    prepare: async () => {
+      throw Error("Save failed");
+    },
+  },
+  "save-failed",
+  {
+    reads: 1,
+    reloads: 0,
+    reservations: 0,
+  },
+);
 await check(
   "same build does not reload",
   { currentEntry: () => "https://fixture.invalid/assets/new.js" },
@@ -103,19 +111,18 @@ await check(
   "unavailable",
   { reads: 0, reloads: 0, reservations: 0 },
 );
-let edited = false;
+let prepared = false;
 await check(
-  "editing during version check prevents reload",
+  "owning screen prepares its data before reload",
   {
-    hasDraft: () => edited,
-    latestEntry: async () => {
-      edited = true;
-      return "new";
+    prepare: async () => {
+      prepared = true;
     },
   },
-  "draft",
-  { reads: 0, reloads: 0, reservations: 0 },
+  "reloading",
+  { reads: 1, reloads: 1, reservations: 1 },
 );
+assert.equal(prepared, true);
 let online = true;
 await check(
   "disconnect during check prevents reload",
@@ -134,20 +141,26 @@ const modulePath = (file) =>
   JSON.stringify(path.join(root, file).replaceAll("\\", "/"));
 const bundle = await build({
   stdin: {
-    contents: `import React,{useState} from "react";
+    contents: `import React,{useEffect,useState} from "react";
 import {createRoot} from "react-dom/client";
 import ErrorBoundary from ${modulePath("src/components/common/ErrorBoundary.tsx")};
 import {LoadingProvider} from ${modulePath("src/components/common/LoadingState.tsx")};
-import {installAssetRecovery,markAssetRecoveryEdited} from ${modulePath("src/lib/assetRecovery.ts")};
+import {installAssetRecovery,registerAssetRecoveryPreparation} from ${modulePath("src/lib/assetRecovery.ts")};
 installAssetRecovery();
 const mode=new URLSearchParams(location.search).get('case');
 const current=document.querySelector('script[type="module"]').src;
 function Fixture(){
  const [failed,setFailed]=useState(false);
- const fail=()=>{const error=new Error('Unable to preload CSS for /assets/GongsinmoongoWorkspace-old.css');const event=new Event('vite:preloadError',{cancelable:true});event.payload=error;window.dispatchEvent(event);setFailed(true);};
+ const [draft,setDraft]=useState('');
+ useEffect(()=>registerAssetRecoveryPreparation(async()=>{
+  if(mode==='save-failed'&&window.fixtureSaveFail!==false)throw Error('Synthetic answer save failure');
+  if(mode==='slow-save')await new Promise(resolve=>window.releaseSave=resolve);
+  if(draft)sessionStorage.setItem('fixture-scoped-answer',draft);
+ }),[draft]);
+ const fail=()=>{const error=new Error('Unable to preload CSS for /assets/GongsinmoongoWorkspace-old.css');const event=new Event('vite:preloadError',{cancelable:true});event.payload=error;window.dispatchEvent(event);if(mode!=='background')setFailed(true);};
  if(failed)throw new Error('Unable to preload CSS for /assets/GongsinmoongoWorkspace-old.css');
- if(current.endsWith('/new.js')&&mode!=='repeat')return <p>새 버전 화면</p>;
- return <div><textarea aria-label="초안"/><button onClick={markAssetRecoveryEdited}>답안 선택</button><button onClick={fail}>파일 오류 발생</button></div>;
+ if((current.endsWith('/new.js')||document.querySelector('link[href="/fixture-new.css"]'))&&mode!=='repeat')return <><p>새 버전 화면</p><p>{sessionStorage.getItem('fixture-scoped-answer')}</p></>;
+ return <div><select aria-label="검색 필터"><option>전체</option><option>3반</option></select><textarea aria-label="초안" value={draft} onChange={e=>setDraft(e.target.value)}/><button onClick={()=>setDraft('선택한 답안')}>답안 선택</button><button onClick={fail}>파일 오류 발생</button></div>;
 }
 createRoot(document.getElementById('root')).render(<React.StrictMode><LoadingProvider><ErrorBoundary><Fixture/></ErrorBoundary></LoadingProvider></React.StrictMode>);`,
     resolveDir: root,
@@ -180,6 +193,7 @@ const js = bundle.outputFiles.find((file) => file.path.endsWith(".js")).text;
 const css =
   bundle.outputFiles.find((file) => file.path.endsWith(".css"))?.text || "";
 const counts = new Map();
+const unavailableModes = new Set(["network", "manual"]);
 const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, "http://fixture.invalid");
   if (url.pathname.endsWith(".js")) {
@@ -187,7 +201,9 @@ const server = http.createServer(async (request, response) => {
     response.end(js);
     return;
   }
-  if (url.pathname === "/fixture.css") {
+  if (
+    ["/fixture.css", "/fixture-new.css", "/route.css"].includes(url.pathname)
+  ) {
     response.setHeader("Content-Type", "text/css");
     response.end(css);
     return;
@@ -202,7 +218,7 @@ const server = http.createServer(async (request, response) => {
   const documentRequest = request.headers["sec-fetch-dest"] === "document";
   if (documentRequest) state.documents++;
   else state.checks++;
-  if (!documentRequest && ["network", "manual"].includes(mode)) {
+  if (!documentRequest && unavailableModes.has(mode)) {
     response
       .writeHead(503, { "Content-Type": "text/plain" })
       .end("unavailable");
@@ -211,17 +227,20 @@ const server = http.createServer(async (request, response) => {
   if (!documentRequest)
     await new Promise((resolve) => setTimeout(resolve, 180));
   const latest =
-    mode !== "unchanged" && (!documentRequest || state.documents > 1);
+    !["unchanged", "route-style"].includes(mode) &&
+    (!documentRequest || state.documents > 1);
   const entry =
-    mode === "repeat" && !documentRequest && state.checks > 1
-      ? "next"
-      : latest
-        ? "new"
-        : "old";
+    mode === "css-update"
+      ? "old"
+      : mode === "repeat" && !documentRequest && state.checks > 1
+        ? "next"
+        : latest
+          ? "new"
+          : "old";
   response.setHeader("Content-Type", "text/html");
   response.setHeader("Cache-Control", "no-store");
   response.end(
-    `<!doctype html><html><head><link rel="stylesheet" href="/fixture.css"></head><body><div id="root"></div><script type="module" src="/assets/${entry}.js"></script></body></html>`,
+    `<!doctype html><html><head><link rel="stylesheet" href="${mode === "css-update" && latest ? "/fixture-new.css" : "/fixture.css"}"></head><body><div id="root"></div><script type="module" src="/assets/${entry}.js"></script></body></html>`,
   );
 });
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -246,10 +265,17 @@ const browserChecks = [];
 try {
   for (const mode of [
     "updated",
+    "css-update",
+    "background",
+    "route-style",
     "unchanged",
     "offline",
     "draft",
     "choice-draft",
+    "filter",
+    "slow-save",
+    "save-failed",
+    "online",
     "storage",
     "network",
     "repeat",
@@ -265,10 +291,13 @@ try {
         ? route.continue()
         : route.abort(),
     );
-    if (mode === "offline")
-      await page.addInitScript(() =>
-        Object.defineProperty(navigator, "onLine", { get: () => false }),
-      );
+    if (["offline", "online"].includes(mode))
+      await page.addInitScript(() => {
+        window.fixtureOnline = false;
+        Object.defineProperty(navigator, "onLine", {
+          get: () => window.fixtureOnline,
+        });
+      });
     if (mode === "storage")
       await page.addInitScript(() =>
         Object.defineProperty(window, "sessionStorage", {
@@ -284,12 +313,58 @@ try {
         .fill("기기에만 남겨야 하는 초안");
     if (mode === "choice-draft")
       await page.getByRole("button", { name: "답안 선택" }).click();
+    if (mode === "filter")
+      await page
+        .getByRole("combobox", { name: "검색 필터" })
+        .selectOption({ label: "3반" });
+    if (["slow-save", "save-failed"].includes(mode))
+      await page.getByRole("textbox", { name: "초안" }).fill("보존할 답안");
+    if (mode === "route-style")
+      await page.evaluate(
+        () =>
+          new Promise((resolve) => {
+            const style = document.createElement("link");
+            style.rel = "stylesheet";
+            style.href = "/route.css";
+            style.onload = resolve;
+            document.head.append(style);
+          }),
+      );
     await page.getByRole("button", { name: "파일 오류 발생" }).click();
-    if (mode === "updated") {
+    if (
+      [
+        "updated",
+        "css-update",
+        "background",
+        "draft",
+        "choice-draft",
+        "filter",
+        "slow-save",
+      ].includes(mode)
+    ) {
       await page.locator('[data-loading-scope="screen"]').waitFor();
+      if (mode === "slow-save") {
+        await page.waitForFunction(
+          () => typeof window.releaseSave === "function",
+        );
+        assert.deepEqual(
+          counts.get(mode),
+          { documents: 1, checks: 1 },
+          "navigation waits for answer save",
+        );
+        await page.evaluate(() => window.releaseSave());
+      }
       await page.getByText("새 버전 화면").waitFor();
       assert.equal(new URL(page.url()).hash, "#/teacher/gongsinmoongo");
       assert.deepEqual(counts.get(mode), { documents: 2, checks: 1 });
+      if (mode === "draft")
+        await page
+          .getByText("기기에만 남겨야 하는 초안", { exact: true })
+          .waitFor();
+      if (mode === "choice-draft")
+        await page.getByText("선택한 답안", { exact: true }).waitFor();
+      if (mode === "slow-save")
+        await page.getByText("보존할 답안", { exact: true }).waitFor();
     } else {
       if (mode === "repeat")
         await page.getByRole("button", { name: "파일 오류 발생" }).click();
@@ -309,7 +384,7 @@ try {
         null,
         `${mode}: technical error collapsed`,
       );
-      const expected = ["offline", "draft", "choice-draft"].includes(mode)
+      const expected = ["offline", "online"].includes(mode)
         ? 0
         : mode === "repeat"
           ? 2
@@ -318,24 +393,32 @@ try {
         documents: mode === "repeat" ? 2 : 1,
         checks: expected,
       });
-      if (mode === "offline")
+      if (["offline", "online"].includes(mode))
         await page.getByText(/인터넷 연결이 끊겨/).waitFor();
-      if (["draft", "choice-draft"].includes(mode))
-        await page.getByText(/입력 중이던 내용이 있어/).waitFor();
-      if (mode === "choice-draft") {
-        await page
-          .getByText(/저장하지 않은 내용이 사라질 수 있습니다/)
-          .waitFor();
+      if (mode === "online") {
+        await page.evaluate(() => {
+          window.fixtureOnline = true;
+          window.dispatchEvent(new Event("online"));
+        });
+        await page.getByText("새 버전 화면").waitFor();
+        assert.deepEqual(counts.get(mode), { documents: 2, checks: 1 });
+      }
+      if (mode === "save-failed") {
+        await page.getByText(/입력 내용을 아직 저장하지 못했습니다/).waitFor();
+        assert.equal(counts.get(mode).documents, 1);
+        await page.evaluate(() => (window.fixtureSaveFail = false));
         await page.getByRole("button", { name: "다시 불러오기" }).click();
         await page.getByText("새 버전 화면").waitFor();
-        assert.deepEqual(counts.get(mode), { documents: 2, checks: 0 });
+        await page.getByText("보존할 답안", { exact: true }).waitFor();
+        assert.deepEqual(counts.get(mode), { documents: 2, checks: 2 });
       }
       if (["storage", "cancelled", "repeat"].includes(mode))
         await page.getByText(/새 버전으로 자동 복구하지 못했습니다/).waitFor();
       if (mode === "manual") {
+        unavailableModes.delete(mode);
         await page.getByRole("button", { name: "다시 불러오기" }).click();
         await page.getByText("새 버전 화면").waitFor();
-        assert.deepEqual(counts.get(mode), { documents: 2, checks: 1 });
+        assert.deepEqual(counts.get(mode), { documents: 2, checks: 2 });
       }
     }
     await page.screenshot({

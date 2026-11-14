@@ -1,0 +1,96 @@
+.written-score-upload-modes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-bottom: 16px;
+}
+.written-score-upload-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.written-score-upload-choice > button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-border, #e2e8f0);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ws-text, #0f172a);
+  font-size: 14px;
+  font-weight: 700;
+}
+.written-score-upload-choice > button.is-active {
+  color: var(--ws-primary, #2563eb);
+  border-color: var(--ws-primary, #2563eb);
+  background: var(--ws-primary-soft, #eff6ff);
+}
+.written-score-upload-choice > button:focus-visible,
+.written-score-upload-file:focus-within,
+.written-score-upload-template:focus-visible {
+  outline: 2px solid var(--ws-primary, #2563eb);
+  outline-offset: 2px;
+}
+.written-score-upload-scope {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.written-score-upload-scope > label,
+.written-score-upload-essay > label {
+  min-width: 0;
+}
+.written-score-upload-essay {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 160px;
+  gap: 12px;
+  margin-top: 16px;
+}
+.written-score-upload-file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+.written-score-upload-file,
+.written-score-upload-template {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--ws-border, #e2e8f0);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.written-score-upload-file {
+  background: var(--ws-primary, #2563eb);
+  border-color: var(--ws-primary, #2563eb);
+  color: white;
+}
+.written-score-upload-template {
+  background: white;
+  color: var(--ws-primary, #2563eb);
+}
+.score-manager-actions--written {
+  margin: 16px 0;
+  justify-content: flex-end;
+}
+@media (max-width: 639px) {
+  .written-score-upload-scope {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .written-score-upload-subject {
+    grid-column: 1/-1;
+  }
+  .written-score-upload-essay {
+    grid-template-columns: minmax(0, 1fr) 112px;
+  }
+  .written-score-upload-modes {
+    gap: 8px;
+  }
+}

@@ -62,7 +62,9 @@ export function projectWrittenExamAnalysis(input: {
           : undefined,
     };
   });
-  const cutoff = Date.parse(`${input.examDate}T23:59:59+09:00`);
+  const parsedCutoff = Date.parse(`${input.examDate}T23:59:59+09:00`);
+  // A missing exam date must not silently include later mock assessments.
+  const cutoff = Number.isFinite(parsedCutoff) ? parsedCutoff : 0;
   const dataset = buildWrittenExamAnalysisDataset({
     examId: input.id,
     title: input.title,

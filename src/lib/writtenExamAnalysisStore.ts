@@ -178,6 +178,7 @@ export async function loadWrittenExamAnalysisAsset(
 export async function saveWrittenExamAnalysis(
   config: Config,
   input: WrittenExamAnalysisSaveInput,
+  options: { materialsOnly?: boolean } = {},
 ): Promise<WrittenExamAnalysisMetadata> {
   assertArchiveWritable();
   const uid = auth.currentUser?.uid;
@@ -353,7 +354,7 @@ export async function saveWrittenExamAnalysis(
       });
     }
     const batch = writeBatch(db);
-    for (const [classId, students] of groups) {
+    for (const [classId, students] of options.materialsOnly ? [] : groups) {
       writtenClasses.push(classId);
       batch.set(
         doc(revisionRef, "classes", classId),
@@ -369,7 +370,7 @@ export async function saveWrittenExamAnalysis(
         }),
       );
     }
-    await batch.commit();
+    if (!options.materialsOnly) await batch.commit();
     await runTransaction(db, async (transaction) => {
       const current = await transaction.get(manifestRef);
       const currentRevision = current.exists() ? current.data().revision : null;

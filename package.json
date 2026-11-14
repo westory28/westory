@@ -27,7 +27,7 @@
     "verify:assessment-release": "node scripts/verify-assessment-release.mjs",
     "verify:quiz-settings": "node scripts/verify-quiz-settings-browser.mjs",
     "verify:quiz-analysis": "node scripts/verify-quiz-analysis.mjs && node scripts/verify-quiz-behavior.mjs",
-    "verify:written-exam-analysis": "node scripts/verify-written-exam-analysis-import.mjs && node scripts/verify-written-exam-analysis-projection.mjs && node scripts/verify-written-exam-paper-crop.mjs",
+    "verify:written-exam-analysis": "node scripts/verify-written-exam-analysis-import.mjs && node scripts/verify-written-exam-analysis-projection.mjs && node scripts/verify-written-exam-paper-crop.mjs && node scripts/verify-written-exam-score-source.mjs && node scripts/verify-written-score-workbooks.mjs && node scripts/verify-written-exam-essay-analysis.mjs",
     "test:written-exam-analysis-rules": "firebase emulators:exec --only firestore,storage --config firebase.written-exam-analysis-test.json --project demo-westory-written-analysis \"node scripts/verify-written-exam-analysis-rules.mjs\"",
     "verify:student-quiz-result": "node scripts/verify-student-quiz-result.mjs",
     "verify:quiz-score-comparison": "node scripts/verify-quiz-score-comparison.mjs",

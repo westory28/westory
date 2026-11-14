@@ -433,7 +433,7 @@ const OBJECTIVE_CHOICE_ALIASES: Record<string, string[]> = {
   Z: ["1", "2", "3", "4", "5"],
 };
 
-const parseObjectiveAnswerChoices = (value: unknown) => {
+export const parseObjectiveAnswerChoices = (value: unknown) => {
   const text = normalizeObjectiveAnswer(value);
   if (!text || text === ".") return [];
   return Array.from(
@@ -610,6 +610,7 @@ const parseWrittenExamObjectiveScoreWorkbook = (
     fallbackClass: string;
     title?: string;
     subject?: string;
+    rowLimit?: number;
   },
 ): ParsedWrittenExamEssayScoreUpload | null => {
   const layout = findObjectiveScoreLayout(rows);
@@ -641,7 +642,7 @@ const parseWrittenExamObjectiveScoreWorkbook = (
   const candidateRows = rows
     .map((row, rowIndex) => ({ row, rowIndex }))
     .slice(layout.maxScoreRowIndex + 1)
-    .slice(0, MAX_UPLOAD_ROWS)
+    .slice(0, params.rowLimit ?? MAX_UPLOAD_ROWS)
     .filter(({ row }) => row.some((cell) => toText(cell).length > 0));
   const scoreRows = candidateRows.filter(({ row }) =>
     isObjectiveStudentRow(row, layout),
@@ -751,6 +752,7 @@ export const parseWrittenExamEssayScoreWorkbook = (
     subject?: string;
     itemName?: string;
     maxScore: number;
+    rowLimit?: number;
   },
 ): ParsedWrittenExamEssayScoreUpload => {
   if (!Array.isArray(rows) || rows.length === 0) {
@@ -779,7 +781,7 @@ export const parseWrittenExamEssayScoreWorkbook = (
   const candidateRows = rows
     .map((row, rowIndex) => ({ row, rowIndex }))
     .slice(headerRowIndex + 1)
-    .slice(0, MAX_UPLOAD_ROWS)
+    .slice(0, params.rowLimit ?? MAX_UPLOAD_ROWS)
     .filter(({ row }) =>
       row.some((cell) => String(cell ?? "").trim().length > 0),
     );
