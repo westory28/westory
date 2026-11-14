@@ -12,11 +12,18 @@ import RefreshButton from "../../../components/common/RefreshButton";
 import InfoHelp from "../../../components/common/InfoHelp";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { getAssessmentSemesterId } from "../../../lib/assessmentRelease";
-import { isSemesterArchive } from "../../../lib/semesterArchive";
+import { readWrittenExamInfoWorkbook } from "../../../lib/writtenExamAnalysisWorkbook";
 import {
-  readWrittenExamInfoWorkbook,
-  readWrittenExamResponsesWorkbook,
-} from "../../../lib/writtenExamAnalysisWorkbook";
+  listWrittenExamScoreSources,
+  loadWrittenExamScoreAnalysis,
+  loadWrittenExamScoreRoster,
+  loadWrittenExamMaterials,
+  saveWrittenExamScoreMaterials,
+  scoreSourceClasses,
+  questionsFromScoreSource,
+  mergeScoreSourceQuestions,
+  type WrittenExamScoreSource,
+} from "../../../lib/writtenExamScoreSource";
 import { acquirePageScrollLock } from "../../../lib/pageScrollLock";
 import {
   type WrittenExamQuestionInfo,
@@ -31,9 +38,6 @@ import {
   type WrittenExamPaperRect,
 } from "../../../lib/writtenExamPaperCrop";
 import {
-  listWrittenExamAnalyses,
-  loadWrittenExamAnalysis,
-  saveWrittenExamAnalysis,
   loadWrittenExamAnalysisAsset,
   type WrittenExamAnalysisMetadata,
 } from "../../../lib/writtenExamAnalysisStore";
@@ -44,6 +48,11 @@ import {
 import { projectWrittenExamAnalysis } from "../../../lib/writtenExamAnalysisProjection";
 import type { AchievementAnalysis } from "../../../lib/achievementAnalysis";
 import QuizAchievementAnalysis from "./QuizAchievementAnalysis";
+import WrittenExamEssayAnalysis from "./WrittenExamEssayAnalysis";
+import type {
+  PerformanceScoreRoster,
+  PerformanceScoreRosterRow,
+} from "../../../lib/performanceScores";
 import "./QuizClassAnalysis.css";
 import "./writtenExamAnalysis.css";
 
@@ -56,14 +65,21 @@ const reports = [
   "추정 분할점수",
   "학급별 결과·비교",
 ];
+const essayReports = ["전체 결과", "문항별 점수", "학급별 비교", "학생별 결과"];
+type LoadedExam = {
+  metadata: WrittenExamAnalysisMetadata;
+  students: WrittenExamImportedStudent[];
+  scoreRows: PerformanceScoreRosterRow[];
+  scoreItems: PerformanceScoreRoster["items"];
+  mock: QuizClassAchievement | null;
+  mockReady: boolean;
+  classId: string;
+  identity: string;
+};
 const message = (error: unknown) =>
   error instanceof Error
     ? error.message
     : "자료를 처리하지 못했습니다. 다시 시도해 주세요.";
-const today = () =>
-  new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(
-    new Date(),
-  );
 const fmt = (value: number | null | undefined) =>
   value == null ? "—" : Number(value.toFixed(2));
 
@@ -73,34 +89,36 @@ export default function WrittenExamAnalysis({
   navigation: ReactNode;
 }) {
   const { config, currentUser, authGeneration } = useAuth();
-  const { showToast } = useAppToast();
   const semesterId = getAssessmentSemesterId(config);
   const identity = `${currentUser?.uid}:${authGeneration}:${semesterId}`;
   const identityRef = useRef(identity);
   identityRef.current = identity;
   const request = useRef(0);
-  const [catalogRows, setCatalog] = useState<WrittenExamAnalysisMetadata[]>([]);
+  const [catalogRows, setCatalog] = useState<WrittenExamScoreSource[]>([]);
   const [catalogIdentity, setCatalogIdentity] = useState("");
   const catalog = catalogIdentity === identity ? catalogRows : [];
   const [examId, setExamId] = useState("");
   const [classId, setClassId] = useState("");
   const [view, setView] = useState(0);
+  const [analysisKind, setAnalysisKind] = useState<"objective" | "essay">(
+    "objective",
+  );
+  const [essayView, setEssayView] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [mockError, setMockError] = useState("");
-  const [loaded, setLoaded] = useState<{
-    metadata: WrittenExamAnalysisMetadata;
-    students: WrittenExamImportedStudent[];
-    mock: QuizClassAchievement | null;
-    classId: string;
-    identity: string;
-  } | null>(null);
-  const [upload, setUpload] = useState(false);
+  const [loaded, setLoaded] = useState<LoadedExam | null>(null);
   const [inspect, setInspect] = useState<number | null>(null);
   const selected = catalog.find((exam) => exam.id === examId);
 
   const load = useCallback(
-    async (target: string, room: string, refreshCatalog = false) => {
+    async (
+      target: string,
+      room: string,
+      refreshCatalog = false,
+      reuse?: LoadedExam,
+      kind = analysisKind,
+    ) => {
       const run = ++request.current;
       const current = identity;
       setLoading(true);
@@ -108,7 +126,7 @@ export default function WrittenExamAnalysis({
       setMockError("");
       try {
         const list = refreshCatalog
-          ? await listWrittenExamAnalyses(config)
+          ? await listWrittenExamScoreSources(config)
           : null;
         if (run !== request.current || identityRef.current !== current) return;
         if (list) {
@@ -116,37 +134,50 @@ export default function WrittenExamAnalysis({
           setCatalogIdentity(current);
         }
         if (!target) return;
-        const result = await loadWrittenExamAnalysis(
-          config,
-          target,
-          room ? { classId: room } : {},
-        );
+        const result =
+          reuse ||
+          (await loadWrittenExamScoreAnalysis(
+            config,
+            target,
+            room ? { classId: room } : {},
+          ));
         if (run !== request.current || identityRef.current !== current) return;
         let mock: QuizClassAchievement | null = null;
-        try {
-          mock = await getQuizClassAchievement(
-            {
-              semesterId,
-              unitId: "exam_prep",
-              category: "exam_prep",
-              examRound: "round_3",
-              classIds: room ? [room] : [],
-              ...(room ? {} : { grade: result.metadata.grade }),
-            },
-            current,
-            true,
-          );
-          if (mock.semesterId !== semesterId || mock.complete === false)
-            throw new Error("모의고사 분석 범위를 확인하지 못했습니다.");
-        } catch {
-          mock = null;
-          if (run === request.current && identityRef.current === current)
-            setMockError(
-              "모의고사 자료를 불러오지 못해 정기시험 자료로만 추정했습니다. 새로고침으로 다시 시도해 주세요.",
+        if (kind === "objective" && result.students.length > 0) {
+          try {
+            if (!result.metadata.examDate) throw new Error("시험일 미등록");
+            mock = await getQuizClassAchievement(
+              {
+                semesterId,
+                unitId: "exam_prep",
+                category: "exam_prep",
+                examRound: "round_3",
+                classIds: room ? [room] : [],
+                ...(room ? {} : { grade: result.metadata.grade }),
+              },
+              current,
+              true,
             );
+            if (mock.semesterId !== semesterId || mock.complete === false)
+              throw new Error("모의고사 분석 범위를 확인하지 못했습니다.");
+          } catch {
+            mock = null;
+            if (run === request.current && identityRef.current === current)
+              setMockError(
+                result.metadata.examDate
+                  ? "모의고사 자료를 불러오지 못해 정기시험 자료로만 추정했습니다. 새로고침으로 다시 시도해 주세요."
+                  : "모의고사 누적 추정에는 시험일이 필요합니다. 점수 등록 및 확인의 업로드 창에서 시험일을 등록해 주세요.",
+              );
+          }
         }
         if (run !== request.current || identityRef.current !== current) return;
-        setLoaded({ ...result, mock, classId: room, identity: current });
+        setLoaded({
+          ...result,
+          mock,
+          mockReady: kind === "objective",
+          classId: room,
+          identity: current,
+        });
       } catch (failure) {
         if (run === request.current && identityRef.current === current)
           setError(message(failure));
@@ -155,7 +186,7 @@ export default function WrittenExamAnalysis({
           setLoading(false);
       }
     },
-    [identity, config, semesterId],
+    [identity, config, semesterId, analysisKind],
   );
 
   useEffect(() => {
@@ -163,7 +194,6 @@ export default function WrittenExamAnalysis({
     setExamId("");
     setClassId("");
     setLoaded(null);
-    setUpload(false);
     setInspect(null);
     void load("", "", true);
     return () => {
@@ -173,7 +203,9 @@ export default function WrittenExamAnalysis({
 
   const projection = useMemo(
     () =>
-      loaded?.identity === identity
+      loaded?.identity === identity &&
+      loaded.metadata.questions.length &&
+      loaded.students.length
         ? projectWrittenExamAnalysis({
             ...loaded.metadata,
             students: loaded.students,
@@ -214,24 +246,74 @@ export default function WrittenExamAnalysis({
     <section className="written-exam-analysis">
       <div className="ws-page-header">
         <h2>정기시험 점수 관리</h2>
-        <div className="written-exam-actions">
-          <RefreshButton
-            loading={loading}
-            label="정기시험 분석 새로고침"
-            onClick={() => load(examId, classId, true)}
-          />
-          {!isSemesterArchive && (
-            <button
-              type="button"
-              className="qca-primary"
-              onClick={() => setUpload(true)}
-            >
-              분석 자료 업로드
-            </button>
-          )}
-        </div>
       </div>
       {navigation}
+      <div className="written-exam-tab-toolbar">
+        <div
+          className="written-exam-kind-tabs"
+          role="tablist"
+          aria-label="분석 유형"
+        >
+          {(
+            [
+              ["objective", "선택형"],
+              ["essay", "논술형"],
+            ] as const
+          ).map(([kind, label]) => (
+            <button
+              key={kind}
+              type="button"
+              id={`written-exam-kind-${kind}`}
+              role="tab"
+              aria-controls="written-exam-analysis-panel"
+              tabIndex={analysisKind === kind ? 0 : -1}
+              onKeyDown={(event) => {
+                if (
+                  !["ArrowLeft", "ArrowRight", "Home", "End"].includes(
+                    event.key,
+                  )
+                )
+                  return;
+                event.preventDefault();
+                const next =
+                  event.key === "Home"
+                    ? "objective"
+                    : event.key === "End"
+                      ? "essay"
+                      : kind === "objective"
+                        ? "essay"
+                        : "objective";
+                const button = document.getElementById(
+                  `written-exam-kind-${next}`,
+                );
+                button?.focus();
+                button?.click();
+              }}
+              aria-selected={analysisKind === kind}
+              className={analysisKind === kind ? "is-active" : ""}
+              disabled={loading}
+              onClick={() => {
+                setAnalysisKind(kind);
+                setInspect(null);
+                if (
+                  kind === "objective" &&
+                  current &&
+                  loaded &&
+                  !loaded.mockReady
+                )
+                  void load(examId, classId, false, loaded, "objective");
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <RefreshButton
+          loading={loading}
+          label="정기시험 분석 새로고침"
+          onClick={() => load(examId, classId, true)}
+        />
+      </div>
       <div className="written-exam-filters">
         <label>
           평가명
@@ -250,7 +332,7 @@ export default function WrittenExamAnalysis({
             <option value="">평가 선택</option>
             {catalog.map((exam) => (
               <option key={exam.id} value={exam.id}>
-                {exam.title} · {exam.grade}학년
+                {exam.title} · {exam.targetGrade}학년
               </option>
             ))}
           </select>
@@ -267,91 +349,105 @@ export default function WrittenExamAnalysis({
             }}
           >
             <option value="">학년 전체</option>
-            {selected?.classIds.map((id) => (
-              <option key={id} value={id}>
-                {id.split("-").at(-1)}반
-              </option>
-            ))}
+            {selected &&
+              scoreSourceClasses(selected).map((id) => (
+                <option key={id} value={id}>
+                  {id.split("-").at(-1)}반
+                </option>
+              ))}
           </select>
         </label>
         <label>
           분석 항목
           <select
-            value={view}
-            onChange={(event) => setView(Number(event.target.value))}
+            value={analysisKind === "objective" ? view : essayView}
+            onChange={(event) =>
+              analysisKind === "objective"
+                ? setView(Number(event.target.value))
+                : setEssayView(Number(event.target.value))
+            }
           >
-            {reports.map((label, i) => (
-              <option key={label} value={i}>
-                {label}
-              </option>
-            ))}
+            {(analysisKind === "objective" ? reports : essayReports).map(
+              (label, i) => (
+                <option key={label} value={i}>
+                  {label}
+                </option>
+              ),
+            )}
           </select>
         </label>
       </div>
-      {error && (
-        <p role="alert" className="qca-error">
-          {error}
-        </p>
-      )}
-      {mockError && (
-        <p role="alert" className="qca-error">
-          {mockError}
-        </p>
-      )}
-      {loading && <p role="status">분석 자료를 불러오는 중입니다.</p>}
-      {!loading && !catalog.length && !error && (
-        <p className="written-exam-empty">등록된 분석 자료가 없습니다.</p>
-      )}
-      {current && projection && (
-        <div aria-busy={loading}>
-          {view === 6 ? (
-            <ClassComparison
-              students={loaded.students}
-              questions={loaded.metadata.questions}
-            />
-          ) : (
-            <QuizAchievementAnalysis
-              key={`${identity}:${examId}:${classId}`}
-              scope={{
-                semesterId,
-                unitId: `written:${examId}`,
-                category: "exam_prep",
-                examRound: "round_4",
-                classIds: classId ? [classId] : [],
-                ...(classId ? {} : { grade: loaded.metadata.grade }),
-              }}
-              identityKey={identity}
-              canEdit={false}
-              suppliedData={projection.data}
-              reportView={view}
-              reportLabels={reports}
-              suppliedHelp={help}
-              onInspectQuestion={(id) => setInspect(Number(id))}
-              renderEstimates={(analysis) => (
-                <WrittenExamEstimates
-                  analysis={analysis}
-                  showCuts={view === 5}
-                />
-              )}
-            />
-          )}
-        </div>
-      )}
-      {upload && catalogIdentity === identity && (
-        <WrittenExamUpload
-          key={identity}
-          existing={selected}
-          onClose={() => setUpload(false)}
-          onSaved={async (saved) => {
-            if (identityRef.current !== identity) return;
-            setUpload(false);
-            setExamId(saved.id);
-            setClassId("");
-            showToast({ tone: "success", title: "분석 자료를 저장했습니다." });
-            await load(saved.id, "", true);
-          }}
-        />
-      )}
+      <div
+        id="written-exam-analysis-panel"
+        role="tabpanel"
+        aria-labelledby={`written-exam-kind-${analysisKind}`}
+        aria-busy={loading}
+      >
+        {error && (
+          <p role="alert" className="qca-error">
+            {error}
+          </p>
+        )}
+        {analysisKind === "objective" && mockError && (
+          <p role="alert" className="qca-error">
+            {mockError}
+          </p>
+        )}
+        {loading && <p role="status">분석 자료를 불러오는 중입니다.</p>}
+        {!loading && !catalog.length && !error && (
+          <p className="written-exam-empty">
+            등록된 정기시험 점수표가 없습니다.
+          </p>
+        )}
+        {analysisKind === "objective" && current && !projection && !loading && (
+          <p className="written-exam-empty">
+            정오 분석에 필요한 서답형 답안이 아직 등록되지 않았습니다. 등록된
+            논술형 점수와 피드백은 논술형 탭에서 확인할 수 있습니다.
+          </p>
+        )}
+        {analysisKind === "essay" && current && loaded && (
+          <WrittenExamEssayAnalysis
+            rows={loaded.scoreRows || []}
+            items={loaded.scoreItems || []}
+            view={essayView}
+          />
+        )}
+        {analysisKind === "objective" && current && projection && (
+          <div aria-busy={loading}>
+            {view === 6 ? (
+              <ClassComparison
+                students={loaded.students}
+                questions={loaded.metadata.questions}
+              />
+            ) : (
+              <QuizAchievementAnalysis
+                key={`${identity}:${examId}:${classId}`}
+                scope={{
+                  semesterId,
+                  unitId: `written:${examId}`,
+                  category: "exam_prep",
+                  examRound: "round_4",
+                  classIds: classId ? [classId] : [],
+                  ...(classId ? {} : { grade: loaded.metadata.grade }),
+                }}
+                identityKey={identity}
+                canEdit={false}
+                suppliedData={projection.data}
+                reportView={view}
+                reportLabels={reports}
+                suppliedHelp={help}
+                onInspectQuestion={(id) => setInspect(Number(id))}
+                renderEstimates={(analysis) => (
+                  <WrittenExamEstimates
+                    analysis={analysis}
+                    showCuts={view === 5}
+                  />
+                )}
+              />
+            )}
+          </div>
+        )}
+      </div>
       {inspect !== null && current && loaded && (
         <PaperPreview
           number={inspect}
@@ -601,7 +697,7 @@ function PaperPreview({
     }
     if (crop.status !== "ready") {
       setError(
-        "문항 영역 확인이 필요합니다. 분석 자료 업로드에서 영역을 확인해 주세요.",
+        "문항 영역 확인이 필요합니다. 점수 등록 및 확인의 업로드 창에서 원안지를 확인해 주세요.",
       );
       return;
     }
@@ -647,220 +743,330 @@ function PaperPreview({
   );
 }
 
-function WrittenExamUpload({
-  existing,
-  onClose,
-  onSaved,
-}: {
-  existing?: WrittenExamAnalysisMetadata;
-  onClose: () => void;
-  onSaved: (metadata: WrittenExamAnalysisMetadata) => Promise<void>;
-}) {
-  const { config } = useAuth();
-  const [title, setTitle] = useState(existing?.title || "");
-  const [replaceExisting, setReplaceExisting] = useState(Boolean(existing));
-  const [grade, setGrade] = useState(existing?.grade || "3");
-  const [examDate, setExamDate] = useState(existing?.examDate || today());
+export function WrittenExamMaterials() {
+  const { config, currentUser, authGeneration } = useAuth();
+  return (
+    <WrittenExamMaterialEditor
+      key={`${currentUser?.uid}:${authGeneration}:${getAssessmentSemesterId(config)}`}
+    />
+  );
+}
+
+function WrittenExamMaterialEditor() {
+  const { config, currentUser, authGeneration } = useAuth();
+  const { showToast } = useAppToast();
+  const identity = `${currentUser?.uid}:${authGeneration}:${getAssessmentSemesterId(config)}`;
+  const owner = useRef(identity);
+  owner.current = identity;
+  const run = useRef(0);
+  const [sources, setSources] = useState<WrittenExamScoreSource[]>([]);
+  const [sourceId, setSourceId] = useState("");
+  const [examDate, setExamDate] = useState("");
   const [infoFile, setInfoFile] = useState<File | null>(null);
-  const [answerFile, setAnswerFile] = useState<File | null>(null);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [existing, setExisting] = useState<WrittenExamAnalysisMetadata | null>(
+    null,
+  );
   const [questions, setQuestions] = useState<WrittenExamQuestionInfo[]>([]);
-  const [students, setStudents] = useState<WrittenExamImportedStudent[]>([]);
   const [pages, setPages] = useState<WrittenExamPaperPage[]>([]);
   const [crops, setCrops] = useState<WrittenExamPaperCrop[]>([]);
+  const [files, setFiles] = useState<
+    Array<{ fileName: string; kind: "pdf" | "page"; page?: number; blob: Blob }>
+  >([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [preview, setPreview] = useState(false);
   const controller = useRef<AbortController | null>(null);
-  useEffect(() => () => controller.current?.abort(), []);
-  const close = () => {
-    if (!busy) onClose();
+  const source = sources.find((item) => item.id === sourceId);
+  const reload = async () => {
+    const sequence = ++run.current,
+      expected = identity;
+    setBusy(true);
+    setError("");
+    try {
+      const list = await listWrittenExamScoreSources(config);
+      if (sequence === run.current && owner.current === expected)
+        setSources(list);
+    } catch (failure) {
+      if (sequence === run.current && owner.current === expected)
+        setError(message(failure));
+    } finally {
+      if (sequence === run.current && owner.current === expected)
+        setBusy(false);
+    }
+  };
+  useEffect(() => {
+    setSources([]);
+    setSourceId("");
+    setPreview(false);
+    setExisting(null);
+    void reload();
+    return () => {
+      ++run.current;
+      controller.current?.abort();
+    };
+  }, [identity]);
+  const select = async (id: string) => {
+    const sequence = ++run.current,
+      expected = identity;
+    setSourceId(id);
+    setPreview(false);
+    setExisting(null);
+    setExamDate("");
+    setInfoFile(null);
+    setPdfFile(null);
+    setFiles([]);
+    setCrops([]);
+    setPages([]);
+    setQuestions([]);
+    setWarnings([]);
+    setError("");
+    if (!id) return;
+    setBusy(true);
+    try {
+      const saved = await loadWrittenExamMaterials(config, id);
+      if (sequence !== run.current || owner.current !== expected) return;
+      setExisting(saved);
+      setExamDate(saved?.examDate || "");
+    } catch (failure) {
+      if (sequence === run.current && owner.current === expected)
+        setError(message(failure));
+    } finally {
+      if (sequence === run.current && owner.current === expected)
+        setBusy(false);
+    }
   };
   const prepare = async () => {
-    if (
-      !infoFile ||
-      !answerFile ||
-      !title.trim() ||
-      !/^\d+$/.test(grade) ||
-      !examDate
-    ) {
-      setError("평가명·학년·시험일과 두 엑셀 파일을 확인해 주세요.");
+    if (!source || !examDate) {
+      setError("점수표와 시험일을 선택해 주세요.");
       return;
     }
+    const sequence = ++run.current,
+      expected = identity;
     setBusy(true);
     setError("");
-    setProgress("엑셀 자료 확인 중");
+    setProgress("등록 자료 확인 중");
     controller.current = new AbortController();
     try {
-      const info = await readWrittenExamInfoWorkbook(infoFile);
-      const answer = await readWrittenExamResponsesWorkbook(answerFile, {
-        targetGrade: grade,
-        questions: info.questions,
-      });
-      setQuestions(info.questions);
-      setStudents(answer.students);
-      const paper = pdfFile
-        ? await processWrittenExamPaper(pdfFile, info.questions, {
-            signal: controller.current.signal,
-            onProgress: (page, total) =>
-              setProgress(`PDF ${page}/${total}쪽 처리 중`),
-          })
-        : { pages: [], crops: [], warnings: [] };
-      setPages(paper.pages);
-      setCrops(paper.crops);
-      setWarnings([...info.warnings, ...answer.warnings, ...paper.warnings]);
-      setPreview(true);
-    } catch (failure) {
-      setError(message(failure));
-    } finally {
-      setBusy(false);
-      setProgress("");
-    }
-  };
-  const save = async () => {
-    setBusy(true);
-    setError("");
-    setProgress("분석 자료 저장 중");
-    try {
-      const saved = await saveWrittenExamAnalysis(config, {
-        examId: replaceExisting ? existing?.id : undefined,
-        expectedRevision: replaceExisting ? existing?.revision || null : null,
-        title: title.trim(),
-        grade,
-        examDate,
-        questions,
-        students,
-        crops,
-        files: [
-          ...(pdfFile
-            ? [
-                {
-                  fileName: "paper.pdf",
-                  blob: pdfFile as Blob,
-                  kind: "pdf" as const,
-                },
-              ]
-            : []),
-          ...pages.map((page) => ({
+      const roster = await loadWrittenExamScoreRoster(config, source.id);
+      const info = infoFile
+        ? await readWrittenExamInfoWorkbook(infoFile)
+        : { questions: existing?.questions || [], warnings: [] };
+      const nextQuestions = mergeScoreSourceQuestions(
+        questionsFromScoreSource(roster),
+        info.questions,
+      );
+      if (!nextQuestions.length)
+        throw new Error(
+          "원안지 문항을 구분할 문항정보표 또는 서답형 정오답 명렬표가 필요합니다.",
+        );
+      let paper: {
+        pages: WrittenExamPaperPage[];
+        crops: WrittenExamPaperCrop[];
+        warnings: string[];
+      };
+      let nextFiles: typeof files;
+      if (pdfFile) {
+        paper = await processWrittenExamPaper(pdfFile, nextQuestions, {
+          signal: controller.current.signal,
+          onProgress: (page, total) => {
+            if (owner.current === expected && sequence === run.current)
+              setProgress(`PDF ${page}/${total}쪽 처리 중`);
+          },
+        });
+        nextFiles = [
+          { fileName: "paper.pdf", blob: pdfFile, kind: "pdf" },
+          ...paper.pages.map((page) => ({
             fileName: `page-${page.page}.webp`,
             blob: page.blob,
             kind: "page" as const,
             page: page.page,
           })),
-        ],
-      });
-      await onSaved(saved);
+        ];
+      } else if (existing?.files.length) {
+        // Keep an existing paper when only its item metadata/date is updated.
+        nextFiles = await Promise.all(
+          existing.files.map(async (file) => ({
+            ...file,
+            blob: await loadWrittenExamAnalysisAsset(
+              config,
+              source.id,
+              existing.revision,
+              file.fileName,
+            ),
+          })),
+        );
+        const oldPages: WrittenExamPaperPage[] = [];
+        for (const file of nextFiles.filter((file) => file.kind === "page")) {
+          const bitmap = await createImageBitmap(file.blob);
+          oldPages.push({
+            page: file.page!,
+            width: bitmap.width,
+            height: bitmap.height,
+            blob: file.blob,
+          });
+          bitmap.close();
+        }
+        paper = { pages: oldPages, crops: existing.crops, warnings: [] };
+      } else {
+        paper = { pages: [], crops: [], warnings: [] };
+        nextFiles = [];
+      }
+      if (sequence !== run.current || owner.current !== expected) return;
+      setQuestions(nextQuestions);
+      setPages(paper.pages);
+      setCrops(paper.crops);
+      setFiles(nextFiles);
+      setWarnings([...info.warnings, ...paper.warnings]);
+      setPreview(true);
     } catch (failure) {
-      setError(message(failure));
+      if (sequence === run.current && owner.current === expected)
+        setError(message(failure));
     } finally {
-      setBusy(false);
-      setProgress("");
+      if (sequence === run.current && owner.current === expected) {
+        setBusy(false);
+        setProgress("");
+      }
+    }
+  };
+  const save = async () => {
+    if (!source) return;
+    const sequence = ++run.current,
+      expected = identity;
+    setBusy(true);
+    setError("");
+    setProgress("원안지·문항정보 저장 중");
+    try {
+      const saved = await saveWrittenExamScoreMaterials(config, {
+        examId: source.id,
+        expectedRevision: existing?.revision || null,
+        examDate,
+        questions,
+        crops,
+        files,
+      });
+      if (sequence !== run.current || owner.current !== expected) return;
+      setExisting(saved);
+      setPreview(false);
+      setInfoFile(null);
+      setPdfFile(null);
+      showToast({ tone: "success", title: "원안지·문항정보를 저장했습니다." });
+    } catch (failure) {
+      if (sequence === run.current && owner.current === expected)
+        setError(message(failure));
+    } finally {
+      if (sequence === run.current && owner.current === expected) {
+        setBusy(false);
+        setProgress("");
+      }
     }
   };
   return (
-    <Dialog title="정기시험 분석 자료 업로드" onClose={close} wide>
-      {!preview && existing && (
-        <label className="written-exam-save-target">
-          저장 대상
-          <select
-            disabled={busy}
-            value={replaceExisting ? "replace" : "new"}
-            onChange={(event) =>
-              setReplaceExisting(event.target.value === "replace")
-            }
-          >
-            <option value="replace">선택한 평가 자료 교체</option>
-            <option value="new">새 평가로 등록</option>
-          </select>
-        </label>
-      )}
+    <section
+      className="written-exam-materials"
+      aria-label="원안지·문항정보 등록"
+    >
       {!preview ? (
-        <div className="written-exam-upload-fields">
-          <label>
-            평가명
-            <input
-              value={title}
-              disabled={busy}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={120}
-            />
-          </label>
-          <label>
-            학년
-            <select
-              value={grade}
-              disabled={busy}
-              onChange={(e) => setGrade(e.target.value)}
-            >
-              {[1, 2, 3].map((n) => (
-                <option key={n} value={n}>
-                  {n}학년
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            시험일
-            <input
-              type="date"
-              value={examDate}
-              disabled={busy}
-              onChange={(e) => setExamDate(e.target.value)}
-            />
-          </label>
-          <label>
-            문항정보표 엑셀
-            <input
-              type="file"
-              accept=".xlsx"
-              disabled={busy}
-              onChange={(e) => setInfoFile(e.target.files?.[0] || null)}
-            />
-          </label>
-          <label>
-            학생답 정오표 엑셀
-            <input
-              type="file"
-              accept=".xlsx"
-              disabled={busy}
-              onChange={(e) => setAnswerFile(e.target.files?.[0] || null)}
-            />
-          </label>
-          <label>
-            원안지 PDF
-            <input
-              type="file"
-              accept=".pdf,application/pdf"
-              disabled={busy}
-              onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
-            />
-          </label>
-          <InfoHelp label="분석 자료 파일 형식">
-            <p>
-              문항정보표에는 문항번호·정답·배점을, 학생답 정오표에는
-              반·번호·이름과 문항별 답 또는 정오를 넣어 주세요. 성취기준·목표
-              성취수준·난이도를 함께 넣으면 해당 분석에 반영합니다. 서술형
-              통계는 이번 분석에 포함하지 않습니다.
+        <>
+          <div className="written-exam-material-fields">
+            <label>
+              등록된 점수표
+              <select
+                value={sourceId}
+                disabled={busy}
+                onChange={(event) => void select(event.target.value)}
+              >
+                <option value="">점수표 선택</option>
+                {sources.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.title} · {item.targetGrade}학년
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              시험일
+              <input
+                type="date"
+                value={examDate}
+                disabled={busy}
+                onChange={(event) => setExamDate(event.target.value)}
+              />
+            </label>
+          </div>
+          <div className="written-exam-material-files">
+            <div>
+              <div className="written-exam-file-label">
+                <label htmlFor="written-exam-info-file">문항정보표 엑셀</label>
+                <InfoHelp label="문항정보표 안내">
+                  <p>
+                    성취기준·목표 성취수준·난이도를 보완합니다.
+                    문항번호·정답·배점은 등록된 서답형 점수표와 같아야 합니다.
+                    기존 문항정보를 유지하려면 파일을 다시 선택하지 않아도
+                    됩니다.
+                  </p>
+                </InfoHelp>
+              </div>
+              <input
+                id="written-exam-info-file"
+                key={`info:${sourceId}:${existing?.revision}`}
+                type="file"
+                accept=".xlsx"
+                disabled={busy}
+                onChange={(event) =>
+                  setInfoFile(event.target.files?.[0] || null)
+                }
+              />
+            </div>
+            <div>
+              <div className="written-exam-file-label">
+                <label htmlFor="written-exam-paper-file">원안지 PDF</label>
+                <InfoHelp label="원안지 PDF 안내">
+                  <p>
+                    문항별 영역을 자동으로 나누고 정답 선지만 강조합니다. 인식이
+                    불명확한 문항은 미리보기에서 확인합니다. 파일을 다시
+                    선택하지 않으면 기존 원안지를 유지합니다.
+                  </p>
+                </InfoHelp>
+              </div>
+              <input
+                id="written-exam-paper-file"
+                key={`pdf:${sourceId}:${existing?.revision}`}
+                type="file"
+                accept=".pdf,application/pdf"
+                disabled={busy}
+                onChange={(event) =>
+                  setPdfFile(event.target.files?.[0] || null)
+                }
+              />
+            </div>
+          </div>
+          {existing && (
+            <p className="written-exam-material-status">
+              등록됨 · {existing.questions.length}문항 · 원안지{" "}
+              {existing.files.filter((file) => file.kind === "page").length}쪽
             </p>
-          </InfoHelp>
-        </div>
+          )}
+          {!busy && !sources.length && !error && (
+            <p>먼저 서답형 또는 논술형 점수표를 등록해 주세요.</p>
+          )}
+        </>
       ) : (
         <>
           <div className="written-exam-import-summary">
-            <strong>{title}</strong>
+            <strong>{source?.title}</strong>
             <span>
-              {grade}학년 · {students.length}명 · 선택형 {questions.length}문항
-              · PDF {pages.length}쪽
+              {questions.length}문항 · PDF {pages.length}쪽
             </span>
           </div>
           {warnings.length > 0 && (
             <details>
               <summary>확인할 항목 {warnings.length}개</summary>
               <ul>
-                {warnings.map((warning, i) => (
-                  <li key={i}>{warning}</li>
+                {warnings.map((warning, index) => (
+                  <li key={index}>{warning}</li>
                 ))}
               </ul>
             </details>
@@ -880,10 +1086,20 @@ function WrittenExamUpload({
           {error}
         </p>
       )}
-      {busy && <p role="status">{progress}</p>}
+      {busy && (
+        <p role="status">{progress || "점수표 목록을 불러오는 중입니다."}</p>
+      )}
       <div className="written-exam-dialog-actions">
+        {error && !sourceId && (
+          <RefreshButton
+            label="점수표 목록 새로고침"
+            loading={busy}
+            onClick={reload}
+          />
+        )}
         {preview && (
           <button
+            type="button"
             className="qca-secondary"
             disabled={busy}
             onClick={() => setPreview(false)}
@@ -892,20 +1108,19 @@ function WrittenExamUpload({
           </button>
         )}
         <button
+          type="button"
           className="qca-primary"
           disabled={
-            busy || (preview && crops.some((crop) => crop.status !== "ready"))
+            busy ||
+            !sourceId ||
+            (preview && crops.some((crop) => crop.status !== "ready"))
           }
           onClick={() => void (preview ? save() : prepare())}
         >
-          {preview
-            ? replaceExisting
-              ? "분석 자료 교체 저장"
-              : "분석 자료 저장"
-            : "자료 확인"}
+          {preview ? "원안지·문항정보 저장" : "자료 확인"}
         </button>
       </div>
-    </Dialog>
+    </section>
   );
 }
 

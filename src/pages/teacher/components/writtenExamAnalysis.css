@@ -174,3 +174,99 @@
     padding: 16px;
   }
 }
+.written-exam-tab-actions {
+  justify-content: flex-end;
+  margin: 16px 0;
+}
+.written-exam-tab-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0;
+}
+.written-exam-kind-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.written-exam-kind-tabs button {
+  min-height: 44px;
+  padding: 8px 18px;
+  border: 1px solid var(--ws-border, #e2e8f0);
+  border-radius: 999px;
+  color: var(--ws-text-muted, #64748b);
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+}
+.written-exam-kind-tabs button.is-active {
+  border-color: var(--ws-primary, #2563eb);
+  color: var(--ws-primary, #2563eb);
+  background: var(--ws-primary-soft, #eff6ff);
+}
+.written-exam-kind-tabs button:focus-visible {
+  outline: 2px solid var(--ws-primary, #2563eb);
+  outline-offset: 2px;
+}
+.written-exam-materials {
+  display: grid;
+  gap: 16px;
+}
+.written-exam-material-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 12px;
+}
+.written-exam-material-fields label {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.written-exam-material-fields select,
+.written-exam-material-fields input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--ws-border, #e2e8f0);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--ws-surface, #fff);
+  color: var(--ws-text, #0f172a);
+}
+.written-exam-material-files {
+  display: grid;
+  gap: 16px;
+}
+.written-exam-file-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.written-exam-material-files input[type="file"] {
+  max-width: 100%;
+  min-height: 44px;
+  font-size: 13px;
+}
+.written-exam-material-files input::file-selector-button {
+  min-height: 44px;
+  margin-right: 10px;
+  padding: 8px 16px;
+  border: 1px solid var(--ws-border, #e2e8f0);
+  border-radius: 8px;
+  background: var(--ws-surface, #fff);
+  color: var(--ws-primary, #2563eb);
+  cursor: pointer;
+}
+.written-exam-material-status {
+  font-size: 13px;
+  color: var(--ws-text-muted, #64748b);
+}
+@media (max-width: 540px) {
+  .written-exam-material-fields {
+    grid-template-columns: 1fr;
+  }
+}

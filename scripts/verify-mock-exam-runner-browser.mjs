@@ -95,16 +95,21 @@ const js = built.outputFiles.find(file => file.path.endsWith(".js")).text;
 const globalCss = (await fs.readFile(path.join(root, "assets/css/style.css"), "utf8")) + (await fs.readFile(path.join(root, "src/assets/index.css"), "utf8"));
 const css = (globalCss + built.outputFiles.find(file => file.path.endsWith(".css")).text).replace(/@import\s+url\([^;]+;/g, "");
 const html = `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><style>${css}body{margin:0}#root{min-height:100dvh}</style><div id="root"></div><script type="module" src="/fixture.js"></script></html>`;
+const assetRecoveryVersions = new Set();
 const server = http.createServer((request, response) => {
-  const pathname = new URL(request.url, "http://localhost").pathname;
+  const requestUrl = new URL(request.url, "http://localhost");
+  const pathname = requestUrl.pathname;
   if(['/qa-material.svg','/qa-set-material.svg'].includes(pathname)) {
     response.setHeader('Content-Type','image/svg+xml');
     response.setHeader('Cache-Control','public, max-age=3600');
     response.end('<svg xmlns="http://www.w3.org/2000/svg" width="480" height="180"><rect x="2" y="2" width="476" height="176" fill="white" stroke="black"/><path d="M40 150L160 50L280 150L400 70" fill="none" stroke="black" stroke-width="4"/></svg>');
     return;
   }
-  response.setHeader("Content-Type", ["/fixture.js", "/tailwind.js"].includes(pathname) ? "text/javascript; charset=utf-8" : "text/html; charset=utf-8");
-  response.end(pathname === "/fixture.js" ? js : pathname === "/tailwind.js" ? tailwind : html);
+  const assetUpdate = requestUrl.searchParams.has('asset-recovery');
+  if(assetUpdate && request.headers['sec-fetch-dest']!=='document') assetRecoveryVersions.add(requestUrl.search);
+  const documentHtml = assetUpdate && assetRecoveryVersions.has(requestUrl.search) ? html.replace('/fixture.js','/updated-fixture.js') : html;
+  response.setHeader("Content-Type", ["/fixture.js", "/updated-fixture.js", "/tailwind.js"].includes(pathname) ? "text/javascript; charset=utf-8" : "text/html; charset=utf-8");
+  response.end(["/fixture.js", "/updated-fixture.js"].includes(pathname) ? js : pathname === "/tailwind.js" ? tailwind : documentHtml);
 });
 await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
@@ -275,19 +280,42 @@ try {
       await page.close();
     }
   } else if(process.argv.includes('--asset-recovery-only')) {
-    for(const width of [390,1280]) {
-      const page = await open(width,844,width===390);
+    for(const width of [390,768,1280]) {
+      const page = await open(width,844,width===390,'?asset-recovery&viewport='+width+(width===1280?'&slow-save':''));
       const dialog = await openQuestion(page,1);
       const answer = dialog.getByRole('radio',{name:/조선/});
+      if(width===1280) {
+        await dialog.getByRole('radio',{name:/가야/}).focus();await page.keyboard.press('Space');
+        await page.waitForFunction(()=>window.mockRunnerQa.saves.length===1);
+      }
       await answer.focus();
       await page.keyboard.press('Space');
       assert.equal(await answer.isChecked(),true);
-      // This fixture does not install the document input/change listener: the
-      // real QuizRunner answer callback must protect keyboard/button changes.
-      assert.equal(await page.evaluate(()=>window.mockRunnerRecoverAsset()),'draft');
+      const prior = await page.evaluate(()=>({attemptId:window.mockRunnerQa.attempt.attemptId, deadline:window.mockRunnerQa.attempt.deadlineAtIso}));
+      await page.evaluate(()=>{
+        const observe=()=>{
+          sessionStorage.setItem('asset-final-saves',JSON.stringify(window.mockRunnerQa.saves));
+          sessionStorage.setItem('asset-final-submits',JSON.stringify(window.mockRunnerQa.submits));
+        };
+        window.addEventListener('beforeunload',observe);
+        void window.mockRunnerRecoverAsset();
+      });
+      if(width===1280) {
+        await page.waitForTimeout(150);
+        assert.equal(await page.evaluate(()=>window.mockRunnerQa.saves.length),1,'Recovery waits for the held older save');
+        assert.equal(await page.evaluate(()=>document.querySelector('script[type="module"]').src.endsWith('/fixture.js')),true);
+        await page.evaluate(()=>window.mockRunnerQa.releaseSave());
+        await page.waitForFunction(()=>window.mockRunnerQa.saves.length===2);
+        assert.equal(await page.evaluate(()=>window.mockRunnerQa.saves[1].expectedRevision),2,'Recovery final save uses confirmed older-save revision');
+        await page.evaluate(()=>window.mockRunnerQa.releaseSave());
+      }
+      await page.waitForFunction(()=>document.querySelector('script[type="module"]')?.src.endsWith('/updated-fixture.js')&&!!window.mockRunnerQa?.attempt);
       await page.waitForFunction(()=>window.mockRunnerQa.attempt?.answers?.['1']==='조선');
-      assert.equal(await answer.isChecked(),true);
-      assert.equal(await page.evaluate(()=>window.mockRunnerQa.starts.length),1);
+      const resumed = await openQuestion(page,1);
+      assert.equal(await resumed.getByRole('radio',{name:/조선/}).isChecked(),true);
+      const final=await page.evaluate(()=>({attemptId:window.mockRunnerQa.attempt.attemptId,deadline:window.mockRunnerQa.attempt.deadlineAtIso,saves:JSON.parse(sessionStorage.getItem('asset-final-saves')),submits:JSON.parse(sessionStorage.getItem('asset-final-submits'))}));
+      assert.equal(final.attemptId,prior.attemptId);assert.equal(final.deadline,prior.deadline);
+      assert.equal(final.saves.at(-1).answers['1'],'조선');assert.equal(final.submits.length,0,'Update recovery never submits or grades');
       await page.screenshot({path:path.join(evidence,`asset-recovery-answer-${width}.png`),fullPage:true});
       await page.close();
     }
@@ -704,7 +732,7 @@ try {
   console.log(process.argv.includes('--scroll-only')
     ? `Mock exam real-portal scroll regression passed: actual MainLayout/Header/Footer, internal paper scroll only, question width, answer preservation, full screen and route-exit restoration at 390/768/1280/1440px. Evidence: ${evidence}`
     : process.argv.includes('--asset-recovery-only')
-    ? `Exam asset recovery passed: actual keyboard answer changes prevent automatic deployment reload at 390/1280px and preserve normal answer saving. Evidence: ${evidence}`
+    ? `Exam asset recovery passed: actual keyboard answers save before automatic update at 390/768/1280px, then resume the same attempt and deadline without submission. Evidence: ${evidence}`
     : process.argv.includes('--recovery-only')
     ? `Exam recovery passed: closed active attempt and deadline preserved, limited submitted attempt blocked, unavailable counts unknown, and forbidden fresh attempt blocked. Evidence: ${evidence}`
     : process.argv.includes('--loading-only')

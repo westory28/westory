@@ -83,7 +83,20 @@ const mocks = {
   "qa-archive": `export const isSemesterArchive=false;`,
   "qa-assessment-release": `export const getAssessmentSemesterId=config=>config.year+'-'+config.semester;`,
   "qa-score-kind": `export const WRITTEN_EXAM_SCORE_KIND='written_exam_essay';`,
-  "qa-score-manager": `import React from 'react';export default function Manager({navigation}){return <section><div className="ws-page-header"><h2>정기시험 점수 관리</h2><button>이의제기</button><button>업로드</button><button>서명 현황</button></div>{navigation}<p>기존 점수 운영 검증 경계</p></section>}`,
+  "qa-score-manager": `import React,{useState} from 'react';export default function Manager({navigation,writtenExamMaterials}){const[open,setOpen]=useState(false);return <section><div className="ws-page-header"><h2>정기시험 점수 관리</h2></div>{navigation}<button>이의제기</button><button onClick={()=>setOpen(true)}>업로드</button><button>서명 현황</button>{open&&<section role="dialog" aria-label="정기시험 점수표 업로드"><button onClick={()=>setOpen(false)}>업로드 창 닫기</button>{writtenExamMaterials}</section>}</section>}`,
+  "qa-source": `import{qa,begin}from'qa-state';
+const essayItems=[{itemKey:'essay-1',name:'논술형 1',shortName:'1-(1)',examSection:'essay',maxScore:2},{itemKey:'essay-2',name:'논술형 2',shortName:'1-(2)',examSection:'essay',maxScore:3}];
+const scoreRows=()=>qa.students.map((student,index)=>{const scores=[[0,0],[2,3],[1,null],[null,null]][index%4];return{uid:'qa-uid-'+student.key,rowKey:student.key,grade:student.grade,class:student.class,number:student.number,studentName:student.name,items:essayItems.map((item,i)=>({...item,score:scores[i],scoreEntered:scores[i]!==null,feedback:i===0?'문항 근거를 다시 확인하세요.':''})),feedback:'교사가 확인한 기존 피드백 '+student.key,evidence:'기존 채점 근거',totalScore:scores.reduce((sum,score)=>sum+(score||0),0),enteredScoreCount:scores.filter(score=>score!==null).length,totalMaxScore:5}});
+const source=()=>({id:qa.metadata.id,title:qa.metadata.title,targetGrade:'3',classes:['1','2'],scoreKind:'written_exam_essay',scoreContentKind:'mixed',academicYear:'2026',semester:'2',items:[...qa.metadata.questions.map(q=>({...q,examSection:'objective',questionNumber:q.number,correctAnswer:q.answer,maxScore:q.points,answerChoices:q.options})),...essayItems],rows:scoreRows()});
+export async function listWrittenExamScoreSources(){await begin('list',{from:'score-ledger'});return[source(),{...source(),id:'qa-other',title:'다른 정기시험'}]}
+export async function loadWrittenExamScoreAnalysis(config,id,options={}){await begin('load',{id,...options,from:'score-ledger'});if(qa.failLoad)throw new Error('합성 서버 읽기 실패');return{metadata:qa.metadata,hasObjectiveScores:true,students:qa.students.filter(s=>!options.classId||('3-'+s.class)===options.classId),scoreRows:scoreRows().filter(s=>!options.classId||('3-'+s.class)===options.classId),scoreItems:source().items}}
+export async function loadWrittenExamScoreRoster(config,id){await begin('roster',{id});return {...source(),id}}
+export async function loadWrittenExamMaterials(config,id){await begin('materials',{id});return id==='qa-other'?null:qa.metadata}
+export function scoreSourceClasses(s){return s.classes.map(c=>s.targetGrade+'-'+c)}
+export function questionsFromScoreSource(s){return s.items.filter(i=>i.examSection==='objective').map(i=>({number:i.questionNumber,answer:i.correctAnswer,points:i.maxScore,options:i.answerChoices,achievementStandardCodes:[],targetAchievementLevel:'',intendedDifficulty:'',concepts:[]}))}
+export function mergeScoreSourceQuestions(source,info){if(!info.length)return source;if(source.length!==info.length||source.some(q=>!info.some(i=>i.number===q.number&&i.answer===q.answer&&i.points===q.points)))throw new Error('문항정보표의 문항번호·정답·배점이 등록된 점수표와 다릅니다.');return info}
+export async function saveWrittenExamScoreMaterials(config,input){await begin('save',{hasStudentPayload:'students'in input});if('students'in input)throw new Error('Student payload must not reach materials API');qa.saved=input;qa.metadata={...qa.metadata,...input,id:input.examId,revision:qa.metadata.revision+'-next',files:input.files.map(({blob,...file})=>({...file,size:blob.size,contentType:blob.type}))};for(const file of input.files)qa.assets.set(file.fileName,file.blob);return qa.metadata}
+`,
   "qa-store": `import{qa,begin}from'qa-state';
 export async function listWrittenExamAnalyses(){await begin('list');return [qa.metadata]}
 export async function loadWrittenExamAnalysis(config,id,options={}){await begin('load',{id,...options});if(qa.failLoad)throw new Error('합성 서버 읽기 실패');return{metadata:qa.metadata,students:qa.students.filter(s=>!options.classId||('3-'+s.class)===options.classId)}}
@@ -105,6 +118,7 @@ const mappings = [
   ["/lib/performanceScores", "qa-score-kind"],
   ["/PerformanceScoreManager", "qa-score-manager"],
   ["/lib/writtenExamAnalysisStore", "qa-store"],
+  ["/lib/writtenExamScoreSource", "qa-source"],
   ["/lib/quizClassAnalysis", "qa-class"],
   ["/useQuizClassUpdates", "qa-updates"],
   ["/components/common/LoadingState", "qa-loading"],
@@ -224,6 +238,10 @@ await variant(
 await variant(infoWorkbook, "missing-info.xlsx", (book) =>
   book.getWorksheet("문항정보 1").spliceRows(5, 1),
 );
+await variant(infoWorkbook, "updated-metadata.xlsx", (book) => {
+  book.getWorksheet("문항정보 1").getRow(2).getCell(5).value = "E";
+  book.getWorksheet("문항정보 2").getRow(6).getCell(5).value = "E";
+});
 await variant(answerWorkbook, "invalid-sheet.xlsx", (book) =>
   book.addWorksheet("알 수 없는 시트").addRow(["참고 자료"]),
 );
@@ -293,6 +311,12 @@ try {
   });
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.getByRole("button", { name: "평가 분석", exact: true }).waitFor();
+  assert.equal(
+    await page
+      .getByRole("button", { name: "점수 등록 및 확인", exact: true })
+      .count(),
+    1,
+  );
   const workbookChecks = await page.evaluate(async () => {
     const file = async (name) =>
       new File([await (await fetch("/qa-fixture/" + name)).blob()], name);
@@ -358,6 +382,13 @@ try {
     "Hidden analysis tab must not read data",
   );
   await page.getByRole("button", { name: "평가 분석", exact: true }).click();
+  assert.equal(
+    await page
+      .getByRole("button", { name: "분석 자료 업로드", exact: true })
+      .count(),
+    0,
+    "Analysis has no duplicate upload workflow",
+  );
   await page
     .locator(".written-exam-filters select")
     .nth(0)
@@ -374,6 +405,12 @@ try {
   );
   const initialCalls = await page.evaluate(() => window.examQa.calls.slice());
   assert.equal(initialCalls.filter((call) => call.op === "mock").length, 1);
+  assert(
+    initialCalls
+      .filter((call) => ["list", "load"].includes(call.op))
+      .every((call) => call.from === "score-ledger"),
+    "Analysis reads the registered score ledger",
+  );
   for (const width of [390, 768, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     const css = await page
@@ -516,17 +553,245 @@ try {
     "Failed mock lookup must not show stale mock estimates",
   );
   await page.evaluate(() => (window.examQa.failMock = false));
+  const objectiveTab = page.getByRole("tab", { name: "선택형", exact: true });
+  const essayTab = page.getByRole("tab", { name: "논술형", exact: true });
+  const failedSwitchCalls = await page.evaluate(
+    () => window.examQa.calls.length,
+  );
+  await essayTab.click();
+  assert.equal(
+    await page
+      .getByRole("alert")
+      .filter({ hasText: "모의고사 자료를 불러오지 못해" })
+      .count(),
+    0,
+    "Mock warning stays hidden in essay reports",
+  );
+  await essayTab.press("Home");
   await page
-    .getByRole("button", { name: "분석 자료 업로드", exact: true })
+    .getByRole("alert")
+    .filter({ hasText: "모의고사 자료를 불러오지 못해" })
+    .waitFor();
+  assert.equal(
+    await page.evaluate(() => window.examQa.calls.length),
+    failedSwitchCalls,
+    "Returning to cached choice data preserves its warning without reads",
+  );
+  await page.locator(".written-exam-filters select").nth(1).selectOption("");
+  await page.waitForFunction(
+    () =>
+      document.querySelector('button[aria-label="정기시험 분석 새로고침"]')
+        .disabled === false,
+  );
+  const beforeEssay = await page.evaluate(() => window.examQa.calls.length);
+  await objectiveTab.focus();
+  await objectiveTab.press("End");
+  assert.equal(await essayTab.getAttribute("aria-selected"), "true");
+  assert.equal(await essayTab.getAttribute("tabindex"), "0");
+  assert.equal(await objectiveTab.getAttribute("tabindex"), "-1");
+  assert(await essayTab.evaluate((el) => el === document.activeElement));
+  assert.equal(
+    await page.getByRole("tabpanel").getAttribute("aria-labelledby"),
+    "written-exam-kind-essay",
+  );
+  await essayTab.press("ArrowLeft");
+  assert.equal(await objectiveTab.getAttribute("aria-selected"), "true");
+  await objectiveTab.press("ArrowRight");
+  assert.equal(await essayTab.getAttribute("aria-selected"), "true");
+  await essayTab.press("Home");
+  assert.equal(await objectiveTab.getAttribute("aria-selected"), "true");
+  await objectiveTab.press("End");
+  const essayTitles = [
+    "전체 결과",
+    "문항별 점수",
+    "학급별 비교",
+    "학생별 결과",
+  ];
+  assert.equal(
+    await page
+      .locator(".written-exam-filters select")
+      .nth(2)
+      .locator("option")
+      .count(),
+    4,
+  );
+  for (const width of [390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (let view = 0; view < 4; view++) {
+      await page
+        .locator(".written-exam-filters select")
+        .nth(2)
+        .selectOption(String(view));
+      await page
+        .getByRole("heading", {
+          name: `논술형 ${essayTitles[view]}`,
+          exact: true,
+        })
+        .waitFor();
+      assert.equal(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth > innerWidth + 1,
+        ),
+        false,
+        `Essay overflow at ${width}px / ${view}`,
+      );
+      assert.deepEqual(
+        await page.locator(".wea-counts dd").allTextContents(),
+        ["24명", "12명", "6명", "6명"],
+        "Entered zero, partial and missing remain distinct",
+      );
+      if (view === 0)
+        assert.deepEqual(
+          await page
+            .getByRole("region", {
+              name: "논술형 전체 원점수 결과",
+              exact: true,
+            })
+            .locator("tbody td")
+            .allTextContents(),
+          ["12명", "2.5", "2.5", "0", "5"],
+          "Actual score mean/population SD include zeros and exclude incomplete totals",
+        );
+      if (view === 1)
+        assert.deepEqual(
+          await page
+            .getByRole("region", { name: "논술형 문항별 원점수", exact: true })
+            .locator("tbody tr")
+            .first()
+            .locator("td")
+            .allTextContents()
+            .then((cells) => cells.slice(0, 4)),
+          ["18명", "6명", "1", "0.82"],
+        );
+      if (view === 2)
+        assert.equal(
+          await page
+            .getByRole("region", {
+              name: "논술형 학급별 원점수 비교",
+              exact: true,
+            })
+            .locator("tbody tr")
+            .count(),
+          2,
+        );
+      if (view === 3) {
+        const table = page.getByRole("region", {
+          name: "논술형 학생별 점수와 교사 피드백",
+          exact: true,
+        });
+        assert.equal(await table.locator("tbody tr").count(), 24);
+        assert.equal(
+          await table
+            .getByText("교사가 확인한 기존 피드백 3-1-1", { exact: true })
+            .count(),
+          1,
+        );
+        assert.equal(
+          await table
+            .getByText("문항 근거를 다시 확인하세요.", { exact: false })
+            .count(),
+          24,
+        );
+      }
+      await page.screenshot({
+        path: path.join(out, `essay-report-${view}-${width}.png`),
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
+    evidence.push({ width, essayReports: 4, actualScoreRows: 24 });
+  }
+  assert.equal(
+    await page.evaluate(() => window.examQa.calls.length),
+    beforeEssay,
+    "Choice/essay tabs and essay reports require no additional queries",
+  );
+  const essayRefreshStart = await page.evaluate(
+    () => window.examQa.calls.length,
+  );
+  await page.getByRole("button", { name: "정기시험 분석 새로고침" }).click();
+  await page.waitForFunction(
+    () =>
+      document.querySelector('button[aria-label="정기시험 분석 새로고침"]')
+        .disabled === false,
+  );
+  assert.deepEqual(
+    await page.evaluate(
+      (start) => window.examQa.calls.slice(start).map((call) => call.op),
+      essayRefreshStart,
+    ),
+    ["list", "load"],
+    "Essay refresh never reads mock attempts",
+  );
+  assert.equal(
+    await page.locator(".written-exam-filters select").nth(2).inputValue(),
+    "3",
+    "Essay refresh preserves report selection",
+  );
+  const choiceReturnStart = await page.evaluate(
+    () => window.examQa.calls.length,
+  );
+  await objectiveTab.click();
+  await page.waitForFunction(
+    () =>
+      document.querySelector('button[aria-label="정기시험 분석 새로고침"]')
+        .disabled === false,
+  );
+  assert.deepEqual(
+    await page.evaluate(
+      (start) => window.examQa.calls.slice(start).map((call) => call.op),
+      choiceReturnStart,
+    ),
+    ["mock"],
+    "Choice after essay refresh reuses score data and fetches only mock attempts",
+  );
+  assert.equal(
+    await page.locator(".written-exam-filters select").nth(2).inputValue(),
+    "3",
+    "Choice report selection is preserved independently",
+  );
+  await page
+    .getByRole("button", { name: "점수 등록 및 확인", exact: true })
     .click();
-  let dialog = page.getByRole("dialog", { name: "정기시험 분석 자료 업로드" });
-  await dialog.getByLabel("문항정보표 엑셀").setInputFiles(infoFile);
-  await dialog.getByLabel("학생답 정오표 엑셀").setInputFiles(answerFile);
-  await dialog.getByLabel("원안지 PDF").setInputFiles(pdfFile);
-  await dialog.getByRole("button", { name: "자료 확인", exact: true }).click();
+  await page.getByRole("button", { name: "업로드", exact: true }).click();
+  let dialog = page.getByRole("dialog", { name: "정기시험 점수표 업로드" });
+  const originalStudents = await page.evaluate(() =>
+    JSON.stringify(window.examQa.students),
+  );
   await dialog
-    .getByText(/3학년 · 24명 · 선택형 8문항 · PDF 2쪽/)
-    .waitFor({ timeout: 30000 });
+    .locator(".written-exam-material-fields select")
+    .selectOption("qa-exam");
+  await dialog
+    .getByLabel("문항정보표 엑셀")
+    .setInputFiles(path.join(out, "conflicting-info.xlsx"));
+  await dialog.getByLabel("원안지 PDF", { exact: true }).setInputFiles(pdfFile);
+  await dialog
+    .locator(".written-exam-material-fields select")
+    .selectOption("qa-other");
+  await dialog.getByLabel("시험일", { exact: true }).fill("2026-11-14");
+  await dialog.getByRole("button", { name: "자료 확인", exact: true }).click();
+  await dialog.getByText(/8문항 · PDF 0쪽/).waitFor();
+  assert.equal(
+    await dialog.getByRole("alert").count(),
+    0,
+    "Changing the source clears stale info and PDF file state",
+  );
+  await dialog
+    .getByRole("button", { name: "파일 다시 선택", exact: true })
+    .click();
+  await dialog
+    .locator(".written-exam-material-fields select")
+    .selectOption("qa-exam");
+  await dialog.getByLabel("시험일", { exact: true }).fill("2026-11-14");
+  assert.equal(
+    await dialog.getByLabel("학생답 정오표 엑셀").count(),
+    0,
+    "Materials never ask for student responses again",
+  );
+  await dialog.getByLabel("문항정보표 엑셀").setInputFiles(infoFile);
+  await dialog.getByLabel("원안지 PDF", { exact: true }).setInputFiles(pdfFile);
+  await dialog.getByRole("button", { name: "자료 확인", exact: true }).click();
+  await dialog.getByText(/8문항 · PDF 2쪽/).waitFor({ timeout: 30000 });
   const highlight = await dialog
     .locator(".written-exam-highlight")
     .first()
@@ -541,7 +806,7 @@ try {
     .click();
   assert.equal(
     await dialog
-      .getByRole("button", { name: "분석 자료 교체 저장", exact: true })
+      .getByRole("button", { name: "원안지·문항정보 저장", exact: true })
       .isDisabled(),
     true,
   );
@@ -567,11 +832,12 @@ try {
     .focus();
   await page.keyboard.press("Enter");
   await dialog
-    .getByRole("button", { name: "분석 자료 교체 저장", exact: true })
+    .getByRole("button", { name: "원안지·문항정보 저장", exact: true })
     .click();
-  await dialog.waitFor({ state: "detached" });
+  await dialog.getByText(/등록됨 · 8문항 · 원안지 2쪽/).waitFor();
   const saved = await page.evaluate(() => ({
-    count: window.examQa.saved.students.length,
+    count: window.examQa.students.length,
+    hasStudentPayload: "students" in window.examQa.saved,
     crops: window.examQa.saved.crops.map((c) => ({
       number: c.questionNumber,
       status: c.status,
@@ -583,12 +849,91 @@ try {
     })),
   }));
   assert.equal(saved.count, 24);
+  assert.equal(saved.hasStudentPayload, false);
   assert.equal(saved.crops.length, 8);
   assert.ok(
     saved.crops.every(
       (crop) => crop.status === "ready" && crop.highlights === 1,
     ),
   );
+  const paperBefore = await page.evaluate(async () => {
+    const digest = async (blob) =>
+      Array.from(
+        new Uint8Array(
+          await crypto.subtle.digest("SHA-256", await blob.arrayBuffer()),
+        ),
+      ).join(",");
+    return Promise.all(
+      window.examQa.saved.files.map(async (file) => [
+        file.fileName,
+        await digest(file.blob),
+      ]),
+    );
+  });
+  assert.equal(
+    await dialog
+      .getByLabel("원안지 PDF", { exact: true })
+      .evaluate((el) => el.files.length),
+    0,
+    "PDF input clears after successful save",
+  );
+  await dialog.getByLabel("시험일", { exact: true }).fill("2026-11-15");
+  await dialog
+    .getByLabel("문항정보표 엑셀")
+    .setInputFiles(path.join(out, "updated-metadata.xlsx"));
+  await dialog.getByRole("button", { name: "자료 확인", exact: true }).click();
+  await dialog.getByText(/8문항 · PDF 2쪽/).waitFor();
+  await dialog
+    .getByRole("button", { name: "원안지·문항정보 저장", exact: true })
+    .click();
+  await dialog.getByText(/등록됨 · 8문항 · 원안지 2쪽/).waitFor();
+  const paperAfter = await page.evaluate(async () => {
+    const digest = async (blob) =>
+      Array.from(
+        new Uint8Array(
+          await crypto.subtle.digest("SHA-256", await blob.arrayBuffer()),
+        ),
+      ).join(",");
+    return Promise.all(
+      window.examQa.saved.files.map(async (file) => [
+        file.fileName,
+        await digest(file.blob),
+      ]),
+    );
+  });
+  assert.deepEqual(
+    paperAfter,
+    paperBefore,
+    "Metadata-only changes preserve original PDF and page bytes",
+  );
+  assert.equal(
+    await page.evaluate(() => window.examQa.saved.examDate),
+    "2026-11-15",
+  );
+  assert.equal(
+    await page.evaluate(
+      () => window.examQa.saved.questions[0].targetAchievementLevel,
+    ),
+    "E",
+  );
+  assert.equal(
+    await page.evaluate(() => JSON.stringify(window.examQa.students)),
+    originalStudents,
+    "All ledger responses remain unchanged after both materials saves",
+  );
+  assert.equal(
+    await page.evaluate(() => window.examQa.students.length),
+    24,
+    "Materials save leaves ledger responses untouched",
+  );
+  await dialog
+    .getByRole("button", { name: "업로드 창 닫기", exact: true })
+    .click();
+  await page.getByRole("button", { name: "평가 분석", exact: true }).click();
+  await page
+    .locator(".written-exam-filters select")
+    .nth(0)
+    .selectOption("qa-exam");
   await page.locator(".written-exam-filters select").nth(2).selectOption("1");
   const buttons = await page
     .locator(".quiz-achievement-analysis button")
@@ -645,7 +990,7 @@ try {
     ),
   );
   console.log(
-    `PASS written exam UI: 7 reports at 390/768/1440; scoped refresh/filter preservation/retry; mock linkage; all-sheet XLSX+PDF upload, dedup/conflict/missing/invalid-sheet checks; question image/focus. Evidence: ${out}`,
+    `PASS written exam UI: choice 7 + essay 4 reports at 390/768/1440; actual score statistics/feedback; accessible tabs and query-free view switching; essay refresh without mock reads; scoped refresh/retry; materials-only XLSX+PDF save and byte preservation; question image/focus. Evidence: ${out}`,
   );
 } catch (error) {
   await page?.screenshot({

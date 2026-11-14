@@ -1829,6 +1829,13 @@ const createWisCommandAdapter = ({ projectId, now } = {}) => ({
             : commandType === WIS_COMMAND_TYPES.DEDUCT_WIS
               ? "DEDUCT"
               : "ADJUST";
+      const notification = commandType === WIS_COMMAND_TYPES.GRANT_WIS
+        ? await require("./wisGrantNotifications").prepareWisGrantNotification({
+            transaction, account, amount: payload.amount, reason: payload.reason,
+            ledgerEntryId: ledgerIdFor(account.semesterId, account.accountId, type, payload.sourceId),
+            actor, timestamp, concreteTimestamp: projectionTimestamp,
+          })
+        : { refs: [], apply() {} };
       const posted = await postLedger({
         transaction,
         account,
@@ -1843,6 +1850,7 @@ const createWisCommandAdapter = ({ projectId, now } = {}) => ({
         timestamp: projectionTimestamp,
         actor,
       });
+      notification.apply();
       if (type === "INITIAL_GRANT") {
         // The manifest is ACTIVE here. Promote this prepared account only as
         // part of its exactly-once opening, without scanning every account.
@@ -1874,6 +1882,7 @@ const createWisCommandAdapter = ({ projectId, now } = {}) => ({
             accountPath(account.accountId),
             balancePath(account.accountId),
             rankingPath(account.accountId),
+            ...notification.refs,
           ],
         },
         sourceHash: sha256(`${type}\n${payload.sourceId}`),

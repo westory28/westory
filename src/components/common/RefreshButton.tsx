@@ -54,7 +54,8 @@ export default function RefreshButton({
         strokeLinejoin="round"
         aria-hidden="true"
       >
-        <path d="M20 7v5h-5M20 12a8 8 0 1 0-2.3 5.7" />
+        <path d="M3 10a9 9 0 0 1 15.4-6.4L21 6M21 6V1M21 6h-5" />
+        <path d="M21 14a9 9 0 0 1-15.4 6.4L3 18M3 18v5M3 18h5" />
       </svg>
     </button>
   );

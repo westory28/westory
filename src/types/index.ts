@@ -275,6 +275,7 @@ export type WestoryNotificationType =
   | "history_dictionary_rejected"
   | "point_order_requested"
   | "point_order_reviewed"
+  | "wis_granted"
   | "lesson_worksheet_published"
   | "privacy_policy_updated"
   | "question_created"

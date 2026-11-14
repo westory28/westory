@@ -6,6 +6,11 @@ import PerformanceScoreManager from "./PerformanceScoreManager";
 import "./writtenExamAnalysis.css";
 
 const WrittenExamAnalysis = lazy(() => import("./WrittenExamAnalysis"));
+const WrittenExamMaterials = lazy(() =>
+  import("./WrittenExamAnalysis").then((module) => ({
+    default: module.WrittenExamMaterials,
+  })),
+);
 
 const WrittenExamEssayScoreManager: React.FC = () => {
   const [params, setParams] = useSearchParams();
@@ -13,12 +18,12 @@ const WrittenExamEssayScoreManager: React.FC = () => {
   const navigation = (
     <PortalSubNavigation
       title="정기시험"
-      activeLabel={analysis ? "평가 분석" : "점수 확인·운영"}
+      activeLabel={analysis ? "평가 분석" : "점수 등록 및 확인"}
       variant="tabs"
       className="written-exam-navigation"
     >
       {[
-        [false, "점수 확인·운영"],
+        [false, "점수 등록 및 확인"],
         [true, "평가 분석"],
       ].map(([value, label]) => (
         <button
@@ -45,6 +50,13 @@ const WrittenExamEssayScoreManager: React.FC = () => {
     <PerformanceScoreManager
       scoreKind={WRITTEN_EXAM_SCORE_KIND}
       navigation={navigation}
+      writtenExamMaterials={
+        <Suspense
+          fallback={<p role="status">원안지 등록을 준비하고 있습니다.</p>}
+        >
+          <WrittenExamMaterials />
+        </Suspense>
+      }
     />
   );
 };

@@ -20,6 +20,48 @@ type State = {
 class ErrorBoundary extends React.Component<Props, State> {
   private mounted = true;
   private navigationTimer: ReturnType<typeof setTimeout> | undefined;
+  private recover = async (manual = false, retry = true) => {
+    if (typeof window === "undefined") return;
+    clearTimeout(this.navigationTimer);
+    this.setState({ recovery: "checking" });
+    const recovery = await recoverAssetLoad(this.state.message, {
+      retry,
+      manual,
+    });
+    if (!this.mounted) return;
+    this.setState({ recovery });
+    if (recovery === "reloading") {
+      // A genuine beforeunload guard may cancel navigation. Keep retry usable.
+      this.navigationTimer = setTimeout(() => {
+        if (this.mounted) this.setState({ recovery: "reload-blocked" });
+      }, 3000);
+    }
+  };
+  private onOnline = () => {
+    if (
+      ["offline", "unavailable", "save-failed"].includes(
+        this.state.recovery || "",
+      )
+    )
+      void this.recover();
+  };
+  private onAssetError = (event: Event) => {
+    const error = (event as Event & { payload?: unknown }).payload;
+    if (!isAssetLoadFailure(error)) return;
+    // Capture the owning screen's checkpoint before replacing its subtree.
+    // This also covers failed background preloads that React.lazy never renders.
+    void recoverAssetLoad(error);
+    this.setState(
+      {
+        hasError: true,
+        message: normalizeAssetError(error),
+        recovery: "checking",
+      },
+      () => {
+        void this.recover(false, false);
+      },
+    );
+  };
 
   constructor(props: Props) {
     super(props);
@@ -36,27 +78,20 @@ class ErrorBoundary extends React.Component<Props, State> {
 
   componentDidMount() {
     this.mounted = true;
+    window.addEventListener("online", this.onOnline);
+    window.addEventListener("vite:preloadError", this.onAssetError);
   }
 
   componentDidCatch(error: unknown) {
     console.error("Unhandled render error:", error);
     if (typeof window === "undefined" || !isAssetLoadFailure(error)) return;
-    void recoverAssetLoad(error).then((recovery) => {
-      if (!this.mounted) return;
-      this.setState({ recovery });
-      if (recovery === "reloading") {
-        clearTimeout(this.navigationTimer);
-        // beforeunload can cancel navigation. Do not strand the page behind
-        // a permanent loading surface if the browser stays here.
-        this.navigationTimer = setTimeout(() => {
-          if (this.mounted) this.setState({ recovery: "reload-blocked" });
-        }, 3000);
-      }
-    });
+    void this.recover(false, false);
   }
 
   componentWillUnmount() {
     this.mounted = false;
+    window.removeEventListener("online", this.onOnline);
+    window.removeEventListener("vite:preloadError", this.onAssetError);
     clearTimeout(this.navigationTimer);
   }
 
@@ -71,8 +106,8 @@ class ErrorBoundary extends React.Component<Props, State> {
     const description =
       recovery === "offline"
         ? "인터넷 연결이 끊겨 있습니다. 연결한 뒤 다시 불러와 주세요."
-        : recovery === "draft"
-          ? "입력 중이던 내용이 있어 자동으로 새로고침하지 않았습니다. 다시 불러오면 저장하지 않은 내용이 사라질 수 있습니다."
+        : recovery === "save-failed"
+          ? "입력 내용을 아직 저장하지 못했습니다. 연결을 확인한 뒤 다시 불러와 주세요."
           : recovery === "retry-limit" || recovery === "reload-blocked"
             ? "새 버전으로 자동 복구하지 못했습니다. 다시 불러와 주세요."
             : recovery
@@ -96,7 +131,8 @@ class ErrorBoundary extends React.Component<Props, State> {
             type="button"
             onClick={() => {
               if (typeof window === "undefined") return;
-              window.location.reload();
+              if (isAssetLoadFailure(message)) void this.recover(true);
+              else window.location.reload();
             }}
             className="mt-4 inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
           >

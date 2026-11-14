@@ -1,7 +1,7 @@
 export type AssetRecoveryResult =
   | "reloading"
   | "offline"
-  | "draft"
+  | "save-failed"
   | "retry-limit"
   | "current-version"
   | "unavailable"
@@ -17,22 +17,32 @@ export const isAssetLoadFailure = (error: unknown): boolean =>
 
 export type AssetRecoveryEnvironment = {
   online: () => boolean;
-  hasDraft: () => boolean;
   currentEntry: () => string | null;
   latestEntry: () => Promise<string | null>;
+  prepare?: () => Promise<void>;
   reserveReload: (target: string) => boolean;
   reload: () => void;
+};
+
+export type AssetRecoveryOptions = {
+  /** A user retry may reload the current build; automatic recovery stays bounded. */
+  manual?: boolean;
+  retry?: boolean;
 };
 
 /** A preload event and its React boundary share one bounded recovery attempt. */
 export function createAssetRecoveryController(env: AssetRecoveryEnvironment) {
   let attempt: Promise<AssetRecoveryResult> | undefined;
-  return (error: unknown): Promise<AssetRecoveryResult> => {
+  let settled = false;
+  return (
+    error: unknown,
+    options: AssetRecoveryOptions = {},
+  ): Promise<AssetRecoveryResult> => {
     if (!isAssetLoadFailure(error)) return Promise.resolve("unsupported");
-    if (attempt) return attempt;
-    attempt = (async () => {
+    if (attempt && (!options.retry || !settled)) return attempt;
+    settled = false;
+    attempt = (async (): Promise<AssetRecoveryResult> => {
       if (!env.online()) return "offline";
-      if (env.hasDraft()) return "draft";
       const current = env.currentEntry();
       if (!current) return "unavailable";
       let latest: string | null;
@@ -41,32 +51,82 @@ export function createAssetRecoveryController(env: AssetRecoveryEnvironment) {
       } catch {
         return env.online() ? "unavailable" : "offline";
       }
-      // A user can start editing or lose their connection during the check.
       if (!env.online()) return "offline";
-      if (env.hasDraft()) return "draft";
       if (!latest) return "unavailable";
-      if (latest === current) return "current-version";
-      if (!env.reserveReload(latest)) return "retry-limit";
+      if (latest === current && !options.manual) return "current-version";
+      // Ordinary filters and saved input are not unsaved work. Only owning
+      // features can provide a checkpoint, using their existing save contract.
+      try {
+        await env.prepare?.();
+      } catch {
+        return "save-failed";
+      }
+      if (!env.online()) return "offline";
+      const reserved = env.reserveReload(latest);
+      if (!reserved && !options.manual) return "retry-limit";
       try {
         env.reload();
         return "reloading";
       } catch {
         return "unavailable";
       }
-    })();
+    })().finally(() => {
+      settled = true;
+    });
     return attempt;
   };
 }
 
 const RECOVERY_KEY = "westory:asset-recovery:v1";
 const RECOVERY_COOLDOWN_MS = 60_000;
-let editedInDocument = false;
 let installed = false;
+let bootAssetVersion: string | null | undefined;
 
-// Buttons and keyboard-driven answer controls may not emit input/change.
-// Retain the same conservative flag without storing any answer or form value.
-export const markAssetRecoveryEdited = () => {
-  editedInDocument = true;
+type RecoveryPreparation = () => void | Promise<void>;
+const preparations = new Set<RecoveryPreparation>();
+let capturedPreparations: RecoveryPreparation[] | undefined;
+const preparationTasks = new Map<RecoveryPreparation, Promise<void>>();
+
+/** The owner retains its own scoped draft; no DOM values or identities are copied. */
+export const registerAssetRecoveryPreparation = (
+  prepare: RecoveryPreparation,
+) => {
+  preparations.add(prepare);
+  return () => {
+    preparations.delete(prepare);
+  };
+};
+
+const prepareRecovery = async () => {
+  const work = Promise.all(
+    (capturedPreparations || []).map((prepare) => {
+      let task = preparationTasks.get(prepare);
+      if (!task) {
+        task = Promise.resolve()
+          .then(prepare)
+          .catch((error) => {
+            preparationTasks.delete(prepare);
+            throw error;
+          });
+        preparationTasks.set(prepare, task);
+      }
+      return task;
+    }),
+  );
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      work,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("Recovery save timed out")),
+          12_000,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 };
 
 const moduleEntry = (document: Document): string | null => {
@@ -76,6 +136,19 @@ const moduleEntry = (document: Document): string | null => {
   if (!source) return null;
   const url = new URL(source, window.location.href);
   return url.origin === window.location.origin ? url.href : null;
+};
+
+const documentAssetVersion = (source: Document): string | null => {
+  const entry = moduleEntry(source);
+  if (!entry) return null;
+  const styles = [
+    ...source.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"][href]'),
+  ]
+    .map((link) => new URL(link.getAttribute("href")!, window.location.href))
+    .filter((url) => url.origin === window.location.origin)
+    .map((url) => url.href)
+    .sort();
+  return JSON.stringify([entry, ...styles]);
 };
 
 const reserveReload = (target: string): boolean => {
@@ -118,7 +191,7 @@ const latestEntry = async (): Promise<string | null> => {
       !response.headers.get("content-type")?.includes("text/html")
     )
       return null;
-    return moduleEntry(
+    return documentAssetVersion(
       new DOMParser().parseFromString(await response.text(), "text/html"),
     );
   } finally {
@@ -126,29 +199,28 @@ const latestEntry = async (): Promise<string | null> => {
   }
 };
 
-export const recoverAssetLoad = createAssetRecoveryController({
+const recover = createAssetRecoveryController({
   online: () => navigator.onLine !== false,
-  hasDraft: () => editedInDocument,
-  currentEntry: () => moduleEntry(document),
+  currentEntry: () => (bootAssetVersion ??= documentAssetVersion(document)),
   latestEntry,
+  prepare: prepareRecovery,
   reserveReload,
   reload: () => window.location.reload(),
 });
 
+export const recoverAssetLoad = (
+  error: unknown,
+  options?: AssetRecoveryOptions,
+) => {
+  if (isAssetLoadFailure(error)) capturedPreparations ||= [...preparations];
+  return recover(error, options);
+};
+
 export function installAssetRecovery() {
   if (installed || typeof window === "undefined") return;
   installed = true;
-  const markEdited = (event: Event) => {
-    const target = event.target;
-    if (
-      target instanceof HTMLElement &&
-      target.closest("input, textarea, select, [contenteditable='true']")
-    )
-      markAssetRecoveryEdited();
-  };
-  // Keep only a conservative flag, never input values or student information.
-  document.addEventListener("input", markEdited, true);
-  document.addEventListener("change", markEdited, true);
+  // Freeze only the initial document assets. Route-added styles are not a new build.
+  bootAssetVersion ??= documentAssetVersion(document);
   window.addEventListener("vite:preloadError", (event) => {
     void recoverAssetLoad((event as Event & { payload?: unknown }).payload);
     // Let Vite reject normally: suppressing CSS errors can render an unstyled

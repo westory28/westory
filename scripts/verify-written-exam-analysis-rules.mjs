@@ -655,6 +655,19 @@ try {
       });
     },
   );
+
+  await check("linked materials publish without copying any student responses", async () => {
+    hooks.failClassCommit = true;
+    const materials = await store.saveWrittenExamAnalysis(config, {...input, examId: "linked-score-materials"}, {materialsOnly: true});
+    assert.equal(hooks.failClassCommit, true, "Materials must not commit a class-response batch");
+    hooks.failClassCommit = false;
+    const manifest = await getDocFromServer(doc(clients.teacher.db, root, materials.id));
+    assert.equal(manifest.data().revision, materials.revision);
+    assert.equal("students" in manifest.data(), false);
+    const responses = await getDocsFromServer(collection(clients.teacher.db, root, materials.id, "revisions", materials.revision, "classes"));
+    assert.equal(responses.size, 0);
+    await assertFails(getDocFromServer(doc(clients["student-a"].db, root, materials.id)));
+  });
   console.log(
     JSON.stringify(
       {

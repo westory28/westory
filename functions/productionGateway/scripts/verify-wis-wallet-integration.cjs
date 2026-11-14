@@ -23,6 +23,8 @@ const scope = "2026-2";
 const accountId = (uid) => wis.accountIdFor(scope, uid);
 const accountPath = (uid) => `semester_wis_accounts/${accountId(uid)}`;
 const economyPath = `semester_wis_economies/${scope}`;
+const inboxPath = uid => `years/2026/semesters/2/notification_inboxes/${uid}`;
+const notificationItems = uid => documents(`${inboxPath(uid)}/items`);
 const inventoryId = wis.inventoryIdFor(scope, "pencil");
 const inventoryPath = `semester_wis_inventory/${inventoryId}`;
 const reason = (expected) => (error) => error.details?.reason === expected;
@@ -119,11 +121,25 @@ async function accounting(uid, expectedDeltas) {
     assert.equal(projection.ledgerRevision, account.revision);
   }
   assert.equal((await get(`years/2026/semesters/2/point_wallets/${uid}`)).balance, 9000);
+  const notifications = await notificationItems(uid);
+  const grants = rows.filter(row => row.type === "GRANT");
+  assert.equal(notifications.length, grants.length);
+  if (grants.length) assert.equal((await get(inboxPath(uid))).unreadCount, grants.length);
+  for (const item of notifications) {
+    assert.equal(item.type, "wis_granted");
+    assert.equal(item.recipientUid, uid);
+    assert.equal(item.targetUrl, "/student/points");
+    assert.equal(item.readAt, null);
+    assert.ok(grants.some(row => row.ledgerEntryId === item.entityId));
+    assert.ok(Math.abs(item.expiresAt.toMillis() - item.createdAt.toMillis() - 30 * 86400_000) < 60_000,
+      "expiry retains 30 days allowing server commit timestamp latency");
+  }
   return account;
 }
 const snapshot = async () => Promise.all(["semester_wis_ledger", "semester_wis_accounts", "semester_wis_balances",
   "semester_wis_rankings", "semester_wis_economies", "semester_wis_orders", "semester_wis_inventory",
-  gateway.RECEIPT_COLLECTION, gateway.AUDIT_COLLECTION].map(documents));
+  gateway.RECEIPT_COLLECTION, gateway.AUDIT_COLLECTION,
+  "years/2026/semesters/2/notification_inboxes", `${inboxPath("a")}/items`, `${inboxPath("b")}/items`].map(documents));
 async function unchanged(action, expected) {
   const before = await snapshot();
   await assert.rejects(action, reason(expected));
@@ -227,6 +243,17 @@ async function test(name, run) {
     await assert.rejects(() => call({ ...grant("a"), sessionRejected: true }), (error) => error.code === "unauthenticated");
     assert.deepEqual(await snapshot(), before);
     await accounting("a", []);
+  });
+  await test("each notification off switch preserves successful payment and emits no inbox item", async () => {
+    for (const config of [{ enabled: false }, { studentNotificationsEnabled: false },
+      { eventPolicies: { wis_granted: { enabled: false } } }]) {
+      await seed();
+      await patch("site_settings/notification_config", config);
+      assert.equal((await call(grant("a", 500))).result.balance, 500);
+      assert.equal((await notificationItems("a")).length, 0);
+      assert.equal(await get(inboxPath("a")), undefined);
+      assert.equal((await documents("semester_wis_ledger")).length, 1);
+    }
   });
   console.log(`PASS Wis gateway Firestore integration: ${groups} groups; production reads/writes 0`);
 } finally {

@@ -67,7 +67,7 @@ import {
   type QuizSubmissionDoc,
 } from "../../../lib/quizSubmissions";
 import { emitSessionActivity } from "../../../lib/sessionActivity";
-import { markAssetRecoveryEdited } from "../../../lib/assetRecovery";
+import { registerAssetRecoveryPreparation } from "../../../lib/assetRecovery";
 import { getYearSemester } from "../../../lib/semesterScope";
 import {
   buildAssessmentDefinitionId,
@@ -336,6 +336,11 @@ const QuizRunner: React.FC = () => {
   const persistInFlightRef = useRef(false);
   const persistSaveTailRef = useRef<Promise<void>>(Promise.resolve());
   const finishSubmittingRef = useRef(false);
+  const finishSaveTailRef = useRef<Promise<void>>(Promise.resolve());
+  const assetRecoveryPendingRef = useRef(false);
+  const assetRecoveryPreparationRef = useRef<() => Promise<void>>(
+    async () => {},
+  );
   const persistQueuedRef = useRef(false);
   const progressChangeRef = useRef(0);
   const persistQuizProgressRef = useRef<() => Promise<void>>(async () => {});
@@ -869,6 +874,7 @@ const QuizRunner: React.FC = () => {
       !category ||
       !canonicalAttempt ||
       view !== "quiz" ||
+      assetRecoveryPendingRef.current ||
       finishSubmittingRef.current ||
       startingQuiz
     ) {
@@ -932,6 +938,58 @@ const QuizRunner: React.FC = () => {
   };
   // Debounced saves must use the committed answer and revision from the latest render.
   persistQuizProgressRef.current = persistQuizProgress;
+
+  // The update boundary may unmount this screen while a save is in flight.
+  // Drain that save first, then persist this answer snapshot with its confirmed
+  // revision. This never submits, grades, or awards an assessment.
+  const prepareQuizAssetRecovery = async () => {
+    if (view !== "quiz" || !canonicalAttempt) return;
+    const attemptId = canonicalAttempt.attemptId;
+    const snapshot = { ...answers };
+    const currentItemId = String(selectedQuestions[currentIndex]?.id || "");
+    const analytics = readTelemetry();
+    assetRecoveryPendingRef.current = true;
+    if (persistTimeoutRef.current) {
+      window.clearTimeout(persistTimeoutRef.current);
+      persistTimeoutRef.current = null;
+    }
+    persistQueuedRef.current = false;
+    await finishSaveTailRef.current;
+    await persistSaveTailRef.current;
+    const latest = canonicalAttemptRef.current;
+    if (!latest || latest.attemptId !== attemptId)
+      throw new Error("응시 상태가 변경되어 답안을 확인해야 합니다.");
+    if (latest.status === "SUBMITTED") return;
+    if (!["STARTED", "IN_PROGRESS", "RECOVERABLE"].includes(latest.status))
+      throw new Error("응시 상태를 확인한 뒤 다시 시도해 주세요.");
+    const saved = await saveAssessmentProgress({
+      attemptId,
+      expectedRevision: latest.revision,
+      answers: snapshot,
+      currentItemId,
+      analytics,
+    });
+    setCanonicalAttempt((previous) =>
+      previous?.attemptId === attemptId && previous.revision <= saved.revision
+        ? {
+            ...previous,
+            status: "IN_PROGRESS",
+            revision: saved.revision,
+            answers: snapshot,
+            currentItemId,
+            lastSavedAtIso: saved.savedAtIso,
+          }
+        : previous,
+    );
+  };
+  assetRecoveryPreparationRef.current = prepareQuizAssetRecovery;
+  useEffect(() => {
+    let checkpoint: (() => Promise<void>) | undefined;
+    return registerAssetRecoveryPreparation(() => {
+      checkpoint ||= assetRecoveryPreparationRef.current;
+      return checkpoint();
+    });
+  }, [assessmentDefinitionId, fallbackStudentUid]);
 
   useEffect(() => {
     setOpenHintQuestionId(null);
@@ -1092,7 +1150,13 @@ const QuizRunner: React.FC = () => {
   }, [view, currentIndex]);
 
   const schedulePersistQuizProgress = () => {
-    if (view !== "quiz" || finishSubmittingRef.current || startingQuiz) return;
+    if (
+      view !== "quiz" ||
+      finishSubmittingRef.current ||
+      startingQuiz ||
+      assetRecoveryPendingRef.current
+    )
+      return;
     progressChangeRef.current += 1;
     setSaveStatus("pending");
     if (persistTimeoutRef.current) {
@@ -1679,7 +1743,6 @@ const QuizRunner: React.FC = () => {
         ? limitShortAnswer(input)
         : input;
     if (answers[String(question.id)] === value) return;
-    markAssetRecoveryEdited();
     pendingSubmitAnalyticsRef.current = undefined;
 
     emitSessionActivity();
@@ -1847,6 +1910,10 @@ const QuizRunner: React.FC = () => {
   const finishQuiz = async (isTimeout = false) => {
     if (finishSubmittingRef.current) return;
     finishSubmittingRef.current = true;
+    let finishSettled!: () => void;
+    finishSaveTailRef.current = new Promise<void>((resolve) => {
+      finishSettled = resolve;
+    });
     if (!isTimeout) {
       emitSessionActivity();
     }
@@ -1889,6 +1956,7 @@ const QuizRunner: React.FC = () => {
     } finally {
       finishSubmittingRef.current = false;
       setFinishSubmitting(false);
+      finishSettled();
     }
   };
 

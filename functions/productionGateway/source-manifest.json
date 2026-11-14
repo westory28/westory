@@ -466,13 +466,23 @@
       "sourceFile": "wisEconomy.js",
       "file": "wisEconomy.js",
       "originalSha256": "f6267e1d62b1e977b86cbac8de07b310b9ec4d220a46537550343978631986b4",
-      "sha256": "f9f53c84422b4cf5c8018437bdc8f1c42b6d8d0c435243cad8924a683de0ca6e",
+      "sha256": "fca25eebc1fecf2a67450b38daf59adda35b57a43e3548660a3c1356bc98d2e5",
       "changes": [
         "2026-10-18: Wis shop preserves stock=available+reserved+sold, receipt-safe student/teacher cancellation with original-payment refund, READY/fulfilled timestamps, current-semester write guard, HTTPS original/preview images and semester product snapshots.",
         "2026-10-18: Return sold inventory count and preserve optional product display order in commands, student projection and semester snapshots.",
         "2026-10-18: Orders freeze student name, grade, class and number from canonical enrollment for historical direct reads; own-order projection preserves this snapshot without exposing actor IDs.",
         "2026-10-27: Preserve per-account/order/inventory CAS while allowing unrelated economy revisions; fail closed on malformed scope, frozen accounts and unsafe amounts.",
-        "2026-11-09: Overlap independent assessment reward enrollment/class/policy reads with settled results; preserve existing validation/error priority, legacy-ID sequential reads, policy calculation and atomic reward/result/receipt writes."
+        "2026-11-09: Overlap independent assessment reward enrollment/class/policy reads with settled results; preserve existing validation/error priority, legacy-ID sequential reads, policy calculation and atomic reward/result/receipt writes.",
+        "2026-11-14: Manual grantWis prepares a policy-controlled student notification and commits its inbox/unread counter with the payment and receipt; automatic assessment rewards and other financial commands remain unchanged."
+      ]
+    },
+    {
+      "sourceFile": null,
+      "file": "wisGrantNotifications.js",
+      "originalSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sha256": "cebb76338c680cb95439cee97bbea9d65dea71fa1760828f1b8ec483abb034d3",
+      "changes": [
+        "2026-11-14: Newly authored manual-grant notification helper. Respect global/student/wis_granted enable flags and templates, deduplicate by ledger ID, and stage inbox delivery atomically with the existing grant transaction."
       ]
     },
     {
