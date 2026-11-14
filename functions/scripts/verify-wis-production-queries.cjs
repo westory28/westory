@@ -10,7 +10,7 @@ const assert = require('node:assert/strict');
     const db = getFirestore(app);
     const semesterId = (await db.doc('site_settings/semester_active').get()).data().semesterId;
     const accounts = await db.collection('semester_wis_accounts').where('semesterId', '==', semesterId)
-      .select('grade', 'classNumber', 'studentNumber', 'displayName', 'balance', 'rankEarnedTotal', 'spentTotal').limit(2001).get();
+      .select('grade', 'classNumber', 'studentNumber', 'displayName', 'balance', 'earnedTotal', 'rankEarnedTotal', 'spentTotal').limit(2001).get();
     assert.ok(accounts.size <= 2000, 'Account schema audit safety bound exceeded');
     const schemaIssues = {};
     for (const doc of accounts.docs) {
@@ -18,7 +18,7 @@ const assert = require('node:assert/strict');
       for (const field of ['grade', 'classNumber', 'studentNumber']) {
         if (typeof value[field] !== 'string' || !/^[1-9]\d{0,2}$/.test(value[field])) schemaIssues[field] = (schemaIssues[field] || 0) + 1;
       }
-      for (const field of ['balance', 'rankEarnedTotal', 'spentTotal']) {
+      for (const field of ['balance', 'earnedTotal', 'rankEarnedTotal', 'spentTotal']) {
         if (!Number.isSafeInteger(value[field]) || value[field] < 0) schemaIssues[field] = (schemaIssues[field] || 0) + 1;
       }
       if (typeof value.displayName !== 'string' || !value.displayName.trim()) schemaIssues.displayName = (schemaIssues.displayName || 0) + 1;
@@ -28,7 +28,7 @@ const assert = require('node:assert/strict');
     for (const filters of scopes) {
       let base = db.collection('semester_wis_accounts').where('semesterId', '==', semesterId);
       for (const [key, value] of Object.entries(filters)) base = base.where(key, '==', value);
-      for (const field of ['balance', 'rankEarnedTotal', 'spentTotal']) for (const direction of ['asc', 'desc']) {
+      for (const field of ['balance', 'earnedTotal', 'rankEarnedTotal', 'spentTotal']) for (const direction of ['asc', 'desc']) {
         try {
           const result = await base.orderBy(field, direction).orderBy(FieldPath.documentId(), 'asc').limit(21).explain({ analyze: false });
           plans.push({ filters: Object.keys(filters), field, direction, ready: true, indexCount: result.metrics.planSummary.indexesUsed.length });

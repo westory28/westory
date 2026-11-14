@@ -20,7 +20,7 @@ const normalizeWisOverviewQuery = (raw, audience, projection) => {
     || result.namePrefix.length > 60 || /[\x00-\x1f]/.test(result.namePrefix)) invalid();
   result.sortField = raw.sortField || 'balance';
   result.direction = raw.direction || 'desc';
-  if (!['balance', 'rankEarnedTotal', 'spentTotal'].includes(result.sortField)
+  if (!['balance', 'earnedTotal', 'rankEarnedTotal', 'spentTotal'].includes(result.sortField)
     || !['asc', 'desc'].includes(result.direction)) invalid();
   return result;
 };

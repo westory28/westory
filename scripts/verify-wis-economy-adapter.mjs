@@ -354,7 +354,7 @@ await test("Teacher overview requests only the selected cursor page and preserve
     classNumber: "2",
     studentNumber: "1",
     namePrefix: "가",
-    sortField: "balance",
+    sortField: "earnedTotal",
     direction: "desc",
   };
   const page = await h.adapter.getCanonicalPointWalletPage(

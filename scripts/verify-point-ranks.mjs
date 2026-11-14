@@ -200,6 +200,38 @@ test("legacy wallet and transaction metrics remain intact and inputs are not mut
   );
 });
 
+test("cumulative earnings include initial grants while rank and spending stay independent", () => {
+  const wallet = { earnedTotal: 8100, rankEarnedTotal: 7600, balance: 7910 };
+  assert.equal(ranks.getPointWalletCumulativeEarned(wallet), 8100);
+  assert.equal(
+    ranks.getPointWalletCumulativeEarned({
+      ...wallet,
+      balance: 0,
+      spentTotal: 7910,
+    }),
+    8100,
+  );
+  assert.equal(
+    ranks.getPointRankDisplay({ wallet, rankPolicy: joseonPolicy }).metricValue,
+    7600,
+  );
+  const boundary = { earnedTotal: 3100, rankEarnedTotal: 2600 };
+  assert.equal(ranks.getPointWalletCumulativeEarned(boundary), 3100);
+  assert.equal(
+    ranks.getPointRankDisplay({ wallet: boundary, rankPolicy: joseonPolicy })
+      .label,
+    "노비",
+  );
+  assert.equal(
+    ranks.getPointWalletCumulativeEarned({
+      earnedTotal: 0,
+      rankEarnedTotal: 500,
+    }),
+    0,
+  );
+  assert.equal(ranks.getPointWalletCumulativeEarned(null), 0);
+});
+
 test("the teacher selector uses a neutral history label while preserving custom theme display", () => {
   const render = (policy) => {
     const resolved = ranks.resolvePointRankPolicy(policy);

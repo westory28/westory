@@ -253,6 +253,9 @@ const normalizeEntry = (value: unknown): WisHallOfFameEntry | null => {
     displayName,
     currentBalance: toNonNegativeNumber(raw.currentBalance),
     cumulativeEarned: toNonNegativeNumber(raw.cumulativeEarned),
+    ...(Number.isFinite(Number(raw.rankEarnedTotal))
+      ? { rankEarnedTotal: toNonNegativeNumber(raw.rankEarnedTotal) }
+      : {}),
     profileIcon: toSafeText(raw.profileIcon) || "😀",
     profileEmojiId: toSafeText(raw.profileEmojiId) || undefined,
   };

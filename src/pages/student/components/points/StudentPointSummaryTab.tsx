@@ -1,5 +1,6 @@
 import React from "react";
 import PointRankBadge from "../../../../components/common/PointRankBadge";
+import InfoHelp from "../../../../components/common/InfoHelp";
 import {
   POINT_HISTORY_FILTER_LABELS,
   POINT_TRANSACTION_TYPE_LABELS,
@@ -78,7 +79,7 @@ const StudentPointSummaryTab: React.FC<StudentPointSummaryTabProps> = ({
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <PointRankBadge rank={rank} size="md" />
                 <span className="inline-flex whitespace-nowrap rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
-                  누적 기준 {formatWisAmount(rank.metricValue)}
+                  등급 기준 {formatWisAmount(rank.metricValue)}
                 </span>
               </div>
             )}
@@ -86,7 +87,13 @@ const StudentPointSummaryTab: React.FC<StudentPointSummaryTabProps> = ({
 
           <dl className="grid w-full gap-x-6 gap-y-4 border-t border-gray-100 pt-4 sm:grid-cols-2 lg:w-auto lg:min-w-[620px] lg:grid-cols-4 lg:border-t-0 lg:pt-0">
             <div>
-              <dt className="text-xs font-bold text-gray-500">누적 획득</dt>
+              <dt className="flex items-center gap-1 text-xs font-bold text-gray-500">
+                누적 획득
+                <InfoHelp label="누적 획득 위스 기준">
+                  처음 받은 위스도 포함합니다. 게임·상점에서 사용해도 누적 획득
+                  위스는 줄지 않습니다.
+                </InfoHelp>
+              </dt>
               <dd className="mt-1 whitespace-nowrap text-lg font-black text-emerald-600">
                 {formatWisAmount(getPointWalletCumulativeEarned(wallet))}
               </dd>

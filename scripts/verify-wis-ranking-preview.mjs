@@ -37,6 +37,7 @@ const makeState = call => ({
 });
 const calls = [];
 let epoch = 1700000000;
+let clockOffset = 0;
 const makeUser = uid => ({ uid, getIdTokenResult: async () => ({ claims: { auth_time: epoch } }) });
 const auth = { currentUser: makeUser('student-a') };
 const archive = { isSemesterArchive: false, archiveScope: null };
@@ -81,7 +82,8 @@ const loadActual = relative => {
     assert(name.startsWith('.'), `Unexpected dependency: ${name}`);
     return loadActual(path.relative(root, path.resolve(path.dirname(filename), `${name}.ts`)));
   };
-  vm.runInNewContext(js, { module, exports: module.exports, require, console, URLSearchParams, URL, Date, setTimeout, clearTimeout }, { filename });
+  vm.runInNewContext(js, { module, exports: module.exports, require, console, URLSearchParams, URL,
+    Date: class extends Date { static now() { return Date.now() + clockOffset; } }, setTimeout, clearTimeout }, { filename });
   return module.exports;
 };
 const { getWisRankingPreview, getWisHallOfFameState, getWisHallOfFameView } = loadActual('src/lib/wisRankingPreview.ts');
@@ -139,6 +141,7 @@ await step('full hall uses one authorized read with class data and no extra poli
   assert.equal(calls.length, before + 1);
   const call = rankingCalls().at(-1);
   assert.equal(call.data.projection, 'hall-of-fame');
+  assert.equal(call.data.rankingMetric, 'cumulative');
   assert.equal(call.data.limit, 20);
   assert.equal(snapshot.classLeaderboardByClassKey['3-1'][0].profileIcon, '😀');
 });
@@ -163,6 +166,7 @@ await step('selected hall groups send one scoped request and isolate different g
   const classView = getWisHallOfFameView(config, 'teacher', { view: 'class', gradeKey: '', classKey: '3-2' });
   await waitFor(() => pendingCalls().length === 2, 'separate selected hall groups');
   assert(pendingCalls().every(call => call.data.projection === 'hall-view'));
+  assert(pendingCalls().every(call => call.data.rankingMetric === 'cumulative'));
   assert.deepEqual(pendingCalls().map(call => [call.data.hallView, call.data.hallGradeKey, call.data.hallClassKey]),
     [['grade', '3', ''], ['class', '', '3-2']]);
   for (const call of pendingCalls()) call.resolve();
@@ -183,6 +187,51 @@ await step('ranking mode and class isolate pending requests without extra direct
   await Promise.all([first, duplicate, current, classroom]);
   assert.equal(pendingCalls().length, 0);
   hold = false;
+});
+await step('recent selections paint from memory while every visit revalidates; failures discard every cached filter', async () => {
+  const selection = { metric: 'current', classKey: '3-2' };
+  const options = { permissionKey: 'permission-v1', onCached: () => cached++ };
+  let cached = 0;
+  await getWisRankingPreview(config, 'teacher', selection, options);
+  assert.equal(cached, 0);
+  hold = true;
+  const before = rankingCalls().length;
+  const first = getWisRankingPreview(config, 'teacher', selection, options);
+  const second = getWisRankingPreview(config, 'teacher', selection, options);
+  const settled = Promise.allSettled([first, second]);
+  await waitFor(() => pendingCalls().length === 1, 'cached revalidation');
+  assert.equal(cached, 2);
+  assert.equal(rankingCalls().length, before + 1);
+  pendingCalls()[0].reject(Object.assign(new Error('permission revoked'), {code:'functions/permission-denied'}));
+  assert((await settled).every(item => item.status === 'rejected'));
+  hold = false;
+  await getWisRankingPreview(config, 'teacher', selection, options);
+  assert.equal(cached, 2, 'Denied cache cannot be reused');
+  await getWisRankingPreview(config, 'teacher', selection, { ...options, permissionKey: 'permission-v2' });
+  assert.equal(cached, 2, 'Role/permission generation isolates cache');
+  await getWisRankingPreview({year:'2026',semester:'1'}, 'teacher', selection, options);
+  assert.equal(cached, 2, 'Semester isolates cache');
+  epoch++;
+  await getWisRankingPreview(config, 'teacher', selection, options);
+  assert.equal(cached, 2, 'Auth epoch isolates cache');
+  await getWisRankingPreview(config, 'teacher', selection, options);
+  assert.equal(cached, 3);
+  clockOffset += 30_001;
+  await getWisRankingPreview(config, 'teacher', selection, options);
+  assert.equal(cached, 3, '30-second TTL expired');
+  loadActual('src/lib/appEvents.ts').notifyPointsUpdated();
+  await getWisRankingPreview(config, 'teacher', selection, options);
+  assert.equal(cached, 3, 'Points revision invalidates prior success');
+  const avatarEvents = loadActual('src/features/avatar/events.ts');
+  const previousAvatarRevision = avatarEvents.getAvatarRevision();
+  avatarEvents.getAvatarRevision = () => previousAvatarRevision + 1;
+  await getWisRankingPreview(config, 'teacher', selection, options);
+  assert.equal(cached, 3, 'Avatar revision invalidates prior success');
+  await getWisRankingPreview(config, 'student', selection, options);
+  assert.equal(cached, 3, 'Audience isolates cached rows');
+  auth.currentUser = makeUser(auth.currentUser.uid);
+  await getWisRankingPreview(config, 'teacher', selection, options);
+  assert.equal(cached, 3, 'New SDK identity never receives the old account cache');
 });
 await step('failed shared call clears its flight without polling and permits explicit retry', async () => {
   hold = true;

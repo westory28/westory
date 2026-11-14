@@ -593,6 +593,7 @@ export interface WisHallOfFameEntry {
   displayName: string;
   currentBalance: number;
   cumulativeEarned: number;
+  rankEarnedTotal?: number;
   profileIcon: string;
   profileEmojiId?: string;
   avatar?: AvatarPublic;

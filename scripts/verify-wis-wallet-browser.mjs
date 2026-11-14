@@ -49,10 +49,10 @@ export const getFirebaseStorage=async()=>{throw Error('Unexpected storage')};
 export const canManagePoints=()=>true,canReadPoints=()=>true;
 export const ensureSensitiveOperation=async()=>{};
 export const POINT_POLICY_FALLBACK={manualAdjustEnabled:true,allowNegativeBalance:false,rankPolicy:{enabled:false},rewardPolicy:{},controlPolicy:{}};
-export const getPointPolicy=async()=>{qa.calls.push({kind:'policy'});return POINT_POLICY_FALLBACK};
+export const getPointPolicy=async()=>{qa.calls.push({kind:'policy'});return qa.enableRank?{...POINT_POLICY_FALLBACK,rankPolicy:{enabled:true}}:POINT_POLICY_FALLBACK};
 export const getPointRankManualAdjustEarnedPointsMap=async()=>({});
 export const getPointRankManualAdjustEarnedPointsByUid=async()=>0;
-const wallet=()=>({uid:'student-a',studentName:'합성학생',grade:'3',class:'1',number:'7',balance:qa.balance,revision:qa.revision,earnedTotal:130,rankEarnedTotal:130,spentTotal:30,adjustedTotal:0});
+const wallet=()=>({uid:'student-a',studentName:'합성학생',grade:'3',class:'1',number:'7',balance:qa.balance,revision:qa.revision,earnedTotal:qa.earnedTotal??630,rankEarnedTotal:qa.rankEarnedTotal??130,spentTotal:30,adjustedTotal:0});
 const entry=(id,type,delta,balanceAfter,sourceLabel)=>({id,uid:'student-a',type,activityType:type,delta,balanceAfter,sourceLabel,createdAt:{seconds:1793050000+Number(id.slice(1))},canReverse:false});
 const page=async(scope,uid,cursor='')=>{
 qa.calls.push({kind:'page',uid,cursor});
@@ -187,6 +187,10 @@ try {
     for (const teacher of [false, true]) {
       const page = await open(width, teacher);
       await page.getByText("충무공 도전 비용", { exact: true }).waitFor();
+      assert(
+        (await page.getByText("630 ₩s", { exact: true }).count()) >= 1,
+        "Both wallet views include the initial 500 in cumulative earnings",
+      );
       const more = page.getByRole("button", {
         name: "이전 기록 더 보기",
         exact: true,
@@ -215,6 +219,68 @@ try {
     }
   checks.push(
     "390/768/1280 student and teacher: negative game entries, keyboard pagination, older records, no overflow.",
+  );
+  for (const teacher of [false, true]) {
+    const total = await open(1280, teacher);
+    await total.getByText("충무공 도전 비용", { exact: true }).waitFor();
+    await total.evaluate(() => {
+      Object.assign(window.wisWalletQa, {
+        balance: 7910,
+        earnedTotal: 8100,
+        rankEarnedTotal: 7600,
+        revision: 5,
+        enableRank: true,
+      });
+      window.refreshWis();
+    });
+    if (teacher)
+      await total
+        .getByRole("button", { name: "거래 내역 새로고침", exact: true })
+        .click();
+    await total.getByText("8,100 ₩s", { exact: true }).first().waitFor();
+    await total.getByText("7,910 ₩s", { exact: true }).first().waitFor();
+    if (teacher) {
+      assert.equal(
+        await total.evaluate(
+          () =>
+            window.wisWalletQa.calls
+              .filter((call) => call.kind === "roster")
+              .at(-1).selection.sortField,
+        ),
+        "earnedTotal",
+      );
+    } else {
+      await total.getByText("등급 기준 7,600 ₩s", { exact: true }).waitFor();
+      assert.equal(
+        await total.getByText("누적 기준 7,600 ₩s", { exact: true }).count(),
+        0,
+      );
+    }
+    const help = total.getByRole("button", {
+      name: "누적 획득 위스 기준",
+      exact: true,
+    });
+    await help.press("Enter");
+    await total
+      .getByRole("tooltip")
+      .filter({
+        hasText: teacher
+          ? "초기 지급 위스도 포함합니다."
+          : "처음 받은 위스도 포함합니다.",
+      })
+      .waitFor();
+    await total.keyboard.press("Escape");
+    await total.screenshot({
+      path: path.join(
+        evidence,
+        `${teacher ? "teacher" : "student"}-total-includes-initial.png`,
+      ),
+      fullPage: true,
+    });
+    await total.close();
+  }
+  checks.push(
+    "Student and teacher cumulative earnings show 8,100 with current 7,910 and activity rank metric 7,600; overview orders by earnedTotal and keyboard help explains initial-grant inclusion.",
   );
   const student = await open();
   await student.getByText("충무공 도전 비용", { exact: true }).waitFor();
@@ -428,7 +494,9 @@ try {
   await overview.evaluate(() => {
     window.wisWalletQa.editable = true;
   });
-  await overview.getByRole("button", { name: "거래 내역 새로고침", exact: true }).click();
+  await overview
+    .getByRole("button", { name: "거래 내역 새로고침", exact: true })
+    .click();
   await overview.getByText("수정할 지급", { exact: true }).click();
   await overview.evaluate(() => {
     window.wisWalletQa.holdRosterNext = true;
@@ -443,7 +511,9 @@ try {
     window.wisWalletQa.balance = 180;
     window.wisWalletQa.revision = 6;
   });
-  await overview.getByRole("button", { name: "거래 내역 새로고침", exact: true }).click();
+  await overview
+    .getByRole("button", { name: "거래 내역 새로고침", exact: true })
+    .click();
   await overview.getByText("최신 지급 내역", { exact: true }).waitFor();
   await overview.evaluate(() => {
     window.wisWalletQa.holdNext = true;
@@ -466,7 +536,9 @@ try {
   await scope.evaluate(() => {
     window.wisWalletQa.editable = true;
   });
-  await scope.getByRole("button", { name: "거래 내역 새로고침", exact: true }).click();
+  await scope
+    .getByRole("button", { name: "거래 내역 새로고침", exact: true })
+    .click();
   await scope.getByText("수정할 지급", { exact: true }).click();
   await scope.evaluate(() => {
     window.wisWalletQa.holdRosterNext = true;

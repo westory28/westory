@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { getYearSemester } from "../../lib/semesterScope";
-import { InlineLoading } from "./LoadingState";
 import PointRankBadge from "./PointRankBadge";
 import WisIcon from "./WisIcon";
 import { getWisHallOfFameGradeLeaderboard } from "../../lib/wisHallOfFame";
@@ -10,6 +9,7 @@ import {
   getWisRankingPreview,
   type WisRankingMetric,
   type WisRankingClass,
+  type WisRankingPreviewResult,
 } from "../../lib/wisRankingPreview";
 import { subscribePointsUpdated } from "../../lib/appEvents";
 import { subscribeAvatarUpdated } from "../../features/avatar/events";
@@ -65,7 +65,7 @@ const buildRankWallet = (entry: WisHallOfFameEntry): PointWallet => ({
   number: entry.number || "",
   balance: Number(entry.currentBalance || 0),
   earnedTotal: Number(entry.cumulativeEarned || 0),
-  rankEarnedTotal: Number(entry.cumulativeEarned || 0),
+  rankEarnedTotal: Number(entry.rankEarnedTotal ?? entry.cumulativeEarned ?? 0),
   spentTotal: 0,
   adjustedTotal: 0,
   rankSnapshot: null,
@@ -104,7 +104,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
   hallOfFameTitle = "명예의 전당",
 }) => {
   const navigate = useNavigate();
-  const { currentUser, authGeneration, configReady } = useAuth();
+  const { currentUser, authGeneration, configReady, userData } = useAuth();
   const { year, semester } = getYearSemester(config);
   const scopeReady = Boolean(
     currentUser && configReady && config?.year && config?.semester,
@@ -139,7 +139,13 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
   const needsRefresh = useRef(false);
   const available = useRef(false);
   const savedScope = useRef("");
-  const identityScope = `${currentUser?.uid || ""}:${authGeneration}:${year}:${semester}:${studentAudience}`;
+  const permissionKey = JSON.stringify([
+    authGeneration,
+    userData?.role,
+    userData?.teacherPortalEnabled,
+    [...(userData?.staffPermissions || [])].sort(),
+  ]);
+  const identityScope = `${currentUser?.uid || ""}:${permissionKey}:${year}:${semester}:${studentAudience}`;
   const classKey =
     classSelection.scope === identityScope ? classSelection.key : "";
   const scopeKey = `${identityScope}:${metric}:${classKey}`;
@@ -222,29 +228,38 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
     if (!scopeReady) return;
     const startedAt = performance.now();
     const scope = { year, semester };
+    const applyPreview = ({
+      snapshot,
+      rankPolicy: policy,
+      classes,
+    }: WisRankingPreviewResult) => {
+      if (cancelled) return;
+      setLoadedScope(scopeKey);
+      setEntries(getWisHallOfFameGradeLeaderboard(snapshot).slice(0, 5));
+      setRankingClasses(classes);
+      setClassesScope(identityScope);
+      setRankPolicy(policy);
+      setDefaultProfileIcon(getPointRankDefaultEmojiValue(policy));
+      setLoadDurationMs(Math.round(performance.now() - startedAt));
+      setLoading(false);
+    };
     void (async () => {
       try {
-        const {
-          snapshot,
-          rankPolicy: policy,
-          classes,
-        } = await getWisRankingPreview(
+        const result = await getWisRankingPreview(
           scope,
           studentAudience ? "student" : "teacher",
           { metric, classKey },
+          { permissionKey, onCached: applyPreview },
         );
-        if (cancelled) return;
-        setLoadedScope(scopeKey);
-        setEntries(getWisHallOfFameGradeLeaderboard(snapshot).slice(0, 5));
-        setRankingClasses(classes);
-        setClassesScope(identityScope);
-        setRankPolicy(policy);
-        setDefaultProfileIcon(getPointRankDefaultEmojiValue(policy));
-        setLoadDurationMs(Math.round(performance.now() - startedAt));
+        applyPreview(result);
       } catch (error) {
         console.warn("Failed to load wis ranking:", error);
         if (!cancelled) {
           setLoadedScope(scopeKey);
+          setEntries([]);
+          setRankPolicy(null);
+          setRankingClasses([]);
+          setClassesScope("");
           setLoadError(true);
         }
       } finally {
@@ -263,6 +278,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
     authGeneration,
     scopeKey,
     identityScope,
+    permissionKey,
     metric,
     classKey,
     refreshRevision,
@@ -381,7 +397,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
         )}
       </div>
 
-      <div className="wis-ranking-avatar-layout">
+      <div className="wis-ranking-avatar-layout" aria-busy={scopeLoading}>
         <div
           className="wis-ranking-list-scroll"
           role="region"
@@ -390,15 +406,23 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
         >
           <div className="wis-ranking-list min-h-0 flex-1 space-y-2">
             {scopeLoading && (
-              <InlineLoading
-                className="flex h-full min-h-[160px] items-center"
-                message="순위를 불러오는 중입니다."
-                showWarning
-              />
+              <div className="wis-ranking-skeleton" role="status">
+                <span className="sr-only">순위를 불러오는 중입니다.</span>
+                {Array.from({ length: 5 }, (_, index) => (
+                  <div
+                    key={index}
+                    className="wis-ranking-skeleton-row"
+                    aria-hidden="true"
+                  />
+                ))}
+              </div>
             )}
 
             {!scopeLoading && loadError && (
-              <div className="wis-ranking-load-error" role="status">
+              <div
+                className="wis-ranking-load-error wis-ranking-state"
+                role="status"
+              >
                 <span>순위를 불러오지 못했습니다.</span>
                 <button
                   type="button"
@@ -410,7 +434,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
             )}
 
             {!scopeLoading && !loadError && entries.length === 0 && (
-              <div className="flex h-full min-h-[160px] items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-sm font-bold text-gray-400">
+              <div className="wis-ranking-state flex items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-sm font-bold text-gray-400">
                 표시할 위스 순위가 없습니다.
               </div>
             )}
@@ -494,11 +518,13 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
               })}
           </div>
         </div>
-        {!scopeLoading && !loadError && selectedEntry && (
-          <div className="wis-ranking-avatar-aside">
+        <div className="wis-ranking-avatar-aside">
+          {!scopeLoading && !loadError && selectedEntry ? (
             <RankingAvatar key={selectedKey} entry={selectedEntry} />
-          </div>
-        )}
+          ) : (
+            <div className="wis-ranking-avatar__frame" aria-hidden="true" />
+          )}
+        </div>
       </div>
     </div>
   );

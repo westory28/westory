@@ -428,7 +428,7 @@ const ManagePoints: React.FC = () => {
     namePrefix: debouncedNameSearch,
     sortField:
       overviewSortKey === "earnedTotal"
-        ? ("rankEarnedTotal" as const)
+        ? ("earnedTotal" as const)
         : overviewSortKey === "spentTotal"
           ? ("spentTotal" as const)
           : ("balance" as const),

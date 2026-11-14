@@ -13,6 +13,7 @@
     "executeThinkCloudResponseFast"
   ],
   "notes": [
+    "2026-11-14: Total-earned Wis includes initial grants in dashboard, opt-in hall and teacher overview; grade eligibility remains rankEarnedTotal. Deploy only the four live ranking/query endpoints from captured archives with wisOverviewQuery.js. No ledger, balance, policy, trigger or account migration.",
     "2026-11-14: Wis wallet integrity, canonical cumulative/current ranking, scoped teacher queries and ACTIVE enrollment metadata synchronization. Transplant reviewed files into each captured live archive, include ../wisLedgerIntegrity.js for executeCommand and ../wisOverviewQuery.js for query endpoints, and preserve deployed runtime resources. No account or ledger repair; isolated stock endpoints remain teacher-only.",
     "2026-11-14: Think Cloud only: preserve live executeCommand/getThinkCloudState archives; overlay reviewed w8Domains/submit queue/wiring/query. Add executeThinkCloudResponseFast and getThinkCloudStateFast beside nam5, with minInstances 0. Keep receipts, authority, other commands and Seoul compatibility.",
     "2026-11-11: Opt-in immutable mock-paper publication and server-time overview. Deploy only executeCommand and getAssessmentState from each captured live archive plus this assessmentLifecycle patch; preserve their existing SAVE implementation and all other runtime files. Scheduled publication keeps opensAt under old-client saves. No runtime sizing, session, rules, prior-round or student-result changes.",
@@ -503,7 +504,7 @@
       "sourceFile": "wisEconomy.js",
       "file": "wisEconomyQuery.js",
       "originalSha256": "560fd24282179aa9e4bd4ac9b7b99556cb533f7c4f67baac9339b22cb13b6f46",
-      "sha256": "3d89f36ba190785a9a0ef150226d3ac5f045f0878b60c5c6f97bbd7c48a1527c",
+      "sha256": "15e2259284dfb52c968c034de84e5ac954eaa335e7f9c90559acb0c02ac8daae",
       "changes": [
         "Restore the live EXPLICIT teacher archive query independently of the command closure.",
         "Expose only requested full name, student number and selected-entry profile emoji; preserve pseudonymous public IDs, zero balances, tie caps and grade/class limits.",

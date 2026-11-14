@@ -40,7 +40,7 @@ const WIS_RANKING_PREVIEW_COLLECTION = "semester_wis_preview_entries";
 const WIS_RANKING_PREVIEW_PAGE_SIZE = 20;
 // Full-hall candidate reads never need account balances or recent ledger rows.
 // Keep this field mask local to the opt-in indexed full-hall transport.
-const WIS_HALL_ACCOUNT_FIELDS = ["accountId", "studentUid", "semesterId", "rankEarnedTotal",
+const WIS_HALL_ACCOUNT_FIELDS = ["accountId", "studentUid", "semesterId", "rankEarnedTotal", "earnedTotal",
   "status", "displayName", "enrollmentId", "classId", "grade", "classNumber", "studentNumber", "hallZeroEligible"];
 const WIS_REBUILD_LEDGER_LIMIT = 400;
 const WIS_INTEGRITY_VERSION = "w10p-aggregate-v1";
@@ -2562,7 +2562,8 @@ const normalizeQuery = (raw) => {
   const hallGradeKey = optionalText(value.hallGradeKey, "hallGradeKey", 80);
   const hallClassKey = optionalText(value.hallClassKey, "hallClassKey", 160);
   const rankingMetric = value.rankingMetric || "";
-  if (rankingMetric && (projection !== "ranking-preview" || !["cumulative", "current"].includes(rankingMetric)))
+  if (rankingMetric && (!["ranking-preview", "hall-view", "hall-of-fame"].includes(projection) ||
+    !["cumulative", "current"].includes(rankingMetric) || (projection !== "ranking-preview" && rankingMetric !== "cumulative")))
     fail("invalid-argument", "rankingMetric is invalid.", "WIS_QUERY_INVALID");
   const rankingClassKey = optionalText(value.rankingClassKey, "rankingClassKey", 160);
   if (rankingClassKey && (!rankingMetric || !/^\d+-\d+$/.test(rankingClassKey)))
@@ -3362,13 +3363,14 @@ const queryRankingPreview = async ({ transaction, scope, config, studentAccount,
 // be interpreted as a negative earned score. Only a bounded ordered candidate
 // page is fetched; canonical membership and visible balances are revalidated.
 const querySelectableRankingPreview = async ({ transaction, scope, config, studentAccount,
-  explicitTeacherRead, archived = null, rankPolicy, metric, classKey, now }) => {
+  explicitTeacherRead, archived = null, rankPolicy, metric, classKey, now,
+  directoryRows = null, gradeKey = "", maxEntries = 5 }) => {
   const ownGrade = String(studentAccount?.grade || "").trim();
-  const classRows = archived ? archived.accounts.map(data => ({ data })) : await transaction.query(archiveEnrollment.SEMESTER_CLASS_COLLECTION, {
+  const classRows = directoryRows || (archived ? archived.accounts.map(data => ({ data })) : await transaction.query(archiveEnrollment.SEMESTER_CLASS_COLLECTION, {
     field: "semesterId", operator: "==", value: scope,
     fieldMask: ["semesterId", "classId", "grade", "classNumber", "status"],
     limit: WIS_HALL_ACCOUNT_LIMIT + 1,
-  });
+  }));
   if (classRows.length > WIS_HALL_ACCOUNT_LIMIT) fail("resource-exhausted",
     "Wis class directory limit was exceeded.", "WIS_HALL_ACCOUNT_LIMIT_EXCEEDED");
   const classes = [...new Map(classRows.filter(({ data }) => data?.semesterId === scope &&
@@ -3381,28 +3383,34 @@ const querySelectableRankingPreview = async ({ transaction, scope, config, stude
   if (classKey && !classes.some(item => item.key === classKey)) fail("permission-denied",
     "The requested ranking class is unavailable.", "WIS_RANKING_CLASS_UNAVAILABLE");
   const [selectedGrade = "", selectedClass = ""] = classKey.split("-");
-  const grade = ownGrade || selectedGrade;
-  const scoreField = metric === "current" ? "balance" : "rankEarnedTotal";
-  const publicLimit = Math.min(5, classKey ? config.publicRange.classRankLimit : config.publicRange.gradeRankLimit);
+  const grade = ownGrade || selectedGrade || gradeKey;
+  const scoreField = metric === "current" ? "balance" : "earnedTotal";
+  const publicLimit = Math.min(maxEntries, classKey ? config.publicRange.classRankLimit : config.publicRange.gradeRankLimit);
   const score = account => Number(account[scoreField]);
-  const validScore = account => Number.isSafeInteger(account?.[scoreField]) && account[scoreField] >= 0;
+  const validScore = account => Number.isSafeInteger(account?.[scoreField]) && account[scoreField] >= 0 &&
+    Number.isSafeInteger(account.earnedTotal) && account.earnedTotal >= 0;
   const inScope = account => (!grade || String(account.grade) === grade) &&
     (!selectedClass || String(account.classNumber) === selectedClass);
   // Tie order matches the canonical query cursor, independently of public IDs.
   const compare = (a, b) => score(b) - score(a) || String(a.accountId).localeCompare(String(b.accountId));
   const select = accounts => {
     let previous = null, rank = 0;
-    return accounts.sort(compare).filter((account, index) => {
+    const ranked = accounts.sort(compare).map((account, index) => {
       if (score(account) !== previous) rank = index + 1;
       previous = score(account);
-      return config.publicRange.includeTies && score(account) > 0 ? rank <= publicLimit : index < publicLimit;
-    }).slice(0, 5);
+      return { account, rank, index };
+    });
+    const earned = ranked.filter(({ account, rank, index }) => score(account) > 0 &&
+      (config.publicRange.includeTies ? rank <= publicLimit : index < publicLimit))
+      .slice(0, maxEntries).map(row => row.account);
+    return earned.concat(ranked.filter(row => score(row.account) === 0)
+      .slice(0, Math.max(0, Math.min(5, publicLimit) - earned.length)).map(row => row.account));
   };
   const candidates = new Map();
   const verified = new Map(), rejected = new Set(), seen = new Set();
   let cursor = "", selected = [];
   while (seen.size < WIS_HALL_ACCOUNT_LIMIT) {
-    const limit = Math.min(WIS_RANKING_PREVIEW_PAGE_SIZE, WIS_HALL_ACCOUNT_LIMIT - seen.size);
+    const limit = Math.min(maxEntries, WIS_HALL_ACCOUNT_LIMIT - seen.size);
     const rows = await transaction.query(WIS_ACCOUNT_COLLECTION, {
       filters: [{ field: "semesterId", operator: "==", value: scope },
         ...(grade ? [{ field: "grade", operator: "==", value: grade }] : []),
@@ -3439,7 +3447,8 @@ const querySelectableRankingPreview = async ({ transaction, scope, config, stude
       }
     }
     const last = rows.at(-1)?.data, cutoff = selected.at(-1);
-    const target = config.publicRange.includeTies && cutoff && score(cutoff) > 0 ? 5 : publicLimit;
+    const target = cutoff && score(cutoff) === 0 ? Math.min(5, publicLimit)
+      : config.publicRange.includeTies && cutoff && score(cutoff) > 0 ? maxEntries : publicLimit;
     const rangeComplete = selected.length >= publicLimit && selected.length < target && last && cutoff && Number(last[scoreField]) < score(cutoff);
     const complete = rows.length < limit || rangeComplete || (selected.length >= target && last && cutoff &&
       (Number(last[scoreField]) < score(cutoff) || (Number(last[scoreField]) === score(cutoff) &&
@@ -3456,7 +3465,8 @@ const querySelectableRankingPreview = async ({ transaction, scope, config, stude
           grade: String(account.grade), class: String(account.classNumber),
           classKey: `${account.grade}-${account.classNumber}`, number: String(account.studentNumber || ""),
           studentName: String(account.displayName || "학생"), displayName: String(account.displayName || "학생"),
-          currentBalance: Number(account.balance || 0), cumulativeEarned: account.rankEarnedTotal,
+          currentBalance: Number(account.balance || 0), cumulativeEarned: account.earnedTotal,
+          rankEarnedTotal: account.rankEarnedTotal,
           profileIcon: resolveStudentProfileEmoji({ profileEmojiId: profile.profileEmojiId,
             profileIcon: profile.profileIcon, rankEarnedTotal: account.rankEarnedTotal, rankPolicy }).profileIcon,
           ...(avatar ? { avatar } : {}) };
@@ -3474,9 +3484,55 @@ const querySelectableRankingPreview = async ({ transaction, scope, config, stude
   fail("resource-exhausted", "Wis ranking candidate limit was exceeded.", "WIS_HALL_ACCOUNT_LIMIT_EXCEEDED");
 };
 
-// The full hall has many grade/class groups. Read the small private index once
-// instead of opening one query per group or downloading every account's ledger.
-// Only the union of publicly visible rows is verified against current sources.
+// New clients use the same total-earned account ordering in the dashboard and
+// hall. Keep legacy index transports available to already-open clients.
+const queryTotalEarnedHall = async ({ transaction, scope, config, studentAccount,
+  explicitTeacherRead, archived, rankPolicy, selection, now }) => {
+  const ownGrade = String(studentAccount?.grade || "");
+  const ownClassKey = ownGrade ? `${ownGrade}-${studentAccount.classNumber}` : "";
+  const directoryRows = archived ? archived.accounts.map(data => ({ data })) :
+    await transaction.query(archiveEnrollment.SEMESTER_CLASS_COLLECTION, {
+      filters: [{ field: "semesterId", operator: "==", value: scope },
+        ...(ownGrade ? [{ field: "grade", operator: "==", value: ownGrade }] : [])],
+      fieldMask: ["semesterId", "classId", "grade", "classNumber", "status"], limit: WIS_HALL_ACCOUNT_LIMIT + 1,
+    });
+  if (directoryRows.length > WIS_HALL_ACCOUNT_LIMIT) fail("resource-exhausted",
+    "Wis class directory limit was exceeded.", "WIS_HALL_ACCOUNT_LIMIT_EXCEEDED");
+  const classes = [...new Map(directoryRows.filter(({ data }) => data?.semesterId === scope &&
+    (explicitTeacherRead || data.status === "ACTIVE") && (!ownGrade || String(data.grade) === ownGrade) &&
+    /^\d+$/.test(String(data.grade)) && /^\d+$/.test(String(data.classNumber)))
+    .map(({ data }) => [`${data.grade}-${data.classNumber}`, { grade: String(data.grade), classKey: `${data.grade}-${data.classNumber}` }])).values()]
+    .sort((a, b) => a.classKey.localeCompare(b.classKey, undefined, { numeric: true }));
+  const gradeKeys = [...new Set(classes.map(row => row.grade))];
+  const classKeys = studentAccount ? classes.filter(row => row.classKey === ownClassKey).map(row => row.classKey)
+    : classes.map(row => row.classKey);
+  const selectedGrade = ownGrade || (gradeKeys.includes(selection?.gradeKey) ? selection.gradeKey : gradeKeys[0] || "");
+  const selectedClass = ownClassKey || (classKeys.includes(selection?.classKey) ? selection.classKey :
+    classes.find(row => row.grade === selectedGrade)?.classKey || classKeys[0] || "");
+  const groups = selection ? (selection.view === "class"
+    ? (selectedClass ? [{ classKey: selectedClass, grade: selectedClass.split("-")[0] }] : [])
+    : (selectedGrade ? [{ classKey: "", grade: selectedGrade }] : []))
+    : [...gradeKeys.map(grade => ({ classKey: "", grade })),
+      ...classKeys.map(classKey => ({ classKey, grade: classKey.split("-")[0] }))];
+  const gradeLeaderboardByGrade = Object.fromEntries(gradeKeys.map(key => [key, []]));
+  const classLeaderboardByClassKey = Object.fromEntries(classKeys.map(key => [key, []]));
+  await Promise.all(groups.map(async group => {
+    const result = await querySelectableRankingPreview({ transaction, scope, config, studentAccount,
+      explicitTeacherRead, archived, rankPolicy, metric: "cumulative", classKey: group.classKey,
+      gradeKey: group.grade, maxEntries: 20, directoryRows, now });
+    const entries = (result.hallOfFame.gradeLeaderboardByGrade[group.grade] || []).map(entry => ({ ...entry,
+      ...(entry.cumulativeEarned > 0 && entry.rank <= 3 ? { podiumSlot: entry.rank } : {}) }));
+    if (group.classKey) classLeaderboardByClassKey[group.classKey] = entries;
+    else gradeLeaderboardByGrade[group.grade] = entries;
+  }));
+  const top3 = groups => Object.fromEntries(Object.entries(groups).map(([key, entries]) =>
+    [key, entries.filter(entry => entry.cumulativeEarned > 0 && entry.rank <= 3)]));
+  const base = buildWisHallOfFameProjection({ accounts: [], config, scope });
+  return { ...base, primaryGradeKey: selectedGrade, gradeLeaderboardByGrade, classLeaderboardByClassKey,
+    gradeTop3ByGrade: top3(gradeLeaderboardByGrade), classTop3ByClassKey: top3(classLeaderboardByClassKey),
+    snapshotKey: `w7_${sha256(canonicalJson([gradeLeaderboardByGrade, classLeaderboardByClassKey])).slice(0, 32)}` };
+};
+
 const selectHallView = (hall, selection, studentAccount = null, known = {}) => {
   const gradeKeys = new Set([...(known.gradeKeys || []), ...Object.keys(hall.gradeLeaderboardByGrade)]);
   const classKeys = new Set([...(known.classKeys || []), ...Object.keys(hall.classLeaderboardByClassKey)]);
@@ -3962,7 +4018,7 @@ const createWisQueryCore = ({
       const isIndexedHall = ["hall-index", "hall-view"].includes(query.projection);
       const hallSelection = query.projection === "hall-view"
         ? { view: query.hallView, gradeKey: query.hallGradeKey, classKey: query.hallClassKey } : null;
-      const isIndexedRankingRead = isRankingPreview || isIndexedHall;
+      const isIndexedRankingRead = isRankingPreview || isIndexedHall || Boolean(query.rankingMetric);
       const transaction = isIndexedRankingRead ? memoizeRankingPreviewReads(rawTransaction,
         { maskAccounts: isIndexedHall || Boolean(query.rankingMetric), includeBalance: Boolean(query.rankingMetric) }) : rawTransaction;
       const [year, semester] = query.semesterId.split("-");
@@ -4069,7 +4125,10 @@ const createWisQueryCore = ({
           studentAccount = ownAccount
             ? (await readRankingPreviewRoster(transaction, [ownAccount], query.semesterId))[0]
             : null;
-          if (!studentAccount) return { ...emptyWisState({ query, provenance,
+          // Missing or malformed placement must never turn a student's ranking
+          // request into the unscoped teacher query.
+          if (!studentAccount || !/^[1-9]\d{0,2}$/.test(String(studentAccount.grade || "")) ||
+            !/^[1-9]\d{0,2}$/.test(String(studentAccount.classNumber || ""))) return { ...emptyWisState({ query, provenance,
             readOnly: true, economy: projectStudentEconomy(economySnapshot.data), manifestRevision,
             reason: "WIS_ACTIVE_ENROLLMENT_REQUIRED" }), rankPolicy: policySnapshot?.data?.rankPolicy || null };
         }
@@ -4077,12 +4136,21 @@ const createWisQueryCore = ({
         if (isRankingPreview && query.rankingMetric) {
           const selected = await querySelectableRankingPreview({ transaction, scope: query.semesterId,
             config: hallOfFameConfig, studentAccount, explicitTeacherRead, rankPolicy,
-            archived: explicitTeacherRead ? await loadRankingPreviewInputs(transaction, query.semesterId, true) : null,
+            archived: explicitTeacherRead ? { accounts: await queryHallAccounts(transaction, query.semesterId, { compact: true }) } : null,
             metric: query.rankingMetric, classKey: query.rankingClassKey, now: now() });
           return { ...base, economy: query.audience === "student"
             ? projectStudentEconomy(economySnapshot.data) : base.economy,
             ...selected, rankPolicy, status: Object.values(selected.hallOfFame.gradeLeaderboardByGrade)
               .some(rows => rows.length) ? "CONTENT" : "EMPTY" };
+        }
+        if (query.rankingMetric === "cumulative") {
+          const hallOfFame = await queryTotalEarnedHall({ transaction, scope: query.semesterId,
+            config: hallOfFameConfig, studentAccount, explicitTeacherRead, rankPolicy,
+            archived: explicitTeacherRead ? { accounts: await queryHallAccounts(transaction, query.semesterId, { compact: true }) } : null,
+            selection: hallSelection, now: now() });
+          return { ...base, economy: query.audience === "student" ? projectStudentEconomy(economySnapshot.data) : base.economy,
+            hallOfFame, rankPolicy, status: [hallOfFame.gradeLeaderboardByGrade, hallOfFame.classLeaderboardByClassKey]
+              .some(group => Object.values(group).some(rows => rows.length)) ? "CONTENT" : "EMPTY" };
         }
         let hallOfFame;
         if (isIndexedHall && explicitTeacherRead) {

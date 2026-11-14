@@ -373,7 +373,7 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                 <div className="flex items-center gap-1 text-xs font-bold text-gray-500">
                   누적 획득 위스
                   <InfoHelp label="누적 획득 위스 기준">
-                    초기 지급 위스는 제외합니다. 게임·상점에서 사용해도 누적
+                    초기 지급 위스도 포함합니다. 게임·상점에서 사용해도 누적
                     획득 위스는 줄지 않습니다.
                   </InfoHelp>
                 </div>

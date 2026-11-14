@@ -49,6 +49,7 @@
   min-height: 28px;
   height: 28px;
   max-width: 160px;
+  width: 104px;
   border: 1px solid var(--ws-border, #e5e7eb);
   border-radius: 8px;
   padding: 2px 8px;
@@ -68,12 +69,17 @@
 }
 
 .wis-ranking-with-avatar .wis-ranking-avatar-layout {
+  --wis-ranking-row-height: 52px;
+  --wis-ranking-row-gap: 8px;
+  --wis-ranking-content-height: calc(
+    5 * var(--wis-ranking-row-height) + 4 * var(--wis-ranking-row-gap) + 8px
+  );
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   gap: 16px;
   flex: 1;
   min-width: 0;
-  min-height: 0;
+  min-height: var(--wis-ranking-content-height);
 }
 
 .wis-ranking-list-scroll {
@@ -92,6 +98,24 @@
   padding: 2px 0;
   gap: 8px;
   overflow: visible;
+  min-height: calc(var(--wis-ranking-content-height) - 4px);
+}
+
+.wis-ranking-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wis-ranking-row-gap);
+}
+
+.wis-ranking-skeleton-row {
+  height: var(--wis-ranking-row-height);
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  background: var(--ws-surface-subtle, #f8fafc);
+}
+
+.wis-ranking-with-avatar .wis-ranking-state {
+  min-height: calc(var(--wis-ranking-content-height) - 8px);
 }
 
 .wis-ranking-with-avatar .wis-ranking-row {
@@ -249,6 +273,10 @@
 }
 
 @media (max-width: 1023px), (max-width: 1280px) and (pointer: coarse) {
+  .wis-ranking-with-avatar .wis-ranking-avatar-layout {
+    --wis-ranking-row-height: 44px;
+    --wis-ranking-row-gap: 4px;
+  }
   .wis-ranking-with-avatar .wis-ranking-list-scroll {
     overflow: visible;
   }

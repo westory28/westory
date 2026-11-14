@@ -134,7 +134,7 @@ export const POINT_RANK_THEME_MAP: Record<
       tier_1: {
         label: "4두품",
         shortLabel: "4두품",
-        description: "누적 획득 위스 성장을 막 시작한 단계입니다.",
+        description: "활동으로 위스를 모으기 시작한 단계입니다.",
         badgeStyleToken: "stone",
       },
       tier_2: {
@@ -169,7 +169,7 @@ export const POINT_RANK_THEME_MAP: Record<
       tier_1: {
         label: "남작",
         shortLabel: "남작",
-        description: "누적 획득 위스 성장을 막 시작한 단계입니다.",
+        description: "활동으로 위스를 모으기 시작한 단계입니다.",
         badgeStyleToken: "stone",
       },
       tier_2: {
@@ -435,7 +435,7 @@ const getBaseTierMeta = (
   return {
     label: `${theme.themeName} ${tierIndex}단계`,
     shortLabel: `${tierIndex}단계`,
-    description: "누적 획득 위스를 기준으로 계산한 등급입니다.",
+    description: "활동으로 획득한 위스를 기준으로 계산한 등급입니다.",
     badgeStyleToken: normalizeBadgeStyleToken("", tierIndex - 1),
   };
 };
@@ -911,10 +911,6 @@ const getStoredRankEarnedTotal = (
 export const getPointWalletCumulativeEarned = (
   wallet?: Pick<PointWallet, "earnedTotal" | "rankEarnedTotal"> | null,
 ) => {
-  const storedRankEarnedTotal = getStoredRankEarnedTotal(wallet);
-  if (storedRankEarnedTotal !== null) {
-    return storedRankEarnedTotal;
-  }
   return Math.max(0, Number(wallet?.earnedTotal || 0));
 };
 

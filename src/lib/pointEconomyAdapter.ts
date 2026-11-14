@@ -94,7 +94,7 @@ export type WisOverviewSelection = {
   classNumber?: string;
   studentNumber?: string;
   namePrefix?: string;
-  sortField?: "balance" | "rankEarnedTotal" | "spentTotal";
+  sortField?: "balance" | "earnedTotal" | "rankEarnedTotal" | "spentTotal";
   direction?: "asc" | "desc";
 };
 export const getCanonicalPointWalletPage = async (
