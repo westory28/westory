@@ -157,6 +157,14 @@
   min-width: 960px;
 }
 
+.score-class-sheet--written .score-class-sheet-table table {
+  table-layout: auto;
+}
+
+.score-class-sheet-label-compact {
+  display: none;
+}
+
 .score-class-sheet--compact .score-class-sheet-table :is(th, td) {
   white-space: nowrap;
 }
@@ -170,6 +178,18 @@
 }
 
 @container score-class-sheet (max-width: 767px) {
+  .score-class-sheet--written .score-class-sheet-summary {
+    gap: 8px;
+  }
+
+  .score-class-sheet--written .score-class-sheet-label-full {
+    display: none;
+  }
+
+  .score-class-sheet--written .score-class-sheet-label-compact {
+    display: inline;
+  }
+
   .score-class-sheet--compact .score-class-sheet-filters {
     display: grid;
     grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -183,7 +203,9 @@
     grid-column: span 3;
   }
 
-  .score-class-sheet--compact .score-class-sheet-filter-fields > label:nth-child(n + 3),
+  .score-class-sheet--compact
+    .score-class-sheet-filter-fields
+    > label:nth-child(n + 3),
   .score-class-sheet--compact .score-class-sheet-filters > div:last-child {
     grid-column: span 2;
     grid-row: 2;

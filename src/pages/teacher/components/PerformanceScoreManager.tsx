@@ -7782,9 +7782,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const classSheetModalTitle = isWrittenExamMode
     ? "정기시험 서명 현황"
     : "일람표 다운로드";
-  const classSheetModalDescription = isWrittenExamMode
-    ? "정기시험 점수 확인 서명 여부와 서명 이미지를 학급별로 확인합니다."
-    : "수행평가 강의실별 일람표 양식으로 학급별 점수와 서명을 확인합니다.";
   const classSheetFirstRosterLabel = isWrittenExamMode
     ? "서답형 점수표"
     : "1차 점수표";
@@ -11115,10 +11112,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
   return (
     <div className="space-y-6" aria-busy={savingScoreEdits || undefined}>
-      {(scoreListLoading ||
-        (classSheetModalOpen && classSheetPreviewLoading)) && (
-        <LoadingOverlay />
-      )}
+      {scoreListLoading && <LoadingOverlay />}
       {savingScoreEdits && (
         <LoadingOverlay
           message={managerCopy.savingOverlayMessage}
@@ -13041,18 +13035,17 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       {signatureStatusModalEnabled && classSheetModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
           <section
-            className={`${!isWrittenExamMode ? "score-class-sheet--compact " : ""}flex max-h-[calc(100vh-2rem)] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl`}
+            role="dialog"
+            aria-modal="true"
+            aria-label={classSheetModalTitle}
+            className={`score-class-sheet--compact ${isWrittenExamMode ? "score-class-sheet--written " : ""}flex max-h-[calc(100vh-2rem)] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl`}
           >
+            {classSheetPreviewLoading && <LoadingOverlay />}
             <div className="score-class-sheet-header flex flex-col gap-3 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <h3 className="text-lg font-black text-slate-900">
                   {classSheetModalTitle}
                 </h3>
-                {isWrittenExamMode && (
-                  <p className="mt-1 text-sm font-semibold text-slate-500">
-                    {classSheetModalDescription}
-                  </p>
-                )}
               </div>
               <button
                 type="button"
@@ -13070,7 +13063,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 <div className="score-class-sheet-filter-fields">
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-black text-slate-500">
-                      {isWrittenExamMode ? classSheetFirstRosterLabel : "1차"}
+                      {isWrittenExamMode ? "서답형" : "1차"}
                     </span>
                     <select
                       aria-label={classSheetFirstRosterLabel}
@@ -13097,7 +13090,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                   </label>
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-black text-slate-500">
-                      {isWrittenExamMode ? classSheetSecondRosterLabel : "2차"}
+                      {isWrittenExamMode ? "논술형" : "2차"}
                     </span>
                     <select
                       aria-label={classSheetSecondRosterLabel}
@@ -13205,33 +13198,39 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                     {[
                       {
                         label: "학급 인원",
+                        compactLabel: "인원",
                         value: `${classSheetStatusSummary.totalCount}명`,
                         tone: "bg-slate-50 text-slate-700",
                       },
                       {
                         label: classSheetFirstScoreLabel,
+                        compactLabel: isWrittenExamMode ? "서답" : "1차",
                         value: `${classSheetStatusSummary.firstScoredCount}명`,
                         tone: "bg-blue-50 text-blue-700",
                       },
                       {
                         label: classSheetSecondScoreLabel,
+                        compactLabel: isWrittenExamMode ? "논술" : "2차",
                         value: `${classSheetStatusSummary.secondScoredCount}명`,
                         tone: "bg-blue-50 text-blue-700",
                       },
                       isWrittenExamMode
                         ? {
                             label: "논술형만 서명",
+                            compactLabel: "논술서명",
                             value: `${classSheetStatusSummary.secondOnlySignedCount}명`,
                             tone: "bg-amber-50 text-amber-700",
                           }
                         : null,
                       {
                         label: "서명 완료",
+                        compactLabel: "완료",
                         value: `${classSheetStatusSummary.signedCount}명`,
                         tone: "bg-emerald-50 text-emerald-700",
                       },
                       {
                         label: "서명 미완료",
+                        compactLabel: "미완료",
                         value: `${classSheetStatusSummary.unsignedCount}명`,
                         tone: "bg-rose-50 text-rose-700",
                       },
@@ -13241,6 +13240,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                           item,
                         ): item is {
                           label: string;
+                          compactLabel: string;
                           value: string;
                           tone: string;
                         } => Boolean(item),
@@ -13248,13 +13248,31 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                       .map((item) => (
                         <div
                           key={item.label}
+                          role="group"
+                          aria-label={`${item.label} ${item.value}`}
                           className={`rounded-lg px-3 py-3 ${item.tone}`}
                         >
-                          <div className="text-[11px] font-black">
-                            {item.label}
+                          <div
+                            className="text-[11px] font-black"
+                            aria-hidden="true"
+                          >
+                            <span className="score-class-sheet-label-full">
+                              {item.label}
+                            </span>
+                            <span className="score-class-sheet-label-compact">
+                              {item.compactLabel}
+                            </span>
                           </div>
-                          <div className="mt-1 text-lg font-black">
-                            {item.value}
+                          <div
+                            className="mt-1 text-lg font-black"
+                            aria-hidden="true"
+                          >
+                            <span className="score-class-sheet-label-full">
+                              {item.value}
+                            </span>
+                            <span className="score-class-sheet-label-compact">
+                              {item.value.replace(/명$/, "")}
+                            </span>
                           </div>
                         </div>
                       ))}
@@ -13262,10 +13280,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
                   <div
                     className="score-class-sheet-table max-h-[min(46vh,520px)] overflow-auto rounded-xl border border-slate-200"
-                    tabIndex={isWrittenExamMode ? undefined : 0}
-                    aria-label={
-                      isWrittenExamMode ? undefined : "학생별 점수와 서명 현황"
-                    }
+                    tabIndex={0}
+                    aria-label="학생별 점수와 서명 현황"
                   >
                     <table className="w-full table-fixed text-left text-sm">
                       <colgroup>
@@ -14056,11 +14072,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         </div>
       )}
 
-      <section
-        className={
-          isWrittenExamMode ? "min-w-0" : "score-performance-manager min-w-0"
-        }
-      >
+      <section className="score-performance-manager min-w-0">
         <div className="ws-page-header">
           <div>
             <h2 className="text-xl font-black text-slate-900">
@@ -14287,34 +14299,30 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                         className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
                       />
                     </label>
-                    {!isWrittenExamMode && (
-                      <button
-                        ref={scoreSearchToggleRef}
-                        type="button"
-                        className="score-manager-search-toggle"
-                        aria-controls={scoreSearchInputId}
-                        aria-expanded={scoreSearchExpanded}
-                        aria-label={
-                          scoreSearchExpanded
-                            ? "학생 이름 검색 닫기"
-                            : "학생 이름 검색 열기"
+                    <button
+                      ref={scoreSearchToggleRef}
+                      type="button"
+                      className="score-manager-search-toggle"
+                      aria-controls={scoreSearchInputId}
+                      aria-expanded={scoreSearchExpanded}
+                      aria-label={
+                        scoreSearchExpanded
+                          ? "학생 이름 검색 닫기"
+                          : "학생 이름 검색 열기"
+                      }
+                      onClick={() =>
+                        scoreSearchExpanded
+                          ? closeScoreSearch()
+                          : setScoreSearchOpen(true)
+                      }
+                    >
+                      <i
+                        aria-hidden="true"
+                        className={
+                          scoreSearchExpanded ? "fas fa-times" : "fas fa-search"
                         }
-                        onClick={() =>
-                          scoreSearchExpanded
-                            ? closeScoreSearch()
-                            : setScoreSearchOpen(true)
-                        }
-                      >
-                        <i
-                          aria-hidden="true"
-                          className={
-                            scoreSearchExpanded
-                              ? "fas fa-times"
-                              : "fas fa-search"
-                          }
-                        />
-                      </button>
-                    )}
+                      />
+                    </button>
                   </div>
                   <button
                     type="button"
