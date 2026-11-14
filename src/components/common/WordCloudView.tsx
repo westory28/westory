@@ -1,4 +1,12 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import "./wordCloudView.css";
 
 interface WordCloudEntry {
   text: string;
@@ -11,398 +19,28 @@ interface WordCloudViewProps {
   className?: string;
   showSubmitters?: boolean;
   variant?: "default" | "modal";
+  motionEnabled?: boolean;
   batchStart?: number;
   totalEntries?: number;
 }
 
-interface PositionedWord extends WordCloudEntry {
+interface WordFrame {
   x: number;
   y: number;
+  count: number;
   fontSize: number;
-  width: number;
-  height: number;
-  color: string;
-  rotate: 0 | 90;
-  tooltip: string;
 }
 
-const WIDTH = 2100;
-const HEIGHT = 900;
-const CENTER_X = WIDTH / 2;
-const CENTER_Y = HEIGHT / 2 - 12;
-const RADIUS_X = 948;
-const RADIUS_Y = 346;
-const WORDS_PER_CLOUD = 50;
-const COLORS = [
-  "#2563eb",
-  "#0f766e",
-  "#7c3aed",
-  "#ea580c",
-  "#0891b2",
-  "#db2777",
-  "#65a30d",
-  "#64748b",
-];
-const PRIMARY_ANCHORS = [
-  { x: 0, y: 0 },
-  { x: -132, y: -34 },
-  { x: 132, y: -28 },
-  { x: -116, y: 62 },
-  { x: 120, y: 60 },
-  { x: 0, y: -90 },
-  { x: 0, y: 96 },
-  { x: -240, y: 8 },
-  { x: 236, y: 10 },
-];
-const NEIGHBOR_DIRECTIONS = [
-  { x: 1, y: 0 },
-  { x: -1, y: 0 },
-  { x: 0, y: 1 },
-  { x: 0, y: -1 },
-  { x: 1, y: 1 },
-  { x: -1, y: 1 },
-  { x: 1, y: -1 },
-  { x: -1, y: -1 },
-];
-const FILL_SCALES = [0.5, 0.62, 0.76, 0.9, 1.04];
-const SPIRAL_ANGLE = Math.PI * (3 - Math.sqrt(5));
+// An absolute count scale keeps a word's size independent of other responses.
+const wordSize = (count: number, length: number) => {
+  const ceiling = length > 24 ? 40 : length > 12 ? 56 : 80;
+  return Math.min(ceiling, 22 + Math.sqrt(Math.max(0, count - 1)) * 10);
+};
 
-const hashCode = (value: string) => {
+const wordTone = (text: string) => {
   let hash = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    hash = (hash << 5) - hash + value.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-};
-
-const buildTooltip = (entry: WordCloudEntry, showSubmitters: boolean) => {
-  const base = `${entry.text}: ${entry.count}`;
-  if (!showSubmitters) return base;
-
-  const names = Array.from(
-    new Set(
-      (entry.submitters || [])
-        .map((name) => String(name || "").trim())
-        .filter(Boolean),
-    ),
-  );
-  if (names.length === 0) return base;
-
-  const preview = names.slice(0, 8).join(", ");
-  const suffix = names.length > 8 ? ` +${names.length - 8}` : "";
-  return `${base}\n${preview}${suffix}`;
-};
-
-const getTextUnits = (text: string) =>
-  Array.from(text).reduce((sum, char) => {
-    if (/[A-Z0-9]/.test(char)) return sum + 0.74;
-    if (/[a-z]/.test(char)) return sum + 0.62;
-    if (/[\uAC00-\uD7A3]/.test(char)) return sum + 0.96;
-    return sum + 0.82;
-  }, 0);
-
-const estimateWordWidth = (text: string, fontSize: number) => {
-  const units = getTextUnits(text);
-  return Math.max(fontSize * 2.4, fontSize * (units + 1.2));
-};
-
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(max, Math.max(min, value));
-
-const getLengthAdjustedMaxFontSize = (
-  text: string,
-  baseMax: number,
-  variant: "default" | "modal",
-) => {
-  const units = getTextUnits(text);
-  const maxWidth = WIDTH * (variant === "modal" ? 0.7 : 0.46);
-  const widthLimitedSize = maxWidth / Math.max(units + 1.2, 2.4);
-  const lengthScale = clamp(1 - Math.max(0, units - 5.2) * 0.052, 0.62, 1);
-
-  return Math.max(
-    18,
-    Math.min(baseMax, widthLimitedSize, baseMax * lengthScale),
-  );
-};
-
-const getDensityFontScale = (
-  wordCount: number,
-  variant: "default" | "modal",
-) => {
-  const base = variant === "modal" ? 1.22 : 1.12;
-  const crowding =
-    Math.max(0, wordCount - 14) * (variant === "modal" ? 0.012 : 0.01);
-  const sparseBoost = Math.max(0, 14 - wordCount) * 0.018;
-
-  return clamp(
-    base + sparseBoost - crowding,
-    variant === "modal" ? 0.62 : 0.68,
-    variant === "modal" ? 1.38 : 1.24,
-  );
-};
-
-const getCloudFillScale = (
-  placed: PositionedWord[],
-  wordCount: number,
-  variant: "default" | "modal",
-) => {
-  if (placed.length === 0) return 1;
-
-  const extentX = placed.reduce(
-    (max, item) => Math.max(max, Math.abs(item.x - CENTER_X) + item.width / 2),
-    1,
-  );
-  const extentY = placed.reduce(
-    (max, item) => Math.max(max, Math.abs(item.y - CENTER_Y) + item.height / 2),
-    1,
-  );
-  const targetX = RADIUS_X * (variant === "modal" ? 0.93 : 0.9);
-  const targetY = RADIUS_Y * (variant === "modal" ? 0.88 : 0.84);
-  const desiredScale = Math.min(targetX / extentX, targetY / extentY);
-  const sparseCap =
-    variant === "modal"
-      ? clamp(2.16 - wordCount * 0.025, 1.02, 1.9)
-      : clamp(1.62 - wordCount * 0.014, 1.01, 1.38);
-
-  return clamp(desiredScale, 1, sparseCap);
-};
-
-const scalePositionedWords = (placed: PositionedWord[], scale: number) => {
-  if (scale <= 1.01) return placed;
-
-  return placed.map((item) => ({
-    ...item,
-    x: CENTER_X + (item.x - CENTER_X) * scale,
-    y: CENTER_Y + (item.y - CENTER_Y) * scale,
-    fontSize: item.fontSize * scale,
-    width: item.width * scale,
-    height: item.height * scale,
-  }));
-};
-
-const getWordRotation = (
-  text: string,
-  textUnits: number,
-  fontSize: number,
-  index: number,
-  wordCount: number,
-  variant: "default" | "modal",
-): 0 | 90 => {
-  if (index <= 5) return 0;
-  if (textUnits > 6.2) return 0;
-
-  const maxRotatedSize = variant === "modal" ? 112 : 82;
-  if (fontSize > maxRotatedSize) return 0;
-
-  const hash = hashCode(text);
-  const rotationRate = wordCount > 36 ? 2 : wordCount > 20 ? 3 : 4;
-
-  return hash % rotationRate === 0 ? 90 : 0;
-};
-
-const getPadding = (fontSize: number, variant: "default" | "modal") => ({
-  x: Math.max(1, fontSize * (variant === "modal" ? 0.012 : 0.024)),
-  y: Math.max(1, fontSize * (variant === "modal" ? 0.01 : 0.018)),
-});
-
-const isInsideEllipse = (
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-) => {
-  const corners = [
-    { x: x - width / 2, y: y - height / 2 },
-    { x: x + width / 2, y: y - height / 2 },
-    { x: x - width / 2, y: y + height / 2 },
-    { x: x + width / 2, y: y + height / 2 },
-  ];
-
-  return corners.every((corner) => {
-    const nx = (corner.x - CENTER_X) / RADIUS_X;
-    const ny = (corner.y - CENTER_Y) / RADIUS_Y;
-    return nx * nx + ny * ny <= 1;
-  });
-};
-
-const overlaps = (
-  candidate: PositionedWord,
-  placed: PositionedWord[],
-  variant: "default" | "modal",
-) => {
-  const candidatePadding = getPadding(candidate.fontSize, variant);
-
-  return placed.some((item) => {
-    const itemPadding = getPadding(item.fontSize, variant);
-    const xGap = Math.abs(candidate.x - item.x);
-    const yGap = Math.abs(candidate.y - item.y);
-
-    return (
-      xGap <
-        (candidate.width + item.width) / 2 +
-          candidatePadding.x +
-          itemPadding.x &&
-      yGap <
-        (candidate.height + item.height) / 2 +
-          candidatePadding.y +
-          itemPadding.y
-    );
-  });
-};
-
-const getNeighborGapScore = (
-  candidate: PositionedWord,
-  placed: PositionedWord[],
-  variant: "default" | "modal",
-) => {
-  if (placed.length === 0) return 0;
-
-  let nearest = Number.POSITIVE_INFINITY;
-  const candidatePadding = getPadding(candidate.fontSize, variant);
-
-  placed.forEach((item) => {
-    const itemPadding = getPadding(item.fontSize, variant);
-    const dx =
-      Math.abs(candidate.x - item.x) -
-      ((candidate.width + item.width) / 2 + candidatePadding.x + itemPadding.x);
-    const dy =
-      Math.abs(candidate.y - item.y) -
-      ((candidate.height + item.height) / 2 +
-        candidatePadding.y +
-        itemPadding.y);
-    const gap = Math.max(dx, dy, 0);
-    nearest = Math.min(nearest, gap);
-  });
-
-  return nearest;
-};
-
-const buildNeighborCandidates = (
-  item: WordCloudEntry,
-  fontSize: number,
-  width: number,
-  height: number,
-  rotate: 0 | 90,
-  placed: PositionedWord[],
-  variant: "default" | "modal",
-  showSubmitters: boolean,
-) => {
-  const candidates: PositionedWord[] = [];
-  const color = COLORS[hashCode(item.text) % COLORS.length];
-  const tooltip = buildTooltip(item, showSubmitters);
-
-  placed.forEach((anchorWord) => {
-    const candidatePadding = getPadding(fontSize, variant);
-    const anchorPadding = getPadding(anchorWord.fontSize, variant);
-    const baseOffsetX =
-      (width + anchorWord.width) / 2 + candidatePadding.x + anchorPadding.x;
-    const baseOffsetY =
-      (height + anchorWord.height) / 2 + candidatePadding.y + anchorPadding.y;
-
-    FILL_SCALES.forEach((scale) => {
-      NEIGHBOR_DIRECTIONS.forEach((direction, index) => {
-        const offsetX =
-          direction.x === 0 ? 0 : baseOffsetX * direction.x * scale;
-        const offsetY =
-          direction.y === 0 ? 0 : baseOffsetY * direction.y * scale;
-        const jitter = index >= 4 ? 0.92 : 1;
-        const x = clamp(
-          anchorWord.x + offsetX * jitter,
-          width / 2 + 12,
-          WIDTH - width / 2 - 12,
-        );
-        const y = clamp(
-          anchorWord.y + offsetY * jitter,
-          height / 2 + 12,
-          HEIGHT - height / 2 - 12,
-        );
-
-        candidates.push({
-          ...item,
-          x,
-          y,
-          fontSize,
-          width,
-          height,
-          color,
-          rotate,
-          tooltip,
-        });
-      });
-    });
-  });
-
-  return candidates;
-};
-
-const buildSpiralCandidate = (
-  item: WordCloudEntry,
-  fontSize: number,
-  width: number,
-  height: number,
-  rotate: 0 | 90,
-  step: number,
-  index: number,
-  variant: "default" | "modal",
-  showSubmitters: boolean,
-) => {
-  const seed = hashCode(item.text);
-  const angle = seed * 0.017 + step * SPIRAL_ANGLE;
-  const stepRatio = Math.sqrt(step + 0.5);
-  const radius = index === 0 ? 0 : stepRatio * (variant === "modal" ? 13 : 16);
-  const wobble = 1 + ((hashCode(`${item.text}-${step}`) % 9) - 4) * 0.006;
-  const horizontalBias = index < 12 ? 1.04 : 0.98;
-  const verticalBias = index < 12 ? 0.72 : 0.82;
-  const x = CENTER_X + Math.cos(angle) * radius * horizontalBias * wobble;
-  const y = CENTER_Y + Math.sin(angle) * radius * verticalBias * wobble;
-
-  return {
-    ...item,
-    x,
-    y,
-    fontSize,
-    width,
-    height,
-    color: COLORS[seed % COLORS.length],
-    rotate,
-    tooltip: buildTooltip(item, showSubmitters),
-  };
-};
-
-const getPlacementScore = (
-  candidate: PositionedWord,
-  placed: PositionedWord[],
-  variant: "default" | "modal",
-) => {
-  const dx = candidate.x - CENTER_X;
-  const dy = candidate.y - CENTER_Y;
-  const centerDistance = Math.hypot(dx * 0.7, dy * 1.05);
-  const neighborGap = getNeighborGapScore(candidate, placed, variant);
-  const preferredGap = variant === "modal" ? 0.8 : 1.6;
-  const gapPenalty =
-    Math.abs(neighborGap - preferredGap) * (variant === "modal" ? 4.6 : 3.4);
-  const verticalPenalty = candidate.rotate === 90 ? 3 : 0;
-  const bandPenalty = Math.abs(dy) * (variant === "modal" ? 0.018 : 0.032);
-  const edgePenalty = Math.max(0, Math.abs(dx) - RADIUS_X * 0.78) * 0.07;
-  const balancePenalty = placed.reduce((penalty, item) => {
-    const sameBand =
-      Math.abs(item.y - candidate.y) < (candidate.height + item.height) * 0.55;
-    if (!sameBand) return penalty;
-    return (
-      penalty +
-      Math.max(0, RADIUS_X * 0.34 - Math.abs(item.x - candidate.x)) * 0.004
-    );
-  }, 0);
-
-  return (
-    centerDistance +
-    gapPenalty +
-    verticalPenalty +
-    bandPenalty +
-    edgePenalty +
-    balancePenalty
-  );
+  for (const letter of text) hash = (hash * 31 + letter.codePointAt(0)!) | 0;
+  return Math.abs(hash) % 5 === 0 ? "amber" : "blue";
 };
 
 const WordCloudView: React.FC<WordCloudViewProps> = ({
@@ -410,364 +48,323 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
   className = "",
   showSubmitters = false,
   variant = "default",
-  batchStart = 0,
-  totalEntries,
+  motionEnabled = true,
 }) => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const detailId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const nodesRef = useRef(new Map<string, HTMLLIElement>());
+  const framesRef = useRef(new Map<string, WordFrame>());
+  const animationsRef = useRef(new Set<Animation>());
+  const inViewRef = useRef(true);
   const [hoveredText, setHoveredText] = useState("");
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [focusedText, setFocusedText] = useState("");
+  const [pinnedText, setPinnedText] = useState("");
+  const [dismissedText, setDismissedText] = useState("");
 
-  const positioned = useMemo(() => {
-    if (entries.length === 0) return [] as PositionedWord[];
-
-    const source = entries.slice(0, WORDS_PER_CLOUD);
-    const minCount = Math.min(...source.map((item) => item.count));
-    const maxCount = Math.max(...source.map((item) => item.count));
-    const fontRange =
-      variant === "modal"
-        ? { min: 30, max: 220, fallback: 18 }
-        : { min: 26, max: 138, fallback: 20 };
-    const secondCount = source[1]?.count ?? maxCount;
-    const densityFontScale = getDensityFontScale(source.length, variant);
-
-    const placed: PositionedWord[] = [];
-
-    source.forEach((item, index) => {
-      const uniformRatio =
-        source.length > 18 ? 0.16 : source.length > 8 ? 0.24 : 0.34;
-      const ratio =
-        maxCount === minCount
-          ? uniformRatio
-          : (item.count - minCount) / Math.max(maxCount, 1);
-      const easedRatio = Math.pow(ratio, 0.45);
-      const dominance = maxCount > 0 ? item.count / maxCount : 0;
-      const rankFalloff = Math.max(
-        0,
-        1 - index / Math.max(source.length - 1, 1),
-      );
-      const itemMaxFontSize = getLengthAdjustedMaxFontSize(
-        item.text,
-        fontRange.max,
-        variant,
-      );
-      const leaderBoost =
-        index === 0 && maxCount > secondCount
-          ? Math.min(
-              1.14,
-              1 + ((maxCount - secondCount) / Math.max(maxCount, 1)) * 0.18,
+  const words = useMemo(() => {
+    const combined = new Map<string, WordCloudEntry>();
+    for (const entry of entries) {
+      const text = String(entry.text || "").trim();
+      const count = Math.floor(Number(entry.count));
+      if (!text || !Number.isFinite(count) || count < 1) continue;
+      const previous = combined.get(text);
+      combined.set(text, {
+        text,
+        count: (previous?.count || 0) + count,
+        submitters: showSubmitters
+          ? Array.from(
+              new Set(
+                [...(previous?.submitters || []), ...(entry.submitters || [])]
+                  .map((name) => name.trim())
+                  .filter(Boolean),
+              ),
             )
-          : 1;
-      const emphasisBoost = 1 + dominance * 0.14 + rankFalloff * 0.06;
-      const baseSize = Math.round(
-        Math.min(
-          itemMaxFontSize,
-          (fontRange.min + easedRatio * (fontRange.max - fontRange.min)) *
-            emphasisBoost *
-            leaderBoost *
-            densityFontScale,
-        ),
-      );
-
-      let fontSize = baseSize;
-      let bestCandidate: PositionedWord | null = null;
-
-      for (let shrink = 0; shrink < 8 && !bestCandidate; shrink += 1) {
-        const textUnits = getTextUnits(item.text);
-        const rotate = getWordRotation(
-          item.text,
-          textUnits,
-          fontSize,
-          index,
-          source.length,
-          variant,
-        );
-        const baseWidth = estimateWordWidth(item.text, fontSize);
-        const baseHeight = Math.max(28, fontSize * 0.94);
-        const width = rotate === 90 ? baseHeight : baseWidth;
-        const height = rotate === 90 ? baseWidth : baseHeight;
-        let bestScore = Number.POSITIVE_INFINITY;
-
-        if (index < PRIMARY_ANCHORS.length) {
-          const anchor = PRIMARY_ANCHORS[index];
-          const anchorX = clamp(
-            CENTER_X + anchor.x,
-            width / 2 + 14,
-            WIDTH - width / 2 - 14,
-          );
-          const anchorY = clamp(
-            CENTER_Y + anchor.y,
-            height / 2 + 14,
-            HEIGHT - height / 2 - 14,
-          );
-          const anchoredCandidate: PositionedWord = {
-            ...item,
-            x: anchorX,
-            y: anchorY,
-            fontSize,
-            width,
-            height,
-            color: COLORS[hashCode(item.text) % COLORS.length],
-            rotate,
-            tooltip: buildTooltip(item, showSubmitters),
-          };
-
-          if (
-            isInsideEllipse(anchorX, anchorY, width, height) &&
-            !overlaps(anchoredCandidate, placed, variant)
-          ) {
-            bestCandidate = anchoredCandidate;
-          }
-        }
-
-        if (bestCandidate) break;
-
-        const neighborCandidates = buildNeighborCandidates(
-          item,
-          fontSize,
-          width,
-          height,
-          rotate,
-          placed,
-          variant,
-          showSubmitters,
-        );
-        neighborCandidates.forEach((candidate) => {
-          if (!isInsideEllipse(candidate.x, candidate.y, width, height)) return;
-          if (overlaps(candidate, placed, variant)) return;
-
-          const score = getPlacementScore(candidate, placed, variant);
-          if (score < bestScore) {
-            bestScore = score;
-            bestCandidate = candidate;
-          }
-        });
-
-        if (bestCandidate && bestScore < 14) break;
-
-        for (let step = 0; step < 6200; step += 1) {
-          const candidate = buildSpiralCandidate(
-            item,
-            fontSize,
-            width,
-            height,
-            rotate,
-            step,
-            index,
-            variant,
-            showSubmitters,
-          );
-
-          if (!isInsideEllipse(candidate.x, candidate.y, width, height))
-            continue;
-          if (overlaps(candidate, placed, variant)) continue;
-
-          const score = getPlacementScore(candidate, placed, variant);
-          if (score < bestScore) {
-            bestScore = score;
-            bestCandidate = candidate;
-          }
-
-          if (bestScore < 7) break;
-        }
-
-        fontSize = Math.max(fontRange.fallback, Math.floor(fontSize * 0.94));
-      }
-
-      if (bestCandidate) {
-        placed.push(bestCandidate);
-      }
-    });
-
-    return scalePositionedWords(
-      placed,
-      getCloudFillScale(placed, source.length, variant),
+          : undefined,
+      });
+    }
+    return Array.from(combined.values()).sort(
+      (left, right) =>
+        right.count - left.count || left.text.localeCompare(right.text, "ko"),
     );
-  }, [entries, showSubmitters, variant]);
+  }, [entries, showSubmitters]);
 
-  const hoveredWord = hoveredText
-    ? positioned.find((item) => item.text === hoveredText) || null
-    : null;
-  const positionedTextSet = new Set(positioned.map((item) => item.text));
-  const currentEntries = entries.slice(0, WORDS_PER_CLOUD);
-  const unplacedEntries = currentEntries.filter(
-    (item) => !positionedTextSet.has(item.text),
+  // A refreshed response object with unchanged content never replays effects.
+  const animationSignature = JSON.stringify(
+    words.map(({ text, count }) => [text, count]),
   );
-  const remainingEntries = entries.slice(WORDS_PER_CLOUD);
-  const resolvedTotalEntries = totalEntries ?? entries.length;
-  const batchEnd = Math.min(
-    batchStart + currentEntries.length,
-    resolvedTotalEntries,
-  );
+  const activeText = hoveredText || focusedText || pinnedText;
+  const selectedText = activeText === dismissedText ? "" : activeText;
+  const selectedWord = words.find((word) => word.text === selectedText);
 
-  const containerWidth = containerRef.current?.clientWidth || 0;
-  const containerHeight = containerRef.current?.clientHeight || 0;
-  const tooltipLeft = Math.max(
-    8,
-    Math.min(Math.max(8, containerWidth - 336), tooltipPos.x + 16),
-  );
-  const tooltipTop = Math.max(
-    8,
-    Math.min(Math.max(8, containerHeight - 220), tooltipPos.y + 16),
-  );
-
-  const updateTooltipPosition = (clientX: number, clientY: number) => {
-    const container = containerRef.current;
-    if (!container) return;
-    const rect = container.getBoundingClientRect();
-    setTooltipPos({
-      x: Math.max(8, Math.min(rect.width - 8, clientX - rect.left)),
-      y: Math.max(8, Math.min(rect.height - 8, clientY - rect.top)),
-    });
+  const stopAnimations = () => {
+    for (const animation of animationsRef.current) animation.cancel();
+    animationsRef.current.clear();
   };
+
+  useEffect(() => {
+    const root = rootRef.current;
+    let active = true;
+    let measuredWidth = listRef.current?.clientWidth || 0;
+    const captureCurrentLayout = () => {
+      const list = listRef.current;
+      if (!active || !list) return;
+      stopAnimations();
+      const origin = list.getBoundingClientRect();
+      const next = new Map<string, WordFrame>();
+      nodesRef.current.forEach((node, text) => {
+        const label = node.querySelector<HTMLElement>(".think-word__text");
+        if (!label) return;
+        const bounds = node.getBoundingClientRect();
+        next.set(text, {
+          x: bounds.left - origin.left,
+          y: bounds.top - origin.top,
+          count: Number(node.dataset.count),
+          fontSize: Number.parseFloat(getComputedStyle(label).fontSize),
+        });
+      });
+      framesRef.current = next;
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") stopAnimations();
+    };
+    const onOutsidePointer = (event: PointerEvent) => {
+      if (root && !root.contains(event.target as Node)) {
+        setPinnedText("");
+        setFocusedText("");
+        setHoveredText("");
+      }
+    };
+    const observer =
+      root && typeof IntersectionObserver !== "undefined"
+        ? new IntersectionObserver(([entry]) => {
+            inViewRef.current = entry.isIntersecting;
+            if (!entry.isIntersecting) stopAnimations();
+          })
+        : null;
+    if (root) observer?.observe(root);
+    const resizeObserver =
+      root && typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => {
+            const width = listRef.current?.clientWidth || 0;
+            if (Math.abs(width - measuredWidth) < 1) return;
+            measuredWidth = width;
+            captureCurrentLayout();
+          })
+        : null;
+    if (root) resizeObserver?.observe(root);
+    if (document.fonts?.status === "loading")
+      void document.fonts.ready.then(captureCurrentLayout);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    document.addEventListener("pointerdown", onOutsidePointer);
+    return () => {
+      active = false;
+      stopAnimations();
+      framesRef.current.clear();
+      observer?.disconnect();
+      resizeObserver?.disconnect();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      document.removeEventListener("pointerdown", onOutsidePointer);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    stopAnimations();
+    const origin = list.getBoundingClientRect();
+    const nextFrames = new Map<string, WordFrame>();
+    const changes: Array<{
+      node: HTMLLIElement;
+      textNode: HTMLElement;
+      previous: WordFrame | undefined;
+      next: WordFrame;
+      index: number;
+    }> = [];
+
+    // Read all geometry before writing animations, avoiding layout thrashing.
+    words.forEach((word, index) => {
+      const node = nodesRef.current.get(word.text);
+      const textNode = node?.querySelector<HTMLElement>(".think-word__text");
+      if (!node || !textNode) return;
+      const bounds = node.getBoundingClientRect();
+      const next = {
+        x: bounds.left - origin.left,
+        y: bounds.top - origin.top,
+        count: word.count,
+        fontSize: Number.parseFloat(getComputedStyle(textNode).fontSize),
+      };
+      nextFrames.set(word.text, next);
+      changes.push({
+        node,
+        textNode,
+        next,
+        previous: framesRef.current.get(word.text),
+        index,
+      });
+    });
+    framesRef.current = nextFrames;
+    if (
+      !motionEnabled ||
+      !inViewRef.current ||
+      document.visibilityState === "hidden" ||
+      origin.bottom <= 0 ||
+      origin.top >= window.innerHeight
+    )
+      return;
+
+    const play = (element: HTMLElement, keyframes: Keyframe[], delay = 0) => {
+      if (typeof element.animate !== "function") return;
+      const animation = element.animate(keyframes, {
+        duration: 300,
+        easing: "ease-out",
+        delay,
+        fill: "backwards",
+      });
+      animationsRef.current.add(animation);
+      const release = () => animationsRef.current.delete(animation);
+      animation.onfinish = release;
+      animation.oncancel = release;
+    };
+
+    for (const { node, textNode, previous, next, index } of changes) {
+      if (!previous) {
+        play(
+          node,
+          [
+            { opacity: 0, transform: "translateY(12px) scale(0.9)" },
+            { opacity: 1, transform: "translateY(0) scale(1)" },
+          ],
+          Math.min(index, 5) * 20,
+        );
+        continue;
+      }
+      const x = previous.x - next.x;
+      const y = previous.y - next.y;
+      if (Math.abs(x) + Math.abs(y) > 1) {
+        play(node, [
+          { transform: `translate(${x}px, ${y}px)` },
+          { transform: "translate(0, 0)" },
+        ]);
+      }
+      if (next.count > previous.count) {
+        const scale = Math.min(0.96, previous.fontSize / next.fontSize);
+        play(textNode, [
+          { transform: `scale(${scale})`, opacity: 0.65 },
+          { transform: "scale(1.035)", opacity: 1, offset: 0.7 },
+          { transform: "scale(1)", opacity: 1 },
+        ]);
+        const counter = node.querySelector<HTMLElement>(".think-word__count");
+        if (counter)
+          play(counter, [
+            { transform: "translateY(6px) scale(0.8)", opacity: 0 },
+            { transform: "translateY(0) scale(1)", opacity: 1 },
+          ]);
+      }
+    }
+    // `words` is represented by the content signature. Reduced motion stays
+    // enabled for this learning interaction by the user's 2026-11-14 request.
+  }, [animationSignature, motionEnabled]);
+
+  useEffect(() => {
+    if (pinnedText && !words.some((word) => word.text === pinnedText))
+      setPinnedText("");
+  }, [animationSignature, pinnedText, words]);
 
   return (
     <div
-      className={`flex w-full flex-col items-center gap-[var(--space-4)] ${className}`}
+      ref={rootRef}
+      className={`think-word-board think-word-board--${variant} ${className}`}
+      data-motion={motionEnabled ? "on" : "off"}
+      data-testid="think-word-board"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          setDismissedText(activeText);
+          setPinnedText("");
+          setFocusedText("");
+          setHoveredText("");
+        }
+      }}
     >
-      {resolvedTotalEntries > WORDS_PER_CLOUD && (
-        <div className="w-full max-w-[2100px] text-left text-xs font-bold text-slate-500">
-          고유 응답 {batchStart + 1}~{batchEnd} / {resolvedTotalEntries}
-        </div>
-      )}
-      <div
-        ref={containerRef}
-        className={`relative w-full overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-cyan-50 ${
-          variant === "modal"
-            ? "h-full min-h-0 rounded-[28px] border-blue-200 shadow-inner"
-            : "max-w-[2100px] min-h-[320px] aspect-[21/9]"
-        }`}
+      <ul
+        ref={listRef}
+        className="think-word-board__words"
+        aria-label="모인 생각"
       >
-        <svg
-          className="absolute inset-0 h-full w-full"
-          viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-          preserveAspectRatio="xMidYMid meet"
-          role="img"
-          aria-label="word cloud"
-        >
-          <defs>
-            <radialGradient
-              id={`cloudGlow-${variant}`}
-              cx="50%"
-              cy="50%"
-              r="65%"
-            >
-              <stop offset="0%" stopColor="rgba(255,255,255,0.96)" />
-              <stop offset="68%" stopColor="rgba(255,255,255,0.82)" />
-              <stop offset="100%" stopColor="rgba(255,255,255,0.38)" />
-            </radialGradient>
-          </defs>
-          <ellipse
-            cx={CENTER_X}
-            cy={CENTER_Y}
-            rx={RADIUS_X}
-            ry={RADIUS_Y}
-            fill={`url(#cloudGlow-${variant})`}
-          />
-          {positioned.map((item) => (
-            <text
-              key={item.text}
-              x={item.x}
-              y={item.y}
-              fontSize={item.fontSize}
-              fill={item.color}
-              stroke={hoveredText === item.text ? "#111827" : "none"}
-              strokeWidth={
-                hoveredText === item.text
-                  ? Math.max(1.2, item.fontSize * 0.03)
-                  : 0
-              }
-              paintOrder="stroke fill"
-              strokeLinejoin="round"
-              fontWeight={900}
-              textAnchor="middle"
-              dominantBaseline="central"
-              transform={`rotate(${item.rotate} ${item.x} ${item.y})`}
-              style={{ userSelect: "none" }}
-              onMouseEnter={(event) => {
-                setHoveredText(item.text);
-                updateTooltipPosition(event.clientX, event.clientY);
-              }}
-              onMouseMove={(event) => {
-                updateTooltipPosition(event.clientX, event.clientY);
-              }}
-              onMouseLeave={() => {
-                setHoveredText("");
-              }}
-            >
-              <title>{item.tooltip}</title>
-              {item.text}
-            </text>
-          ))}
-        </svg>
-
-        {showSubmitters && hoveredWord && (
-          <div
-            className="pointer-events-none absolute z-20 min-w-[220px] max-w-[360px] rounded-md border-l-4 border-orange-400 bg-black/75 p-2.5 pl-3 text-white shadow-2xl"
-            style={{
-              left: `${tooltipLeft}px`,
-              top: `${tooltipTop}px`,
-              transform: "translate(0, 0)",
+        {words.map((word) => (
+          <li
+            key={word.text}
+            ref={(node) => {
+              if (node) nodesRef.current.set(word.text, node);
+              else nodesRef.current.delete(word.text);
             }}
+            className="think-word"
+            data-word={word.text}
+            data-count={word.count}
+            data-tone={wordTone(word.text)}
+            data-weight={word.count > 1 ? "strong" : "soft"}
+            style={
+              {
+                "--think-word-size": wordSize(
+                  word.count,
+                  [...word.text].length,
+                ),
+              } as React.CSSProperties
+            }
           >
-            <div
-              className="absolute -left-2 top-4 h-0 w-0"
-              style={{
-                borderTop: "8px solid transparent",
-                borderBottom: "8px solid transparent",
-                borderRight: "8px solid rgba(0, 0, 0, 0.75)",
+            <button
+              type="button"
+              className="think-word__button"
+              aria-label={`${word.text}, 응답 ${word.count}개`}
+              aria-expanded={selectedText === word.text}
+              aria-controls={selectedText === word.text ? detailId : undefined}
+              onMouseEnter={() => {
+                setDismissedText("");
+                setHoveredText(word.text);
               }}
-            />
-            <div className="mb-1.5 text-base font-bold leading-none">
-              {hoveredWord.text} ({hoveredWord.count})
-            </div>
-            <div className="mb-1 text-[11px] font-bold text-orange-200">
-              Submitters
-            </div>
-            <div className="space-y-1">
-              {(hoveredWord.submitters || []).map((name) => (
-                <div
-                  key={`${hoveredWord.text}-${name}`}
-                  className="flex items-center gap-1.5 text-[12px] font-semibold leading-tight"
-                >
-                  <span className="inline-block h-2 w-2 border border-orange-300 bg-transparent" />
-                  <span>{name}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {unplacedEntries.length > 0 && (
-        <div className="w-full max-w-[2100px] rounded-xl border border-slate-200 bg-slate-50 p-4 text-left">
-          <div className="mb-3 text-xs font-bold text-slate-500">
-            목록으로 보는 응답
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {unplacedEntries.map((item) => (
-              <span
-                key={item.text}
-                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-bold text-slate-700"
-                title={buildTooltip(item, showSubmitters)}
-              >
-                {item.text}
-                <span className="ml-1 text-xs text-slate-400">
-                  {item.count}
+              onMouseLeave={() => setHoveredText("")}
+              onFocus={() => {
+                setDismissedText("");
+                setFocusedText(word.text);
+              }}
+              onBlur={() => setFocusedText("")}
+              onClick={() => {
+                const closing = pinnedText === word.text;
+                setPinnedText(closing ? "" : word.text);
+                setDismissedText(closing ? word.text : "");
+              }}
+            >
+              <span className="think-word__text">{word.text}</span>
+              {word.count > 1 && (
+                <span className="think-word__count" aria-hidden="true">
+                  {word.count}
                 </span>
-              </span>
-            ))}
-          </div>
+              )}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {words.length === 0 && (
+        <div className="think-word-board__empty">
+          <span className="think-word-board__empty-mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none">
+              <path d="M12 10h24a6 6 0 0 1 6 6v14a6 6 0 0 1-6 6H23l-9 6v-6h-2a6 6 0 0 1-6-6V16a6 6 0 0 1 6-6Z" />
+              <path d="M16 21h16M16 27h10" />
+            </svg>
+          </span>
+          <p>첫 번째 생각을 기다리고 있어요</p>
         </div>
       )}
-
-      {remainingEntries.length > 0 && (
-        <WordCloudView
-          entries={remainingEntries}
-          showSubmitters={showSubmitters}
-          variant={variant}
-          batchStart={batchStart + WORDS_PER_CLOUD}
-          totalEntries={resolvedTotalEntries}
-        />
+      {selectedWord && (
+        <div id={detailId} className="think-word-board__detail" role="status">
+          <strong>{selectedWord.text}</strong>
+          <span>응답 {selectedWord.count}개</span>
+          {showSubmitters && !!selectedWord.submitters?.length && (
+            <span className="think-word-board__names">
+              {selectedWord.submitters.join(" · ")}
+            </span>
+          )}
+        </div>
       )}
     </div>
   );

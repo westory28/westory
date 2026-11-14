@@ -1,0 +1,321 @@
+.student-think {
+  font-family: var(--think-font, "Noto Sans KR", sans-serif);
+}
+.student-think-lobby,
+.student-think-detail {
+  min-width: 0;
+  animation: student-think-reveal var(--motion-base, 200ms) ease-out both;
+}
+.student-think-lobby > section + section {
+  margin-top: 32px;
+}
+.student-think-section-heading,
+.student-think-board-heading,
+.student-think-compose-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 16px;
+}
+.student-think-section-heading {
+  justify-content: flex-start;
+}
+.student-think
+  :is(
+    .student-think-section-heading,
+    .student-think-board-heading,
+    .student-think-compose-heading
+  )
+  .think-section-label {
+  margin: 0;
+}
+.student-think-topic {
+  width: 100%;
+  text-align: left;
+}
+.student-think-topic.is-live {
+  padding-block: 28px;
+  border-color: var(--think-blue);
+}
+.student-think-topic.is-live .think-topic-title {
+  color: var(--think-blue-deep);
+  font-size: clamp(22px, 2.2vw, 30px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
+.student-think-topic-copy {
+  display: grid;
+  flex: 1;
+  gap: 12px;
+  min-width: 0;
+}
+.student-think-topic-description {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+  color: var(--think-muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+.student-think-topic-action {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 12px;
+  color: var(--think-blue);
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.student-think
+  :is(.student-think-topic-action, .student-think-send, .think-back)
+  svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.student-think-topic-action svg {
+  transition: transform var(--motion-fast, 160ms) ease-out;
+}
+.student-think-topic:is(:hover, :focus-visible)
+  .student-think-topic-action
+  svg {
+  transform: translateX(4px);
+}
+.student-think-wait,
+.student-think-board-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  text-align: center;
+}
+.student-think-wait {
+  min-height: 240px;
+}
+.student-think-wait-mark,
+.student-think-first-word {
+  color: var(--think-blue);
+  font-size: clamp(32px, 5vw, 56px);
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: -0.05em;
+  text-shadow: 0 2px 0 #dbeafe;
+}
+.student-think-wait p,
+.student-think-board-empty p {
+  margin: 0;
+  color: var(--think-muted);
+  font-size: 15px;
+}
+.student-think-question {
+  margin-bottom: 24px;
+}
+.student-think-question h2 {
+  max-width: 100%;
+  margin: 12px 0 0;
+  color: var(--think-ink);
+  font-size: clamp(24px, 2.7vw, 36px);
+  font-weight: 800;
+  line-height: 1.4;
+  letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
+}
+.student-think-question h2:focus {
+  outline: none;
+}
+.student-think-question p {
+  max-width: 960px;
+  margin: 12px 0 0;
+  color: var(--think-muted);
+  font-size: 16px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.student-think-board {
+  min-width: 0;
+}
+.student-think-board-heading {
+  margin-bottom: 12px;
+}
+.student-think-board-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.student-think-motion {
+  min-height: 44px;
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--think-muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.student-think-motion:is(:hover, :focus-visible) {
+  color: var(--think-blue);
+}
+.student-think-motion:focus-visible {
+  outline: 2px solid var(--think-blue);
+  outline-offset: 2px;
+}
+.student-think-board-empty {
+  min-height: 280px;
+  padding: 24px;
+  border: 1px solid var(--think-line);
+  border-radius: 16px;
+  background: #fff;
+}
+.student-think-compose {
+  margin-top: 24px;
+  padding: 24px 0 0;
+  border-top: 1px solid var(--think-line);
+}
+.student-think-compose-heading > span {
+  color: var(--think-muted);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.student-think-input-row {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+}
+.student-think-input-row .student-think-input {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+  min-height: 56px;
+  padding: 12px 16px;
+  font-size: 18px;
+  font-weight: 600;
+}
+.student-think-send {
+  min-height: 56px;
+  gap: 12px;
+  padding-inline: 24px;
+  flex-shrink: 0;
+}
+.student-think-compose-note,
+.student-think-repeat-success {
+  margin: 12px 0 0;
+  color: var(--think-muted);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.student-think-repeat-success {
+  color: var(--think-blue-deep);
+  animation: student-think-reveal var(--motion-slow, 300ms) ease-out both;
+}
+.student-think-sent {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: var(--think-blue-deep);
+}
+.student-think-sent:focus-visible {
+  outline: 2px solid var(--think-blue);
+  outline-offset: 6px;
+  border-radius: 8px;
+}
+.student-think-sent > svg {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  padding: 10px;
+  border-radius: 50%;
+  background: #dbeafe;
+}
+.student-think-sent > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.student-think-sent strong {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.student-think-sent span {
+  color: var(--think-muted);
+  font-size: 14px;
+}
+.student-think-sent.is-new > svg {
+  animation: student-think-sent var(--motion-slow, 300ms) ease-out both;
+}
+.student-think-load-error p {
+  margin: 0 0 12px;
+}
+.student-think[data-motion="off"]
+  :is(
+    .student-think-lobby,
+    .student-think-detail,
+    .student-think-repeat-success,
+    .student-think-sent > svg
+  ) {
+  animation: none;
+}
+/* The user requests these brief participation effects in reduced motion too. */
+@keyframes student-think-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes student-think-sent {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@media (max-width: 640px) {
+  .student-think-topic {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .student-think-topic.is-live {
+    padding-block: 20px;
+  }
+  .student-think-topic-action {
+    margin-left: auto;
+  }
+  .student-think-input-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .student-think-input-row .student-think-input {
+    width: 100%;
+    min-height: 52px;
+    font-size: 16px;
+  }
+  .student-think-send {
+    min-height: 48px;
+  }
+  .student-think-board-empty {
+    min-height: 220px;
+  }
+  .student-think-compose {
+    padding-top: 20px;
+  }
+}

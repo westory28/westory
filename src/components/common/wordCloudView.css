@@ -1,0 +1,236 @@
+.think-word-board {
+  --think-word-scale: 1;
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--think-line, #dbe3ef);
+  border-radius: 16px;
+  background: #fbfcfe;
+  color: var(--think-ink, #172554);
+  font-family: var(--think-font, "Noto Sans KR", sans-serif);
+  box-shadow: 0 2px 8px rgb(23 37 84 / 4%);
+}
+
+.think-word-board__words {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: center;
+  justify-content: center;
+  gap: 16px 20px;
+  min-height: 320px;
+  margin: 0;
+  padding: 40px 32px;
+  list-style: none;
+}
+
+.think-word-board__words:empty {
+  display: none;
+}
+
+.think-word-board--modal .think-word-board__words {
+  min-height: 56vh;
+  padding-block: 56px;
+}
+
+.think-word {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  color: var(--think-blue-deep, #1d4ed8);
+  transform-origin: center;
+}
+
+.think-word[data-tone="amber"] {
+  color: var(--think-amber-ink, #92400e);
+}
+
+.think-word[data-weight="soft"] {
+  color: #52617a;
+}
+
+.think-word__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 44px;
+  max-width: 100%;
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.think-word__button:hover,
+.think-word__button[aria-expanded="true"] {
+  border-color: #dbe5f3;
+  background: #f0f5fc;
+}
+
+.think-word__button:focus-visible {
+  outline: 2px solid var(--think-blue, #2563eb);
+  outline-offset: 4px;
+}
+
+.think-word__text {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  font-size: max(
+    18px,
+    calc(var(--think-word-size) * var(--think-word-scale) * 1px)
+  );
+  font-weight: 750;
+  line-height: 1.25;
+  letter-spacing: -0.045em;
+  writing-mode: horizontal-tb;
+  text-orientation: mixed;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+  text-shadow: none;
+  -webkit-text-stroke: 0;
+  transform-origin: center;
+}
+
+.think-word[data-weight="soft"] .think-word__text {
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.think-word__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 24px;
+  height: 24px;
+  padding-inline: 6px;
+  border: 1px solid #dae3f1;
+  border-radius: 8px;
+  background: #fff;
+  color: #53637d;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.think-word-board__detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px 12px;
+  padding: 12px 24px;
+  border-top: 1px solid #e6ecf4;
+  color: #52617a;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.think-word-board__detail strong {
+  color: var(--think-ink, #172554);
+  font-weight: 700;
+}
+
+.think-word-board__names {
+  flex-basis: 100%;
+  text-align: center;
+}
+
+.think-word-board__empty {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 16px;
+  min-height: 320px;
+  padding: 32px 20px;
+  color: #53637d;
+  text-align: center;
+}
+
+.think-word-board__empty p {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.think-word-board__empty-mark {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border: 1px solid #dbe5f3;
+  border-radius: 16px;
+  background: #eef4ff;
+  color: var(--think-blue, #2563eb);
+}
+
+.think-word-board__empty-mark svg {
+  width: 36px;
+  height: 36px;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (max-width: 600px) {
+  .think-word-board {
+    --think-word-scale: 0.75;
+    border-radius: 16px;
+  }
+
+  .think-word-board__words {
+    gap: 12px 8px;
+    min-height: 280px;
+    padding: 28px 12px;
+  }
+
+  .think-word__button {
+    gap: 6px;
+    padding-inline: 4px;
+  }
+
+  .think-word__count {
+    min-width: 20px;
+    height: 20px;
+    padding-inline: 4px;
+    border-radius: 6px;
+    font-size: 11px;
+  }
+
+  .think-word-board__empty {
+    min-height: 280px;
+  }
+}
+
+@media print {
+  .think-word-board {
+    border-color: #cbd5e1;
+    background: #fff;
+    box-shadow: none;
+  }
+
+  .think-word,
+  .think-word__text,
+  .think-word__count {
+    transform: none !important;
+    opacity: 1 !important;
+  }
+
+  .think-word__button {
+    border-color: transparent;
+    background: transparent;
+  }
+}

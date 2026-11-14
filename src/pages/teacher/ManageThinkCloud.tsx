@@ -1,9 +1,13 @@
 import { useAppToast } from "../../components/common/AppToastProvider";
 import PortalWorkspace from "../../components/common/PortalWorkspace";
-import { LoadingOverlay } from "../../components/common/LoadingState";
-import TeacherSubNavigation from "./components/TeacherSubNavigation";
+import { InlineLoading } from "../../components/common/LoadingState";
 import NumericInput from "../../components/common/NumericInput";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { acquirePageScrollLock } from "../../lib/pageScrollLock";
+import "../../components/common/portalPage.css";
+import "../../components/common/thinkCloudWorkspace.css";
+import "./manageThinkCloud.css";
 import { doc, getDoc } from "firebase/firestore";
 import { useAuth } from "../../contexts/AuthContext";
 import { db } from "../../lib/firebase";
@@ -61,9 +65,28 @@ const ManageThinkCloud: React.FC = () => {
   const [loadingAction, setLoadingAction] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [message, setMessage] = useState("");
-  const [isCreateMode, setIsCreateMode] = useState(false);
+  const [view, setView] = useState<"list" | "create" | "detail">("list");
+  const [readError, setReadError] = useState(false);
+  const [readErrorMessage, setReadErrorMessage] = useState("");
+  const [readOnly, setReadOnly] = useState(true);
+  const [motionEnabled, setMotionEnabled] = useState(true);
+  const [loadedSessionId, setLoadedSessionId] = useState("");
+  const [loadedScopeKey, setLoadedScopeKey] = useState("");
+  const scopeKey = `${currentUser?.uid || ""}:${config?.year || ""}:${config?.semester || ""}`;
+  const scopeRef = useRef(scopeKey);
+  scopeRef.current = scopeKey;
+  const subscriptionScopeRef = useRef("");
+  const actionAttemptRef = useRef(0);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const presentationTrigger = useRef<HTMLButtonElement>(null);
+  const presentationClose = useRef<HTMLButtonElement>(null);
+  const presentationSessionRef = useRef("");
+  const focusRequested = useRef(false);
+  const returnSessionId = useRef("");
+  const actionInFlight = useRef(false);
+  const createComposing = useRef(false);
   const [cloudModalOpen, setCloudModalOpen] = useState(false);
-  const [mobileSessionListOpen, setMobileSessionListOpen] = useState(false);
   const [classStudents, setClassStudents] = useState<StudentRosterItem[]>([]);
   const [gradeOptions, setGradeOptions] =
     useState<SchoolOption[]>(defaultGradeOptions);
@@ -79,26 +102,69 @@ const ManageThinkCloud: React.FC = () => {
   const [options, setOptions] = useState<ThinkCloudOptions>(
     DEFAULT_THINK_CLOUD_OPTIONS,
   );
-  const canEdit = canWriteLessonManagement(userData, currentUser?.email || "");
+  const canEdit =
+    loadedScopeKey === scopeKey &&
+    !initialLoading &&
+    !readError &&
+    !readOnly &&
+    canWriteLessonManagement(userData, currentUser?.email || "");
 
   const selectedSession = useMemo(
-    () => sessions.find((session) => session.id === selectedSessionId) || null,
-    [sessions, selectedSessionId],
+    () =>
+      loadedScopeKey === scopeKey
+        ? sessions.find((session) => session.id === selectedSessionId) || null
+        : null,
+    [sessions, selectedSessionId, loadedScopeKey, scopeKey],
   );
+  const dataReady =
+    !!selectedSession &&
+    loadedScopeKey === scopeKey &&
+    !initialLoading &&
+    !readError &&
+    loadedSessionId === selectedSession.id;
+  const presentationReady =
+    cloudModalOpen &&
+    dataReady &&
+    selectedSession?.id === presentationSessionRef.current;
 
   const filteredSessions = useMemo(
     () =>
-      sessions.filter((session) => {
+      (loadedScopeKey === scopeKey ? sessions : []).filter((session) => {
         if (filterGrade !== "all" && session.targetGrade !== filterGrade)
           return false;
         if (filterClass !== "all" && session.targetClass !== filterClass)
           return false;
         return true;
       }),
-    [sessions, filterGrade, filterClass],
+    [sessions, filterGrade, filterClass, loadedScopeKey, scopeKey],
   );
 
   useEffect(() => {
+    const sameScope = subscriptionScopeRef.current === scopeKey;
+    subscriptionScopeRef.current = scopeKey;
+    setLoadedScopeKey("");
+    setLoadedSessionId("");
+    setReadOnly(true);
+    setResponses([]);
+    setClassStudents([]);
+    setActiveSessionIds([]);
+    if (!sameScope) {
+      actionAttemptRef.current += 1;
+      actionInFlight.current = false;
+      setLoadingAction(false);
+      setCloudModalOpen(false);
+      setSessions([]);
+      setSelectedSessionId("");
+      setView("list");
+      setMessage("");
+      setReadError(false);
+      setReadErrorMessage("");
+      setTitle("");
+      setDescription("");
+      setOptions(DEFAULT_THINK_CLOUD_OPTIONS);
+      returnSessionId.current = "";
+      presentationSessionRef.current = "";
+    }
     if (!currentUser) {
       setInitialLoading(false);
       return;
@@ -108,10 +174,15 @@ const ManageThinkCloud: React.FC = () => {
     const subscription = subscribeThinkCloudState(
       config,
       "teacher",
-      selectedSessionId,
+      sameScope ? selectedSessionId : "",
       (state) => {
-        if (!active) return;
+        if (!active || scopeRef.current !== scopeKey) return;
         setInitialLoading(false);
+        setReadError(false);
+        setReadErrorMessage("");
+        setReadOnly(state.readOnly);
+        setLoadedScopeKey(scopeKey);
+        setLoadedSessionId(state.thinkCloudSelectedSessionId || "");
         setSessions(state.thinkCloudSessions);
         setResponses(state.thinkCloudResponses);
         setClassStudents(state.thinkCloudRoster);
@@ -119,18 +190,26 @@ const ManageThinkCloud: React.FC = () => {
         setSelectedSessionId((selected) =>
           state.thinkCloudSessions.some((session) => session.id === selected)
             ? selected
-            : state.thinkCloudSessions[0]?.id || "",
+            : state.thinkCloudSelectedSessionId ||
+              state.thinkCloudSessions[0]?.id ||
+              "",
         );
       },
       (error) => {
-        if (!active) return;
+        if (!active || scopeRef.current !== scopeKey) return;
         setInitialLoading(false);
+        setReadError(true);
+        setReadOnly(true);
+        setLoadedScopeKey("");
+        setLoadedSessionId("");
+        setCloudModalOpen(false);
+        setView((current) => (current === "create" ? "create" : "list"));
         setSessions([]);
         setResponses([]);
         setClassStudents([]);
         setActiveSessionIds([]);
         setSelectedSessionId("");
-        setMessage(
+        setReadErrorMessage(
           error instanceof Error
             ? error.message
             : "생각모아를 불러오지 못했습니다.",
@@ -144,11 +223,19 @@ const ManageThinkCloud: React.FC = () => {
       if (subscriptionRef.current === subscription)
         subscriptionRef.current = null;
     };
-  }, [config?.year, config?.semester, currentUser?.uid, refreshKey]);
+  }, [scopeKey, refreshKey]);
 
   useEffect(() => {
+    if (loadedScopeKey !== scopeKey) return;
     subscriptionRef.current?.selectSession(selectedSessionId);
-  }, [selectedSessionId]);
+  }, [selectedSessionId, loadedScopeKey, scopeKey]);
+
+  useEffect(
+    () => () => {
+      actionAttemptRef.current += 1;
+    },
+    [],
+  );
 
   const cloudEntries = useMemo(() => {
     const buckets = new Map<
@@ -263,36 +350,115 @@ const ManageThinkCloud: React.FC = () => {
   }, [filterClass, classOptions]);
 
   useEffect(() => {
-    if (isCreateMode) return;
-    if (!selectedSessionId && filteredSessions.length > 0) {
-      setSelectedSessionId(filteredSessions[0].id);
+    if (!focusRequested.current) return;
+    focusRequested.current = false;
+    if (view === "list" && returnSessionId.current) {
+      const target = document.querySelector<HTMLButtonElement>(
+        `[data-think-session="${CSS.escape(returnSessionId.current)}"]`,
+      );
+      if (target) {
+        target.focus({ preventScroll: true });
+        return;
+      }
+    }
+    headingRef.current?.focus({ preventScroll: true });
+  }, [view, selectedSessionId]);
+
+  useEffect(() => {
+    if (!cloudModalOpen) return;
+    if (!presentationReady) {
+      setCloudModalOpen(false);
       return;
     }
-    if (
-      selectedSessionId &&
-      !filteredSessions.some((session) => session.id === selectedSessionId)
-    ) {
-      setSelectedSessionId(filteredSessions[0]?.id || "");
-    }
-  }, [filteredSessions, isCreateMode, selectedSessionId]);
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previousFocus = document.activeElement;
+    dialog.showModal();
+    const releaseScrollLock = acquirePageScrollLock();
+    presentationClose.current?.focus({ preventScroll: true });
+    const trapFocus = (event: KeyboardEvent) => {
+      if (event.key !== "Tab" || event.altKey || event.ctrlKey || event.metaKey)
+        return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'a[href], area[href], button, input, select, textarea, summary, [tabindex], [contenteditable="true"]',
+        ),
+      )
+        .filter((element) => {
+          const style = window.getComputedStyle(element);
+          return (
+            element.tabIndex >= 0 &&
+            !element.matches(':disabled, [aria-disabled="true"]') &&
+            !element.closest("[hidden], [inert]") &&
+            element.getClientRects().length > 0 &&
+            style.visibility !== "hidden" &&
+            style.visibility !== "collapse"
+          );
+        })
+        .sort(
+          (left, right) =>
+            (left.tabIndex || Infinity) - (right.tabIndex || Infinity),
+        );
+      event.preventDefault();
+      if (!focusable.length) {
+        dialog.focus({ preventScroll: true });
+        return;
+      }
+      const currentIndex = focusable.indexOf(
+        document.activeElement as HTMLElement,
+      );
+      const nextIndex = event.shiftKey
+        ? currentIndex <= 0
+          ? focusable.length - 1
+          : currentIndex - 1
+        : (currentIndex + 1) % focusable.length;
+      focusable[nextIndex].focus({ preventScroll: true });
+    };
+    document.addEventListener("keydown", trapFocus, true);
+    return () => {
+      document.removeEventListener("keydown", trapFocus, true);
+      dialog.close();
+      releaseScrollLock();
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected)
+        previousFocus.focus({ preventScroll: true });
+      else headingRef.current?.focus({ preventScroll: true });
+    };
+  }, [cloudModalOpen, presentationReady, selectedSession?.id, scopeKey]);
+
+  const beginAction = () => {
+    const attempt = ++actionAttemptRef.current;
+    const actionScope = scopeKey;
+    actionInFlight.current = true;
+    setLoadingAction(true);
+    setMessage("");
+    return () =>
+      scopeRef.current === actionScope && actionAttemptRef.current === attempt;
+  };
+
+  const showList = () => {
+    focusRequested.current = true;
+    setView("list");
+    setMessage("");
+  };
 
   const selectSession = (id: string) => {
-    setIsCreateMode(false);
+    returnSessionId.current = id;
+    focusRequested.current = true;
+    setView("detail");
     setSelectedSessionId(id);
     setMessage("");
-    setMobileSessionListOpen(false);
   };
 
   const openCreateMode = () => {
-    setIsCreateMode(true);
-    setSelectedSessionId("");
+    if (!canEdit || actionInFlight.current) return;
+    focusRequested.current = true;
+    setView("create");
     setMessage("");
     resetCreateForm();
-    setMobileSessionListOpen(false);
   };
 
   const handleStartSession = async () => {
-    if (!canEdit) return;
+    if (!canEdit || actionInFlight.current) return;
     const safeTitle = title.trim();
     if (!safeTitle) {
       setMessage("주제를 입력해 주세요.");
@@ -304,8 +470,7 @@ const ManageThinkCloud: React.FC = () => {
     }
     if (!currentUser) return;
 
-    setLoadingAction(true);
-    setMessage("");
+    const isCurrentAction = beginAction();
     try {
       const added = await createThinkCloudSession(config, {
         title: safeTitle,
@@ -318,41 +483,50 @@ const ManageThinkCloud: React.FC = () => {
           classOptions.find((item) => item.value === targetClass)?.label || "",
         options,
       });
+      if (!isCurrentAction()) return;
       setRefreshKey((key) => key + 1);
       showToast({
         tone: "success",
         title: "생각모아 시작",
-        message: "새 생각모아 세션을 시작했습니다.",
+        message: "학생이 참여할 수 있도록 주제를 열었습니다.",
       });
-      setIsCreateMode(false);
+      focusRequested.current = true;
+      setView("detail");
       setSelectedSessionId(added.sessionId);
     } catch (error) {
+      if (!isCurrentAction()) return;
       console.error("Failed to start think cloud session:", error);
+      setMessage(
+        "주제를 열지 못했습니다. 입력한 내용을 확인하고 다시 시도해 주세요.",
+      );
       showToast({
         tone: "error",
         title: "생각모아 시작 실패",
         message: "세션 시작에 실패했습니다.",
       });
     } finally {
-      setLoadingAction(false);
+      if (isCurrentAction()) {
+        actionInFlight.current = false;
+        setLoadingAction(false);
+      }
     }
   };
 
   const handleCloseSession = async () => {
-    if (!canEdit) return;
-    if (!selectedSessionId) return;
-    setLoadingAction(true);
-    setMessage("");
+    if (!canEdit || actionInFlight.current) return;
+    if (!dataReady || !selectedSession) return;
+    const isCurrentAction = beginAction();
     try {
-      if (!selectedSession) return;
       await transitionThinkCloudSession(config, selectedSession, "closed");
+      if (!isCurrentAction()) return;
       setRefreshKey((key) => key + 1);
       showToast({
         tone: "success",
         title: "생각모아 종료",
-        message: "선택한 세션을 종료했습니다.",
+        message: "선택한 주제를 마쳤습니다.",
       });
     } catch (error) {
+      if (!isCurrentAction()) return;
       console.error("Failed to close think cloud session:", error);
       showToast({
         tone: "error",
@@ -360,25 +534,28 @@ const ManageThinkCloud: React.FC = () => {
         message: "세션 종료에 실패했습니다.",
       });
     } finally {
-      setLoadingAction(false);
+      if (isCurrentAction()) {
+        actionInFlight.current = false;
+        setLoadingAction(false);
+      }
     }
   };
 
   const handlePauseSession = async () => {
-    if (!canEdit) return;
-    if (!selectedSessionId) return;
-    setLoadingAction(true);
-    setMessage("");
+    if (!canEdit || actionInFlight.current) return;
+    if (!dataReady || !selectedSession) return;
+    const isCurrentAction = beginAction();
     try {
-      if (!selectedSession) return;
       await transitionThinkCloudSession(config, selectedSession, "paused");
+      if (!isCurrentAction()) return;
       setRefreshKey((key) => key + 1);
       showToast({
         tone: "success",
         title: "생각모아 일시 정지",
-        message: "선택한 세션을 일시 정지했습니다.",
+        message: "학생의 응답 입력을 잠시 멈췄습니다.",
       });
     } catch (error) {
+      if (!isCurrentAction()) return;
       console.error("Failed to pause think cloud session:", error);
       showToast({
         tone: "error",
@@ -386,25 +563,28 @@ const ManageThinkCloud: React.FC = () => {
         message: "일시 정지에 실패했습니다.",
       });
     } finally {
-      setLoadingAction(false);
+      if (isCurrentAction()) {
+        actionInFlight.current = false;
+        setLoadingAction(false);
+      }
     }
   };
 
   const handleResumeSession = async () => {
-    if (!canEdit) return;
-    if (!selectedSessionId) return;
-    setLoadingAction(true);
-    setMessage("");
+    if (!canEdit || actionInFlight.current) return;
+    if (!dataReady || !selectedSession) return;
+    const isCurrentAction = beginAction();
     try {
-      if (!selectedSession) return;
       await transitionThinkCloudSession(config, selectedSession, "active");
+      if (!isCurrentAction()) return;
       setRefreshKey((key) => key + 1);
       showToast({
         tone: "success",
         title: "생각모아 재개",
-        message: "선택한 세션을 재개했습니다.",
+        message: "학생이 다시 응답할 수 있습니다.",
       });
     } catch (error) {
+      if (!isCurrentAction()) return;
       console.error("Failed to resume think cloud session:", error);
       showToast({
         tone: "error",
@@ -412,31 +592,36 @@ const ManageThinkCloud: React.FC = () => {
         message: "재개에 실패했습니다.",
       });
     } finally {
-      setLoadingAction(false);
+      if (isCurrentAction()) {
+        actionInFlight.current = false;
+        setLoadingAction(false);
+      }
     }
   };
 
   const handleDeleteSession = async () => {
-    if (!canEdit) return;
-    if (!selectedSessionId) return;
+    if (!canEdit || actionInFlight.current) return;
+    if (!dataReady || !selectedSession) return;
     const confirmed = window.confirm(
       "선택한 주제를 삭제할까요? 해당 주제의 응답도 함께 삭제됩니다.",
     );
     if (!confirmed) return;
 
-    setLoadingAction(true);
-    setMessage("");
+    const isCurrentAction = beginAction();
     try {
-      if (!selectedSession) return;
       await deleteThinkCloudSession(config, selectedSession);
+      if (!isCurrentAction()) return;
       setRefreshKey((key) => key + 1);
       setSelectedSessionId("");
+      focusRequested.current = true;
+      setView("list");
       showToast({
         tone: "success",
         title: "주제 삭제",
         message: "선택한 주제를 삭제했습니다.",
       });
     } catch (error) {
+      if (!isCurrentAction()) return;
       console.error("Failed to delete think cloud session:", error);
       showToast({
         tone: "error",
@@ -444,375 +629,128 @@ const ManageThinkCloud: React.FC = () => {
         message: "삭제에 실패했습니다.",
       });
     } finally {
-      setLoadingAction(false);
+      if (isCurrentAction()) {
+        actionInFlight.current = false;
+        setLoadingAction(false);
+      }
     }
   };
+
+  const getStatus = (session: SessionWithId) =>
+    session.status === "active" && activeSessionIds.includes(session.id)
+      ? "active"
+      : session.status === "closed"
+        ? "closed"
+        : "paused";
+  const statusLabel = (status: "active" | "paused" | "closed") =>
+    status === "active"
+      ? "진행 중"
+      : status === "paused"
+        ? "잠시 멈춤"
+        : "종료";
+  const classLabel = (session: SessionWithId) =>
+    `${formatGradeLabel(session.targetGrade, session.targetGradeLabel)} ${formatClassLabel(session.targetClass, session.targetClassLabel)}`;
+  const activeCount = filteredSessions.filter(
+    (session) => getStatus(session) === "active",
+  ).length;
 
   const renderCreatePanel = () => (
-    <section className="min-w-0">
-      <div className="ws-page-header">
-        <h2 className="text-lg font-extrabold text-gray-900">
-          새 생각모아 주제
-        </h2>
-      </div>
-
-      <div className="space-y-6 rounded-xl border border-gray-200 bg-white p-4 sm:p-6">
-        <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">
-            주제
-          </label>
-          <input
-            lang="ko"
-            inputMode="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="예: 조선 후기 사회 변화를 한 단어로 표현해 보세요"
-            className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 outline-none"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">
-            설명
-          </label>
-          <textarea
-            lang="ko"
-            inputMode="text"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={3}
-            placeholder="학생 안내 문구를 입력해 주세요."
-            className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 outline-none resize-y"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <span className="font-bold text-gray-700">학년</span>
-            <select
-              value={targetGrade}
-              onChange={(e) => setTargetGrade(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-1.5 font-bold bg-white"
-            >
-              {gradeOptions.map((grade) => (
-                <option key={grade.value} value={grade.value}>
-                  {grade.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <span className="font-bold text-gray-700">반</span>
-            <select
-              value={targetClass}
-              onChange={(e) => setTargetClass(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-1.5 font-bold bg-white"
-            >
-              {classOptions.map((cls) => (
-                <option key={cls.value} value={cls.value}>
-                  {cls.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <span className="font-bold text-gray-700">중복 단어 제출 허용</span>
-            <input
-              type="checkbox"
-              checked={options.allowDuplicateWord}
-              onChange={(e) =>
-                setOptions((prev) => ({
-                  ...prev,
-                  allowDuplicateWord: e.target.checked,
-                }))
-              }
-              className="w-5 h-5"
-            />
-          </label>
-
-          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <span className="font-bold text-gray-700">
-              동일 학생 중복 제출 허용
+    <form
+      className="teacher-think-create"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (createComposing.current) return;
+        void handleStartSession();
+      }}
+      onCompositionStart={() => {
+        createComposing.current = true;
+      }}
+      onCompositionEnd={() => {
+        createComposing.current = false;
+      }}
+      onKeyDown={(event) => {
+        if (
+          event.key === "Enter" &&
+          (createComposing.current ||
+            event.nativeEvent.isComposing ||
+            event.keyCode === 229)
+        )
+          event.preventDefault();
+      }}
+      aria-label="새 생각모아 주제"
+      data-testid="teacher-think-create"
+    >
+      <div className="teacher-think-create-grid">
+        <div className="teacher-think-question-fields">
+          <label className="think-field" htmlFor="think-topic-title">
+            <span className="think-label">
+              질문 <span aria-hidden="true">*</span>
             </span>
             <input
-              type="checkbox"
-              checked={options.allowDuplicateByStudent}
-              onChange={(e) =>
-                setOptions((prev) => ({
-                  ...prev,
-                  allowDuplicateByStudent: e.target.checked,
-                }))
-              }
-              className="w-5 h-5"
+              id="think-topic-title"
+              className="think-input teacher-think-title-input"
+              lang="ko"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              maxLength={200}
+              required
+              disabled={loadingAction}
+              placeholder="오늘, 어떤 생각을 모아 볼까요?"
             />
           </label>
-
-          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <span className="font-bold text-gray-700">익명 표시</span>
-            <input
-              type="checkbox"
-              checked={options.anonymous}
-              onChange={(e) =>
-                setOptions((prev) => ({ ...prev, anonymous: e.target.checked }))
-              }
-              className="w-5 h-5"
-            />
-          </label>
-
-          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <span className="font-bold text-gray-700">금칙어 필터</span>
-            <input
-              type="checkbox"
-              checked={options.profanityFilter}
-              onChange={(e) =>
-                setOptions((prev) => ({
-                  ...prev,
-                  profanityFilter: e.target.checked,
-                }))
-              }
-              className="w-5 h-5"
-            />
-          </label>
-
-          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <span className="font-bold text-gray-700">입력 형식</span>
-            <select
-              value={options.inputMode}
-              onChange={(e) =>
-                setOptions((prev) => ({
-                  ...prev,
-                  inputMode: e.target.value as ThinkCloudOptions["inputMode"],
-                }))
-              }
-              className="border border-gray-300 rounded-lg px-3 py-1.5 font-bold bg-white"
-            >
-              <option value="word">단어 1개</option>
-              <option value="sentence">짧은 문장</option>
-            </select>
-          </label>
-
-          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 md:col-span-2">
-            <span className="font-bold text-gray-700">최대 입력 길이</span>
-            <NumericInput
-              type="number"
-              min={5}
-              max={100}
-              value={options.maxLength}
-              onChange={(e) => {
-                const parsed = Number.parseInt(e.target.value, 10);
-                const next = Number.isFinite(parsed)
-                  ? Math.max(5, Math.min(100, parsed))
-                  : 20;
-                setOptions((prev) => ({ ...prev, maxLength: next }));
-              }}
-              className="w-24 border border-gray-300 rounded-lg px-3 py-1.5 font-bold text-right bg-white"
-            />
-          </label>
-        </div>
-
-        <div className="text-right">
-          <button
-            onClick={() => void handleStartSession()}
-            disabled={loadingAction}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition disabled:opacity-60"
-          >
-            {loadingAction ? "처리 중..." : "세션 시작"}
-          </button>
-        </div>
-      </div>
-    </section>
-  );
-
-  const renderDetailPanel = () => {
-    if (!selectedSession) {
-      return (
-        <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-          <p className="text-gray-500 font-bold">
-            목록에서 주제를 선택하거나 새 주제를 추가해 주세요.
-          </p>
-        </section>
-      );
-    }
-
-    const isActive =
-      activeSessionIds.includes(selectedSession.id) &&
-      selectedSession.status === "active";
-    const isPaused = selectedSession.status === "paused";
-
-    return (
-      <section className="min-w-0">
-        <div className="ws-page-header">
-          <div>
-            <h2 className="text-lg font-extrabold text-gray-900">
-              {selectedSession.title}
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              {selectedSession.description || "설명 없음"}
-            </p>
-          </div>
-          <span
-            className={`text-xs font-bold px-2.5 py-1 rounded-full border ${isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : isPaused ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-gray-50 text-gray-600 border-gray-200"}`}
-          >
-            {isActive ? "진행 중" : isPaused ? "일시 정지" : "종료됨"}
-          </span>
-        </div>
-
-        <div className="flex flex-wrap gap-2 mb-4 text-xs font-bold">
-          <span className="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-            대상{" "}
-            {formatGradeLabel(
-              selectedSession.targetGrade,
-              selectedSession.targetGradeLabel,
-            )}{" "}
-            {formatClassLabel(
-              selectedSession.targetClass,
-              selectedSession.targetClassLabel,
-            )}
-          </span>
-          <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-            {selectedSession.options.inputMode === "word"
-              ? "단어 1개 입력"
-              : "짧은 문장 입력"}
-          </span>
-          <span className="px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-            최대 {selectedSession.options.maxLength}자
-          </span>
-          <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
-            {selectedSession.options.allowDuplicateWord
-              ? "중복 단어 제출 허용"
-              : "중복 단어 제출 제한"}
-          </span>
-          <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
-            {selectedSession.options.allowDuplicateByStudent
-              ? "동일 학생 중복 제출 허용"
-              : "동일 학생 중복 제출 제한"}
-          </span>
-          <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
-            {selectedSession.options.anonymous ? "익명 표시" : "이름 표시"}
-          </span>
-        </div>
-
-        <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-          <h3 className="font-bold text-gray-800">
-            {"\uC2E4\uC2DC\uAC04 \uC9D1\uACC4"}
-          </h3>
-          <div className="flex flex-1 flex-col gap-2 lg:items-end">
-            <span className="text-sm font-bold text-gray-500">
-              {"\uC751\uB2F5 "}
-              {responses.length}
-              {"\uAC1C"}
+          <label className="think-field" htmlFor="think-topic-description">
+            <span className="think-label">
+              덧붙일 내용 <span className="teacher-think-optional">선택</span>
             </span>
-            {pendingStudents.length > 0 ? (
-              <div className="flex flex-wrap gap-2 lg:justify-end">
-                {pendingStudents.map((student) => (
-                  <span
-                    key={student.uid}
-                    className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700"
-                    title={student.name}
-                  >
-                    {student.name}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-                {"\uC804\uC6D0 \uC81C\uCD9C \uC644\uB8CC"}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {cloudEntries.length === 0 ? (
-          <p className="text-sm text-gray-500 font-bold">
-            아직 제출된 응답이 없습니다.
-          </p>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setCloudModalOpen(true)}
-            className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl"
-            title="클릭해서 크게 보기"
-          >
-            <WordCloudView
-              entries={cloudEntries}
-              showSubmitters={!selectedSession.options.anonymous}
+            <textarea
+              id="think-topic-description"
+              className="think-input"
+              lang="ko"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              maxLength={2000}
+              rows={3}
+              disabled={loadingAction}
+              placeholder="질문에 필요한 맥락이나 자료"
             />
-          </button>
-        )}
-
-        <div className="mt-6 flex flex-wrap justify-end gap-2">
-          <button
-            onClick={() => void handlePauseSession()}
-            disabled={!isActive || loadingAction}
-            className="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
-          >
-            {loadingAction ? "처리 중..." : "일시 정지"}
-          </button>
-          <button
-            onClick={() => void handleResumeSession()}
-            disabled={
-              isActive || selectedSession.status === "closed" || loadingAction
-            }
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
-          >
-            {loadingAction ? "처리 중..." : "재개"}
-          </button>
-          <button
-            onClick={() => void handleCloseSession()}
-            disabled={!isActive || loadingAction}
-            className="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
-          >
-            {loadingAction ? "처리 중..." : "이 세션 종료"}
-          </button>
-          <button
-            onClick={() => void handleDeleteSession()}
-            disabled={loadingAction}
-            className="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
-          >
-            {loadingAction ? "처리 중..." : "주제 삭제"}
-          </button>
+          </label>
         </div>
-      </section>
-    );
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {initialLoading && <LoadingOverlay />}
-      <PortalWorkspace
-        as="main"
-        className="teacher-sub-workspace teacher-sub-workspace--page flex-1"
-      >
-        <TeacherSubNavigation
-          title="생각모아"
-          activeLabel={
-            isCreateMode ? "새 주제" : selectedSession?.title || "주제 선택"
-          }
-          open={mobileSessionListOpen}
-          onOpenChange={setMobileSessionListOpen}
-          actions={
-            canEdit ? (
-              <button
-                type="button"
-                onClick={openCreateMode}
-                className="min-h-11 rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white hover:bg-blue-700"
-              >
-                + 새 주제
-              </button>
-            ) : undefined
-          }
+        <aside
+          className="teacher-think-preview"
+          aria-label="학생 화면 미리보기"
         >
-          <div className="border-b border-gray-100 p-4">
-            <div className="grid grid-cols-2 gap-2">
+          <span className="think-section-label">학생 화면</span>
+          <div className="teacher-think-preview-question">
+            {title.trim() || "우리의 생각이 만나는 질문"}
+          </div>
+          {description.trim() && <p>{description}</p>}
+          <div className="teacher-think-preview-input" aria-hidden="true">
+            <span>
+              {options.inputMode === "word"
+                ? "내 생각 한 단어"
+                : "내 생각 한 문장"}
+            </span>
+            <ThinkArrow />
+          </div>
+          <span className="teacher-think-preview-note">
+            {options.anonymous ? "익명" : "이름 표시"} · 최대{" "}
+            {options.maxLength}자
+          </span>
+        </aside>
+      </div>
+
+      <div className="teacher-think-form-settings">
+        <div className="teacher-think-settings-row">
+          <fieldset className="teacher-think-class-fields">
+            <legend className="think-label">참여 학급</legend>
+            <div className="teacher-think-class-selects">
               <select
-                aria-label="학년 필터"
-                value={filterGrade}
-                onChange={(e) => setFilterGrade(e.target.value)}
-                className="min-h-11 min-w-0 rounded-lg border border-gray-200 bg-gray-50 px-2 py-2 text-sm font-bold text-gray-700 focus-visible:outline-blue-500"
+                aria-label="참여 학년"
+                className="think-input"
+                value={targetGrade}
+                onChange={(event) => setTargetGrade(event.target.value)}
+                disabled={loadingAction}
               >
-                <option value="all">전체 학년</option>
                 {gradeOptions.map((grade) => (
                   <option key={grade.value} value={grade.value}>
                     {grade.label}
@@ -820,12 +758,12 @@ const ManageThinkCloud: React.FC = () => {
                 ))}
               </select>
               <select
-                aria-label="반 필터"
-                value={filterClass}
-                onChange={(e) => setFilterClass(e.target.value)}
-                className="min-h-11 min-w-0 rounded-lg border border-gray-200 bg-gray-50 px-2 py-2 text-sm font-bold text-gray-700 focus-visible:outline-blue-500"
+                aria-label="참여 반"
+                className="think-input"
+                value={targetClass}
+                onChange={(event) => setTargetClass(event.target.value)}
+                disabled={loadingAction}
               >
-                <option value="all">전체 반</option>
                 {classOptions.map((cls) => (
                   <option key={cls.value} value={cls.value}>
                     {cls.label}
@@ -833,127 +771,526 @@ const ManageThinkCloud: React.FC = () => {
                 ))}
               </select>
             </div>
+          </fieldset>
+          <fieldset className="teacher-think-mode-fields">
+            <legend className="think-label">모으는 방식</legend>
+            <div className="teacher-think-mode-options">
+              {(
+                [
+                  ["word", "한 단어"],
+                  ["sentence", "한 문장"],
+                ] as const
+              ).map(([mode, label]) => (
+                <label className="think-choice" key={mode}>
+                  <input
+                    type="radio"
+                    name="think-input-mode"
+                    value={mode}
+                    checked={options.inputMode === mode}
+                    onChange={() =>
+                      setOptions((previous) => ({
+                        ...previous,
+                        inputMode: mode,
+                      }))
+                    }
+                    disabled={loadingAction}
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <label
+            className="think-field teacher-think-length-field"
+            htmlFor="think-max-length"
+          >
+            <span className="think-label">최대 글자 수</span>
+            <NumericInput
+              id="think-max-length"
+              className="think-input"
+              min={5}
+              max={100}
+              value={options.maxLength}
+              disabled={loadingAction}
+              onChange={(event) => {
+                const parsed = Number.parseInt(event.target.value, 10);
+                setOptions((previous) => ({
+                  ...previous,
+                  maxLength: Number.isFinite(parsed)
+                    ? Math.max(5, Math.min(100, parsed))
+                    : 20,
+                }));
+              }}
+            />
+          </label>
+        </div>
+        <fieldset className="teacher-think-option-fields">
+          <legend className="think-label">참여 설정</legend>
+          <div className="teacher-think-option-row">
+            {(
+              [
+                ["allowDuplicateWord", "같은 응답 허용"],
+                ["allowDuplicateByStudent", "여러 번 참여"],
+                ["anonymous", "익명 표시"],
+                ["profanityFilter", "금칙어 필터"],
+              ] as const
+            ).map(([key, label]) => (
+              <label className="think-choice" key={key}>
+                <input
+                  type="checkbox"
+                  checked={options[key]}
+                  onChange={(event) =>
+                    setOptions((previous) => ({
+                      ...previous,
+                      [key]: event.target.checked,
+                    }))
+                  }
+                  disabled={loadingAction}
+                />
+                <span>{label}</span>
+              </label>
+            ))}
           </div>
+        </fieldset>
+      </div>
+      <div className="teacher-think-create-footer">
+        <p>주제를 열면 선택한 학급의 학생이 바로 참여할 수 있습니다.</p>
+        <div className="think-actions">
+          <button
+            className="think-button"
+            type="button"
+            onClick={showList}
+            disabled={loadingAction}
+          >
+            취소
+          </button>
+          <button
+            className="think-button is-primary"
+            type="submit"
+            disabled={loadingAction || !canEdit}
+          >
+            {loadingAction ? "주제를 여는 중…" : "주제 열기"}
+            <ThinkArrow />
+          </button>
+        </div>
+      </div>
+    </form>
+  );
 
-          <div className="flex flex-col gap-1">
-            {filteredSessions.length === 0 && (
-              <p className="p-4 text-sm font-bold text-gray-500">
-                저장된 주제가 없습니다.
-              </p>
-            )}
-            {filteredSessions.map((session) => {
-              const isSelected =
-                !isCreateMode && selectedSessionId === session.id;
-              const isActive =
-                activeSessionIds.includes(session.id) &&
-                session.status === "active";
-              return (
+  const renderList = () => (
+    <section
+      className="teacher-think-list"
+      aria-label="생각모아 주제 목록"
+      data-testid="teacher-think-list"
+    >
+      <div className="ws-filter-bar teacher-think-filters">
+        <select
+          aria-label="학년 필터"
+          className="think-input"
+          value={filterGrade}
+          onChange={(event) => setFilterGrade(event.target.value)}
+        >
+          <option value="all">전체 학년</option>
+          {gradeOptions.map((grade) => (
+            <option key={grade.value} value={grade.value}>
+              {grade.label}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="반 필터"
+          className="think-input"
+          value={filterClass}
+          onChange={(event) => setFilterClass(event.target.value)}
+        >
+          <option value="all">전체 반</option>
+          {classOptions.map((cls) => (
+            <option key={cls.value} value={cls.value}>
+              {cls.label}
+            </option>
+          ))}
+        </select>
+        {!initialLoading && !readError && (
+          <span className="teacher-think-list-count">
+            {filteredSessions.length}개 주제
+            {activeCount > 0 ? ` · 진행 중 ${activeCount}개` : ""}
+          </span>
+        )}
+      </div>
+      {initialLoading ? (
+        <InlineLoading message="주제를 불러오는 중입니다." />
+      ) : (
+        !readError &&
+        (filteredSessions.length ? (
+          <ul className="think-topic-list">
+            {filteredSessions.map((session, index) => (
+              <li key={session.id}>
                 <button
                   type="button"
-                  key={session.id}
+                  className="think-topic-row teacher-think-topic"
+                  data-state={getStatus(session)}
+                  data-think-session={session.id}
                   onClick={() => selectSession(session.id)}
-                  className={`teacher-settings-section flex-col !items-stretch !gap-1${isSelected ? " is-active" : ""}`}
-                  aria-current={isSelected ? "page" : undefined}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <p
-                      className="teacher-navigation-label"
-                      title={session.title}
-                    >
-                      {session.title}
-                    </p>
-                    {isActive && (
-                      <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold">
-                        LIVE
+                  <span
+                    className="teacher-think-topic-index"
+                    aria-hidden="true"
+                  >
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <span className="teacher-think-topic-content">
+                    <span className="think-topic-title">{session.title}</span>
+                    <span className="think-topic-meta">
+                      {classLabel(session)} ·{" "}
+                      {session.options.inputMode === "word"
+                        ? "한 단어"
+                        : "한 문장"}
+                    </span>
+                    {session.description && (
+                      <span className="teacher-think-topic-description">
+                        {session.description}
                       </span>
                     )}
-                  </div>
-                  <p className="text-xs text-gray-500 break-words">
-                    {formatGradeLabel(
-                      session.targetGrade,
-                      session.targetGradeLabel,
-                    )}{" "}
-                    {formatClassLabel(
-                      session.targetClass,
-                      session.targetClassLabel,
-                    )}{" "}
-                    · {session.description || "설명 없음"}
-                  </p>
+                  </span>
+                  <span
+                    className="think-status"
+                    data-state={getStatus(session)}
+                  >
+                    {statusLabel(getStatus(session))}
+                  </span>
+                  <ThinkArrow />
                 </button>
-              );
-            })}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="think-empty teacher-think-empty">
+            <span className="teacher-think-empty-mark" aria-hidden="true">
+              ＋
+            </span>
+            <p>
+              {sessions.length
+                ? "이 학급에 등록된 주제가 없습니다."
+                : "아직 등록된 주제가 없습니다."}
+            </p>
           </div>
-        </TeacherSubNavigation>
+        ))
+      )}
+    </section>
+  );
 
-        <div className="teacher-sub-content">
-          {isCreateMode ? renderCreatePanel() : renderDetailPanel()}
-          {message && (
-            <p className="mt-3 text-sm font-bold text-blue-700">{message}</p>
+  const renderDetailPanel = () => {
+    if (!selectedSession)
+      return (
+        <div className="think-empty">
+          <p>주제를 불러오는 중입니다.</p>
+        </div>
+      );
+    const status = getStatus(selectedSession);
+    return (
+      <section
+        className="teacher-think-detail"
+        data-testid="teacher-think-detail"
+      >
+        <div className="teacher-think-detail-meta">
+          <span className="think-status" data-state={status}>
+            {statusLabel(status)}
+          </span>
+          <span>{classLabel(selectedSession)}</span>
+          <span>
+            {selectedSession.options.inputMode === "word"
+              ? "한 단어"
+              : "한 문장"}{" "}
+            · 최대 {selectedSession.options.maxLength}자
+          </span>
+          <span>
+            {selectedSession.options.anonymous ? "익명" : "이름 표시"}
+          </span>
+        </div>
+        {selectedSession.description && (
+          <p className="teacher-think-description">
+            {selectedSession.description}
+          </p>
+        )}
+        <div className="teacher-think-board-toolbar">
+          <h2 className="think-section-label">
+            모인 생각{" "}
+            <span className="think-count">
+              {dataReady ? responses.length : "—"}
+            </span>
+          </h2>
+          <div className="think-actions">
+            <button
+              className="think-button teacher-think-motion-toggle"
+              type="button"
+              aria-label="움직임 효과"
+              aria-pressed={motionEnabled}
+              onClick={() => setMotionEnabled((enabled) => !enabled)}
+            >
+              효과 {motionEnabled ? "켜짐" : "꺼짐"}
+            </button>
+            <button
+              ref={presentationTrigger}
+              className="think-button"
+              type="button"
+              disabled={!dataReady}
+              onClick={() => {
+                presentationSessionRef.current = selectedSession.id;
+                setCloudModalOpen(true);
+              }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                aria-hidden="true"
+              >
+                <path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" />
+              </svg>
+              크게 보기
+            </button>
+          </div>
+        </div>
+        {dataReady ? (
+          <WordCloudView
+            key={selectedSession.id}
+            entries={cloudEntries}
+            showSubmitters={!selectedSession.options.anonymous}
+            motionEnabled={motionEnabled}
+          />
+        ) : (
+          <InlineLoading message="응답을 불러오는 중입니다." />
+        )}
+        <div className="teacher-think-management">
+          {dataReady && classStudents.length > 0 && (
+            <details
+              className="teacher-think-participation"
+              key={selectedSession.id}
+            >
+              <summary>
+                <span>참여 현황</span>
+                <span>
+                  {classStudents.length - pendingStudents.length} /{" "}
+                  {classStudents.length}명
+                </span>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  aria-hidden="true"
+                >
+                  <path d="m7 10 5 5 5-5" />
+                </svg>
+              </summary>
+              <div className="teacher-think-pending">
+                <span className="teacher-think-pending-label">
+                  {pendingStudents.length
+                    ? "아직 참여하지 않은 학생"
+                    : "모두 참여했습니다."}
+                </span>
+                {pendingStudents.map((student) => (
+                  <span key={student.uid}>
+                    {student.number ? `${student.number}번 ` : ""}
+                    {student.name}
+                  </span>
+                ))}
+              </div>
+            </details>
+          )}
+          <div className="teacher-think-policy">
+            <span>
+              {selectedSession.options.allowDuplicateWord
+                ? "같은 응답 허용"
+                : "같은 응답 제한"}
+            </span>
+            <span>
+              {selectedSession.options.allowDuplicateByStudent
+                ? "여러 번 참여"
+                : "한 번 참여"}
+            </span>
+            {selectedSession.options.profanityFilter && (
+              <span>금칙어 필터</span>
+            )}
+          </div>
+          {canEdit && (
+            <div className="teacher-think-operations" aria-label="주제 운영">
+              {status === "active" && (
+                <button
+                  className="think-button"
+                  type="button"
+                  disabled={loadingAction || !dataReady}
+                  onClick={() => void handlePauseSession()}
+                >
+                  잠시 멈추기
+                </button>
+              )}
+              {status === "paused" && (
+                <button
+                  className="think-button is-primary"
+                  type="button"
+                  disabled={loadingAction || !dataReady}
+                  onClick={() => void handleResumeSession()}
+                >
+                  다시 열기
+                </button>
+              )}
+              {status !== "closed" && (
+                <button
+                  className="think-button"
+                  type="button"
+                  disabled={loadingAction || !dataReady}
+                  onClick={() => void handleCloseSession()}
+                >
+                  주제 마치기
+                </button>
+              )}
+              <button
+                className="think-button is-danger"
+                type="button"
+                disabled={loadingAction || !dataReady}
+                onClick={() => void handleDeleteSession()}
+              >
+                주제 삭제
+              </button>
+              {loadingAction && <span role="status">처리 중…</span>}
+            </div>
           )}
         </div>
-      </PortalWorkspace>
+      </section>
+    );
+  };
 
-      {cloudModalOpen && (
-        <div
-          className="fixed inset-0 z-[120] bg-white"
-          onClick={() => setCloudModalOpen(false)}
-        >
-          <div
-            className="flex h-full w-full flex-col overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
+  return (
+    <>
+      <PortalWorkspace
+        as="main"
+        className="ws-page think-workspace teacher-think-page"
+        data-view={view}
+      >
+        {view !== "list" && (
+          <button
+            className="think-back"
+            type="button"
+            onClick={showList}
+            disabled={loadingAction}
           >
-            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 md:px-8 md:py-5">
-              <div className="min-w-0">
-                <h3 className="text-xl font-extrabold text-gray-900 md:text-2xl">
-                  생각모아 워드클라우드 대형 보기
-                </h3>
-                <div className="mt-2 text-sm font-bold text-gray-600 md:text-base">
-                  TV 출력용 모드입니다. 응답 {responses.length}개
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {pendingStudents.length > 0 ? (
-                    pendingStudents.map((student) => (
-                      <span
-                        key={student.uid}
-                        className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700 md:text-sm"
-                        title={student.name}
-                      >
-                        {student.name}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 md:text-sm">
-                      전원 제출 완료
-                    </span>
-                  )}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setCloudModalOpen(false)}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-gray-800"
-                aria-label="닫기"
-              >
-                <i className="fas fa-times text-lg"></i>
-              </button>
-            </div>
-            <div className="custom-scroll flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-4 md:px-8 md:pb-8 md:pt-6">
-              <div className="flex min-h-full w-full items-center justify-center">
-                <WordCloudView
-                  entries={cloudEntries}
-                  showSubmitters={
-                    !!selectedSession && !selectedSession.options.anonymous
-                  }
-                  variant="default"
-                  className="w-full"
-                />
-              </div>
-            </div>
-          </div>
+            <ThinkArrow back /> 주제 목록
+          </button>
+        )}
+        <div className="ws-page-header think-header">
+          <h1 className="think-title" ref={headingRef} tabIndex={-1}>
+            {view === "create"
+              ? "새 주제"
+              : view === "detail"
+                ? selectedSession?.title || "생각모아"
+                : "생각모아"}
+          </h1>
+          {view === "list" && canEdit && (
+            <button
+              className="think-button is-primary"
+              type="button"
+              onClick={openCreateMode}
+            >
+              <span aria-hidden="true">＋</span> 새 주제
+            </button>
+          )}
         </div>
-      )}
-    </div>
+        {readError && (
+          <div className="think-error teacher-think-read-error" role="alert">
+            <p>{readErrorMessage || "생각모아를 불러오지 못했습니다."}</p>
+            <button
+              className="think-button"
+              type="button"
+              onClick={() => {
+                setReadError(false);
+                setReadErrorMessage("");
+                setRefreshKey((key) => key + 1);
+              }}
+            >
+              다시 불러오기
+            </button>
+          </div>
+        )}
+        {view === "list"
+          ? renderList()
+          : view === "create"
+            ? renderCreatePanel()
+            : renderDetailPanel()}
+        {!readError && message && (
+          <p className="think-error" role="alert">
+            {message}
+          </p>
+        )}
+      </PortalWorkspace>
+      {presentationReady &&
+        selectedSession &&
+        createPortal(
+          <dialog
+            ref={dialogRef}
+            tabIndex={-1}
+            className="think-workspace teacher-think-presentation"
+            aria-labelledby="think-presentation-title"
+            onCancel={(event) => {
+              event.preventDefault();
+              setCloudModalOpen(false);
+            }}
+          >
+            <div className="ws-page-header think-header teacher-think-presentation-heading">
+              <div className="teacher-think-presentation-title-group">
+                <span className="teacher-think-presentation-context">
+                  생각모아 · {classLabel(selectedSession)}
+                </span>
+                <h2 id="think-presentation-title">{selectedSession.title}</h2>
+              </div>
+              <div className="think-actions">
+                <span className="think-count">응답 {responses.length}개</span>
+                <button
+                  className="think-button teacher-think-motion-toggle"
+                  type="button"
+                  aria-label="움직임 효과"
+                  aria-pressed={motionEnabled}
+                  onClick={() => setMotionEnabled((enabled) => !enabled)}
+                >
+                  효과 {motionEnabled ? "켜짐" : "꺼짐"}
+                </button>
+                <button
+                  ref={presentationClose}
+                  className="think-button"
+                  type="button"
+                  onClick={() => setCloudModalOpen(false)}
+                  aria-label="크게 보기 닫기"
+                >
+                  닫기 <span aria-hidden="true">×</span>
+                </button>
+              </div>
+            </div>
+            <div className="teacher-think-presentation-body">
+              <WordCloudView
+                entries={cloudEntries}
+                showSubmitters={!selectedSession.options.anonymous}
+                variant="modal"
+                motionEnabled={motionEnabled}
+              />
+            </div>
+          </dialog>,
+          document.body,
+        )}
+    </>
   );
 };
+
+const ThinkArrow = ({ back = false }: { back?: boolean }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+    aria-hidden="true"
+  >
+    <path d={back ? "M20 12H4m6-6-6 6 6 6" : "M4 12h16m-6-6 6 6-6 6"} />
+  </svg>
+);
 
 export default ManageThinkCloud;

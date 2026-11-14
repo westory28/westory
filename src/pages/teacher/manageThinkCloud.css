@@ -1,0 +1,477 @@
+.teacher-think-page {
+  min-height: calc(100vh - 160px);
+}
+.teacher-think-page > .think-back {
+  margin-bottom: 12px;
+}
+.teacher-think-page .think-title:focus {
+  outline: none;
+}
+.teacher-think-page .think-button svg,
+.teacher-think-page .think-back svg,
+.teacher-think-presentation .think-button svg {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+}
+.teacher-think-list,
+.teacher-think-create,
+.teacher-think-detail {
+  animation: teacher-think-reveal var(--motion-base, 200ms) ease-out both;
+}
+.teacher-think-filters {
+  align-items: center;
+  margin-bottom: 8px;
+}
+.teacher-think-filters .think-input {
+  width: auto;
+  min-width: 120px;
+  background: transparent;
+  box-shadow: none;
+}
+.teacher-think-list-count {
+  margin-left: auto;
+  color: var(--think-muted);
+  font-size: 14px;
+}
+.teacher-think-topic {
+  border-left: 3px solid transparent;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+.teacher-think-topic[data-state="active"] {
+  border-left-color: var(--think-blue);
+}
+.teacher-think-topic-index {
+  flex: 0 0 40px;
+  align-self: flex-start;
+  padding-top: 4px;
+  color: var(--think-muted);
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.teacher-think-topic-content {
+  flex: 1;
+  min-width: 0;
+}
+.teacher-think-topic > svg {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  color: var(--think-muted);
+  transition: transform var(--motion-fast, 160ms) ease-out;
+}
+.teacher-think-topic:hover > svg {
+  transform: translateX(4px);
+}
+.teacher-think-topic-description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin-top: 8px;
+  color: var(--think-muted);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+.teacher-think-empty {
+  border-top: 1px solid var(--think-line);
+}
+.teacher-think-empty-mark {
+  display: inline-block;
+  color: var(--think-blue);
+  font-size: 36px;
+  font-weight: 300;
+  margin-bottom: 8px;
+}
+.teacher-think-create-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 32px;
+}
+.teacher-think-question-fields {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 24px;
+}
+.teacher-think-question-fields textarea {
+  min-height: 144px;
+  resize: vertical;
+}
+.teacher-think-title-input {
+  font-size: 20px;
+  font-weight: 700;
+}
+.teacher-think-optional {
+  margin-left: 4px;
+  color: var(--think-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.teacher-think-preview {
+  align-self: start;
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid var(--think-line);
+  border-radius: 16px;
+  background: #eff6ff;
+}
+.teacher-think-preview > .think-section-label {
+  display: block;
+  margin-bottom: 24px;
+}
+.teacher-think-preview-question {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.4;
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+}
+.teacher-think-preview > p {
+  margin: 12px 0 0;
+  color: var(--think-muted);
+  font-size: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.teacher-think-preview-input {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 24px;
+  padding: 16px 0;
+  border-bottom: 2px solid var(--think-blue);
+  color: var(--think-blue-deep);
+  font-size: 16px;
+  font-weight: 700;
+}
+.teacher-think-preview-input svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+.teacher-think-preview-note {
+  display: block;
+  margin-top: 12px;
+  color: var(--think-muted);
+  font-size: 12px;
+}
+.teacher-think-form-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--think-line);
+}
+.teacher-think-settings-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 24px 32px;
+}
+.teacher-think-form-settings fieldset {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+.teacher-think-form-settings legend {
+  margin-bottom: 8px;
+  padding: 0;
+}
+.teacher-think-class-selects,
+.teacher-think-mode-options,
+.teacher-think-option-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.teacher-think-class-selects .think-input {
+  width: 112px;
+}
+.teacher-think-mode-options .think-choice {
+  min-height: 48px;
+  padding-inline: 16px;
+}
+.teacher-think-form-settings .think-choice:has(input:checked) {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: var(--think-blue-deep);
+}
+.teacher-think-form-settings .think-choice:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.teacher-think-length-field {
+  width: 112px;
+}
+.teacher-think-create-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--think-line);
+}
+.teacher-think-create-footer p {
+  margin: 0;
+  color: var(--think-muted);
+  font-size: 14px;
+}
+.teacher-think-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  color: var(--think-muted);
+  font-size: 14px;
+}
+.teacher-think-description {
+  margin: 16px 0 0;
+  font-size: 16px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.teacher-think-board-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 24px 0 12px;
+}
+.teacher-think-board-toolbar .think-section-label {
+  margin: 0;
+}
+.teacher-think-board-toolbar .think-count {
+  margin-left: 8px;
+  font-size: 20px;
+}
+.teacher-think-management {
+  margin-top: 24px;
+  border-top: 1px solid var(--think-line);
+}
+.teacher-think-participation > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 0;
+  list-style: none;
+  cursor: pointer;
+  color: var(--think-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+.teacher-think-participation > summary::-webkit-details-marker {
+  display: none;
+}
+.teacher-think-participation > summary > span:nth-child(2) {
+  color: var(--think-muted);
+  font-weight: 500;
+}
+.teacher-think-participation > summary > svg {
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  transition: transform var(--motion-fast, 160ms) ease-out;
+}
+.teacher-think-participation[open] > summary > svg {
+  transform: rotate(180deg);
+}
+.teacher-think-pending {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 8px 0 16px;
+  color: var(--think-ink);
+  font-size: 14px;
+}
+.teacher-think-pending-label {
+  color: var(--think-muted);
+}
+.teacher-think-policy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 12px 0;
+  color: var(--think-muted);
+  font-size: 13px;
+}
+.teacher-think-operations {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+}
+.teacher-think-operations > [role="status"] {
+  color: var(--think-muted);
+  font-size: 14px;
+}
+.teacher-think-operations .is-danger {
+  margin-left: auto;
+}
+.teacher-think-read-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.teacher-think-read-error p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.teacher-think-presentation {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: max(24px, env(safe-area-inset-top))
+    max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom))
+    max(24px, env(safe-area-inset-left));
+  border: 0;
+  border-radius: 0;
+  background: #f9fafb;
+  overflow: hidden;
+}
+.teacher-think-presentation[open] {
+  display: flex;
+  flex-direction: column;
+  animation: teacher-think-reveal var(--motion-base, 200ms) ease-out both;
+}
+.teacher-think-presentation::backdrop {
+  background: #f9fafb;
+}
+.teacher-think-presentation-heading {
+  flex: 0 0 auto;
+}
+.teacher-think-presentation-title-group {
+  flex: 1;
+  min-width: 0;
+}
+.teacher-think-presentation-context {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--think-muted);
+  font-size: 14px;
+}
+.teacher-think-presentation-heading h2 {
+  overflow-wrap: anywhere;
+  font-family: var(--think-font);
+}
+.teacher-think-presentation-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+@keyframes teacher-think-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+/* The user explicitly keeps these short transitions in reduced-motion mode. */
+@media (max-width: 900px) {
+  .teacher-think-create-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  .teacher-think-preview {
+    width: 100%;
+  }
+}
+@media (max-width: 600px) {
+  .teacher-think-topic {
+    position: relative;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px 8px 16px 12px;
+  }
+  .teacher-think-topic-index {
+    display: none;
+  }
+  .teacher-think-topic > svg {
+    display: none;
+  }
+  .teacher-think-topic > .think-status {
+    font-size: 12px;
+    padding: 3px 8px;
+  }
+  .teacher-think-list-count {
+    width: 100%;
+    margin-left: 0;
+    margin-top: 4px;
+  }
+  .teacher-think-filters .think-input {
+    flex: 1;
+  }
+  .teacher-think-create-footer {
+    align-items: stretch;
+  }
+  .teacher-think-create-footer .think-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .teacher-think-title-input {
+    font-size: 18px;
+  }
+  .teacher-think-preview {
+    padding: 20px;
+  }
+  .teacher-think-preview-question {
+    font-size: 20px;
+  }
+  .teacher-think-settings-row {
+    gap: 20px;
+  }
+  .teacher-think-operations .is-danger {
+    margin-left: 0;
+  }
+  .teacher-think-presentation {
+    padding: max(16px, env(safe-area-inset-top))
+      max(16px, env(safe-area-inset-right))
+      max(16px, env(safe-area-inset-bottom))
+      max(16px, env(safe-area-inset-left));
+  }
+  .teacher-think-presentation-heading {
+    gap: 12px;
+  }
+  .teacher-think-presentation-title-group {
+    flex-basis: 100%;
+  }
+}
+@media print {
+  .teacher-think-board-toolbar .think-button,
+  .teacher-think-management,
+  .teacher-think-filters,
+  .teacher-think-create-footer {
+    display: none;
+  }
+  .teacher-think-list,
+  .teacher-think-create,
+  .teacher-think-detail,
+  .teacher-think-presentation[open] {
+    animation: none;
+  }
+}

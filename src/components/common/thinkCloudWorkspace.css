@@ -1,0 +1,310 @@
+@font-face {
+  font-family: "SUIT Variable";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../../assets/fonts/think-cloud/SUIT-Variable.woff2") format("woff2");
+}
+
+:root {
+  --think-font: "SUIT Variable", "Noto Sans KR", system-ui, sans-serif;
+  --think-ink: #172554;
+  --think-blue: #2563eb;
+  --think-blue-deep: #1d4ed8;
+  --think-amber: #f59e0b;
+  --think-amber-ink: #92400e;
+  --think-line: #dbe3ef;
+  --think-muted: #64748b;
+}
+
+.think-workspace {
+  color: var(--think-ink);
+  font-family: var(--think-font);
+  font-size: 16px;
+  line-height: 1.55;
+  letter-spacing: -0.015em;
+  min-width: 0;
+}
+.think-workspace *,
+.think-workspace *::before,
+.think-workspace *::after {
+  box-sizing: border-box;
+}
+.think-workspace :is(button, input, select, textarea) {
+  font-family: inherit;
+}
+.think-workspace
+  :is(button, a, input, select, textarea, summary):focus-visible {
+  outline: 3px solid var(--think-blue);
+  outline-offset: 3px;
+}
+.think-workspace .think-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 24px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  position: static;
+  min-height: 0;
+}
+.think-workspace .think-title {
+  margin: 0;
+  color: var(--think-ink);
+  font-size: clamp(28px, 3vw, 36px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.think-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.think-button,
+.think-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--think-line);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--think-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  cursor: pointer;
+  transition:
+    transform var(--motion-fast, 160ms) ease-out,
+    background-color var(--motion-fast, 160ms) ease;
+}
+.think-button:hover:not(:disabled),
+.think-back:hover:not(:disabled) {
+  background: #eff6ff;
+}
+.think-button:active:not(:disabled),
+.think-back:active:not(:disabled) {
+  transform: scale(0.985);
+}
+.think-button.is-primary {
+  background: var(--think-blue);
+  border-color: var(--think-blue);
+  color: #fff;
+}
+.think-button.is-primary:hover:not(:disabled) {
+  background: var(--think-blue-deep);
+}
+.think-button.is-danger {
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+.think-button.is-danger:hover:not(:disabled) {
+  background: #fef2f2;
+}
+.think-button:disabled,
+.think-back:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.think-back {
+  padding-left: 0;
+  padding-right: 8px;
+  border-color: transparent;
+}
+.think-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.think-status[data-state="active"] {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+.think-status[data-state="active"]::before {
+  content: "";
+  height: 6px;
+  width: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.think-status[data-state="paused"] {
+  color: var(--think-amber-ink);
+  background: #fef3c7;
+}
+.think-topic-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.think-topic-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+  padding: 20px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--think-line);
+  border-radius: 0;
+  color: var(--think-ink);
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color var(--motion-fast, 160ms) ease;
+}
+.think-topic-row:hover {
+  background: #eff6ff;
+}
+.think-topic-title {
+  display: block;
+  margin: 0;
+  font-size: 20px;
+  font-weight: 750;
+  line-height: 1.4;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+.think-topic-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  color: var(--think-muted);
+  font-size: 14px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.think-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+.think-label {
+  color: var(--think-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+.think-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 12px 16px;
+  border: 1px solid var(--think-line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--think-ink);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+  box-shadow: 0 2px 8px rgb(23 37 84 / 0.04);
+}
+.think-input::placeholder {
+  color: #64748b;
+  font-weight: 400;
+}
+.think-input:disabled {
+  background: #f1f5f9;
+  color: #64748b;
+}
+.think-input[aria-invalid="true"] {
+  border-color: #b91c1c;
+}
+.think-empty {
+  padding: 48px 16px;
+  color: var(--think-muted);
+  text-align: center;
+  font-size: 16px;
+}
+.think-error {
+  padding: 12px 0;
+  color: #b91c1c;
+  font-size: 14px;
+  font-weight: 600;
+}
+.think-section-label {
+  margin: 0 0 12px;
+  color: var(--think-muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+.think-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--think-line);
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--think-ink);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.think-choice input {
+  accent-color: var(--think-blue);
+}
+.think-choice[aria-pressed="true"] {
+  color: var(--think-blue-deep);
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+.think-count {
+  color: var(--think-blue-deep);
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+}
+
+@media (max-width: 600px) {
+  .think-workspace .think-header {
+    gap: 12px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  .think-topic-row {
+    padding: 16px 0;
+    gap: 12px;
+  }
+  .think-topic-title {
+    font-size: 18px;
+  }
+  .think-topic-meta {
+    font-size: 13px;
+  }
+}
+
+@media print {
+  .think-workspace {
+    background: #fff;
+  }
+  .think-workspace .think-actions,
+  .think-workspace .think-back {
+    display: none;
+  }
+}
