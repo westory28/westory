@@ -3,7 +3,6 @@ import "./developerEventArticles.css";
 import { sanitizeRichHtml } from "../lib/sanitizeRichHtml";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -15,6 +14,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  setDoc,
   updateDoc,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
@@ -203,6 +203,7 @@ const DeveloperLog: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [pendingMutation, setPendingMutation] = useState(false);
   const mutationLock = useRef(false);
+  const draftPostId = useRef<{ uid: string; id: string } | null>(null);
   const [mode, setMode] = useState<"list" | "detail" | "write" | "edit">(
     "list",
   );
@@ -365,6 +366,7 @@ const DeveloperLog: React.FC = () => {
   }, [categoryFilter, posts, searchText, sortMode]);
 
   const resetWriteForm = (category: DeveloperLogCategory = "feature") => {
+    draftPostId.current = null;
     setForm({ ...EMPTY_FORM, category });
     setNewImageFiles([]);
     setPreviewOpen(false);
@@ -380,6 +382,7 @@ const DeveloperLog: React.FC = () => {
 
   const startEdit = () => {
     if (!canManage || !selectedPost) return;
+    draftPostId.current = null;
     setForm({
       title: selectedPost.title,
       version: selectedPost.version,
@@ -395,6 +398,7 @@ const DeveloperLog: React.FC = () => {
   };
 
   const cancelEditor = () => {
+    draftPostId.current = null;
     setPreviewOpen(false);
     setNewImageFiles([]);
     setExpandedImage(null);
@@ -460,29 +464,26 @@ const DeveloperLog: React.FC = () => {
       return;
     }
 
+    mutationLock.current = true;
     setSaving(true);
     const uploadedImages: DeveloperLogImage[] = [];
 
     try {
-      const postRef =
-        mode === "edit" && selectedPost
-          ? getDeveloperLogPostRef(selectedPost.id)
-          : await addDoc(getDeveloperLogItemsCollection(), {
-              title,
-              version: form.version.trim(),
-              category: form.category,
-              summary: form.summary.trim(),
-              bodyHtml: form.bodyHtml,
-              images: [],
-              isPinned: form.isPinned,
-              viewCount: 0,
-              likeCount: 0,
-              createdBy: currentUser?.uid || "",
-              createdByName: displayName,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-              publishedAt: serverTimestamp(),
-            });
+      const editingPost = mode === "edit" ? selectedPost : null;
+      if (
+        !editingPost &&
+        (!draftPostId.current || draftPostId.current.uid !== currentUser?.uid)
+      ) {
+        // Reserving a reference is local: publish only after every image is ready.
+        // Keep this ID on failure so retrying cannot create another post.
+        draftPostId.current = {
+          uid: currentUser?.uid || "",
+          id: doc(getDeveloperLogItemsCollection()).id,
+        };
+      }
+      const postRef = getDeveloperLogPostRef(
+        editingPost?.id || draftPostId.current!.id,
+      );
 
       for (const file of newImageFiles) {
         const uploaded = await uploadDeveloperLogImage({
@@ -513,11 +514,23 @@ const DeveloperLog: React.FC = () => {
         updatedAt: serverTimestamp(),
       };
 
-      await updateDoc(postRef, payload);
+      if (editingPost) {
+        await updateDoc(postRef, payload);
+      } else {
+        await setDoc(postRef, {
+          ...payload,
+          viewCount: 0,
+          likeCount: 0,
+          createdBy: currentUser?.uid || "",
+          createdByName: displayName,
+          createdAt: serverTimestamp(),
+          publishedAt: serverTimestamp(),
+        });
+      }
 
-      if (selectedPost) {
+      if (editingPost) {
         const kept = new Set(nextImages.map((image) => image.imageStoragePath));
-        const removedImages = selectedPost.images.filter(
+        const removedImages = editingPost.images.filter(
           (image) => !kept.has(image.imageStoragePath),
         );
         await Promise.all(
@@ -534,6 +547,7 @@ const DeveloperLog: React.FC = () => {
             ? "개발자 일지를 수정했습니다."
             : "개발자 일지를 게시했습니다.",
       });
+      draftPostId.current = null;
       setNewImageFiles([]);
       setPreviewOpen(false);
       navigate(`/developer-log/${postRef.id}`);
@@ -551,6 +565,7 @@ const DeveloperLog: React.FC = () => {
         message: error?.message,
       });
     } finally {
+      mutationLock.current = false;
       setSaving(false);
     }
   };

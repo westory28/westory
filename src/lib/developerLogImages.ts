@@ -1,10 +1,6 @@
-import {
-  deleteObject,
-  getDownloadURL,
-  ref,
-  uploadBytes,
-} from "firebase/storage";
-import { getFirebaseStorage } from "./firebase";
+import type { User } from "firebase/auth";
+import { auth } from "./firebase";
+import { callWithApplicationSession } from "./applicationSession";
 import { drawBrandWatermark, prepareBrandWatermark } from "./brandWatermark";
 
 export interface DeveloperLogImageUploadResult {
@@ -57,12 +53,41 @@ const canvasToBlob = (
     );
   });
 
-const getStoragePath = (postId: string) => {
-  const safePostId = String(postId || "developer-log")
-    .replace(/[^a-zA-Z0-9_-]+/g, "_")
-    .slice(0, 80);
-  return `developer_log_images/${safePostId}/card-${Date.now()}.webp`;
+const callDeveloperLogImageService = async <Response>(
+  name: "uploadDeveloperLogImageContent" | "deleteDeveloperLogImageContent",
+  input: Record<string, unknown>,
+  user: User | null,
+): Promise<Response> => {
+  const assertOwner = () => {
+    if (!user || auth.currentUser !== user) {
+      throw new Error("로그인 상태가 바뀌었습니다. 다시 로그인해 주세요.");
+    }
+  };
+  assertOwner();
+  const result = await callWithApplicationSession<
+    Record<string, unknown>,
+    Response
+  >(name, input, user);
+  assertOwner();
+  return result.data;
 };
+
+const imageBlobToBase64 = (blob: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const separator = result.indexOf(",");
+      if (separator === -1) {
+        reject(new Error("이미지 전송 데이터를 준비하지 못했습니다."));
+        return;
+      }
+      resolve(result.slice(separator + 1));
+    };
+    reader.onerror = () =>
+      reject(new Error("이미지 전송 데이터를 준비하지 못했습니다."));
+    reader.readAsDataURL(blob);
+  });
 
 const drawCanvas = (
   source: HTMLImageElement,
@@ -156,23 +181,17 @@ export const uploadDeveloperLogImage = async ({
   postId: string;
   file: File;
 }): Promise<DeveloperLogImageUploadResult> => {
+  const user = auth.currentUser;
   const compressed = await compressDeveloperLogImage(file);
-  const storagePath = getStoragePath(postId);
-  const storage = await getFirebaseStorage();
-  const storageRef = ref(storage, storagePath);
-  await uploadBytes(storageRef, compressed.blob, {
-    contentType: compressed.mimeType,
-    cacheControl: "public,max-age=86400",
-  });
-
-  return {
-    imageUrl: await getDownloadURL(storageRef),
-    imageStoragePath: storageRef.fullPath,
-    imageByteSize: compressed.blob.size,
-    imageWidth: compressed.width,
-    imageHeight: compressed.height,
-    imageMimeType: compressed.mimeType,
-  };
+  return callDeveloperLogImageService<DeveloperLogImageUploadResult>(
+    "uploadDeveloperLogImageContent",
+    {
+      postId,
+      imageBase64: await imageBlobToBase64(compressed.blob),
+      contentType: compressed.mimeType,
+    },
+    user,
+  );
 };
 
 export const tryDeleteDeveloperLogImage = async (
@@ -181,9 +200,12 @@ export const tryDeleteDeveloperLogImage = async (
   const normalizedPath = String(storagePath || "").trim();
   if (!normalizedPath) return false;
   try {
-    const storage = await getFirebaseStorage();
-    await deleteObject(ref(storage, normalizedPath));
-    return true;
+    const result = await callDeveloperLogImageService<{ deleted: boolean }>(
+      "deleteDeveloperLogImageContent",
+      { storagePath: normalizedPath },
+      auth.currentUser,
+    );
+    return result.deleted;
   } catch (error) {
     console.warn("Failed to delete developer log image:", error);
     return false;
