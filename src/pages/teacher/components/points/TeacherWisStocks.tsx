@@ -13,6 +13,11 @@ import WisStockChartPreview from "./WisStockChartPreview";
 import WisStockMarketRules from "./WisStockMarketRules";
 import { getYearSemester } from "../../../../lib/semesterScope";
 import {
+  wisStockCatalog,
+  wisStockCatalogWeeks,
+  getWisStockTemplateSettings,
+} from "../../../../lib/wisStockCatalog";
+import {
   getWisStockManagement,
   saveWisStock,
   setWisStockMarketHalted,
@@ -40,6 +45,7 @@ const emptySettings = (): WisStockSettings => ({
   issuedShares: 100000,
   lotSize: 1,
   tradingStatus: "ACTIVE",
+  growthProfile: "HISTORICAL",
 });
 const date = (value: number) =>
   new Intl.DateTimeFormat("ko-KR", {
@@ -93,6 +99,7 @@ export default function TeacherWisStocks({
   const [confirmResume, setConfirmResume] = useState(false);
   const haltIntent = useRef(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [templateId, setTemplateId] = useState("");
   const [draft, setDraft] = useState<WisStockSettings>(emptySettings);
   const [loading, setLoading] = useState(false),
     [saving, setSaving] = useState(false),
@@ -134,6 +141,7 @@ export default function TeacherWisStocks({
   useEffect(() => {
     setMarket(null);
     setSelectedId(null);
+    setTemplateId("");
     setDraft(emptySettings());
     setError("");
     setSaving(false);
@@ -163,6 +171,7 @@ export default function TeacherWisStocks({
     value: WisStockSettings[K],
   ) => setDraft((current) => ({ ...current, [key]: value }));
   const choose = (stock?: WisStock) => {
+    setTemplateId("");
     setSelectedId(stock?.id || "");
     setDraft(stock ? { ...stock.settings } : emptySettings());
     setError("");
@@ -280,8 +289,10 @@ export default function TeacherWisStocks({
             <InfoHelp label="주식 운영 기준">
               <p>
                 교사 준비용 모의 시장입니다. 종목과 규칙을 저장해도 학생에게
-                공개되지 않습니다. 종목은 학기당 40개까지, 가격 기록은 종목별
-                최근 120건까지 보관합니다.
+                공개되지 않습니다. 종목은 학기당 {market?.maxStocks || 100}
+                개까지, 가격 기록은 종목별 최근 {market?.historyLimit || 120}
+                건까지 보관합니다. 설명과 가격 기록을 포함한 저장 용량을 넘으면
+                등록을 중단합니다.
               </p>
             </InfoHelp>
           </>
@@ -403,6 +414,21 @@ export default function TeacherWisStocks({
                   aria-pressed={selectedId === stock.id}
                   onClick={() => choose(stock)}
                 >
+                  {wisStockCatalog.find(
+                    (company) => company.name === stock.settings.name,
+                  )?.logoUrl && (
+                    <img
+                      className="wis-stocks__catalog-logo"
+                      src={
+                        wisStockCatalog.find(
+                          (company) => company.name === stock.settings.name,
+                        )!.logoUrl
+                      }
+                      width={32}
+                      height={32}
+                      alt=""
+                    />
+                  )}
                   <span className="wis-stocks__row-name">
                     <strong>{stock.settings.name}</strong>
                     <span>{stock.settings.period || "시대 미지정"}</span>
@@ -441,6 +467,50 @@ export default function TeacherWisStocks({
                 </button>
               </div>
               <fieldset disabled={!canManage || saving || loading}>
+                {!selected && (
+                  <label className="wis-stocks__wide">
+                    <span>
+                      종목 초안
+                      <InfoHelp label="종목 초안">
+                        <p>
+                          6주 기획안에서 한 종목의 이름·설명을 가져옵니다.
+                          작성한 내용은 선택한 초안으로 바뀌며, 아래 종목 등록을
+                          눌러야 저장됩니다. 기획안의 상장·등락·퇴장 일정은 자동
+                          실행되지 않습니다.
+                        </p>
+                      </InfoHelp>
+                    </span>
+                    <select
+                      aria-label="종목 초안"
+                      value={templateId}
+                      onChange={(event) => {
+                        const id = event.target.value;
+                        setTemplateId(id);
+                        if (id) setDraft(getWisStockTemplateSettings(id));
+                      }}
+                    >
+                      <option value="">직접 작성</option>
+                      {[0, 1, 2, 3, 4, 5, 6].map((week) => (
+                        <optgroup
+                          key={week}
+                          label={
+                            week === 0
+                              ? "상시 · 가치 종목"
+                              : `${week}주차 · ${wisStockCatalogWeeks[week - 1]}`
+                          }
+                        >
+                          {wisStockCatalog
+                            .filter((company) => company.week === week)
+                            .map((company) => (
+                              <option key={company.id} value={company.id}>
+                                {company.name}
+                              </option>
+                            ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <label>
                   종목명
                   <input
@@ -539,6 +609,32 @@ export default function TeacherWisStocks({
                     <option value="HALTED">거래 정지</option>
                   </select>
                 </label>
+                <label className="wis-stocks__wide">
+                  <span>
+                    가격 흐름
+                    <InfoHelp label="가격 흐름">
+                      <p>
+                        역사 종목은 기본 변화율을 중심으로 추세와 조정이
+                        이어집니다. 가치 종목은 장기 성장 기준을 따르지만 단기
+                        하락과 급락이 생길 수 있습니다. 가격 상한과 거래 정지는
+                        동일하게 적용됩니다. 자동 상장폐지는 하지 않습니다.
+                      </p>
+                    </InfoHelp>
+                  </span>
+                  <select
+                    aria-label="가격 흐름"
+                    value={draft.growthProfile || "HISTORICAL"}
+                    onChange={(event) =>
+                      set(
+                        "growthProfile",
+                        event.target.value as WisStockSettings["growthProfile"],
+                      )
+                    }
+                  >
+                    <option value="HISTORICAL">역사 종목</option>
+                    <option value="VALUE">장기 가치 종목</option>
+                  </select>
+                </label>
                 <label>
                   최저가 (위스)
                   <input
@@ -572,8 +668,9 @@ export default function TeacherWisStocks({
                     무작위 변동폭 (%){" "}
                     <InfoHelp label="무작위 변동폭">
                       <p>
-                        각 변동 시점에 선택한 폭 안에서 오르거나 내립니다. 예:
-                        3%는 −3%에서 +3%입니다.
+                        추세·횡보·조정과 무작위 충격의 크기를 조절합니다. 매번
+                        같은 폭으로 오르내리지 않으며, 일일 등락 한도와 종목의
+                        최저·최고가를 함께 적용합니다.
                       </p>
                     </InfoHelp>
                   </span>
@@ -597,8 +694,8 @@ export default function TeacherWisStocks({
                     기본 변화율 (%){" "}
                     <InfoHelp label="기본 변화율">
                       <p>
-                        무작위 변동에 더하는 변화율입니다. −3%에서 +3%까지
-                        설정할 수 있습니다.
+                        가격 흐름의 기본 방향입니다. −3%에서 +3%까지 설정하며,
+                        실제 변화에는 추세·조정·무작위 충격이 함께 반영됩니다.
                       </p>
                     </InfoHelp>
                   </span>

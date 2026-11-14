@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import InfoHelp from "../../../../components/common/InfoHelp";
 import { useAppToast } from "../../../../components/common/AppToastProvider";
 import {
@@ -13,6 +13,7 @@ import {
   type WisStockManagement,
   type WisStockMarketRules as MarketRules,
 } from "../../../../lib/wisStocksClient";
+import "./WisStockMarketRules.css";
 
 const time = (minutes: number) =>
   `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
@@ -47,6 +48,7 @@ export default function WisStockMarketRules({
   );
   const [error, setError] = useState("");
   const [conflict, setConflict] = useState(false);
+  const inputId = useId();
   const baseline = useRef(market.rules);
   const active = useRef(true);
   const { showToast } = useAppToast();
@@ -71,31 +73,40 @@ export default function WisStockMarketRules({
   const input = (
     key: NumericKey,
     label: string,
+    unit: string,
     divisor = 1,
     help?: string,
   ) => (
-    <label key={key}>
-      <span>
-        {label}
+    <div key={key} className="wis-stock-rules__field">
+      <div className="wis-stock-rules__label">
+        <label htmlFor={`${inputId}-${key}`}>{label}</label>
         {help && (
           <InfoHelp label={label}>
             <p>{help}</p>
           </InfoHelp>
         )}
-      </span>
-      <input
-        aria-label={label}
-        type="number"
-        min={WIS_STOCK_RULE_LIMITS[key][0] / divisor}
-        max={WIS_STOCK_RULE_LIMITS[key][1] / divisor}
-        step={divisor === 1 ? 1 : 0.01}
-        required
-        value={Number.isFinite(draft[key]) ? draft[key] / divisor : ""}
-        onChange={(event) =>
-          set(key, Math.round(event.target.valueAsNumber * divisor))
-        }
-      />
-    </label>
+      </div>
+      <div className="wis-stock-rules__value">
+        <input
+          id={`${inputId}-${key}`}
+          aria-label={`${label}${unit ? ` (${unit})` : ""}`}
+          type="number"
+          min={WIS_STOCK_RULE_LIMITS[key][0] / divisor}
+          max={WIS_STOCK_RULE_LIMITS[key][1] / divisor}
+          step={divisor === 1 ? 1 : 0.01}
+          required
+          value={Number.isFinite(draft[key]) ? draft[key] / divisor : ""}
+          onChange={(event) =>
+            set(key, Math.round(event.target.valueAsNumber * divisor))
+          }
+        />
+        {unit && (
+          <span className="wis-stock-rules__unit" aria-hidden="true">
+            {unit}
+          </span>
+        )}
+      </div>
+    </div>
   );
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -130,7 +141,11 @@ export default function WisStockMarketRules({
     }
   };
   return (
-    <form className="wis-stock-rules" aria-label="시장 규칙" onSubmit={save}>
+    <form
+      className="wis-stock-rules wis-stock-rules--compact"
+      aria-label="시장 규칙"
+      onSubmit={save}
+    >
       {error && (
         <div className="wis-stocks__error" role="alert">
           <p>{error}</p>
@@ -154,112 +169,134 @@ export default function WisStockMarketRules({
         </div>
       )}
       <fieldset disabled={!canManage || busy}>
-        <section className="wis-stock-rules__section">
-          <h2>시장 운영</h2>
-          <div
-            className="wis-stock-rules__days"
-            role="group"
-            aria-label="거래 요일"
-          >
-            {["일", "월", "화", "수", "목", "금", "토"].map((label, day) => (
-              <label key={day}>
+        <fieldset className="wis-stock-rules__section">
+          <legend>시장 운영</legend>
+          <div className="wis-stock-rules__schedule">
+            <div className="wis-stock-rules__weekdays">
+              <span className="wis-stock-rules__label">거래 요일</span>
+              <div
+                className="wis-stock-rules__days"
+                role="group"
+                aria-label="거래 요일"
+              >
+                {["일", "월", "화", "수", "목", "금", "토"].map(
+                  (label, day) => (
+                    <label key={day}>
+                      <input
+                        type="checkbox"
+                        checked={draft.tradingDays.includes(day)}
+                        onChange={(event) =>
+                          set(
+                            "tradingDays",
+                            event.target.checked
+                              ? [...draft.tradingDays, day].sort()
+                              : draft.tradingDays.filter(
+                                  (item) => item !== day,
+                                ),
+                          )
+                        }
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ),
+                )}
+              </div>
+            </div>
+            {!draft.tradingDays.length && (
+              <p className="wis-stocks__error">
+                거래 요일을 하나 이상 선택해 주세요.
+              </p>
+            )}
+            <div className="wis-stock-rules__hours">
+              <label>
+                시작 시각 (한국)
                 <input
-                  type="checkbox"
-                  checked={draft.tradingDays.includes(day)}
+                  type="time"
+                  required
+                  value={time(draft.openMinuteKst)}
+                  onChange={(event) =>
+                    set("openMinuteKst", minutes(event.target.value))
+                  }
+                />
+              </label>
+              <label>
+                <span>
+                  종료 시각 (한국)
+                  <InfoHelp label="종료 시각">
+                    <p>00:00은 다음 날 자정에 종료하는 설정입니다.</p>
+                  </InfoHelp>
+                </span>
+                <input
+                  type="time"
+                  required
+                  aria-label="종료 시각 (한국)"
+                  value={time(draft.closeMinuteKst % 1440)}
                   onChange={(event) =>
                     set(
-                      "tradingDays",
-                      event.target.checked
-                        ? [...draft.tradingDays, day].sort()
-                        : draft.tradingDays.filter((item) => item !== day),
+                      "closeMinuteKst",
+                      event.target.value === "00:00"
+                        ? 1440
+                        : minutes(event.target.value),
                     )
                   }
                 />
-                <span>{label}</span>
               </label>
-            ))}
+            </div>
+            {draft.openMinuteKst >= draft.closeMinuteKst && (
+              <p className="wis-stocks__error">
+                종료 시각은 시작 시각보다 늦어야 합니다.
+              </p>
+            )}
           </div>
-          {!draft.tradingDays.length && (
-            <p className="wis-stocks__error">
-              거래 요일을 하나 이상 선택해 주세요.
-            </p>
-          )}
+        </fieldset>
+        <fieldset className="wis-stock-rules__section">
+          <legend>주문 한도</legend>
           <div className="wis-stock-rules__fields">
-            <label>
-              시작 시각 (한국)
-              <input
-                type="time"
-                required
-                value={time(draft.openMinuteKst)}
-                onChange={(event) =>
-                  set("openMinuteKst", minutes(event.target.value))
-                }
-              />
-            </label>
-            <label>
-              <span>
-                종료 시각 (한국)
-                <InfoHelp label="종료 시각">
-                  <p>00:00은 다음 날 자정에 종료하는 설정입니다.</p>
-                </InfoHelp>
-              </span>
-              <input
-                type="time"
-                required
-                aria-label="종료 시각 (한국)"
-                value={time(draft.closeMinuteKst % 1440)}
-                onChange={(event) =>
-                  set(
-                    "closeMinuteKst",
-                    event.target.value === "00:00"
-                      ? 1440
-                      : minutes(event.target.value),
-                  )
-                }
-              />
-            </label>
+            {input("maxOrderQuantity", "1회 주문 수량", "주")}
+            {input("maxOrderAmount", "1회 주문 금액", "위스")}
+            {input("dailyBuyLimit", "하루 매수 금액", "위스")}
+            {input("dailyOrderLimit", "하루 주문 횟수", "회")}
           </div>
-          {draft.openMinuteKst >= draft.closeMinuteKst && (
-            <p className="wis-stocks__error">
-              종료 시각은 시작 시각보다 늦어야 합니다.
-            </p>
-          )}
-        </section>
-        <section className="wis-stock-rules__section">
-          <h2>주문 한도</h2>
+        </fieldset>
+        <fieldset className="wis-stock-rules__section">
+          <legend>주문 접수</legend>
           <div className="wis-stock-rules__fields">
-            {input("maxOrderQuantity", "한 번에 주문할 수량 (주)")}
-            {input("maxOrderAmount", "한 번에 주문할 금액 (위스)")}
-            {input("dailyBuyLimit", "하루 매수 금액 (위스)")}
-            {input("dailyOrderLimit", "하루 주문 횟수")}
-            {input("cooldownSeconds", "주문 사이 대기 (초)")}
-            {input("quoteTtlSeconds", "가격 확인 유효 시간 (초)")}
+            {input("cooldownSeconds", "주문 간격", "초")}
+            {input("quoteTtlSeconds", "시세 유효 시간", "초")}
             {input(
               "maxSlippageBps",
-              "허용 가격 변화 (%)",
+              "허용 가격 변화",
+              "%",
               100,
               "가격을 확인한 뒤 실제 주문까지 달라져도 허용하는 가격 차이입니다.",
             )}
           </div>
-        </section>
-        <section className="wis-stock-rules__section">
-          <h2>보유 한도</h2>
+        </fieldset>
+        <fieldset className="wis-stock-rules__section">
+          <legend>주식계좌 한도</legend>
           <div className="wis-stock-rules__fields">
-            {input("maxHoldingQuantity", "한 종목 보유 수량 (주)")}
+            {input("maxHoldingQuantity", "종목별 보유 수량", "주")}
             {input(
               "maxConcentrationBps",
-              "한 종목 최대 비중 (%)",
+              "종목별 최대 비중",
+              "%",
               100,
-              "보유 위스와 주식 평가액을 합친 예시 자산에서 한 종목이 차지할 수 있는 비율입니다.",
+              "주식계좌의 위스와 보유 주식 평가액을 합친 예시 자산에서 한 종목이 차지할 수 있는 비율입니다. 일반 지갑의 위스는 포함하지 않습니다.",
             )}
-            {input("minimumCashReserve", "남겨 둘 위스")}
+            {input(
+              "minimumCashReserve",
+              "주식계좌 최소 잔액",
+              "위스",
+              1,
+              "매수 금액과 수수료, 대기 주문의 예약금을 제외한 뒤에도 주식계좌에 남아 있어야 하는 위스입니다. 일반 지갑 잔액은 계산하지 않으며, 매도나 출금의 최소 잔액을 정하는 항목은 아닙니다.",
+            )}
           </div>
-        </section>
-        <section className="wis-stock-rules__section">
-          <h2>수수료·정산</h2>
+        </fieldset>
+        <fieldset className="wis-stock-rules__section">
+          <legend>수수료·정산</legend>
           <div className="wis-stock-rules__fields">
-            {input("buyFeeBps", "매수 수수료 (%)", 100)}
-            {input("sellFeeBps", "매도 수수료 (%)", 100)}
+            {input("buyFeeBps", "매수 수수료", "%", 100)}
+            {input("sellFeeBps", "매도 수수료", "%", 100)}
           </div>
           <dl className="wis-stock-rules__settlement">
             <div>
@@ -307,28 +344,31 @@ export default function WisStockMarketRules({
               </dd>
             </div>
           </dl>
-        </section>
-        <section className="wis-stock-rules__section">
-          <h2>가격 변동·보호 장치</h2>
-          <label className="wis-stock-rules__toggle">
-            <input
-              type="checkbox"
-              checked={draft.automaticPrices}
-              onChange={(event) => set("automaticPrices", event.target.checked)}
-            />
-            시장 자동 가격 변동
-          </label>
+        </fieldset>
+        <fieldset className="wis-stock-rules__section">
+          <legend>가격 변동·보호 장치</legend>
           <div className="wis-stock-rules__fields">
-            {input("dailyPriceLimitBps", "하루 가격 제한폭 (%)", 100)}
+            <label className="wis-stock-rules__toggle">
+              <input
+                type="checkbox"
+                checked={draft.automaticPrices}
+                onChange={(event) =>
+                  set("automaticPrices", event.target.checked)
+                }
+              />
+              시장 자동 가격 변동
+            </label>
+            {input("dailyPriceLimitBps", "하루 가격 제한폭", "%", 100)}
             {input(
               "circuitBreakerBps",
-              "일시 정지 기준 (%)",
+              "일시 정지 기준",
+              "%",
               100,
               "한 번에 이 비율 이상 변하면 정한 시간 동안 해당 종목을 멈춥니다.",
             )}
-            {input("circuitBreakerMinutes", "일시 정지 시간 (분)")}
+            {input("circuitBreakerMinutes", "일시 정지 시간", "분")}
           </div>
-        </section>
+        </fieldset>
       </fieldset>
       {canManage && (
         <div className="wis-stocks__form-actions">

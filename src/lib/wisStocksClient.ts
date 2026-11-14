@@ -24,6 +24,7 @@ export interface WisStockSettings {
   issuedShares: number;
   lotSize: number;
   tradingStatus: "ACTIVE" | "HALTED" | "SELL_ONLY";
+  growthProfile?: "HISTORICAL" | "VALUE";
 }
 export interface WisStock {
   id: string;
@@ -32,6 +33,7 @@ export interface WisStock {
   updatedAtMs: number;
   nextTickAtMs: number;
   haltedUntilMs?: number;
+  priceModel?: { version: 1; anchorAtMs: number; anchorPrice: number };
   history: { atMs: number; price: number }[];
 }
 export interface WisStockManagement {

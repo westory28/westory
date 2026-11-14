@@ -109,6 +109,79 @@ test('three simultaneous sell reservations retain every unit of cost when filled
   assert.equal(s.portfolio.cumulativeRealizedPnl, 187); assert.equal(s.portfolio.cashBalance, 11188);
   assert.equal(s.supply.availableShares, 100000); assert.equal(s.reservations.sellCostBasis, 0);
 });
+test('mixed pending buys, cancelled sells and reverse fills preserve reserved cost and the complete supply', () => {
+  const s = state();
+  Object.assign(s.portfolio, { holdingQuantity: 3, holdingPrincipal: 990, holdingCostBasis: 1001 });
+  s.supply.availableShares -= 3;
+  const firstSell = accept(sellRequest(s)); apply(s, firstSell);
+  s.portfolio.portfolioValue = s.portfolio.cashBalance + s.portfolio.holdingQuantity * 100;
+  const buyInput = request(s, { quantity: 2 }); buyInput.orderId = 'mixed_buy_001';
+  const buy = accept(buyInput); apply(s, buy);
+  const secondInput = sellRequest(s); secondInput.orderId = 'mixed_sell_002';
+  const secondSell = accept(secondInput); apply(s, secondSell);
+  assert.equal(s.reservations.sellCostBasis, 667);
+  // New shares settle while two older sell contracts still retain their cost.
+  apply(s, fill(context(s, buy.order)));
+  apply(s, cancel(context(s, firstSell.order)));
+  assert.equal(s.portfolio.holdingCostBasis, 1203);
+  assert.equal(s.reservations.sellCostBasis, 334);
+  const thirdInput = sellRequest(s, 2); thirdInput.orderId = 'mixed_sell_003';
+  thirdInput.quoteInput.nowMs = thirdInput.quoteInput.quote.atMs = buy.order.dueAtMs;
+  const thirdSell = accept(thirdInput); apply(s, thirdSell);
+  let removed = 0, pnl = 0;
+  for (const order of [thirdSell.order, secondSell.order]) {
+    const settled = fill(context(s, order, thirdSell.order.dueAtMs)); apply(s, settled);
+    removed -= settled.effects.holdingCostBasisDelta; pnl += settled.effects.cumulativeRealizedPnlDelta;
+    assert.equal(settled.effects.earnedDelta, 0); assert.equal(settled.effects.mainCashDelta, 0);
+  }
+  assert.equal(s.portfolio.holdingQuantity, 2); assert.equal(s.portfolio.holdingCostBasis, 435);
+  const lastInput = sellRequest(s, 2); lastInput.orderId = 'mixed_sell_004';
+  lastInput.quoteInput.nowMs = lastInput.quoteInput.quote.atMs = thirdSell.order.dueAtMs;
+  const last = accept(lastInput); apply(s, last);
+  const settled = fill(context(s, last.order)); apply(s, settled);
+  removed -= settled.effects.holdingCostBasisDelta; pnl += settled.effects.cumulativeRealizedPnlDelta;
+  assert.equal(removed, 1203); assert.equal(pnl, 777); assert.equal(s.portfolio.cashBalance, 11778);
+  assert.equal(s.portfolio.holdingQuantity, 0); assert.equal(s.portfolio.holdingPrincipal, 0); assert.equal(s.portfolio.holdingCostBasis, 0);
+  assert.deepEqual(s.reservations, { ...empty });
+  assert.deepEqual(s.supply, { issuedShares: 100000, availableShares: 100000, reservedBuyQuantity: 0 });
+});
+test('funding and pending orders protect reserved cash and recognize profit only when it leaves the stock account', () => {
+  const { planWisStockTransfer: transfer } = require('../wisStockAccount');
+  const s = state(); s.portfolio.cashBalance = s.portfolio.portfolioValue = 0;
+  const account = { mainCash: 10000, stockCash: 0, reservedCash: 0, outstandingPrincipal: 0, lastDepositAtMs: 0 };
+  let earnings = 0;
+  function move(direction, amount, nowMs, transferId) {
+    account.stockCash = s.portfolio.cashBalance; account.reservedCash = s.reservations.cash;
+    const result = transfer({ direction, amount, nowMs, transferId, accountId, semesterId, snapshot: account });
+    const e = result.effects;
+    account.mainCash += e.mainCashDelta; account.outstandingPrincipal += e.outstandingPrincipalDelta;
+    if (e.lastDepositAtMs !== null) account.lastDepositAtMs = e.lastDepositAtMs;
+    s.portfolio.cashBalance += e.stockCashDelta;
+    s.portfolio.portfolioValue = s.portfolio.cashBalance + s.portfolio.holdingQuantity * 100;
+    earnings += e.earnedDelta; assert.equal(e.rankEarnedDelta, 0); return result;
+  }
+  move('DEPOSIT', 5000, at, 'funding_deposit_001');
+  const buy = accept(request(s)); apply(s, buy);
+  assert.throws(() => move('WITHDRAW', 3991, at + 1, 'funding_reject_001'), reason('WIS_STOCK_WITHDRAWAL_LIMIT'));
+  // Minimum cash is an acceptance condition, not an extra withdrawal lock.
+  move('WITHDRAW', 3990, at + 1, 'funding_withdraw_001');
+  assert.equal(account.mainCash, 8990); assert.equal(earnings, 0);
+  apply(s, fill(context(s, buy.order)));
+  assert.equal(s.portfolio.cashBalance, 0); assert.equal(account.outstandingPrincipal, 1010);
+  const sellInput = sellRequest(s, 10, 120); sellInput.orderId = 'funding_sell_001';
+  sellInput.quoteInput.nowMs = sellInput.quoteInput.quote.atMs = buy.order.dueAtMs;
+  const sell = accept(sellInput); apply(s, sell);
+  const filled = fill(context(s, sell.order)); apply(s, filled);
+  assert.equal(filled.effects.earnedDelta, 0); assert.equal(s.portfolio.cumulativeRealizedPnl, 178);
+  assert.equal(account.mainCash, 8990); assert.equal(earnings, 0);
+  const withdrawal = move('WITHDRAW', 1188, at + 120000, 'funding_withdraw_002');
+  assert.equal(withdrawal.receipt.principalReturned, 1010); assert.equal(withdrawal.receipt.withdrawnProfit, 178);
+  assert.equal(account.mainCash, 10178); assert.equal(earnings, 178); assert.equal(account.outstandingPrincipal, 0);
+  assert.equal(account.lastDepositAtMs, at);
+  move('DEPOSIT', 1188, at + 86400000, 'funding_deposit_002');
+  move('WITHDRAW', 1188, at + 86400001, 'funding_withdraw_003');
+  assert.equal(account.mainCash, 10178); assert.equal(earnings, 178); assert.equal(account.outstandingPrincipal, 0);
+});
 test('cancel releases same-day buy budget but retains accepted order count and cooldown', () => {
   const s = state(), pending = accept(request(s)); apply(s, pending);
   const terminal = cancel(context(s, pending.order, at + 1)); apply(s, terminal);

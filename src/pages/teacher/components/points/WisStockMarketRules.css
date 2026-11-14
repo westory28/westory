@@ -1,0 +1,233 @@
+.wis-stock-rules.wis-stock-rules--compact {
+  margin-top: 16px;
+}
+
+.wis-stock-rules.wis-stock-rules--compact > fieldset {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.wis-stock-rules--compact .wis-stock-rules__section {
+  min-width: 0;
+  margin: 0 0 16px;
+  padding: 0 0 16px;
+  border: 0;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.wis-stock-rules--compact .wis-stock-rules__section legend {
+  float: none;
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 0;
+  background: transparent;
+  color: var(--ws-text, #1f2937);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.wis-stock-rules--compact .wis-stock-rules__fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 24px;
+  margin: 0;
+  align-items: end;
+}
+
+.wis-stock-rules--compact .wis-stock-rules__field {
+  min-width: 0;
+}
+
+.wis-stock-rules--compact .wis-stock-rules__label,
+.wis-stock-rules--compact .wis-stock-rules__hours label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ws-text, #1f2937);
+}
+
+.wis-stock-rules--compact .wis-stock-rules__label label {
+  display: block;
+  font-size: inherit;
+  font-weight: inherit;
+  word-break: keep-all;
+}
+
+.wis-stock-rules--compact .wis-stock-rules__value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  min-width: 0;
+}
+
+.wis-stock-rules--compact .wis-stock-rules__value input,
+.wis-stock-rules--compact .wis-stock-rules__hours input {
+  box-sizing: border-box;
+  width: 144px;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  background: var(--ws-surface, #fff);
+  font: inherit;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ws-text, #1f2937);
+}
+
+.wis-stock-rules--compact .wis-stock-rules__value input {
+  flex: 0 1 144px;
+}
+
+.wis-stock-rules--compact .wis-stock-rules__unit {
+  flex: 0 0 auto;
+  font-size: 14px;
+  color: var(--ws-text-muted, #6b7280);
+}
+
+.wis-stock-rules--compact .wis-stock-rules__schedule {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+}
+
+.wis-stock-rules--compact .wis-stock-rules__days {
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.wis-stock-rules--compact .wis-stock-rules__hours {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+}
+
+.wis-stock-rules--compact .wis-stock-rules__hours > label {
+  flex-direction: column;
+  align-items: start;
+}
+
+.wis-stock-rules--compact .wis-stock-rules__hours label > span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.wis-stock-rules--compact .wis-stock-rules__toggle {
+  align-self: end;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  flex-direction: row;
+  align-items: center;
+  font-weight: 600;
+}
+
+.wis-stock-rules--compact .wis-stock-rules__toggle input {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0;
+}
+
+.wis-stock-rules--compact .wis-stock-rules__settlement {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin-top: 12px;
+}
+
+.wis-stock-rules--compact .wis-stock-rules__settlement > div {
+  display: block;
+}
+
+.wis-stock-rules--compact .wis-stock-rules__settlement dt {
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.wis-stock-rules--compact .wis-stock-rules__settlement dd {
+  font-size: 14px;
+}
+
+.wis-stock-rules--compact .wis-stocks__form-actions {
+  margin-top: 0;
+}
+
+@media (min-width: 1024px) {
+  .wis-stock-rules--compact .wis-stock-rules__field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+  }
+
+  .wis-stock-rules--compact .wis-stock-rules__label {
+    flex: 1 1 0;
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: 0;
+  }
+
+  .wis-stock-rules--compact .wis-stock-rules__value {
+    flex: 0 1 144px;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .wis-stock-rules--compact .wis-stock-rules__value input {
+    flex: 1 1 0;
+    width: 112px;
+  }
+
+  .wis-stock-rules--compact .wis-stock-rules__fields {
+    align-items: center;
+  }
+}
+
+@media (max-width: 900px) {
+  .wis-stock-rules--compact .wis-stock-rules__fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 16px;
+  }
+}
+
+@media (max-width: 479px) {
+  .wis-stock-rules--compact .wis-stock-rules__fields {
+    gap: 12px;
+  }
+
+  .wis-stock-rules--compact .wis-stock-rules__days {
+    gap: 0;
+  }
+
+  .wis-stock-rules--compact .wis-stock-rules__weekdays {
+    max-width: 100%;
+  }
+
+  .wis-stock-rules--compact .wis-stock-rules__hours {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .wis-stock-rules--compact .wis-stock-rules__label {
+    flex-wrap: wrap;
+  }
+}

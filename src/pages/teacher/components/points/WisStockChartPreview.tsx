@@ -6,7 +6,13 @@ import type {
   WisStockMarketRules,
 } from "../../../../lib/wisStocksClient";
 import WisStockOrderPreview from "./WisStockOrderPreview";
+import {
+  wisStockCatalog,
+  wisStockCatalogWeeks,
+  createWisStockPlanStocks,
+} from "../../../../lib/wisStockCatalog";
 import "./WisStockChart.css";
+import "./WisStockCatalog.css";
 
 const DAY = 86_400_000;
 const periods = [
@@ -16,55 +22,14 @@ const periods = [
   { key: "all", label: "전체", days: Infinity },
 ] as const;
 const money = (value: number) => value.toLocaleString("ko-KR");
-const exampleStocks: WisStock[] = [
-  {
-    name: "조선 상업",
-    period: "조선 후기",
-    prices: [
-      100, 98, 102, 101, 108, 106, 109, 115, 112, 110, 116, 123, 118, 122, 126,
-      123, 130,
-    ],
-  },
-  {
-    name: "고려 무역",
-    period: "고려 시대",
-    prices: [
-      180, 185, 181, 175, 178, 180, 174, 170, 176, 173, 168, 172, 170, 166, 169,
-      165, 168,
-    ],
-  },
-  {
-    name: "신라 교역",
-    period: "통일 신라",
-    prices: [
-      80, 81, 79, 82, 84, 81, 85, 83, 87, 86, 90, 87, 89, 91, 90, 92, 94,
-    ],
-  },
-].map((item, index) => ({
-  id: `stock_${String(index + 1).padStart(24, "0")}`,
-  settings: {
-    name: item.name,
-    period: item.period,
-    description: "화면 구성을 확인하기 위한 가상의 역사 종목입니다.",
-    initialPrice: item.prices[0],
-    minimumPrice: 1,
-    maximumPrice: 10000,
-    volatilityBps: 300,
-    trendBps: 0,
-    intervalHours: 24,
-    automatic: false,
-    issuedShares: 100000,
-    lotSize: 1,
-    tradingStatus: "ACTIVE",
-  },
-  price: item.prices.at(-1)!,
-  updatedAtMs: Date.UTC(2026, 10, 13, 1),
-  nextTickAtMs: 0,
-  history: item.prices.map((price, i) => ({
-    atMs: Date.UTC(2026, 10, 13, 1) - (item.prices.length - 1 - i) * DAY,
-    price,
-  })),
-}));
+const catalogById = new Map(
+  wisStockCatalog.map((company) => [company.id, company]),
+);
+const catalogByName = new Map(
+  wisStockCatalog.map((company) => [company.name, company]),
+);
+const sessionLabel = (session: number) =>
+  `${Math.floor((session - 1) / 35) + 1}주 ${Math.floor(((session - 1) % 35) / 7) + 1}일차`;
 
 // Keep observed times and prices. Invalid or repeated observations must never
 // create NaN coordinates, fabricated prices, or an equal-spacing time axis.
@@ -483,13 +448,21 @@ export default function WisStockChartPreview({
   revision: number;
   semesterId: string;
 }) {
-  const available = stocks.length ? stocks : exampleStocks;
+  const planStocks = useMemo(createWisStockPlanStocks, []);
+  const [source, setSource] = useState(stocks.length ? "registered" : "plan");
+  const isPlan = source === "plan" || !stocks.length;
+  const available = isPlan ? planStocks : stocks;
+  const [week, setWeek] = useState(1);
+  const visibleStocks = isPlan
+    ? available.filter((stock) => catalogById.get(stock.id)?.week === week)
+    : available;
   const [selectedId, setSelectedId] = useState(available[0]?.id || "");
   const [period, setPeriod] = useState<(typeof periods)[number]>(periods[3]);
   const [orderPending, setOrderPending] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const selected =
-    available.find((stock) => stock.id === selectedId) || available[0];
+    visibleStocks.find((stock) => stock.id === selectedId) || visibleStocks[0];
+  const company = isPlan ? catalogById.get(selected.id) : undefined;
   const observations = stockObservations(selected);
   const lastAt = observations.at(-1)?.atMs || 0;
   const first =
@@ -518,19 +491,66 @@ export default function WisStockChartPreview({
       <div className="wis-stock-preview__heading">
         <h2>학생 화면 미리보기</h2>
         <span className="wis-stocks__closed">
-          {stocks.length ? "등록 종목" : "예시 자료"}
+          {isPlan ? "6주 기획안 · 가상 시세" : "등록 종목"}
         </span>
         <InfoHelp label="미리보기 자료">
           <p>
-            가격은 {stocks.length ? "현재 등록된 종목" : "가상의 예시 종목"}{" "}
-            자료입니다. 계좌 이체와 매수·매도는 예시 안에서만 처리하며, 학생
-            지갑이나 보유 주식은 바뀌지 않습니다.
+            등록 종목은 저장된 관측 가격을 표시합니다. 6주 기획안은 역사 종목
+            70개와 장기 가치 종목 10개의 가상 시나리오이며, 날짜·등락·퇴장은
+            실제 운영 일정이 아닙니다. 계좌 이체와 주문은 미리보기 안에서만
+            처리합니다.
           </p>
         </InfoHelp>
       </div>
+      <div
+        className="wis-stock-catalog__filters"
+        aria-label="미리보기 자료 선택"
+      >
+        <div role="group" aria-label="자료 종류">
+          {[
+            { key: "registered", label: "등록 종목" },
+            { key: "plan", label: "6주 기획안" },
+          ].map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              aria-pressed={(isPlan ? "plan" : "registered") === item.key}
+              disabled={
+                orderPending || (item.key === "registered" && !stocks.length)
+              }
+              onClick={() => setSource(item.key)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        {isPlan && (
+          <label>
+            공개 차수
+            <select
+              aria-label="공개 차수"
+              value={week}
+              disabled={orderPending}
+              onChange={(event) => setWeek(Number(event.target.value))}
+            >
+              {wisStockCatalogWeeks.map((name, index) => (
+                <option key={name} value={index + 1}>
+                  {index + 1}주 · {name}
+                </option>
+              ))}
+              <option value={0}>상시 · 장기 가치 종목</option>
+            </select>
+          </label>
+        )}
+      </div>
       <div className="wis-stock-preview__layout">
         <div className="wis-stock-preview__catalog" aria-label="미리보기 종목">
-          {available.map((stock, index) => {
+          {visibleStocks.map((stock, index) => {
+            const logo = (
+              isPlan
+                ? catalogById.get(stock.id)
+                : catalogByName.get(stock.settings.name)
+            )?.logoUrl;
             const baseline = stockObservations(stock)[0]?.price || stock.price;
             const difference = stock.price - baseline;
             return (
@@ -545,7 +565,11 @@ export default function WisStockChartPreview({
                 }}
               >
                 <span className="wis-stock-preview__symbol" aria-hidden="true">
-                  {String(index + 1).padStart(2, "0")}
+                  {logo ? (
+                    <img src={logo} alt="" width={36} height={36} />
+                  ) : (
+                    String(index + 1).padStart(2, "0")
+                  )}
                 </span>
                 <span className="wis-stock-preview__stock-name">
                   <strong>{stock.settings.name}</strong>
@@ -598,7 +622,102 @@ export default function WisStockChartPreview({
               {selected.settings.description}
             </p>
           )}
+          {company && (
+            <details className="wis-stock-catalog__story" key={company.id}>
+              <summary>종목 로드맵·역사 근거</summary>
+              <div
+                className="wis-stock-catalog__timeline"
+                aria-label="6주 종목 로드맵"
+              >
+                <div className="wis-stock-catalog__weeks">
+                  {wisStockCatalogWeeks.map((_, index) => (
+                    <span key={index}>{index + 1}주</span>
+                  ))}
+                </div>
+                {[
+                  {
+                    label: "등장",
+                    session: company.listingSession,
+                    kind: "listing",
+                  },
+                  {
+                    label: "성장 구간",
+                    session: company.riseSession,
+                    kind: "rise",
+                  },
+                  {
+                    label: "조정 구간",
+                    session: company.fallSession,
+                    kind: "fall",
+                  },
+                  ...(company.exitSession === null
+                    ? []
+                    : [
+                        {
+                          label:
+                            company.exitKind === "merge"
+                              ? "합병 구간"
+                              : "퇴장 구간",
+                          session: company.exitSession,
+                          kind: "exit",
+                        },
+                      ]),
+                ].map((event) => (
+                  <div
+                    className={`wis-stock-catalog__event is-${event.kind}`}
+                    key={event.kind}
+                  >
+                    <span>{event.label}</span>
+                    <div>
+                      <i
+                        style={{
+                          left: `${Math.min(98, Math.max(2, ((event.session - 1) / 209) * 100))}%`,
+                        }}
+                      />
+                    </div>
+                    <small>{sessionLabel(event.session)}</small>
+                  </div>
+                ))}
+              </div>
+              <dl>
+                <div>
+                  <dt>성장 계기</dt>
+                  <dd>{company.riseReason}</dd>
+                </div>
+                <div>
+                  <dt>하락 위험</dt>
+                  <dd>{company.fallReason}</dd>
+                </div>
+                <div>
+                  <dt>마무리</dt>
+                  <dd>
+                    {company.exitReason || "6주 이후에도 존속하는 기획입니다."}
+                  </dd>
+                </div>
+              </dl>
+              <p className="wis-stock-catalog__fiction">
+                가격·사건의 발생 시점은 수업용 가정입니다. 상장폐지·합병은
+                기획안이며 계좌를 자동 정산하지 않습니다.
+              </p>
+              {company.sourceUrls.length > 0 && (
+                <div className="wis-stock-catalog__sources">
+                  {company.sourceUrls.map((url, index) => (
+                    <a key={url} href={url} target="_blank" rel="noreferrer">
+                      {company.sourceTitle || "역사 자료"}
+                      {company.sourceUrls.length > 1 ? ` ${index + 1}` : ""}
+                    </a>
+                  ))}
+                </div>
+              )}
+              {company.sourceUrls.length === 0 && company.sourceTitle && (
+                <p className="wis-stock-catalog__fiction">
+                  출처: {company.sourceTitle}
+                </p>
+              )}
+            </details>
+          )}
           <WisStockOrderPreview
+            key={isPlan ? "plan" : "registered"}
             stock={selected}
             stocks={available}
             rules={rules}
