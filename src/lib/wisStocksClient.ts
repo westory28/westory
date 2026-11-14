@@ -3,6 +3,8 @@ import { getHistoryDictionaryCallable } from "./historyDictionarySession";
 import { getYearSemester } from "./semesterScope";
 import { ensureSensitiveOperation } from "./sensitiveOperation";
 import type { SystemConfig } from "../types";
+import type { WisStockMarketRules } from "../../functions/wisStockMarketRules.mjs";
+export type { WisStockMarketRules } from "../../functions/wisStockMarketRules.mjs";
 
 export type WisStockConfig =
   | Pick<SystemConfig, "year" | "semester">
@@ -19,6 +21,9 @@ export interface WisStockSettings {
   trendBps: number;
   intervalHours: number;
   automatic: boolean;
+  issuedShares: number;
+  lotSize: number;
+  tradingStatus: "ACTIVE" | "HALTED" | "SELL_ONLY";
 }
 export interface WisStock {
   id: string;
@@ -26,6 +31,7 @@ export interface WisStock {
   price: number;
   updatedAtMs: number;
   nextTickAtMs: number;
+  haltedUntilMs?: number;
   history: { atMs: number; price: number }[];
 }
 export interface WisStockManagement {
@@ -36,6 +42,7 @@ export interface WisStockManagement {
   historyLimit: number;
   updatedAtMs: number;
   stocks: WisStock[];
+  rules: WisStockMarketRules;
 }
 type SaveResult = WisStockManagement & {
   savedStockId: string;
@@ -92,15 +99,38 @@ export async function saveWisStock(
   stockId: string,
   settings: WisStockSettings,
 ) {
-  await ensureSensitiveOperation();
+  return saveManagement<SaveResult>("saveWisStock", config, expectedRevision, {
+    stockId,
+    settings,
+  });
+}
+export async function saveWisStockMarketRules(
+  config: WisStockConfig,
+  expectedRevision: number,
+  rules: WisStockMarketRules,
+) {
+  return saveManagement<
+    WisStockManagement & { changed: boolean; duplicate: boolean }
+  >("saveWisStockMarketRules", config, expectedRevision, { rules });
+}
+async function saveManagement<T>(
+  name: string,
+  config: WisStockConfig,
+  expectedRevision: number,
+  fields: Record<string, unknown>,
+): Promise<T> {
   const owner = auth.currentUser;
   if (!owner) throw changedOwner();
+  await ensureSensitiveOperation();
+  if (auth.currentUser !== owner) throw changedOwner();
   const epoch = Number((await owner.getIdTokenResult()).claims.auth_time);
+  if (auth.currentUser !== owner || !Number.isFinite(epoch))
+    throw changedOwner();
   const scope = getYearSemester(config);
-  const payload = { ...scope, expectedRevision, stockId, settings };
+  const payload = { ...scope, expectedRevision, ...fields };
   const digest = await crypto.subtle.digest(
     "SHA-256",
-    new TextEncoder().encode(JSON.stringify([owner.uid, epoch, payload])),
+    new TextEncoder().encode(JSON.stringify([name, owner.uid, epoch, payload])),
   );
   const key =
     "westory:wis-stock-save:" +
@@ -122,7 +152,7 @@ export async function saveWisStock(
   } catch {
     /* Memory fallback. */
   }
-  const result = await service<SaveResult>("saveWisStock", {
+  const result = await service<T>(name, {
     ...payload,
     requestId,
   });
@@ -133,6 +163,12 @@ export async function saveWisStock(
     /* Optional storage. */
   }
   return result;
+}
+export function isWisStockRevisionConflict(error: unknown): boolean {
+  return (
+    (error as { details?: { reason?: string } })?.details?.reason ===
+    "WIS_STOCK_REVISION_CONFLICT"
+  );
 }
 export function wisStockErrorMessage(error: unknown): string {
   const failure = error as {

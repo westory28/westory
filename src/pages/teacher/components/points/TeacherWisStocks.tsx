@@ -5,16 +5,18 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { animate, createScope } from "animejs";
 import { useAuth } from "../../../../contexts/AuthContext";
 import { useAppToast } from "../../../../components/common/AppToastProvider";
 import InfoHelp from "../../../../components/common/InfoHelp";
-import RefreshButton from "../../../../components/common/RefreshButton";
+import PortalSubNavigation from "../../../../components/common/PortalSubNavigation";
+import WisStockChartPreview from "./WisStockChartPreview";
+import WisStockMarketRules from "./WisStockMarketRules";
 import { getYearSemester } from "../../../../lib/semesterScope";
 import {
   getWisStockManagement,
   saveWisStock,
   wisStockErrorMessage,
+  isWisStockRevisionConflict,
   type WisStock,
   type WisStockConfig,
   type WisStockManagement,
@@ -33,6 +35,9 @@ const emptySettings = (): WisStockSettings => ({
   trendBps: 0,
   intervalHours: 24,
   automatic: false,
+  issuedShares: 100000,
+  lotSize: 1,
+  tradingStatus: "ACTIVE",
 });
 const date = (value: number) =>
   new Intl.DateTimeFormat("ko-KR", {
@@ -42,67 +47,6 @@ const date = (value: number) =>
     minute: "2-digit",
     timeZone: "Asia/Seoul",
   }).format(value);
-function StockChart({ stock }: { stock: WisStock }) {
-  const root = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const scope = createScope({
-      root,
-      mediaQueries: { reduceMotion: "(prefers-reduced-motion: reduce)" },
-    }).add((context) => {
-      if (context && !context.matches.reduceMotion)
-        animate(".wis-stock-chart__plot", {
-          opacity: [0, 1],
-          y: [8, 0],
-          duration: 300,
-          ease: "out(3)",
-        });
-    });
-    return () => scope.revert();
-  }, [stock.id, stock.updatedAtMs]);
-  const prices = stock.history.map((point) => point.price);
-  const low = Math.min(...prices),
-    high = Math.max(...prices),
-    range = Math.max(1, high - low);
-  const times = stock.history.map((point) => point.atMs);
-  const firstAtMs = Math.min(...times),
-    lastAtMs = Math.max(...times);
-  const timeRange = lastAtMs - firstAtMs;
-  const points = stock.history
-    .map(
-      (point) =>
-        `${16 + (timeRange > 0 ? (point.atMs - firstAtMs) / timeRange : 0) * 568},${152 - ((point.price - low) / range) * 120}`,
-    )
-    .join(" ");
-  return (
-    <div ref={root} className="wis-stock-chart">
-      <div className="wis-stock-chart__values">
-        <span>최고 {high.toLocaleString()} 위스</span>
-        <span>최저 {low.toLocaleString()} 위스</span>
-      </div>
-      <svg
-        viewBox="0 0 600 176"
-        role="img"
-        aria-label={`${stock.settings.name} 가격 변동. 현재 ${stock.price.toLocaleString()} 위스, 최근 변동 ${prices.length}건.`}
-      >
-        <line
-          x1="16"
-          y1="152"
-          x2="584"
-          y2="152"
-          className="wis-stock-chart__axis"
-        />
-        <g className="wis-stock-chart__plot">
-          <polyline points={points} fill="none" />
-          {stock.history.length === 1 && <circle cx="16" cy="152" r="4" />}
-        </g>
-      </svg>
-      <div className="wis-stock-chart__values">
-        <span>{date(firstAtMs)}</span>
-        <span>{date(lastAtMs)}</span>
-      </div>
-    </div>
-  );
-}
 export default function TeacherWisStocks({
   config,
   canManage,
@@ -113,11 +57,15 @@ export default function TeacherWisStocks({
   const { currentUser, authGeneration } = useAuth();
   const { showToast } = useAppToast();
   const { year, semester } = getYearSemester(config);
-  const ownerKey = `${currentUser?.uid || ""}:${authGeneration}:${year}:${semester}`;
+  const ownerKey = `${currentUser?.uid || ""}:${authGeneration}:${year}:${semester}:${canManage}`;
   const generation = useRef(0);
   const owner = useRef(ownerKey);
   owner.current = ownerKey;
-  const [market, setMarket] = useState<WisStockManagement | null>(null);
+  const [tab, setTab] = useState("stocks");
+  const [conflict, setConflict] = useState(false);
+  const [storedMarket, setMarket] = useState<WisStockManagement | null>(null);
+  const [marketOwner, setMarketOwner] = useState("");
+  const market = marketOwner === ownerKey ? storedMarket : null;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<WisStockSettings>(emptySettings);
   const [loading, setLoading] = useState(false),
@@ -146,6 +94,9 @@ export default function TeacherWisStocks({
         if (updated) setDraft({ ...updated.settings });
       }
       setMarket(result);
+      setMarketOwner(ownerKey);
+      setConflict(false);
+      return result;
     } catch (failure) {
       if (sequence === generation.current && owner.current === ownerKey)
         setError(wisStockErrorMessage(failure));
@@ -160,6 +111,8 @@ export default function TeacherWisStocks({
     setDraft(emptySettings());
     setError("");
     setSaving(false);
+    setConflict(false);
+    setTab("stocks");
     let started = false;
     const start = () => {
       if (!started && !document.hidden) {
@@ -182,13 +135,23 @@ export default function TeacherWisStocks({
     setSelectedId(stock?.id || "");
     setDraft(stock ? { ...stock.settings } : emptySettings());
     setError("");
+    setConflict(false);
     requestAnimationFrame(() =>
       formRef.current?.querySelector<HTMLInputElement>("input")?.focus(),
     );
   };
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!market || selectedId === null || saving || !canManage) return;
+    if (
+      !market ||
+      selectedId === null ||
+      saving ||
+      loading ||
+      conflict ||
+      !canManage ||
+      (selected && !dirty)
+    )
+      return;
     const sequence = ++generation.current,
       expectedOwner = ownerKey;
     setSaving(true);
@@ -215,8 +178,10 @@ export default function TeacherWisStocks({
         tone: "success",
       });
     } catch (failure) {
-      if (sequence === generation.current && owner.current === expectedOwner)
+      if (sequence === generation.current && owner.current === expectedOwner) {
         setError(wisStockErrorMessage(failure));
+        setConflict(isWisStockRevisionConflict(failure));
+      }
     } finally {
       if (sequence === generation.current && owner.current === expectedOwner)
         setSaving(false);
@@ -232,39 +197,49 @@ export default function TeacherWisStocks({
   );
   return (
     <section className="wis-stocks" aria-label="위스 주식 관리">
-      <div className="wis-stocks__toolbar">
-        <div className="wis-stocks__title">
-          <h2>위스 주식</h2>
-          <span className="wis-stocks__closed">학생 비공개</span>
-          <InfoHelp label="주식 운영 기준">
-            <p>
-              교사 준비용 모의 시장입니다. 학생 조회와 매매는 닫혀 있습니다.
-              종목은 학기당 40개까지, 가격 변동은 종목별 최근 120건까지
-              보관합니다. 자동 변동은 매시간 확인하며 정한 간격이 지난 종목만
-              반영합니다.
-            </p>
-          </InfoHelp>
-        </div>
-        <div className="wis-stocks__actions">
-          <RefreshButton onClick={load} loading={loading} disabled={saving} />
-          {canManage && (
-            <button
-              type="button"
-              className="wis-stocks__primary"
-              disabled={
-                !market ||
-                loading ||
-                saving ||
-                stats.count >= (market?.maxStocks || 40)
-              }
-              onClick={() => choose()}
-            >
-              종목 등록
-            </button>
-          )}
-        </div>
-      </div>
-      {market && (
+      <PortalSubNavigation
+        title="위스 주식"
+        activeLabel={
+          {
+            stocks: "종목 관리",
+            rules: "시장 규칙",
+            preview: "주식 차트 관리",
+          }[tab] || "종목 관리"
+        }
+        variant="tabs"
+        actions={
+          <>
+            <span className="wis-stocks__closed">학생 비공개</span>
+            <InfoHelp label="주식 운영 기준">
+              <p>
+                교사 준비용 모의 시장입니다. 종목과 규칙을 저장해도 학생에게
+                공개되지 않습니다. 종목은 학기당 40개까지, 가격 기록은 종목별
+                최근 120건까지 보관합니다.
+              </p>
+            </InfoHelp>
+          </>
+        }
+      >
+        {[
+          { key: "stocks", label: "종목 관리" },
+          { key: "rules", label: "시장 규칙" },
+          { key: "preview", label: "주식 차트 관리" },
+        ].map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            className={
+              "teacher-settings-section" +
+              (tab === item.key ? " is-active" : "")
+            }
+            aria-pressed={tab === item.key}
+            onClick={() => setTab(item.key)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </PortalSubNavigation>
+      {market && tab === "stocks" && (
         <div className="wis-stocks__summary">
           <span>
             등록 {stats.count} / {market.maxStocks}
@@ -276,16 +251,47 @@ export default function TeacherWisStocks({
         </div>
       )}
       {error && (
-        <p className="wis-stocks__error" role="alert">
-          {error}
-        </p>
+        <div className="wis-stocks__error" role="alert">
+          <p>{error}</p>
+          <button
+            type="button"
+            disabled={saving || loading}
+            onClick={() => void load()}
+          >
+            {conflict ? "최신 자료 확인" : "다시 불러오기"}
+          </button>
+          {conflict && (
+            <span>
+              작성 중인 내용은 유지됩니다. 최신 자료를 확인한 뒤 다시 저장해
+              주세요.
+            </span>
+          )}
+        </div>
       )}
       {loading && <p role="status">주식 자료를 불러오는 중입니다.</p>}
-      {market && !loading && (
+      {market && (
         <div
           className={`wis-stocks__workspace${selectedId !== null ? " is-editing" : ""}`}
+          hidden={tab !== "stocks"}
         >
           <div className="wis-stocks__list">
+            {canManage && (
+              <button
+                type="button"
+                className={`wis-stocks__row wis-stocks__new${selectedId === "" ? " is-selected" : ""}`}
+                aria-pressed={selectedId === ""}
+                disabled={saving || loading || stats.count >= market.maxStocks}
+                onClick={() => choose()}
+              >
+                <span aria-hidden="true">＋</span>
+                <strong>새 종목</strong>
+                <small>
+                  {stats.count >= market.maxStocks
+                    ? "등록 한도 도달"
+                    : "종목 정보 입력"}
+                </small>
+              </button>
+            )}
             {market.stocks.length === 0 ? (
               <p className="wis-stocks__empty">등록된 종목이 없습니다.</p>
             ) : (
@@ -294,7 +300,7 @@ export default function TeacherWisStocks({
                   type="button"
                   key={stock.id}
                   className={`wis-stocks__row${selectedId === stock.id ? " is-selected" : ""}`}
-                  disabled={saving}
+                  disabled={saving || loading}
                   aria-pressed={selectedId === stock.id}
                   onClick={() => choose(stock)}
                 >
@@ -335,18 +341,7 @@ export default function TeacherWisStocks({
                   닫기
                 </button>
               </div>
-              {selected && (
-                <>
-                  <div className="wis-stocks__quote">
-                    <strong>
-                      {selected.price.toLocaleString()} <small>위스</small>
-                    </strong>
-                    <span>현재가</span>
-                  </div>
-                  <StockChart stock={selected} />
-                </>
-              )}
-              <fieldset disabled={!canManage || saving}>
+              <fieldset disabled={!canManage || saving || loading}>
                 <label>
                   종목명
                   <input
@@ -399,6 +394,50 @@ export default function TeacherWisStocks({
                     <option value={1}>1시간</option>
                     <option value={6}>6시간</option>
                     <option value={24}>24시간</option>
+                  </select>
+                </label>
+                <label>
+                  발행 주식 수
+                  <input
+                    type="number"
+                    min={1}
+                    max={1000000000}
+                    step={1}
+                    required
+                    value={draft.issuedShares}
+                    onChange={(event) =>
+                      set("issuedShares", event.target.valueAsNumber)
+                    }
+                  />
+                </label>
+                <label>
+                  주문 단위 (주)
+                  <input
+                    type="number"
+                    min={1}
+                    max={1000000}
+                    step={1}
+                    required
+                    value={draft.lotSize}
+                    onChange={(event) =>
+                      set("lotSize", event.target.valueAsNumber)
+                    }
+                  />
+                </label>
+                <label className="wis-stocks__wide">
+                  거래 상태
+                  <select
+                    value={draft.tradingStatus}
+                    onChange={(event) =>
+                      set(
+                        "tradingStatus",
+                        event.target.value as WisStockSettings["tradingStatus"],
+                      )
+                    }
+                  >
+                    <option value="ACTIVE">매수·매도 가능</option>
+                    <option value="SELL_ONLY">매도만 가능</option>
+                    <option value="HALTED">거래 정지</option>
                   </select>
                 </label>
                 <label>
@@ -493,7 +532,12 @@ export default function TeacherWisStocks({
                   <button
                     type="submit"
                     className="wis-stocks__primary"
-                    disabled={saving || (!dirty && Boolean(selected))}
+                    disabled={
+                      saving ||
+                      loading ||
+                      conflict ||
+                      (!dirty && Boolean(selected))
+                    }
                   >
                     {saving ? "저장 중…" : selected ? "변경 저장" : "종목 등록"}
                   </button>
@@ -502,6 +546,28 @@ export default function TeacherWisStocks({
             </form>
           )}
         </div>
+      )}
+      {market && (
+        <div hidden={tab !== "rules"}>
+          <WisStockMarketRules
+            key={ownerKey}
+            market={market}
+            config={{ year, semester }}
+            canManage={canManage}
+            busy={saving || loading}
+            onBusyChange={setSaving}
+            onSaved={setMarket}
+            onReload={load}
+          />
+        </div>
+      )}
+      {market && tab === "preview" && (
+        <WisStockChartPreview
+          stocks={market.stocks}
+          rules={market.rules}
+          revision={market.revision}
+          semesterId={market.semesterId}
+        />
       )}
     </section>
   );
