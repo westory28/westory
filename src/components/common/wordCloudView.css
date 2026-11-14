@@ -13,15 +13,10 @@
 }
 
 .think-word-board__words {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  align-content: center;
-  justify-content: center;
-  gap: 16px 20px;
-  min-height: 320px;
+  position: relative;
+  min-height: clamp(360px, 42vw, 480px);
   margin: 0;
-  padding: 40px 32px;
+  padding: 0;
   list-style: none;
 }
 
@@ -31,24 +26,17 @@
 
 .think-word-board--modal .think-word-board__words {
   min-height: 56vh;
-  padding-block: 56px;
 }
 
 .think-word {
+  position: absolute;
+  width: max-content;
   min-width: 0;
-  max-width: 100%;
+  max-width: calc(100% - 48px);
   margin: 0;
   padding: 0;
-  color: var(--think-blue-deep, #1d4ed8);
+  color: var(--think-word-color, #2452d6);
   transform-origin: center;
-}
-
-.think-word[data-tone="amber"] {
-  color: var(--think-amber-ink, #92400e);
-}
-
-.think-word[data-weight="soft"] {
-  color: #52617a;
 }
 
 .think-word__button {
@@ -73,7 +61,7 @@
 .think-word__button:hover,
 .think-word__button[aria-expanded="true"] {
   border-color: #dbe5f3;
-  background: #f0f5fc;
+  background: #fff;
 }
 
 .think-word__button:focus-visible {
@@ -192,9 +180,11 @@
   }
 
   .think-word-board__words {
-    gap: 12px 8px;
-    min-height: 280px;
-    padding: 28px 12px;
+    min-height: 360px;
+  }
+
+  .think-word {
+    max-width: calc(100% - 24px);
   }
 
   .think-word__button {

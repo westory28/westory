@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { placeCloudWords, wordHash, type PlacedWord } from "./wordCloudLayout";
 import "./wordCloudView.css";
 
 interface WordCloudEntry {
@@ -29,6 +30,7 @@ interface WordFrame {
   y: number;
   count: number;
   fontSize: number;
+  order: number;
 }
 
 // An absolute count scale keeps a word's size independent of other responses.
@@ -43,11 +45,20 @@ const wordSize = (count: number, length: number) => {
   );
 };
 
-const wordTone = (text: string) => {
-  let hash = 0;
-  for (const letter of text) hash = (hash * 31 + letter.codePointAt(0)!) | 0;
-  return Math.abs(hash) % 5 === 0 ? "amber" : "blue";
-};
+// Blue → violet → rose → orange, all readable on the pale board.
+const wordColors = [
+  "#2452d6",
+  "#1268b2",
+  "#6654bf",
+  "#8d43a7",
+  "#aa3b80",
+  "#bf3c5d",
+  "#c44931",
+  "#ba510f",
+  "#a86508",
+];
+const wordTone = (text: string) =>
+  wordColors[wordHash(text) % wordColors.length];
 
 const WordCloudView: React.FC<WordCloudViewProps> = ({
   entries,
@@ -63,6 +74,11 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
   const framesRef = useRef(new Map<string, WordFrame>());
   const animationsRef = useRef(new Set<Animation>());
   const inViewRef = useRef(true);
+  const placementRef = useRef({
+    width: 0,
+    words: new Map<string, PlacedWord>(),
+  });
+  const [layoutVersion, setLayoutVersion] = useState(0);
   const [hoveredText, setHoveredText] = useState("");
   const [focusedText, setFocusedText] = useState("");
   const [pinnedText, setPinnedText] = useState("");
@@ -89,10 +105,15 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
           : undefined,
       });
     }
-    return Array.from(combined.values()).sort(
-      (left, right) =>
-        right.count - left.count || left.text.localeCompare(right.text, "ko"),
-    );
+    return Array.from(combined.values()).sort((left, right) => {
+      const leftOrder = framesRef.current.get(left.text)?.order ?? Infinity;
+      const rightOrder = framesRef.current.get(right.text)?.order ?? Infinity;
+      return (
+        leftOrder - rightOrder ||
+        right.count - left.count ||
+        left.text.localeCompare(right.text, "ko")
+      );
+    });
   }, [entries, showSubmitters]);
 
   // A refreshed response object with unchanged content never replays effects.
@@ -112,24 +133,25 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
     const root = rootRef.current;
     let active = true;
     let measuredWidth = listRef.current?.clientWidth || 0;
-    const captureCurrentLayout = () => {
+    let measuredMinHeight = listRef.current
+      ? getComputedStyle(listRef.current).minHeight
+      : "";
+    const refreshLayout = () => {
+      if (active) setLayoutVersion((version) => version + 1);
+    };
+    const refreshDimensions = () => {
       const list = listRef.current;
-      if (!active || !list) return;
-      stopAnimations();
-      const origin = list.getBoundingClientRect();
-      const next = new Map<string, WordFrame>();
-      nodesRef.current.forEach((node, text) => {
-        const label = node.querySelector<HTMLElement>(".think-word__text");
-        if (!label) return;
-        const bounds = node.getBoundingClientRect();
-        next.set(text, {
-          x: bounds.left - origin.left,
-          y: bounds.top - origin.top,
-          count: Number(node.dataset.count),
-          fontSize: Number.parseFloat(getComputedStyle(label).fontSize),
-        });
-      });
-      framesRef.current = next;
+      if (!list) return;
+      const width = list.clientWidth;
+      const minHeight = getComputedStyle(list).minHeight;
+      if (
+        Math.abs(width - measuredWidth) < 1 &&
+        minHeight === measuredMinHeight
+      )
+        return;
+      measuredWidth = width;
+      measuredMinHeight = minHeight;
+      refreshLayout();
     };
     const onVisibilityChange = () => {
       if (document.visibilityState === "hidden") stopAnimations();
@@ -151,26 +173,24 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
     if (root) observer?.observe(root);
     const resizeObserver =
       root && typeof ResizeObserver !== "undefined"
-        ? new ResizeObserver(() => {
-            const width = listRef.current?.clientWidth || 0;
-            if (Math.abs(width - measuredWidth) < 1) return;
-            measuredWidth = width;
-            captureCurrentLayout();
-          })
+        ? new ResizeObserver(refreshDimensions)
         : null;
     if (root) resizeObserver?.observe(root);
     if (document.fonts?.status === "loading")
-      void document.fonts.ready.then(captureCurrentLayout);
+      void document.fonts.ready.then(refreshLayout);
     document.addEventListener("visibilitychange", onVisibilityChange);
     document.addEventListener("pointerdown", onOutsidePointer);
+    window.addEventListener("resize", refreshDimensions);
     return () => {
       active = false;
       stopAnimations();
       framesRef.current.clear();
+      placementRef.current.words.clear();
       observer?.disconnect();
       resizeObserver?.disconnect();
       document.removeEventListener("visibilitychange", onVisibilityChange);
       document.removeEventListener("pointerdown", onOutsidePointer);
+      window.removeEventListener("resize", refreshDimensions);
     };
   }, []);
 
@@ -178,37 +198,78 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
     const list = listRef.current;
     if (!list) return;
     stopAnimations();
-    const origin = list.getBoundingClientRect();
-    const nextFrames = new Map<string, WordFrame>();
-    const changes: Array<{
-      node: HTMLLIElement;
-      textNode: HTMLElement;
-      previous: WordFrame | undefined;
-      next: WordFrame;
-      index: number;
-    }> = [];
-
-    // Read all geometry before writing animations, avoiding layout thrashing.
-    words.forEach((word, index) => {
+    if (!words.length) {
+      framesRef.current.clear();
+      placementRef.current.words.clear();
+      list.style.height = "";
+      return;
+    }
+    const width = list.clientWidth;
+    if (!width) return;
+    const minHeight =
+      Number.parseFloat(getComputedStyle(list).minHeight) || 360;
+    // Read all sizes before positioning any node. Font and viewport changes
+    // trigger this same local pass; response listeners are never touched.
+    const measurements = words.flatMap((word) => {
       const node = nodesRef.current.get(word.text);
       const textNode = node?.querySelector<HTMLElement>(".think-word__text");
-      if (!node || !textNode) return;
+      if (!node || !textNode) return [];
       const bounds = node.getBoundingClientRect();
-      const next = {
-        x: bounds.left - origin.left,
-        y: bounds.top - origin.top,
-        count: word.count,
-        fontSize: Number.parseFloat(getComputedStyle(textNode).fontSize),
-      };
-      nextFrames.set(word.text, next);
-      changes.push({
-        node,
-        textNode,
-        next,
-        previous: framesRef.current.get(word.text),
-        index,
-      });
+      return [
+        {
+          word,
+          node,
+          textNode,
+          width: bounds.width,
+          height: bounds.height,
+          fontSize: Number.parseFloat(getComputedStyle(textNode).fontSize),
+        },
+      ];
     });
+    const layout = placeCloudWords(
+      measurements.map(({ word, width, height }) => ({
+        text: word.text,
+        width,
+        height,
+      })),
+      width,
+      minHeight,
+      placementRef.current.width === width
+        ? placementRef.current.words
+        : undefined,
+    );
+    placementRef.current = {
+      width,
+      words: new Map(layout.words.map((box) => [box.text, box])),
+    };
+    const origin = list.getBoundingClientRect();
+    const nextFrames = new Map<string, WordFrame>();
+    const changes = measurements.map(
+      ({ word, node, textNode, fontSize }, index) => {
+        const box = layout.words[index];
+        const next = {
+          x: width / 2 + box.x - box.width / 2,
+          y: layout.height / 2 + box.y - box.height / 2,
+          count: word.count,
+          fontSize,
+          order: index,
+        };
+        nextFrames.set(word.text, next);
+        return {
+          node,
+          textNode,
+          next,
+          previous: framesRef.current.get(word.text),
+          box,
+        };
+      },
+    );
+    list.style.height = `${layout.height}px`;
+    list.dataset.layout = "radial";
+    for (const { node, next } of changes) {
+      node.style.left = `${next.x}px`;
+      node.style.top = `${next.y}px`;
+    }
     framesRef.current = nextFrames;
     if (
       !motionEnabled ||
@@ -233,25 +294,28 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
       animation.oncancel = release;
     };
 
-    for (const { node, textNode, previous, next, index } of changes) {
+    let entering = 0;
+    for (const { node, textNode, previous, next, box } of changes) {
       if (!previous) {
         play(
           node,
           [
-            { opacity: 0, transform: "translateY(12px) scale(0.9)" },
-            { opacity: 1, transform: "translateY(0) scale(1)" },
+            {
+              opacity: 0,
+              transform: `translate(${-box.x}px, ${-box.y}px) scale(0.55)`,
+            },
+            { opacity: 1, transform: "translate(0, 0) scale(1)" },
           ],
-          Math.min(index, 5) * 20,
+          Math.min(entering++, 8) * 24,
         );
         continue;
       }
       const x = previous.x - next.x;
       const y = previous.y - next.y;
       if (Math.abs(x) + Math.abs(y) > 1) {
-        play(node, [
-          { transform: `translate(${x}px, ${y}px)` },
-          { transform: "translate(0, 0)" },
-        ]);
+        // A straight path can cross unrelated words in a dense board.
+        // Settle the reserved boxes immediately and reveal the moved word.
+        play(node, [{ opacity: 0.35 }, { opacity: 1 }]);
       }
       if (next.count > previous.count) {
         const scale = Math.min(0.96, previous.fontSize / next.fontSize);
@@ -270,7 +334,7 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
     }
     // `words` is represented by the content signature. Reduced motion stays
     // enabled for this learning interaction by the user's 2026-11-14 request.
-  }, [animationSignature, motionEnabled]);
+  }, [animationSignature, motionEnabled, layoutVersion]);
 
   useEffect(() => {
     if (pinnedText && !words.some((word) => word.text === pinnedText))
@@ -311,6 +375,7 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
             data-weight={word.count > 1 ? "strong" : "soft"}
             style={
               {
+                "--think-word-color": wordTone(word.text),
                 "--think-word-size": wordSize(
                   word.count,
                   [...word.text].length,

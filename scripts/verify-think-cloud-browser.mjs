@@ -155,7 +155,7 @@ async function stats(page) {
   }));
 }
 async function settle(page) {
-  await page.waitForTimeout(450);
+  await page.waitForTimeout(650);
 }
 async function openActive(page) {
   await page
@@ -193,7 +193,112 @@ async function fit(page, label) {
     `${label}: transparent header contract`,
   );
 }
+async function radialGeometry(page, label) {
+  const geometry = await page.locator('.think-word-board__words').evaluate(list => {
+    const origin = list.getBoundingClientRect();
+    return { width: origin.width, height: origin.height, layout: list.dataset.layout,
+      boxes: [...list.querySelectorAll('.think-word')].map(node => {
+        const b = node.getBoundingClientRect();
+        return { text: node.dataset.word, x: b.left - origin.left, y: b.top - origin.top,
+          w: b.width, h: b.height, color: getComputedStyle(node).color,
+          transform: getComputedStyle(node).transform };
+      }) };
+  });
+  assert.equal(geometry.layout, 'radial', label);
+  const {boxes, width, height} = geometry;
+  const first = boxes[0];
+  assert(Math.abs(first.x + first.w / 2 - width / 2) < 1, `${label}: first word centered horizontally`);
+  assert(Math.abs(first.y + first.h / 2 - height / 2) < 1, `${label}: first word centered vertically`);
+  for (let i=0;i<boxes.length;i++) {
+    const a=boxes[i];
+    assert(a.x >= -1 && a.y >= -1 && a.x+a.w <= width+1 && a.y+a.h <= height+1, `${label}: bounded ${a.text}`);
+    assert.equal(a.transform, 'none', `${label}: no remaining rotation/movement`);
+    for (let j=i+1;j<boxes.length;j++) {
+      const b=boxes[j];
+      assert(a.x+a.w <= b.x+0.5 || b.x+b.w <= a.x+0.5 || a.y+a.h <= b.y+0.5 || b.y+b.h <= a.y+0.5, `${label}: overlap ${a.text}/${b.text}`);
+    }
+  }
+  assert(new Set(boxes.map(b=>b.color)).size >= 5, `${label}: diverse blue–orange colors including single responses`);
+  assert(boxes.some(b=>{const c=b.color.match(/\d+/g).map(Number);return c[0]>c[2]*1.5 && c[1]>c[2];}), `${label}: warm orange present`);
+  assert(boxes.some(b=>b.y+b.h/2 < height/2-25) && boxes.some(b=>b.y+b.h/2 > height/2+25), `${label}: spread above and below the center`);
+  if (width > 500) assert(boxes.some(b=>b.x+b.w/2 < width/2-50) && boxes.some(b=>b.x+b.w/2 > width/2+50), `${label}: spread to both sides`);
+}
 try {
+  {
+    const {context, page} = await pageFor('student');
+    await openActive(page);
+    await page.evaluate(() => {
+      window.thinkQa.responses.active.length = 0;
+      window.thinkQa.classState.responseRevision = 0;
+      window.dispatchEvent(new Event('focus'));
+    });
+    await page.waitForFunction(() => document.querySelectorAll('.think-word').length === 0);
+    const before = await stats(page);
+    for (const text of ['시작', '연결', '발견', '가능성', '호기심', '도전']) {
+      await page.evaluate(text=>window.thinkQa.add(text), text);
+      await page.locator(`.think-word[data-word="${text}"]`).waitFor();
+      await settle(page);
+      const center = await page.locator('.think-word[data-word="시작"]').evaluate(node => {
+        const b=node.getBoundingClientRect(), stage=node.parentElement.getBoundingClientRect();
+        return {x:b.left+b.width/2-stage.left-stage.width/2, y:b.top+b.height/2-stage.top-stage.height/2};
+      });
+      assert(Math.abs(center.x)<1 && Math.abs(center.y)<1, 'first response stays at the center as new words arrive');
+    }
+    const colors = await page.locator('.think-word').evaluateAll(nodes=>Object.fromEntries(nodes.map(n=>[n.dataset.word,getComputedStyle(n).color])));
+    await page.evaluate(()=>window.thinkQa.add('호기심',20));
+    await page.waitForFunction(()=>document.querySelector('.think-word[data-word="호기심"]').dataset.count==='21');
+    await settle(page);
+    const afterColors = await page.locator('.think-word').evaluateAll(nodes=>Object.fromEntries(nodes.map(n=>[n.dataset.word,getComputedStyle(n).color])));
+    assert.deepEqual(afterColors, colors, 'word colors stay stable when their counts change');
+    assert.equal(await page.locator('.think-word').first().getAttribute('data-word'), '시작', 'frequency growth does not reorder birth order');
+    assert.equal((await stats(page)).reads, before.reads, 'radial arrivals do not add full reads');
+    const beforeResize=await stats(page);
+    for (const width of [390,768,1440]) {
+      await page.setViewportSize({width,height:900});
+      await settle(page);
+      await fit(page, `resized ${width}`);
+      await radialGeometry(page, `resized ${width}`);
+    }
+    assert.equal((await stats(page)).reads, beforeResize.reads, 'resizing stays local');
+    checks.push({scenario:'center-first incremental arrival, stable colors, live resizing',counts:await stats(page)});
+    await context.close();
+  }
+  {
+    const {context,page}=await pageFor('student',768);
+    await openActive(page);
+    await page.evaluate(()=>{
+      window.thinkQa.responses.active.length=0;
+      window.thinkQa.classState.responseRevision=0;
+      for(let n=0;n<60;n++) window.thinkQa.add(`생각${String(n).padStart(2,'0')}`);
+      window.dispatchEvent(new Event('focus'));
+    });
+    await page.waitForFunction(()=>document.querySelectorAll('.think-word').length===60);
+    await settle(page);
+    const positions=()=>page.locator('.think-word').evaluateAll(nodes=>Object.fromEntries(nodes.map(n=>{
+      const r=n.getBoundingClientRect(),s=n.parentElement.getBoundingClientRect();
+      return [n.dataset.word,{x:r.left+r.width/2-s.left-s.width/2,y:r.top+r.height/2-s.top-s.height/2}];
+    })));
+    const before=await positions();
+    await page.evaluate(()=>window.thinkQa.add('생각10',69));
+    await page.waitForFunction(()=>document.querySelector('.think-word[data-word="생각10"]').dataset.count==='70');
+    const overlaps=await page.evaluate(()=>{
+      document.getAnimations().forEach(animation=>{animation.pause();animation.currentTime=150;});
+      const boxes=[...document.querySelectorAll('.think-word:not([data-word="생각10"]) .think-word__text')].map(n=>({text:n.textContent,r:n.getBoundingClientRect()}));
+      const hits=[];
+      for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){
+        const a=boxes[i].r,b=boxes[j].r;
+        if(a.right>b.left+.5&&b.right>a.left+.5&&a.bottom>b.top+.5&&b.bottom>a.top+.5)hits.push([boxes[i].text,boxes[j].text]);
+      }
+      return hits;
+    });
+    assert.deepEqual(overlaps,[],'unchanged words never cross at the midpoint of a growth animation');
+    const after=await positions();
+    for(const text of Object.keys(before).filter(t=>t!=='생각10')) {
+      assert(Math.abs(before[text].x-after[text].x)<.1 && Math.abs(before[text].y-after[text].y)<.1,`${text}: preserve unaffected position during growth`);
+    }
+    checks.push({scenario:'60-word growth preserves 59 positions and has no mid-animation crossings'});
+    await context.close();
+  }
   // Selectors follow the public labels rather than implementation-only state.
   for (const role of ["student", "teacher"])
     for (const width of [320, 390, 768, 1280]) {
@@ -222,6 +327,7 @@ try {
         path: path.join(out, `${role}-${width}-detail.png`),
         fullPage: true,
       });
+      await radialGeometry(page, `${role} ${width}`);
       checks.push({ role, width, initial, detail: await stats(page) });
       await context.close();
     }
@@ -329,6 +435,7 @@ try {
         beforeSize,
       "duplicates grow actual font size",
     );
+    await radialGeometry(page, 'after duplicate growth');
     const grown = await stats(page);
     assert(grown.animations > before.animations, "duplicate growth animated");
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
@@ -491,6 +598,7 @@ try {
     );
     await settle(page);
     await fit(page, "166 words with a 100-character phrase");
+    await radialGeometry(page, "166 words and long phrase");
     assert.equal(
       await page.locator(".think-word").count(),
       166,
