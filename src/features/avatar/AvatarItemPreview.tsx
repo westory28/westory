@@ -13,7 +13,12 @@ export default function AvatarItemPreview({
   character?: AvatarCharacter;
   className?: string;
 }) {
-  const src = `${import.meta.env.BASE_URL}${avatarItemPreviewPath(item, character)}?v=20261114-royal-hair`;
+  const previewVersion =
+    item.slot === "hairStyle" &&
+    ["mm-royal-ash", "mm-royal-choco-bob"].includes(item.value)
+      ? "20261114-royal-flow"
+      : "20261114-royal-hair";
+  const src = `${import.meta.env.BASE_URL}${avatarItemPreviewPath(item, character)}?v=${previewVersion}`;
   const [failedSource, setFailedSource] = useState("");
   return (
     <span className={`avatar-item-preview ${className}`} aria-hidden="true">

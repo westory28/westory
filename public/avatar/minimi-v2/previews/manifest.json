@@ -13,7 +13,7 @@
     "src/features/avatar/minimi/draw.ts": "4ceba0cb5963eb010860b924269bfce4053b2186801c6d6cfe4d733a997e68db",
     "src/features/avatar/minimi/engine.ts": "9967b104d4ae495018c0dfa8a6b8e88d6af9cc7c5f70d005aff5e694c3d3aff1",
     "src/features/avatar/minimi/hanbok.ts": "70facfef7ef3892ccbda9aa91a5d1133ea5a467c47d2a2ecad05c620dbb34b94",
-    "src/features/avatar/minimi/royalHair.ts": "3cb10e9b1c38dcd684bb20a3234eff28d248c7b59f943931092f03bba1132d5c",
+    "src/features/avatar/minimi/royalHair.ts": "24414082fbfd9af614fa8000beccfd2141a75b14c2c1ab6e3ccc105e658d60e6",
     "src/features/avatar/minimi/softHair.ts": "d6367cc25fcd0e14b2365a6ce31e88df095f483451bdf4349ef4f8b11f0bf382",
     "src/features/avatar/minimi/wardrobe.ts": "bc5007b54be9b05dd739001f5050914c508c359105cb9a9fc333b20c08d6f239"
   },
@@ -834,15 +834,15 @@
       "id": "minimi-hairStyle-royal-ash",
       "character": "girl",
       "file": "girl/hairStyle-mm-royal-ash.webp",
-      "bytes": 814,
-      "sha256": "ab8df54cccda8e9265a9749458257e15d0d624bf8dfc2cddacac7e41ea56872a"
+      "bytes": 854,
+      "sha256": "49dfc27c5c022fcadfe5867833072d80064de4a1b82ffe7de77c633627856a96"
     },
     {
       "id": "minimi-hairStyle-royal-choco-bob",
       "character": "girl",
       "file": "girl/hairStyle-mm-royal-choco-bob.webp",
-      "bytes": 828,
-      "sha256": "bbaa9b050caac0d17150c1d17c8849b975e0a9b0c3223c756afbf8dc64c2ba62"
+      "bytes": 774,
+      "sha256": "9e20e4f19e8a5fad0c9e694e41b46926f22a7d62bacb81632c05e0e1bbc9442f"
     },
     {
       "id": "minimi-accessory-cherry-ribbon",
@@ -1660,15 +1660,15 @@
       "id": "minimi-hairStyle-royal-ash",
       "character": "boy",
       "file": "boy/hairStyle-mm-royal-ash.webp",
-      "bytes": 816,
-      "sha256": "a49fb42cae63218dbfe6692260449aa5fb2c067d0db02df0df9764fb7e379cb8"
+      "bytes": 856,
+      "sha256": "d78281cbd5386a882afa70431922d095c1c529fc3e39fba500bee799473b648e"
     },
     {
       "id": "minimi-hairStyle-royal-choco-bob",
       "character": "boy",
       "file": "boy/hairStyle-mm-royal-choco-bob.webp",
-      "bytes": 830,
-      "sha256": "f8778be7548dec8b7a692e19dbb8c9e41657bc2441c263e490bf5a70c1c49104"
+      "bytes": 774,
+      "sha256": "5b04343f8c8b860ccff94d34e118b0e924e20eed42d97d357e02254e0327a87f"
     },
     {
       "id": "minimi-accessory-cherry-ribbon",
