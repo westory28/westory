@@ -35,4 +35,20 @@
 - 원래 `C:\westory`의 미커밋 파일을 건드리지 않고 별도 worktree에서 구현했다. 회사/다른 작업에서 `origin/main`에 반영된 `9bacfce5`, `442a9936` 점수 수정·모바일 화면을 병합했다.
 - 운영 `executeCommand`의 실제 의존 소스와 로컬에는 이번 패치 밖의 차이가 있다. 따라서 각 함수의 운영 보관 소스를 따로 복원하고, 검증한 `w8Domains.js`, `thinkCloudSubmitQueue.js`, `productionSource.js`의 연결부, `thinkCloudQuery.js`, root의 Fast export만 겹쳐서 4개 함수를 선택 배포한다. 다른 함수·rules·GitHub Pages 설정은 배포 대상이 아니다.
 - 배포 전 운영 도메인은 Vercel `dpl_5ZGAEKsfu6phg74yZKqvi2vW3uzr`, `main`의 `442a993648e36c5cb3922c98f2c131d5a346891c`에 연결되어 있었고 작업 branch에 포함되어 있다.
-- 최종 동시 제출 결과, 배포 ID 및 운영 확인은 배포 완료 후 아래에 기록한다.
+- 운영 보관본의 기존 `assessmentLifecycle.js` 해시 기록이 실제 파일과 달랐다. 실행 코드는 바꾸지 않고 배포본의 manifest만 실제 보관 파일 해시로 정정했다. 보관된 분석 코어의 원본 SHA에 해당하는 `1dc9a8e7`의 `quizAnalysis.ts`를 검증용 경로에 복원한 뒤, 두 배포본 모두 전체 predeploy 검사를 통과했다. 현재 앱 소스와 분석 코어는 수정하지 않았다.
+
+## 운영 백엔드 반영
+
+- 2026-11-14 배포 후 4개 함수의 ACTIVE 상태와 실제 배포 소스를 확인했다. 원래 운영 파일과 대조해 승인된 변경 외의 파일이 모두 보존됐으며, 배포된 파일은 검사한 배포본과 byte 단위로 일치했다(제출 계열 215개·조회 계열 211개).
+- 서울 `executeCommand`: `executecommand-00047-poy`, 서울 `getThinkCloudState`: `getthinkcloudstate-00002-joh`.
+- 미국 `executeThinkCloudResponseFast`: `executethinkcloudresponsefast-00001-buj`, 미국 `getThinkCloudStateFast`: `getthinkcloudstatefast-00001-xor`.
+- 기존 두 함수의 메모리·CPU·동시성·최대/최소 인스턴스·시간 제한·서비스 계정·환경 변수·인바운드 설정을 전후 대조해 일치함을 확인했다. 새 미국 함수는 각각 256MiB·동시성 8·최대 20·최소 0·제한 시간 60초다.
+- 미국 두 endpoint의 비로그인 호출은 `401 / SESSION_AUTH_REQUIRED`로 차단됐다. 운영 학생 응답·점수·주제 공개 상태는 검증용으로 변경하지 않았다.
+
+## 운영 화면 확인
+
+- 기능 커밋 `25826d47f97ea3dcfef0b2531ae5ae26ef56ce40`을 `main`에 fast-forward 푸시했다. Vercel `dpl_HMfHMERZyacRRxMCnemqQEV8RoPv`의 전체 빌드가 성공한 뒤 Production으로 승격하고 `www.westory.kr` 연결을 확인했다.
+- Chrome의 `방재석` 프로필로 운영 교사 생각모아 목록과 새 주제 등록 화면을 열었다. SUIT Variable 실제 로딩, 제목 배경 `rgba(0, 0, 0, 0)`, 제목 그림자 없음, 가로 넘침 없음, 오류 표시 없음과 취소 후 목록 복귀를 확인했다.
+- 운영 목록은 주제 0개였다. 실제 주제를 만들거나 학생을 대신해 응답하지 않았으며, 응답 보드·동시 제출·학생 화면의 검증 범위는 위 합성 브라우저와 에뮬레이터 결과로 구분한다.
+- 운영 화면에서 `getThinkCloudStateFast`의 HTTP 200을 확인했다(2026-11-14 06:58:28 UTC, 관측된 요청 지연 1.148초). 이는 한 번의 실제 조회 관측값이며 일반적인 응답 속도나 실시간 반영 지연을 보장하는 수치가 아니다.
+- 기능 커밋 뒤의 이 기록 보완은 문서만 수정하며 앱·백엔드 코드는 동일하다. 원래 `C:\westory`의 branch와 미커밋 파일은 보존하고, 구현 checkout은 `C:\westory-thinkcloud-20261114`에 유지했다. 다른 PC의 작업 파일을 원격으로 바꾼 것은 아니며 최신 `main`을 통한 동기화 기준을 마련했다.
