@@ -8,6 +8,7 @@ import React, {
 import { useAuth } from "../../contexts/AuthContext";
 import { useAppToast } from "../../components/common/AppToastProvider";
 import WisIcon from "../../components/common/WisIcon";
+import RefreshButton from "../../components/common/RefreshButton";
 import {
   AVATAR_ITEMS,
   AVATAR_SLOTS,
@@ -101,30 +102,39 @@ export function AvatarStudio({
   const dialog = useRef<HTMLDialogElement>(null);
   const generation = useRef(0);
   const busyRef = useRef(false);
-  const load = useCallback(async () => {
-    const current = ++generation.current;
-    setLoading(true);
-    setError("");
-    try {
-      const data = await adapter.load();
-      if (current !== generation.current) return;
-      const restored = restoreAvatarState(data.avatar);
-      setSaved(restored);
-      setLook(restored.look);
-      setCharacterChosen(
-        Boolean(restored.thumbnailUrl || restored.requiresThumbnailRefresh),
-      );
-      // Merely opening the studio never writes a selection.
-      setNeedsThumbnailRefresh(Boolean(restored.requiresThumbnailRefresh));
-      setBalance(data.balance);
-      setPricing(data.pricing || { revision: 0, prices: {} });
-    } catch (failure) {
-      if (current === generation.current) setError(avatarErrorMessage(failure));
-    } finally {
-      if (current === generation.current) setLoading(false);
-    }
-  }, [adapter]);
+  const loadedOnce = useRef(false);
+  const load = useCallback(
+    async (options: { preserveDraft?: boolean } = {}) => {
+      const current = ++generation.current;
+      setLoading(true);
+      setError("");
+      try {
+        const data = await adapter.load();
+        if (current !== generation.current) return;
+        const restored = restoreAvatarState(data.avatar);
+        setSaved(restored);
+        if (!options.preserveDraft || !loadedOnce.current) {
+          setLook(restored.look);
+          setCharacterChosen(
+            Boolean(restored.thumbnailUrl || restored.requiresThumbnailRefresh),
+          );
+        }
+        loadedOnce.current = true;
+        // Merely opening the studio never writes a selection.
+        setNeedsThumbnailRefresh(Boolean(restored.requiresThumbnailRefresh));
+        setBalance(data.balance);
+        setPricing(data.pricing || { revision: 0, prices: {} });
+      } catch (failure) {
+        if (current === generation.current)
+          setError(avatarErrorMessage(failure));
+      } finally {
+        if (current === generation.current) setLoading(false);
+      }
+    },
+    [adapter],
+  );
   useEffect(() => {
+    loadedOnce.current = false;
     void load();
     return () => {
       generation.current++;
@@ -464,13 +474,12 @@ export function AvatarStudio({
           {error && (
             <div className="avatar-studio-error" role="alert">
               <p>{error}</p>
-              <button
-                type="button"
+              <RefreshButton
                 disabled={Boolean(busy)}
-                onClick={() => void load()}
-              >
-                새로고침
-              </button>
+                loading={loading}
+                onClick={() => load({ preserveDraft: true })}
+                label="아바타 새로고침"
+              />
             </div>
           )}
         </div>

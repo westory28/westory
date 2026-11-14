@@ -1,3 +1,4 @@
+import RefreshButton from "../../../../components/common/RefreshButton";
 import { LoadingOverlay } from "../../../../components/common/LoadingState";
 import NumericInput from "../../../../components/common/NumericInput";
 import React from "react";
@@ -422,14 +423,13 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                 <div className="whitespace-nowrap font-bold text-gray-800">
                   거래 내역
                 </div>
-                <button
-                  type="button"
-                  className="min-h-11 whitespace-nowrap text-sm text-blue-700 underline disabled:opacity-50"
-                  onClick={onReloadTransactions}
-                  disabled={transactionsLoading}
-                >
-                  새로고침
-                </button>
+                {onReloadTransactions && (
+                  <RefreshButton
+                    onClick={onReloadTransactions}
+                    loading={transactionsLoading}
+                    label="거래 내역 새로고침"
+                  />
+                )}
                 {canManage && (
                   <div className="text-[11px] font-bold text-gray-400">
                     최신 교사 직접 지급/환수 항목만 수정·취소 가능

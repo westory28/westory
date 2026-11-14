@@ -816,6 +816,28 @@ const ManagePoints: React.FC = () => {
     return true;
   };
 
+  const refreshOrders = async () => {
+    if (!canRead || !scopeReady || !isCurrentScope()) return;
+    if (loadInFlightRef.current === requestScope) return;
+    loadInFlightRef.current = requestScope;
+    setShopLoadError("");
+    try {
+      const nextOrders = isSemesterArchive
+        ? await readArchivedShopOrders()
+        : await listPointOrders(config, { limitCount: 200 });
+      if (isCurrentScope()) setOrders(nextOrders);
+    } catch (error: any) {
+      if (isCurrentScope())
+        setShopLoadError(
+          error?.message ||
+            "주문 내역을 불러오지 못했습니다. 다시 시도해 주세요.",
+        );
+    } finally {
+      if (loadInFlightRef.current === requestScope)
+        loadInFlightRef.current = null;
+    }
+  };
+
   const loadAll = async () => {
     if (!isCurrentScope()) return;
     if (!canRead || !scopeReady || activeTab === "hall-of-fame") {
@@ -2362,7 +2384,7 @@ const ManagePoints: React.FC = () => {
               onSelectOrder={setSelectedOrderId}
               onOrderMemoChange={setOrderMemo}
               onSaveOrder={(status) => void handleSaveOrder(status)}
-              onRefresh={() => void loadAll()}
+              onRefresh={refreshOrders}
             />
           )}
         </div>

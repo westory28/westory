@@ -27,6 +27,7 @@ import {
 } from "../../../components/common/MockExamPaper";
 import { formatQuizChoiceText } from "../../../lib/quizChoiceColumns";
 import InfoHelp from "../../../components/common/InfoHelp";
+import RefreshButton from "../../../components/common/RefreshButton";
 import QuizItemStatistics from "./QuizItemStatistics";
 import type { Question, TreeUnit } from "./QuizBankTab";
 import type { QuizQuestionDraft } from "./QuizEditor";
@@ -759,9 +760,7 @@ export default function QuizAnalysisView({
             </select>
           </label>
         )}
-        <button type="button" onClick={onReload} disabled={loading}>
-          새로고침
-        </button>
+        <RefreshButton onClick={onReload} loading={loading} />
         {!canEdit && <span className="qa-muted">읽기 전용</span>}
       </div>
       {errors.length > 0 && (

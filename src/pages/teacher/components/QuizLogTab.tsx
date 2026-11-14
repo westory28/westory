@@ -1,3 +1,4 @@
+import RefreshButton from "../../../components/common/RefreshButton";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
@@ -2093,14 +2094,11 @@ const QuizLogTab: React.FC<{ onOpenQuestions?: (ids: string[]) => void }> = ({
                 </option>
               ))}
             </select>
-            <button
-              type="button"
+            <RefreshButton
               onClick={reload}
-              className="inline-flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-blue-600 px-2 py-2 text-[13px] font-bold text-white shadow-sm transition hover:bg-blue-700"
-            >
-              <i className="fas fa-sync-alt text-xs" aria-hidden="true"></i>
-              새로고침
-            </button>
+              loading={loading || supportLoading}
+              label="평가 기록 새로고침"
+            />
           </div>
         </div>
       </div>

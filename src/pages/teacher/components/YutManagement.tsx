@@ -1,3 +1,4 @@
+import RefreshButton from "../../../components/common/RefreshButton";
 import { LoadingOverlay } from "../../../components/common/LoadingState";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import {
@@ -845,15 +846,12 @@ export default function YutManagement() {
                           {monitor.data &&
                             ` · ${timeLabel(monitor.data.serverNowMs)}`}
                         </span>
-                        <button
-                          className="yut-management-button"
-                          disabled={monitor.refreshing || saving}
+                        <RefreshButton
                           onClick={monitor.refresh}
-                        >
-                          {monitor.status === "error"
-                            ? "다시 연결"
-                            : "새로고침"}
-                        </button>
+                          loading={monitor.refreshing}
+                          disabled={saving}
+                          label="방 현황 새로고침"
+                        />
                       </div>
                     </div>
                     {monitor.error && (

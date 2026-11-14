@@ -1,4 +1,5 @@
 import NumericInput from "../../../components/common/NumericInput";
+import RefreshButton from "../../../components/common/RefreshButton";
 import InfoHelp from "../../../components/common/InfoHelp";
 import { readScoreWorkbookRows } from "../../../lib/scoreWorkbookReader";
 import { isSemesterArchive } from "../../../lib/semesterArchive";
@@ -14,6 +15,7 @@ import {
   type DocumentData,
   type DocumentReference,
   getDoc,
+  getDocFromServer,
   getDocs,
   getDocsFromServer,
   orderBy,
@@ -121,6 +123,7 @@ type ParsedUpload = ParsedPerformanceScoreUpload;
 
 interface PerformanceScoreManagerProps {
   scoreKind?: PerformanceScoreKind;
+  navigation?: React.ReactNode;
 }
 
 type WrittenExamUploadMode = "objective" | "essay";
@@ -5990,6 +5993,7 @@ function useTeacherScoreRequests<T extends { scoreKind: PerformanceScoreKind }>(
 
 const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   scoreKind = PERFORMANCE_SCORE_KIND,
+  navigation,
 }) => {
   const activeScoreKind = normalizePerformanceScoreKind(scoreKind);
   const managerCopy = SCORE_MANAGER_COPY[activeScoreKind];
@@ -5999,10 +6003,16 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const classSheetEnabled = activeScoreKind === PERFORMANCE_SCORE_KIND;
   const signatureStatusModalEnabled = classSheetEnabled || isWrittenExamMode;
   const [searchParams, setSearchParams] = useSearchParams();
-  const { config, currentUser } = useAuth();
+  const { config, currentUser, authGeneration } = useAuth();
   const { showToast } = useAppToast();
   const { confirm, prompt: promptDialog } = useAppDialog();
   const { year, semester } = getYearSemester(config);
+  const scoreReadIdentity = `${currentUser?.uid}:${authGeneration}:${year}:${semester}:${activeScoreKind}`;
+  const scoreReadIdentityRef = useRef(scoreReadIdentity);
+  scoreReadIdentityRef.current = scoreReadIdentity;
+  const rosterReadRunRef = useRef(0);
+  const scoreListReadRunRef = useRef(0);
+  const warningReadRunRef = useRef(0);
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState(managerCopy.defaultSubject);
   const [targetGrade, setTargetGrade] = useState("3");
@@ -6023,6 +6033,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [rosters, setRosters] = useState<PerformanceScoreRoster[]>([]);
+  const refreshVisibleScores = useRef(false);
   const [rostersLoading, setRostersLoading] = useState(true);
   const [deletingRosterId, setDeletingRosterId] = useState("");
   const [scoreWarningSettings, setScoreWarningSettings] =
@@ -6166,6 +6177,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   >([]);
   const beforeMovementProfilesRef = useRef<StudentProfile[]>([]);
   const studentsLoadPromiseRef = useRef<Promise<StudentProfile[]> | null>(null);
+  const studentsCacheOwnerRef = useRef("");
+  const studentsPromiseOwnerRef = useRef("");
+  const studentsReadRunRef = useRef(0);
   const scoreDocumentSyncCheckedKeysRef = useRef<Set<string>>(
     new Set<string>(),
   );
@@ -6257,14 +6271,32 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   }, [managerCopy, semester, year]);
 
   useEffect(() => {
+    refreshVisibleScores.current = false;
+    setScoreListLoading(false);
+    setStudentsLoading(false);
+    setStudentsLoaded(false);
+    setStudents([]);
     scoreDocumentSyncCheckedKeysRef.current.clear();
     scoreDocumentSyncRunRef.current += 1;
     void loadRosters();
-  }, [year, semester]);
+    return () => {
+      rosterReadRunRef.current += 1;
+      scoreListReadRunRef.current += 1;
+      warningReadRunRef.current += 1;
+      studentsLoadPromiseRef.current = null;
+      studentsReadRunRef.current += 1;
+    };
+  }, [scoreReadIdentity]);
 
   useEffect(() => {
     void loadScoreWarningSettings();
-  }, [year, semester]);
+  }, [scoreReadIdentity]);
+
+  useEffect(() => {
+    if (!refreshVisibleScores.current) return;
+    refreshVisibleScores.current = false;
+    void loadScoreListRecords(undefined, { refresh: true });
+  }, [rosters]);
 
   useEffect(() => {
     setScoreListRosterId((current) => {
@@ -7869,13 +7901,26 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     );
   }, [classSheetClassOptions]);
 
-  const loadScoreWarningSettings = async () => {
+  const loadScoreWarningSettings = async (
+    options: { refresh?: boolean } = {},
+  ) => {
+    const readRun = ++warningReadRunRef.current;
+    const owner = scoreReadIdentity;
+    const isCurrent = () =>
+      readRun === warningReadRunRef.current &&
+      owner === scoreReadIdentityRef.current;
+    const preserveDraft =
+      options.refresh && scoreWarningDraft !== scoreWarningSettings.warningText;
     setScoreWarningLoading(true);
     try {
-      const settings = await loadPerformanceScoreSettings(config);
+      const settings = await loadPerformanceScoreSettings(config, {
+        fromServer: options.refresh,
+      });
+      if (!isCurrent()) return;
       setScoreWarningSettings(settings);
-      setScoreWarningDraft(settings.warningText);
+      if (!preserveDraft) setScoreWarningDraft(settings.warningText);
     } catch (error) {
+      if (!isCurrent()) return;
       console.error(
         "Failed to load performance score warning settings:",
         error,
@@ -7886,7 +7931,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         message: "권한과 네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
       });
     } finally {
-      setScoreWarningLoading(false);
+      if (isCurrent()) setScoreWarningLoading(false);
     }
   };
 
@@ -7939,13 +7984,29 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const loadStudents = async (
     options: { force?: boolean; throwOnError?: boolean } = {},
   ): Promise<StudentProfile[]> => {
-    if (!options.force && studentsLoaded) return students;
-    if (studentsLoadPromiseRef.current) return studentsLoadPromiseRef.current;
+    const owner = scoreReadIdentity;
+    if (
+      !options.force &&
+      studentsLoaded &&
+      studentsCacheOwnerRef.current === owner
+    )
+      return students;
+    if (
+      studentsLoadPromiseRef.current &&
+      studentsPromiseOwnerRef.current === owner
+    )
+      return studentsLoadPromiseRef.current;
 
+    const readRun = ++studentsReadRunRef.current;
     setStudentsLoading(true);
     setStudentLoadError("");
     const loadPromise = (async () => {
       const snap = await getDocsFromServer(collection(db, "users"));
+      if (
+        owner !== scoreReadIdentityRef.current ||
+        readRun !== studentsReadRunRef.current
+      )
+        return [];
       const loaded: StudentProfile[] = [];
       const before: StudentProfile[] = [];
       const allProfiles: StudentProfile[] = [];
@@ -7973,15 +8034,22 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       });
       markStudentIdentityConflicts(allProfiles);
       beforeMovementProfilesRef.current = before;
+      studentsCacheOwnerRef.current = owner;
       setStudents(loaded);
       setStudentsLoaded(true);
       return loaded;
     })();
 
     studentsLoadPromiseRef.current = loadPromise;
+    studentsPromiseOwnerRef.current = owner;
     try {
       return await loadPromise;
     } catch (error) {
+      if (
+        owner !== scoreReadIdentityRef.current ||
+        studentsLoadPromiseRef.current !== loadPromise
+      )
+        return [];
       console.error("Failed to load students for performance scores:", error);
       setStudentsLoaded(false);
       setStudentLoadError(
@@ -7990,14 +8058,21 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       if (options.throwOnError) throw error;
       return [];
     } finally {
-      studentsLoadPromiseRef.current = null;
-      setStudentsLoading(false);
+      if (
+        owner === scoreReadIdentityRef.current &&
+        studentsLoadPromiseRef.current === loadPromise
+      ) {
+        studentsLoadPromiseRef.current = null;
+        setStudentsLoading(false);
+      }
     }
   };
 
   const loadScoreDocumentRecordsForRoster = async (
     roster: PerformanceScoreRoster,
+    fromServer = false,
   ) => {
+    const owner = scoreReadIdentity;
     const cached = scoreDocumentRecordsByRosterCacheRef.current.get(roster.id);
     if (cached) return cloneScoreListRecords(cached);
 
@@ -8009,7 +8084,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     }
 
     const loadPromise = (async () => {
-      const snap = await getDocs(
+      const snap = await (fromServer ? getDocsFromServer : getDocs)(
         query(
           collectionGroup(db, PERFORMANCE_SCORE_USER_COLLECTION),
           where("rosterId", "==", roster.id),
@@ -8030,19 +8105,30 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     scoreDocumentRecordPromisesByRosterRef.current.set(roster.id, loadPromise);
     try {
       const loaded = await loadPromise;
-      scoreDocumentRecordsByRosterCacheRef.current.set(
-        roster.id,
-        cloneScoreListRecords(loaded),
-      );
+      if (
+        owner === scoreReadIdentityRef.current &&
+        scoreDocumentRecordPromisesByRosterRef.current.get(roster.id) ===
+          loadPromise
+      ) {
+        scoreDocumentRecordsByRosterCacheRef.current.set(
+          roster.id,
+          cloneScoreListRecords(loaded),
+        );
+      }
       return cloneScoreListRecords(loaded);
     } finally {
-      scoreDocumentRecordPromisesByRosterRef.current.delete(roster.id);
+      if (
+        scoreDocumentRecordPromisesByRosterRef.current.get(roster.id) ===
+        loadPromise
+      )
+        scoreDocumentRecordPromisesByRosterRef.current.delete(roster.id);
     }
   };
 
   const loadScoreDocumentRecordsForLinkedRows = async (
     roster: PerformanceScoreRoster,
     linkedRows: PerformanceScoreRosterRow[],
+    fromServer = false,
   ) => {
     const chunkPromises: Array<Promise<ScoreListRecord[]>> = [];
     for (let index = 0; index < linkedRows.length; index += 40) {
@@ -8050,7 +8136,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       chunkPromises.push(
         Promise.all(
           chunk.map((row) =>
-            getDoc(
+            (fromServer ? getDocFromServer : getDoc)(
               doc(
                 db,
                 "users",
@@ -8332,19 +8418,27 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   };
 
   const loadRosters = async (
-    options: { syncMissingDocuments?: boolean } = {},
+    options: { syncMissingDocuments?: boolean; refresh?: boolean } = {},
   ) => {
+    const readRun = ++rosterReadRunRef.current;
+    const owner = scoreReadIdentity;
+    const isCurrent = () =>
+      readRun === rosterReadRunRef.current &&
+      owner === scoreReadIdentityRef.current;
     const syncRunId = scoreDocumentSyncRunRef.current + 1;
     scoreDocumentSyncRunRef.current = syncRunId;
     clearPerformanceScoreReadCaches();
     setRostersLoading(true);
     try {
-      const snap = await getDocs(
+      const snap = await getDocsFromServer(
         query(
           collection(db, rosterCollectionPath),
-          orderBy("createdAt", "desc"),
+          ...(isWrittenExamMode
+            ? [where("scoreKind", "==", activeScoreKind)]
+            : [orderBy("createdAt", "desc")]),
         ),
       );
+      if (!isCurrent()) return;
       const loaded = snap.docs
         .map((item) => {
           const data = item.data() as Omit<PerformanceScoreRoster, "id">;
@@ -8360,7 +8454,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         void syncMissingStudentScoreDocuments(loaded, syncRunId);
       }
     } catch (error) {
+      if (!isCurrent()) return;
       console.error("Failed to load performance score rosters:", error);
+      refreshVisibleScores.current = false;
+      if (options.refresh) {
+        setScoreListLoadError("새로고침하지 못했습니다. 다시 시도해 주세요.");
+        return;
+      }
       setRosters([]);
       setScoreListRosterId("");
       setScoreListLoadedRosterId("");
@@ -8378,7 +8478,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         message: "권한과 네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
       });
     } finally {
-      setRostersLoading(false);
+      if (isCurrent()) setRostersLoading(false);
     }
   };
 
@@ -8495,6 +8595,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   useEffect(() => {
     if (
       isSemesterArchive ||
+      studentsCacheOwnerRef.current !== scoreReadIdentity ||
       !students.length ||
       !rosters.length ||
       rostersLoading
@@ -8510,11 +8611,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
   const loadScoreRecordsForRoster = async (
     roster: PerformanceScoreRoster,
-    options: { includeStudentDocuments?: boolean } = {},
+    options: { includeStudentDocuments?: boolean; fromServer?: boolean } = {},
   ) => {
+    const owner = scoreReadIdentity;
     const studentSnapshot = isSemesterArchive
       ? []
       : await loadStudents({ force: true, throwOnError: true });
+    if (owner !== scoreReadIdentityRef.current) return [];
     const activeRoster = buildActiveStudentRoster(roster, studentSnapshot);
     const rosterRows = activeRoster.rows || [];
     const shouldIncludeStudentDocuments =
@@ -8528,8 +8631,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     const linkedRows = rosterRows.filter((row) => row.uid);
     let documentRecords: ScoreListRecord[] = [];
     try {
-      documentRecords = await loadScoreDocumentRecordsForRoster(roster);
+      documentRecords = await loadScoreDocumentRecordsForRoster(
+        roster,
+        options.fromServer,
+      );
     } catch (error) {
+      if (owner !== scoreReadIdentityRef.current) return [];
       console.warn(
         "Falling back to direct performance score document reads:",
         error,
@@ -8537,8 +8644,10 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       documentRecords = await loadScoreDocumentRecordsForLinkedRows(
         roster,
         linkedRows,
+        options.fromServer,
       );
     }
+    if (owner !== scoreReadIdentityRef.current) return [];
 
     const documentRecordsByUid = new Map(
       documentRecords
@@ -8574,7 +8683,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
   const loadScoreListRecords = async (
     rosterOverride?: PerformanceScoreRoster,
-    options: { startEdit?: boolean } = {},
+    options: { startEdit?: boolean; refresh?: boolean } = {},
   ) => {
     const roster = rosterOverride || selectedScoreRoster;
     const loadingAllScores = !rosterOverride && scoreListAllSelected;
@@ -8585,14 +8694,21 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     ) {
       return;
     }
+    const readRun = ++scoreListReadRunRef.current;
+    const owner = scoreReadIdentity;
+    const isCurrent = () =>
+      readRun === scoreListReadRunRef.current &&
+      owner === scoreReadIdentityRef.current;
     setScoreListLoading(true);
     setScoreListLoadError("");
     setScoreEditing(false);
     setScoreEditOriginalRecords([]);
-    setScoreListLoadedRosterId("");
-    setScoreListRecords([]);
-    setScoreListSummaryStudents([]);
-    setScoreListSummaryLoadedKey("");
+    if (!options.refresh) {
+      setScoreListLoadedRosterId("");
+      setScoreListRecords([]);
+      setScoreListSummaryStudents([]);
+      setScoreListSummaryLoadedKey("");
+    }
     try {
       if (loadingAllScores) {
         if (isWrittenExamMode) {
@@ -8613,14 +8729,17 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             firstRoster
               ? loadScoreRecordsForRoster(firstRoster, {
                   includeStudentDocuments: true,
+                  fromServer: options.refresh,
                 })
               : Promise.resolve([]),
             secondRoster
               ? loadScoreRecordsForRoster(secondRoster, {
                   includeStudentDocuments: true,
+                  fromServer: options.refresh,
                 })
               : Promise.resolve([]),
           ]);
+          if (!isCurrent()) return;
           setScoreListSummaryStudents(
             buildScoreListSummaryStudents(firstRecords, secondRecords),
           );
@@ -8632,9 +8751,14 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         if (!usesCombinedPerformanceSummary) {
           const loadedRecords = (
             await Promise.all(
-              rosters.map((roster) => loadScoreRecordsForRoster(roster)),
+              rosters.map((roster) =>
+                loadScoreRecordsForRoster(roster, {
+                  fromServer: options.refresh,
+                }),
+              ),
             )
           ).flat();
+          if (!isCurrent()) return;
           setScoreListRecords(
             isWrittenExamMode
               ? mergeWrittenExamScoreRecordsByStudent(loadedRecords)
@@ -8659,9 +8783,14 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           return;
         }
         const [firstRecords, secondRecords] = await Promise.all([
-          loadScoreRecordsForRoster(firstRoster),
-          loadScoreRecordsForRoster(secondRoster),
+          loadScoreRecordsForRoster(firstRoster, {
+            fromServer: options.refresh,
+          }),
+          loadScoreRecordsForRoster(secondRoster, {
+            fromServer: options.refresh,
+          }),
         ]);
+        if (!isCurrent()) return;
         setScoreListSummaryStudents(
           buildScoreListSummaryStudents(firstRecords, secondRecords),
         );
@@ -8673,7 +8802,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       if (!roster) return;
       const sortedLoaded = await loadScoreRecordsForRoster(roster, {
         includeStudentDocuments: options.startEdit === true,
+        fromServer: options.refresh,
       });
+      if (!isCurrent()) return;
       setScoreListLoadedRosterId(roster.id);
       if (options.startEdit) {
         setScoreEditOriginalRecords(cloneScoreListRecords(sortedLoaded));
@@ -8687,11 +8818,14 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         setScoreListRecords(sortedLoaded);
       }
     } catch (error) {
+      if (!isCurrent()) return;
       console.error("Failed to load performance score list:", error);
-      setScoreListLoadedRosterId("");
-      setScoreListRecords([]);
-      setScoreListSummaryStudents([]);
-      setScoreListSummaryLoadedKey("");
+      if (!options.refresh) {
+        setScoreListLoadedRosterId("");
+        setScoreListRecords([]);
+        setScoreListSummaryStudents([]);
+        setScoreListSummaryLoadedKey("");
+      }
       setScoreEditing(false);
       setScoreEditOriginalRecords([]);
       setScoreListLoadError("점수 목록을 불러오지 못했습니다.");
@@ -8701,7 +8835,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         message: "권한과 네트워크 상태를 확인한 뒤 다시 조회해 주세요.",
       });
     } finally {
-      setScoreListLoading(false);
+      if (isCurrent()) setScoreListLoading(false);
     }
   };
 
@@ -11208,20 +11342,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
             <div className="overflow-y-auto px-5 py-4">
               <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => void loadScoreWarningSettings()}
-                  disabled={scoreWarningLoading || scoreWarningSaving}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <i
-                    className={`fas fa-sync-alt text-xs ${
-                      scoreWarningLoading ? "animate-spin" : ""
-                    }`}
-                    aria-hidden="true"
-                  />
-                  새로고침
-                </button>
+                <RefreshButton
+                  onClick={() => loadScoreWarningSettings({ refresh: true })}
+                  loading={scoreWarningLoading}
+                  disabled={scoreWarningSaving}
+                  label="경고 문구 새로고침"
+                />
               </div>
 
               <textarea
@@ -12657,26 +12783,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 </h3>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
+                <RefreshButton
                   onClick={refreshObjectionRequests}
-                  disabled={
-                    objectionsLoading ||
-                    answerSheetRequestsLoading ||
-                    objectionRequestsBusy
-                  }
-                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <i
-                    className={`fas fa-sync-alt text-xs ${
-                      objectionsLoading || answerSheetRequestsLoading
-                        ? "animate-spin"
-                        : ""
-                    }`}
-                    aria-hidden="true"
-                  />
-                  새로고침
-                </button>
+                  loading={objectionsLoading || answerSheetRequestsLoading}
+                  disabled={objectionRequestsBusy}
+                  label="이의 목록 새로고침"
+                />
                 <button
                   type="button"
                   onClick={closeObjectionModal}
@@ -14080,19 +14192,15 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             </h2>
           </div>
           <div className="score-manager-actions flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void loadStudents({ force: true })}
-              disabled={studentsLoading}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-bold text-slate-700 transition hover:bg-slate-50"
-              aria-label="명단 새로고침"
-              title="명단 새로고침"
-            >
-              <i
-                className={`fas fa-sync-alt text-xs ${studentsLoading ? "animate-spin" : ""}`}
-                aria-hidden="true"
-              ></i>
-            </button>
+            <RefreshButton
+              onClick={async () => {
+                refreshVisibleScores.current = Boolean(scoreListLoadedRosterId);
+                await loadRosters({ refresh: true });
+              }}
+              loading={rostersLoading || scoreListLoading}
+              disabled={scoreEditing || savingScoreEdits}
+              label="점수 관리 새로고침"
+            />
             <button
               type="button"
               onClick={() => setScoreWarningModalOpen(true)}
@@ -14182,6 +14290,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           </div>
         </div>
 
+        {navigation}
         {studentLoadError && (
           <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-800">
             {studentLoadError}

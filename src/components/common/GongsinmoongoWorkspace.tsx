@@ -1,3 +1,4 @@
+import RefreshButton from "./RefreshButton";
 import {
   useCallback,
   useEffect,
@@ -782,28 +783,15 @@ export default function GongsinmoongoWorkspace({
               </button>
             )}
           </nav>
-          <button
-            className="gsm-icon gsm-refresh"
-            aria-label="질문함 새로고침"
-            disabled={loading || busy}
+          <RefreshButton
+            className="gsm-refresh"
+            label="질문함 새로고침"
+            loading={loading || !gate.loaded}
+            disabled={busy || conversationBusy}
             onClick={() =>
-              gate.error ? window.location.reload() : setRefresh((i) => i + 1)
+              gate.error ? gate.retry() : setRefresh((i) => i + 1)
             }
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M20 10a8 8 0 1 0-1 7M20 4v6h-6" />
-            </svg>
-          </button>
+          />
         </header>
         {error && (
           <div className="gsm-error" role="alert">

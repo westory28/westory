@@ -19,7 +19,8 @@ export default function AtlasFilterReset({ onReset }: { onReset: () => void }) {
         aria-hidden="true"
         focusable="false"
       >
-        <path d="M3 10a9 9 0 1 1 2.6 8.4M3 4v6h6" />
+        <path d="M4 4h16l-6 7v6l-4 3v-9L4 4Z" />
+        <path d="m17 15 5 5m0-5-5 5" />
       </svg>
     </button>
   );

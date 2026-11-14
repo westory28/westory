@@ -1,3 +1,4 @@
+import RefreshButton from "../../../../components/common/RefreshButton";
 import React from "react";
 import { POINT_ORDER_STATUS_LABELS } from "../../../../constants/pointLabels";
 import {
@@ -36,14 +37,11 @@ const StudentPointOrdersTab: React.FC<StudentPointOrdersTabProps> = ({
     <header className="ws-page-header wis-shop-header">
       <h2>주문 내역</h2>
       {onRefresh && (
-        <button
-          type="button"
-          className="wis-shop-button"
+        <RefreshButton
           onClick={onRefresh}
           disabled={Boolean(cancellingOrderId)}
-        >
-          새로고침
-        </button>
+          label="주문 내역 새로고침"
+        />
       )}
       {onOpenShop && (
         <button type="button" className="wis-shop-button" onClick={onOpenShop}>

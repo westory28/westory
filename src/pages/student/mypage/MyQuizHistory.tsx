@@ -1,3 +1,4 @@
+import RefreshButton from "../../../components/common/RefreshButton";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import { Link } from "react-router-dom";
@@ -726,13 +727,11 @@ export default function MyQuizHistory({
           <button type="button" onClick={onStart}>
             평가 풀기
           </button>
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => void loadList(false, true)}
-          >
-            새로고침
-          </button>
+          <RefreshButton
+            onClick={() => loadList(false, true)}
+            loading={loading}
+            label="오답 노트 새로고침"
+          />
         </div>
       </header>
       <div className="my-quiz-history__toolbar">
@@ -756,13 +755,11 @@ export default function MyQuizHistory({
       {error && (
         <div role="alert">
           <p>{error}</p>
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => void loadList(false, true)}
-          >
-            처음부터 새로고침
-          </button>
+          <RefreshButton
+            onClick={() => loadList(false, true)}
+            loading={loading}
+            label="오답 노트 새로고침"
+          />
         </div>
       )}
       {page?.rows.length ? (

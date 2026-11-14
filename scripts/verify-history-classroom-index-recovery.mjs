@@ -43,6 +43,7 @@ export const executeAssessmentManagementCommand=executeStudentAssessmentCommand;
 export const lockHistoryClassroomAttempt=async(input)=>{window.__lockCalls=(window.__lockCalls||[]).concat([input]);if(window.__holdLockOnce){window.__holdLockOnce=false;await new Promise(resolve=>{window.__resolveLock=resolve;});}return {attemptId:input.attemptId,status:window.__lockStatus||'LOCKED',revision:2};};
 const rows=path=>path==='history_classrooms'?(window.__data.legacyAssignments||[]):path.endsWith('/history_classrooms')?window.__data.assignments:path.endsWith('/history_classroom_results')?window.__data.results:path.endsWith('/history_classroom_exemptions')?(window.__data.exemptions||[]):path.endsWith('/history_classroom_exemption_requests')?(window.__data.requests||[]):[];
 export const getDocs=async(ref)=>{(window.__readCalls||=[]).push(ref.path);if(window.__holdReads)await new Promise(resolve=>(window.__readResolvers||=[]).push(resolve));if(window.__data.readError&&ref.path.endsWith('/history_classrooms'))throw {code:'unavailable'};const docs=rows(ref.path).map(value=>({id:value.id,data:()=>value}));return{docs,empty:!docs.length};};
+export const getDocsFromServer=async(ref)=>{(window.__serverReads||=[]).push(ref.path);return getDocs(ref);};
 const listeners=new Map();window.__listeners=listeners;
 const snapshot=(path,value)=>({id:path.split('/').at(-1),exists:()=>!!value,data:()=>value});
 window.__emit=(path,value)=>listeners.get(path)?.next(snapshot(path,value));window.__deny=path=>listeners.get(path)?.error({code:'permission-denied'});
@@ -1010,7 +1011,7 @@ try {
     await page.evaluate(() => {
       window.__data.readError = false;
     });
-    await page.getByRole("button", { name: "다시 불러오기" }).click();
+    await page.getByRole("button", { name: "역사교실 새로고침" }).click();
     await page.locator("article").waitFor();
     await page.evaluate(
       ({ ownResult }) => {
@@ -1166,7 +1167,7 @@ try {
         window.__readResolvers.splice(0).forEach((resolve) => resolve());
       });
     await releaseReads();
-    await page.getByRole("button", { name: "새로고침", exact: true }).waitFor();
+    await page.getByRole("button", { name: "역사교실 새로고침", exact: true }).waitFor();
     const readsPerLoad = await page.evaluate(() => window.__readCalls.length);
     for (const mode of ["online", "explicit"]) {
       const previousReads = await page.evaluate(
@@ -1179,7 +1180,7 @@ try {
       }, mode);
       if (mode === "explicit")
         await page
-          .getByRole("button", { name: "새로고침", exact: true })
+          .getByRole("button", { name: "역사교실 새로고침", exact: true })
           .click();
       await page.waitForFunction(() => window.__readResolvers?.length === 2);
       if (mode === "explicit")
@@ -1193,7 +1194,10 @@ try {
         mode === "explicit" ? 1 : 0,
         mode + " loading boundary",
       );
-      if (mode === "explicit") await checkExternalAccess();
+      if (mode === "explicit") {
+        await checkExternalAccess();
+        assert.ok(await page.evaluate(()=>window.__serverReads.length >= 2), "explicit refresh uses server reads");
+      }
       await releaseReads();
       await page
         .getByRole("heading", { name: `갱신 ${mode}`, exact: true })

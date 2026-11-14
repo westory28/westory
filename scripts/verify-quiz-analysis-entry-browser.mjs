@@ -93,7 +93,7 @@ const bundle = await build({
   }}],
 });
 const js = bundle.outputFiles.find(f=>f.path.endsWith(".js")).text;
-const css = bundle.outputFiles.find(f=>f.path.endsWith(".css")).text.replace(/@import\s+(?:url\()?['"]https?:[^;]+;/g,"");
+const css = bundle.outputFiles.find(f=>f.path.endsWith(".css")).text.replace(/^@import[^\r\n]*;/gm,"");
 const html='<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/fixture.css"><body><div id="root" class="teacher-layout"></div><script type="module" src="/fixture.js"></script></body></html>';
 const server=http.createServer((req,res)=>{const route=new URL(req.url,"http://localhost").pathname;res.setHeader("Content-Type",route.endsWith(".js")?"text/javascript":route.endsWith(".css")?"text/css":"text/html");res.end(route.endsWith(".js")?js:route.endsWith(".css")?css:html);});
 await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
@@ -182,7 +182,7 @@ try {
       const buttons=[...element.querySelectorAll("button")];
       return buttons.map(button=>({label:button.getAttribute("aria-label")||button.textContent.trim(),left:button.getBoundingClientRect().left,right:button.getBoundingClientRect().right,height:button.getBoundingClientRect().height}));
     });
-    assert.deepEqual(actions.map(a=>a.label),["전체 단원 검색","조회 전체 초기화","결과 조회"]);
+    assert.deepEqual(actions.map(a=>a.label),["전체 단원 검색","평가 분석 새로고침","결과 조회"]);
     assert.ok(Math.abs(actions[1].left-actions[0].right-8)<=1,"reset stays beside search");
     assert.ok(Math.abs(actions[2].left-actions[1].right-8)<=1,"query stays beside reset");
     assert.ok(actions.every(action=>action.height>=44));
@@ -352,11 +352,19 @@ try {
   assert.equal(await page.evaluate(()=>window.analysisEntryQa.directReads.length),1,"one shared curriculum read supplies the persistent navigation");
   assert.equal(await assessment().inputValue(),"mock-1");
   await assessment().selectOption("mock-2");
-  await page.getByRole("button",{name:"조회 전체 초기화",exact:true}).click();
-  assert.equal(await assessment().inputValue(),"mock-2","reset preserves the selected round");
+  const refresh = page.getByRole("button",{name:"평가 분석 새로고침",exact:true});
+  assert.equal(await refresh.isDisabled(),true,"refresh needs a selected class");
+  await classSelect().selectOption("class_2");
+  await page.evaluate(()=>window.analysisEntryQa.withAttempt=true);
+  await refresh.click();
+  await analysis().getByText("첫 제출 1명",{exact:true}).waitFor();
+  assert.equal(await assessment().inputValue(),"mock-2","refresh preserves the selected round");
+  assert.equal(await classSelect().inputValue(),"class_2","refresh preserves the selected class");
+  assert.equal(await page.evaluate(()=>window.analysisEntryQa.calls.at(-1).forceRefresh),true,"first refresh bypasses cached analysis");
+  await page.evaluate(()=>window.analysisEntryQa.withAttempt=false);
   assert.deepEqual(await optionLabels(),["초시 (1회)","복시 (2회)"]);
-  assert.equal(await page.locator(".quiz-mock-exam-entry").getAttribute("aria-current"),"page","reset preserves the current unit");
-  assert.deepEqual(await modes(),["catalog"],"reset is local");
+  assert.equal(await page.locator(".quiz-mock-exam-entry").getAttribute("aria-current"),"page","refresh preserves the current unit");
+  assert.deepEqual(await modes(),["catalog","achievement"],"refresh sends only the selected achievement request");
   await assessment().selectOption("mock-1");await classSelect().selectOption("class_1");
   await report().selectOption("summary");
   assert.equal(await page.getByRole("button",{name:"학급 비교",exact:true}).isVisible(),true);
@@ -377,7 +385,7 @@ try {
   await detail.waitFor({state:"hidden"});
   checks.push("unit-scoped assessment and report selectors; no nested main tabs or duplicate query; detail dialog controls preserved");
   assert.deepEqual(await page.evaluate(()=>window.analysisEntryQa.writes),[]);
-  checks.push("direct analysis entry shares one tree read and reset preserves its unit without writes");
+  checks.push("direct analysis entry shares one tree read and refresh preserves its unit and class without writes");
   // A whole grade is one explicit server scope, not a series of class requests.
   await page.goto(`${origin}/?entry=${encodeURIComponent("/teacher/quiz?tab=analysis&unitId=exam_prep&category=exam_prep")}`);
   await pending().waitFor();
