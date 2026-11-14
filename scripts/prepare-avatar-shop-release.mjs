@@ -14,6 +14,7 @@ const audit = path.resolve(
 );
 const baselineCommit = process.argv[3];
 const patchRoot = path.resolve(process.argv[4] || root);
+const wardrobeRelease = process.argv.includes("--wardrobe");
 assert.match(
   baselineCommit || "",
   /^[a-f0-9]{40}$/,
@@ -56,7 +57,7 @@ const projectionTargets = new Set([
   "getWisEconomyState",
   "getWisEconomyStateFast",
 ]);
-const filesFor = (mode) =>
+const baselineFilesFor = (mode) =>
   mode === "projection"
     ? ["avatarCatalog.json", "studentAvatarCatalog.js"]
     : mode === "pricing"
@@ -71,6 +72,12 @@ const filesFor = (mode) =>
           "avatarCatalogPricing.js",
           "studentAvatar.js",
         ];
+const filesFor = (mode) =>
+  wardrobeRelease
+    ? mode === "avatar"
+      ? ["avatarCatalog.json", "studentAvatar.js"]
+      : ["avatarCatalog.json"]
+    : baselineFilesFor(mode);
 const groups = new Map();
 const sourceMap = [];
 const metadataFiles = (await fs.readdir(path.join(audit, "metadata")))
@@ -105,7 +112,7 @@ for (const filename of metadataFiles) {
     })),
   );
   // Whole-file transplant is allowed only after matching the original to the reviewed baseline.
-  for (const file of filesFor(mode)) {
+  for (const file of baselineFilesFor(mode)) {
     const expected = execFileSync(
       "git",
       ["show", `${baselineCommit}:functions/${file}`],
@@ -260,6 +267,7 @@ for (const group of groups.values()) {
   const deploymentCommand = `firebase deploy --only "${names.map((name) => `functions:${name}`).join(",")}" --project history-quiz-yongsin --config firebase.json`;
   const manifest = {
     name: group.name,
+    patchKind: wardrobeRelease ? "wardrobe" : "shop",
     baselineCommit,
     patchRoot,
     targets: group.targets,

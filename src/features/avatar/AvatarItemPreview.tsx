@@ -13,7 +13,7 @@ export default function AvatarItemPreview({
   character?: AvatarCharacter;
   className?: string;
 }) {
-  const src = `${import.meta.env.BASE_URL}${avatarItemPreviewPath(item, character)}?v=20261114`;
+  const src = `${import.meta.env.BASE_URL}${avatarItemPreviewPath(item, character)}?v=20261114-hanbok`;
   const [failedSource, setFailedSource] = useState("");
   return (
     <span className={`avatar-item-preview ${className}`} aria-hidden="true">

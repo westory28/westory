@@ -1170,6 +1170,370 @@
       ],
       "gender": "unisex",
       "description": "밝은 앞코와 빨간 천으로 만든 캔버스화입니다."
+    },
+    {
+      "id": "minimi-top-hanbok-plum",
+      "slot": "top",
+      "value": "mm-hanbok-plum",
+      "label": "홍매화 저고리",
+      "price": 260,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "작은 매화와 고름을 더한 연분홍 저고리입니다."
+    },
+    {
+      "id": "minimi-top-hanbok-saekdong",
+      "slot": "top",
+      "value": "mm-hanbok-saekdong",
+      "label": "오색 색동 저고리",
+      "price": 280,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "다섯 빛깔 소매와 붉은 밑단이 어우러진 저고리입니다."
+    },
+    {
+      "id": "minimi-top-hanbok-ink",
+      "slot": "top",
+      "value": "mm-hanbok-ink",
+      "label": "먹빛 저고리",
+      "price": 280,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "밝은 동정과 금빛 고름이 돋보이는 짙은 저고리입니다."
+    },
+    {
+      "id": "minimi-top-hanbok-mooncoat",
+      "slot": "top",
+      "value": "mm-hanbok-mooncoat",
+      "label": "달빛 두루마기",
+      "price": 340,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "발목 위로 내려오는 밝은 두루마기입니다."
+    },
+    {
+      "id": "minimi-top-hanbok-jade-dopo",
+      "slot": "top",
+      "value": "mm-hanbok-jade-dopo",
+      "label": "청연 도포",
+      "price": 360,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "넓은 소매와 허리띠를 갖춘 비취빛 도포입니다."
+    },
+    {
+      "id": "minimi-top-hanbok-royal-red",
+      "slot": "top",
+      "value": "mm-hanbok-royal-red",
+      "label": "단청 궁중복",
+      "price": 380,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "금빛 구름무늬와 허리 장식을 더한 붉은 긴옷입니다."
+    },
+    {
+      "id": "minimi-top-hanbok-dangui",
+      "slot": "top",
+      "value": "mm-hanbok-dangui",
+      "label": "비취 당의",
+      "price": 320,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "길게 내려오는 옷자락과 꽃무늬가 있는 비취빛 당의입니다."
+    },
+    {
+      "id": "minimi-top-hanbok-scholar",
+      "slot": "top",
+      "value": "mm-hanbok-scholar",
+      "label": "밤빛 선비 도포",
+      "price": 360,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "넓은 소매와 밝은 띠가 있는 짙은 남색 도포입니다."
+    },
+    {
+      "id": "minimi-bottom-hanbok-chima-red",
+      "slot": "bottom",
+      "value": "mm-hanbok-chima-red",
+      "label": "홍매화 치마",
+      "price": 240,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "발목까지 넓게 퍼지는 붉은 꽃무늬 치마입니다."
+    },
+    {
+      "id": "minimi-bottom-hanbok-chima-plum",
+      "slot": "bottom",
+      "value": "mm-hanbok-chima-plum",
+      "label": "자목련 치마",
+      "price": 240,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "꽃송이와 세로 주름이 어우러진 자줏빛 긴 치마입니다."
+    },
+    {
+      "id": "minimi-bottom-hanbok-chima-jade",
+      "slot": "bottom",
+      "value": "mm-hanbok-chima-jade",
+      "label": "비취 고름 치마",
+      "price": 240,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "분홍 장식 끈을 드리운 비취빛 긴 치마입니다."
+    },
+    {
+      "id": "minimi-bottom-hanbok-chima-ivory",
+      "slot": "bottom",
+      "value": "mm-hanbok-chima-ivory",
+      "label": "달빛 금박 치마",
+      "price": 260,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "금빛 밑단과 작은 무늬가 있는 밝은 긴 치마입니다."
+    },
+    {
+      "id": "minimi-bottom-hanbok-baji-ivory",
+      "slot": "bottom",
+      "value": "mm-hanbok-baji-ivory",
+      "label": "미색 대님바지",
+      "price": 200,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "넉넉한 바지통과 발목 대님을 표현한 미색 바지입니다."
+    },
+    {
+      "id": "minimi-bottom-hanbok-baji-indigo",
+      "slot": "bottom",
+      "value": "mm-hanbok-baji-indigo",
+      "label": "쪽빛 대님바지",
+      "price": 200,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "발목을 묶어 단정하게 마무리한 쪽빛 바지입니다."
+    },
+    {
+      "id": "minimi-shoes-hanbok-flower-red",
+      "slot": "shoes",
+      "value": "mm-hanbok-flower-red",
+      "label": "홍매화 꽃신",
+      "price": 160,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "살짝 올라간 코와 꽃 장식이 있는 붉은 꽃신입니다."
+    },
+    {
+      "id": "minimi-shoes-hanbok-flower-lilac",
+      "slot": "shoes",
+      "value": "mm-hanbok-flower-lilac",
+      "label": "자목련 꽃신",
+      "price": 160,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "밝은 꽃 장식을 더한 보랏빛 꽃신입니다."
+    },
+    {
+      "id": "minimi-shoes-hanbok-mokhwa",
+      "slot": "shoes",
+      "value": "mm-hanbok-mokhwa",
+      "label": "먹빛 목화",
+      "price": 180,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "발목을 감싸는 짙은 전통 신발입니다."
+    },
+    {
+      "id": "minimi-shoes-hanbok-jipsin",
+      "slot": "shoes",
+      "value": "mm-hanbok-jipsin",
+      "label": "들길 짚신",
+      "price": 140,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "엮은 결을 표현한 따뜻한 빛깔의 짚신입니다."
+    },
+    {
+      "id": "minimi-accessory-hanbok-gat",
+      "slot": "accessory",
+      "value": "mm-hanbok-gat",
+      "label": "먹빛 갓",
+      "price": 240,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "넓은 양태와 구슬 끈이 있는 검은 갓입니다."
+    },
+    {
+      "id": "minimi-accessory-hanbok-baekrip",
+      "slot": "accessory",
+      "value": "mm-hanbok-baekrip",
+      "label": "달빛 백립",
+      "price": 260,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "밝은 빛깔과 작은 구슬 끈이 돋보이는 갓입니다."
+    },
+    {
+      "id": "minimi-accessory-hanbok-jokduri",
+      "slot": "accessory",
+      "value": "mm-hanbok-jokduri",
+      "label": "홍매화 족두리",
+      "price": 240,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "꽃과 금빛 장식을 얹은 작은 족두리입니다."
+    },
+    {
+      "id": "minimi-accessory-hanbok-satgat",
+      "slot": "accessory",
+      "value": "mm-hanbok-satgat",
+      "label": "들길 삿갓",
+      "price": 220,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "촘촘하게 엮은 결을 표현한 넓은 삿갓입니다."
+    },
+    {
+      "id": "minimi-accessory-hanbok-ayam",
+      "slot": "accessory",
+      "value": "mm-hanbok-ayam",
+      "label": "자줏빛 아얌",
+      "price": 240,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "둥근 머리 부분과 길게 내린 뒷드림을 표현했습니다."
+    },
+    {
+      "id": "minimi-accessory-hanbok-daenggi",
+      "slot": "accessory",
+      "value": "mm-hanbok-daenggi",
+      "label": "붉은 꽃댕기",
+      "price": 180,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "꽃무늬와 금빛 선이 있는 긴 붉은 댕기입니다."
+    },
+    {
+      "id": "minimi-accessory-hanbok-samo",
+      "slot": "accessory",
+      "value": "mm-hanbok-samo",
+      "label": "먹빛 사모",
+      "price": 240,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "양옆 사모뿔과 앞 장식을 표현한 검은 관모입니다."
+    },
+    {
+      "id": "minimi-accessory-hanbok-binyeo",
+      "slot": "accessory",
+      "value": "mm-hanbok-binyeo",
+      "label": "목련 꽃비녀",
+      "price": 180,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "두 송이 꽃과 작은 드리개가 달린 비녀 장식입니다."
     }
   ]
 }

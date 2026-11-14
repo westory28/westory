@@ -8,7 +8,7 @@ import {
   LoadingOverlay,
 } from "../../components/common/LoadingState";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import {
   collection,
   doc,
@@ -265,6 +265,7 @@ const MyPage: React.FC = () => {
     requestedMenu === "wrong_note"
       ? requestedMenu
       : "profile";
+  const isAvatarWardrobe = menu === "avatar";
   const [menuOpen, setMenuOpen] = useState(false);
   const [profile, setProfile] = useState<UserProfileDoc | null>(null);
   const [profileIcon, setProfileIcon] = useState("😀");
@@ -315,6 +316,10 @@ const MyPage: React.FC = () => {
   const [myPageError, setMyPageError] = useState("");
 
   useEffect(() => {
+    if (isAvatarWardrobe) {
+      setMyPageLoading(false);
+      return;
+    }
     void loadMyPage();
     return () => {
       myPageRequestRef.current += 1;
@@ -326,6 +331,7 @@ const MyPage: React.FC = () => {
     canUseLesson,
     canUseQuiz,
     canUseScore,
+    isAvatarWardrobe,
   ]);
 
   useEffect(() => {
@@ -494,6 +500,7 @@ const MyPage: React.FC = () => {
   };
 
   useEffect(() => {
+    if (isAvatarWardrobe) return;
     void loadPointRankState();
     const unsubscribe = subscribePointsUpdated(() => {
       void loadPointRankState();
@@ -502,7 +509,13 @@ const MyPage: React.FC = () => {
       pointRankRequestRef.current += 1;
       unsubscribe();
     };
-  }, [user?.uid, config?.year, config?.semester, iconModalOpen]);
+  }, [
+    user?.uid,
+    config?.year,
+    config?.semester,
+    iconModalOpen,
+    isAvatarWardrobe,
+  ]);
 
   const loadScoreData = async (requestId = myPageRequestRef.current) => {
     if (!user || !config) return;
@@ -932,7 +945,7 @@ const MyPage: React.FC = () => {
 
   const leftMenus: Array<{ key: MainMenu; title: string; icon: string }> = [
     { key: "profile", title: "나의 기본 정보", icon: "fa-id-card" },
-    { key: "avatar", title: "아바타 꾸미기", icon: "fa-shirt" },
+    { key: "avatar", title: "아바타 옷장", icon: "fa-shirt" },
     { key: "score", title: "나의 성적표", icon: "fa-chart-column" },
     { key: "wrong_note", title: "오답 노트", icon: "fa-book-open" },
   ];
@@ -1078,7 +1091,9 @@ const MyPage: React.FC = () => {
   ];
   return (
     <div className="student-my-page min-h-screen bg-slate-50 flex flex-col">
-      {(myPageLoading || savingIcon || savingGoal) && <LoadingOverlay />}
+      {((myPageLoading && !isAvatarWardrobe) || savingIcon || savingGoal) && (
+        <LoadingOverlay />
+      )}
       <PortalWorkspace
         as="main"
         className="teacher-sub-workspace teacher-sub-workspace--page teacher-sub-workspace--tabs ws-page--reading flex-1"
@@ -1118,7 +1133,7 @@ const MyPage: React.FC = () => {
         </PortalSubNavigation>
 
         <section className="teacher-sub-content">
-          {myPageError && (
+          {myPageError && !isAvatarWardrobe && (
             <div role="alert">
               <p>{myPageError}</p>
               <button
@@ -1133,7 +1148,7 @@ const MyPage: React.FC = () => {
           <div className="space-y-8">
             {menu === "avatar" && (
               <React.Suspense fallback={<InlineLoading />}>
-                <StudentAvatarStudio />
+                <StudentAvatarStudio mode="wardrobe" />
               </React.Suspense>
             )}
             {menu === "profile" && (
@@ -1986,4 +2001,17 @@ const MyPage: React.FC = () => {
   );
 };
 
-export default MyPage;
+export default function MyPageRoute() {
+  const [params] = useSearchParams();
+  if (params.get("menu") === "wardrobe") {
+    const canonical = new URLSearchParams(params);
+    canonical.set("menu", "avatar");
+    return (
+      <Navigate
+        to={{ pathname: "/student/mypage", search: canonical.toString() }}
+        replace
+      />
+    );
+  }
+  return <MyPage />;
+}

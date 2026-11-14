@@ -67,12 +67,17 @@ export function AvatarStudio({
   adapter,
   access = "student",
   active = true,
+  mode = "wardrobe",
+  preview = false,
 }: {
   adapter: AvatarStudioAdapter;
   access?: "student" | "teacher";
   active?: boolean;
+  mode?: "shop" | "wardrobe";
+  preview?: boolean;
 }) {
   const allAvailable = access === "teacher";
+  const isShop = mode === "shop";
   const { showToast } = useAppToast();
   const [saved, setSaved] = useState<AvatarState | null>(null);
   const [look, setLook] = useState<AvatarLook>(defaultAvatarLook());
@@ -83,11 +88,19 @@ export function AvatarStudio({
     prices: {},
   });
   const [slot, setSlot] = useState<AvatarSlot>("top");
-  const [filter, setFilter] = useState<"all" | "owned" | "premium">("all");
+  const [filter, setFilter] = useState<"all" | "owned" | "premium" | "free">(
+    "all",
+  );
   const [gender, setGender] = useState<"all" | "boy" | "girl" | "unisex">(
     "all",
   );
   const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [compactSearch, setCompactSearch] = useState(false);
+  const [page, setPage] = useState(1);
+  const picker = useRef<HTMLDivElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const searchButton = useRef<HTMLButtonElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<"buy" | "save" | null>(null);
@@ -112,7 +125,8 @@ export function AvatarStudio({
       setSaved(restored);
       setLook(restored.look);
       setCharacterChosen(
-        Boolean(restored.thumbnailUrl || restored.requiresThumbnailRefresh),
+        preview ||
+          Boolean(restored.thumbnailUrl || restored.requiresThumbnailRefresh),
       );
       // Merely opening the studio never writes a selection.
       setNeedsThumbnailRefresh(Boolean(restored.requiresThumbnailRefresh));
@@ -123,7 +137,7 @@ export function AvatarStudio({
     } finally {
       if (current === generation.current) setLoading(false);
     }
-  }, [adapter]);
+  }, [adapter, preview]);
   useEffect(() => {
     void load();
     return () => {
@@ -143,6 +157,8 @@ export function AvatarStudio({
   }, [active]);
   useEffect(() => {
     if (
+      !isShop &&
+      !preview &&
       saved &&
       characterChosen &&
       (!saved.thumbnailUrl ||
@@ -155,7 +171,19 @@ export function AvatarStudio({
       window.addEventListener("beforeunload", prevent);
       return () => window.removeEventListener("beforeunload", prevent);
     }
-  }, [saved, look, characterChosen]);
+  }, [saved, look, characterChosen, isShop, preview]);
+  useEffect(() => {
+    const element = picker.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setCompactSearch(entry.contentRect.width < 680);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [loading]);
+  useEffect(() => {
+    setPage(1);
+  }, [slot, filter, gender, search, look.character, mode]);
   const onReady = useCallback((controller: StageControls) => {
     stage.current = controller;
     setReady(true);
@@ -191,13 +219,22 @@ export function AvatarStudio({
     (item) =>
       item.slot === slot &&
       item.characters.includes(look.character) &&
+      (isShop || available(item)) &&
       (gender === "all" || avatarItemGender(item) === gender) &&
       (!search.trim() ||
         `${item.label} ${item.description || ""}`
           .toLocaleLowerCase("ko-KR")
           .includes(search.trim().toLocaleLowerCase("ko-KR"))) &&
       (filter !== "owned" || available(item)) &&
-      (filter !== "premium" || item.price > 0),
+      (filter !== "premium" || item.price > 0) &&
+      (filter !== "free" || item.price === 0),
+  );
+  const pageSize = 18;
+  const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageItems = items.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
   );
   const missing = AVATAR_SLOTS.map(({ key }) => itemForCurrentLook(key)).filter(
     (item): item is AvatarItem => Boolean(item && !available(item)),
@@ -209,6 +246,7 @@ export function AvatarStudio({
       JSON.stringify(saved.look) !== JSON.stringify(look));
   const choose = (item: AvatarItem) => {
     if (busyRef.current) return;
+    if (!isShop && !available(item)) return;
     if (item.slot !== "character" && !characterChosen) return;
     if (item.slot === "character" && !available(item)) setSlot("character");
     if (
@@ -222,7 +260,14 @@ export function AvatarStudio({
     setLook((previous) => selectAvatarItem(previous, item));
   };
   const buy = async () => {
-    if (allAvailable || !characterChosen || !purchase || busyRef.current)
+    if (
+      preview ||
+      !isShop ||
+      allAvailable ||
+      !characterChosen ||
+      !purchase ||
+      busyRef.current
+    )
       return;
     busyRef.current = true;
     setBusy("buy");
@@ -265,6 +310,8 @@ export function AvatarStudio({
   };
   const save = async () => {
     if (
+      preview ||
+      isShop ||
       !characterChosen ||
       !saved ||
       !stage.current ||
@@ -324,12 +371,13 @@ export function AvatarStudio({
   return (
     <section
       className="avatar-studio"
-      aria-label="아바타 꾸미기"
+      aria-label={isShop ? "아바타 상점" : "아바타 옷장"}
       aria-busy={Boolean(busy)}
+      data-renderer-ready={ready}
     >
       <div className="avatar-studio-heading">
-        <h2>아바타 꾸미기</h2>
-        {!allAvailable && (
+        <h2>{isShop ? "아바타 상점" : "아바타 옷장"}</h2>
+        {!allAvailable && isShop && (
           <span className="avatar-studio-wallet">
             내 지갑{" "}
             <strong>
@@ -355,7 +403,7 @@ export function AvatarStudio({
                   aria-pressed={
                     characterChosen && look.character === item.value
                   }
-                  disabled={Boolean(busy)}
+                  disabled={Boolean(busy) || (!isShop && !available(item))}
                   onClick={() => choose(item)}
                   title={`${item.label} 아바타`}
                 >
@@ -407,30 +455,17 @@ export function AvatarStudio({
               </div>
             )}
           </div>
-          <div className="avatar-studio-camera" aria-label="아바타 보기 조절">
-            <button
-              type="button"
-              disabled={!ready || Boolean(busy)}
-              onClick={() => stage.current?.resetView()}
-            >
-              전체 보기
-            </button>
-            <button
-              type="button"
-              disabled={!ready || Boolean(busy)}
-              onClick={() => stage.current?.focusFace()}
-            >
-              얼굴 보기
-            </button>
-          </div>
           <div className="avatar-studio-save">
             <button
               type="button"
-              disabled={Boolean(busy) || !dirty}
+              disabled={Boolean(busy)}
               onClick={() => {
                 setLook(saved.look);
                 setCharacterChosen(
-                  Boolean(saved.thumbnailUrl || saved.requiresThumbnailRefresh),
+                  preview ||
+                    Boolean(
+                      saved.thumbnailUrl || saved.requiresThumbnailRefresh,
+                    ),
                 );
                 stage.current = null;
                 setReady(false);
@@ -438,25 +473,28 @@ export function AvatarStudio({
                 setStageKey((key) => key + 1);
               }}
             >
-              저장한 모습
+              현재 모습
             </button>
-            <button
-              type="button"
-              className="avatar-primary"
-              disabled={
-                !ready ||
-                Boolean(busy) ||
-                missing.length > 0 ||
-                (!dirty &&
-                  !needsThumbnailRefresh &&
-                  Boolean(saved.thumbnailUrl))
-              }
-              onClick={() => void save()}
-            >
-              {busy === "save" ? "저장 중…" : "아바타 저장"}
-            </button>
+            {!isShop && (
+              <button
+                type="button"
+                className="avatar-primary"
+                disabled={
+                  preview ||
+                  !ready ||
+                  Boolean(busy) ||
+                  missing.length > 0 ||
+                  (!dirty &&
+                    !needsThumbnailRefresh &&
+                    Boolean(saved.thumbnailUrl))
+                }
+                onClick={() => void save()}
+              >
+                {busy === "save" ? "저장 중…" : "아바타 저장"}
+              </button>
+            )}
           </div>
-          {missing.length > 0 && (
+          {!isShop && missing.length > 0 && (
             <p className="avatar-studio-pending" role="status">
               미보유 아이템 {missing.length}개 · 구매 후 저장할 수 있습니다.
             </p>
@@ -474,33 +512,105 @@ export function AvatarStudio({
             </div>
           )}
         </div>
-        <div className="avatar-studio-picker">
-          <div className="avatar-studio-categories" aria-label="꾸미기 종류">
-            {AVATAR_SLOTS.filter(
-              (category) =>
-                category.key !== "character" &&
-                AVATAR_ITEMS.filter((item) => item.slot === category.key)
-                  .length > 1,
-            ).map((category) => (
+        <div className="avatar-studio-picker" ref={picker}>
+          <div className="avatar-studio-toolbar">
+            <div className="avatar-studio-categories" aria-label="꾸미기 종류">
+              {AVATAR_SLOTS.filter(
+                (category) =>
+                  category.key !== "character" &&
+                  AVATAR_ITEMS.filter((item) => item.slot === category.key)
+                    .length > 1,
+              ).map((category) => (
+                <button
+                  type="button"
+                  key={category.key}
+                  aria-pressed={slot === category.key}
+                  onClick={(event) => {
+                    setSlot(category.key);
+                    event.currentTarget.scrollIntoView({
+                      block: "nearest",
+                      inline: "nearest",
+                    });
+                  }}
+                >
+                  <i className={`fas ${category.icon}`} aria-hidden="true" />
+                  <span>{category.label}</span>
+                </button>
+              ))}
+            </div>
+            <form
+              className="avatar-studio-search"
+              role="search"
+              data-expanded={!compactSearch || searchOpen}
+              onSubmit={(event) => {
+                event.preventDefault();
+                setSearchOpen(true);
+                requestAnimationFrame(() => searchInput.current?.focus());
+              }}
+            >
+              <input
+                ref={searchInput}
+                type="search"
+                aria-label="아이템 검색"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="이름·설명 검색"
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    setSearch("");
+                    setSearchOpen(false);
+                    searchButton.current?.focus();
+                  }
+                }}
+              />
               <button
+                ref={searchButton}
                 type="button"
-                key={category.key}
-                aria-pressed={slot === category.key}
-                onClick={() => setSlot(category.key)}
+                aria-label={
+                  compactSearch && searchOpen
+                    ? "아이템 검색 닫기"
+                    : "아이템 검색 열기"
+                }
+                aria-expanded={compactSearch ? searchOpen : undefined}
+                onClick={() => {
+                  if (compactSearch && searchOpen) {
+                    setSearch("");
+                    setSearchOpen(false);
+                  } else {
+                    setSearchOpen(true);
+                    requestAnimationFrame(() => searchInput.current?.focus());
+                  }
+                }}
               >
-                <i className={`fas ${category.icon}`} aria-hidden="true" />
-                <span>{category.label}</span>
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden="true"
+                >
+                  <circle cx="10.5" cy="10.5" r="6.5" />
+                  <path d="m16 16 5 5" />
+                </svg>
               </button>
-            ))}
+            </form>
           </div>
           <div className="avatar-studio-browse">
-            {!allAvailable && (
-              <div className="avatar-studio-filter" aria-label="아이템 필터">
+            {!allAvailable && isShop && (
+              <div
+                className="avatar-studio-filter"
+                role="group"
+                aria-label="아이템 필터"
+              >
                 {(
                   [
                     ["all", "전체"],
                     ["owned", "보유"],
                     ["premium", "유료"],
+                    ["free", "무료"],
                   ] as const
                 ).map(([key, label]) => (
                   <button
@@ -509,46 +619,50 @@ export function AvatarStudio({
                     aria-pressed={filter === key}
                     onClick={() => setFilter(key)}
                   >
-                    {label}
+                    <span>{label}</span>
                   </button>
                 ))}
               </div>
             )}
-            <label className="avatar-studio-gender-filter">
-              <span>성별</span>
-              <select
-                aria-label="아이템 성별"
-                value={gender}
-                onChange={(event) =>
-                  setGender(event.target.value as typeof gender)
-                }
-              >
-                <option value="all">전체</option>
-                <option value="boy">남자</option>
-                <option value="girl">여자</option>
-                <option value="unisex">공용</option>
-              </select>
-            </label>
-            <label className="avatar-studio-search">
-              <span className="sr-only">아이템 검색</span>
-              <input
-                type="search"
-                aria-label="아이템 검색"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="이름·설명 검색"
-              />
-            </label>
+            <div
+              className="avatar-studio-filter"
+              role="group"
+              aria-label="아이템 성별"
+            >
+              {(
+                [
+                  ["all", "성별 전체"],
+                  ["boy", "남자"],
+                  ["girl", "여자"],
+                  ["unisex", "공용"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={gender === key}
+                  onClick={() => setGender(key)}
+                >
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
           </div>
           {selected && (
             <div className="avatar-studio-selected">
-              <AvatarShopItemDetails item={selected} hidePrice={allAvailable} />
-              {!available(selected) ? (
+              <AvatarShopItemDetails
+                item={selected}
+                hidePrice={allAvailable || !isShop}
+              />
+              {isShop && !available(selected) ? (
                 <button
                   type="button"
                   className="avatar-primary"
                   disabled={
-                    !characterChosen || Boolean(busy) || balance === null
+                    preview ||
+                    !characterChosen ||
+                    Boolean(busy) ||
+                    balance === null
                   }
                   onClick={() => {
                     setConfirmError("");
@@ -558,7 +672,9 @@ export function AvatarStudio({
                   {selected.price.toLocaleString()} 위스로 구매
                 </button>
               ) : (
-                <span className="avatar-studio-owned">사용 가능</span>
+                <span className="avatar-studio-owned">
+                  {isShop ? "보유" : "착용 중"}
+                </span>
               )}
             </div>
           )}
@@ -568,19 +684,84 @@ export function AvatarStudio({
               AVATAR_SLOTS.find((category) => category.key === slot)?.label
             }
           >
-            {items.map((item) => (
+            {pageItems.map((item) => (
               <AvatarShopItemCard
                 key={item.id}
                 item={item}
                 character={look.character}
                 selected={selected?.id === item.id}
                 owned={available(item)}
-                hidePrice={allAvailable}
+                hidePrice={allAvailable || !isShop}
                 disabled={!characterChosen || Boolean(busy)}
                 onSelect={() => choose(item)}
               />
             ))}
           </div>
+          {pageCount > 1 && (
+            <nav
+              className="avatar-studio-pagination"
+              aria-label="아이템 페이지"
+            >
+              <button
+                type="button"
+                aria-label="이전 페이지"
+                disabled={currentPage === 1}
+                onClick={() => setPage(currentPage - 1)}
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden="true"
+                >
+                  <path d="m15 6-6 6 6 6" />
+                </svg>
+              </button>
+              {Array.from({ length: pageCount }, (_, index) => index + 1)
+                .filter(
+                  (number) =>
+                    number === 1 ||
+                    number === pageCount ||
+                    Math.abs(number - currentPage) <= 1,
+                )
+                .map((number, index, numbers) => (
+                  <React.Fragment key={number}>
+                    {index > 0 && number - numbers[index - 1] > 1 && (
+                      <span aria-hidden="true">…</span>
+                    )}
+                    <button
+                      type="button"
+                      aria-label={`${number}페이지`}
+                      aria-current={currentPage === number ? "page" : undefined}
+                      onClick={() => setPage(number)}
+                    >
+                      {number}
+                    </button>
+                  </React.Fragment>
+                ))}
+              <button
+                type="button"
+                aria-label="다음 페이지"
+                disabled={currentPage === pageCount}
+                onClick={() => setPage(currentPage + 1)}
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden="true"
+                >
+                  <path d="m9 6 6 6-6 6" />
+                </svg>
+              </button>
+            </nav>
+          )}
           {!items.length && (
             <p className="avatar-studio-empty">
               이 조건에 맞는 아이템이 없습니다.
@@ -656,7 +837,11 @@ export function AvatarStudio({
   );
 }
 
-export default function StudentAvatarStudio() {
+export default function StudentAvatarStudio({
+  mode = "wardrobe",
+}: {
+  mode?: "shop" | "wardrobe";
+}) {
   const { user, config, authGeneration } = useAuth();
   const adapter = useMemo<AvatarStudioAdapter>(
     () => ({
@@ -678,8 +863,9 @@ export default function StudentAvatarStudio() {
   );
   return (
     <AvatarStudio
-      key={`${user?.uid}:${authGeneration}:${config?.year}:${config?.semester}`}
+      key={`${user?.uid}:${authGeneration}:${config?.year}:${config?.semester}:${mode}`}
       adapter={adapter}
+      mode={mode}
     />
   );
 }

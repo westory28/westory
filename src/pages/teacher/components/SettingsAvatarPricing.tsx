@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 import InfoHelp from "../../../components/common/InfoHelp";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { InlineLoading } from "../../../components/common/LoadingState";
@@ -7,6 +15,8 @@ import { useAuth } from "../../../contexts/AuthContext";
 import {
   AVATAR_ITEMS,
   AVATAR_SLOTS,
+  AVATAR_CATALOG_VERSION,
+  defaultAvatarLook,
   applyAvatarCatalogSettings,
   avatarItemMetadata,
   avatarItemPricePolicy,
@@ -15,8 +25,10 @@ import {
   type AvatarItemMetadata,
 } from "../../../features/avatar/catalog";
 import AvatarItemPreview from "../../../features/avatar/AvatarItemPreview";
-import AvatarShopItemCard from "../../../features/avatar/AvatarShopItemCard";
-import AvatarShopItemDetails from "../../../features/avatar/AvatarShopItemDetails";
+import {
+  AvatarStudio,
+  type AvatarStudioAdapter,
+} from "../../../features/avatar/AvatarStudio";
 import {
   avatarItemTypeLabel,
   getAvatarItemGroup,
@@ -113,13 +125,15 @@ const validationFor = (draft: ItemDraft): string => {
   return "";
 };
 
-function StudentItemPreview({
-  item,
-  unsaved,
+function CatalogDialog({
+  title,
+  className,
+  children,
   onClose,
 }: {
-  item: AvatarItem;
-  unsaved: boolean;
+  title: string;
+  className: string;
+  children: ReactNode;
   onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -134,42 +148,205 @@ function StudentItemPreview({
       if (previous?.isConnected) previous.focus();
     };
   }, []);
-  return (
+  return createPortal(
     <dialog
       ref={dialog}
-      className="avatar-pricing-student-dialog"
-      aria-labelledby="avatar-student-preview-title"
+      className={`avatar-pricing-dialog ${className}`}
+      aria-labelledby="avatar-catalog-dialog-title"
       onCancel={(event) => {
         event.preventDefault();
         onClose();
       }}
       onClick={(event) => {
-        if (event.target === dialog.current) {
-          const bounds = dialog.current.getBoundingClientRect();
-          if (
-            event.clientX < bounds.left ||
-            event.clientX > bounds.right ||
-            event.clientY < bounds.top ||
-            event.clientY > bounds.bottom
-          )
-            onClose();
-        }
+        if (event.target !== dialog.current) return;
+        const bounds = dialog.current.getBoundingClientRect();
+        if (
+          event.clientX < bounds.left ||
+          event.clientX > bounds.right ||
+          event.clientY < bounds.top ||
+          event.clientY > bounds.bottom
+        )
+          onClose();
       }}
     >
       <div className="avatar-pricing-dialog-heading">
-        <h3 id="avatar-student-preview-title">학생 미리보기</h3>
-        <button type="button" onClick={onClose} aria-label="학생 미리보기 닫기">
+        <h3 id="avatar-catalog-dialog-title">{title}</h3>
+        <button type="button" onClick={onClose} aria-label={`${title} 닫기`}>
           닫기
         </button>
       </div>
-      {unsaved && (
-        <p className="avatar-pricing-preview-note">저장 전 변경 사항</p>
-      )}
-      <div className="avatar-pricing-student-preview">
-        <AvatarShopItemCard item={item} />
-        <AvatarShopItemDetails item={item} />
+      <div className="avatar-pricing-dialog-body">{children}</div>
+    </dialog>,
+    document.body,
+  );
+}
+
+function ItemEditor({
+  item,
+  draft,
+  changed,
+  onChange,
+  onClose,
+}: {
+  item: AvatarItem;
+  draft: ItemDraft;
+  changed: boolean;
+  onChange: (patch: Partial<ItemDraft>) => void;
+  onClose: () => void;
+}) {
+  const policy = avatarItemPricePolicy(item);
+  const invalid = validationFor(draft);
+  return (
+    <CatalogDialog
+      title="아이템 수정"
+      className="avatar-pricing-editor-dialog"
+      onClose={onClose}
+    >
+      <div className="avatar-pricing-editor-layout">
+        <AvatarItemPreview
+          item={item}
+          character={draft.gender === "boy" ? "boy" : "girl"}
+          className="avatar-pricing-editor-image"
+        />
+        <div className="avatar-pricing-editor-fields">
+          <label>
+            <span>이름</span>
+            <input
+              aria-label={`${item.label} 이름`}
+              value={draft.label}
+              maxLength={60}
+              onChange={(event) => onChange({ label: event.target.value })}
+              aria-invalid={!draft.label.trim()}
+            />
+          </label>
+          <div className="avatar-pricing-editor-options">
+            <label>
+              <span>성별</span>
+              <select
+                aria-label={`${item.label} 성별`}
+                value={draft.gender}
+                onChange={(event) =>
+                  onChange({
+                    gender: event.target.value as ItemDraft["gender"],
+                  })
+                }
+              >
+                <option value="unisex">공용</option>
+                <option value="boy">남자</option>
+                <option value="girl">여자</option>
+              </select>
+            </label>
+            <label>
+              <span>판매 방식</span>
+              <select
+                aria-label={`${item.label} 무료·유료`}
+                value={draft.paid ? "paid" : "free"}
+                onChange={(event) =>
+                  onChange({ paid: event.target.value === "paid" })
+                }
+                disabled={policy !== null}
+              >
+                <option value="free">무료</option>
+                <option value="paid">유료</option>
+              </select>
+            </label>
+            <label className="avatar-pricing-editor-price">
+              <span>가격</span>
+              <span className="avatar-pricing-value">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={MAX_PRICE}
+                  step={1}
+                  aria-label={`${item.label} 위스 가격`}
+                  aria-invalid={priceOf(draft) === null}
+                  value={draft.paid ? draft.price : ""}
+                  placeholder={draft.paid ? "가격" : "0"}
+                  onChange={(event) => onChange({ price: event.target.value })}
+                  disabled={!draft.paid}
+                />
+                <WisIcon />
+              </span>
+            </label>
+          </div>
+          <label>
+            <span>설명</span>
+            <textarea
+              aria-label={`${item.label} 설명`}
+              rows={4}
+              maxLength={400}
+              value={draft.description}
+              onChange={(event) =>
+                onChange({ description: event.target.value })
+              }
+            />
+          </label>
+          {policy && (
+            <p className="avatar-pricing-policy">
+              {policy === "free" ? "학교 체육복 · 무료" : "1~1,000,000 위스"}
+            </p>
+          )}
+          {invalid && (
+            <p className="avatar-pricing-item-error" role="alert">
+              {invalid}
+            </p>
+          )}
+          {changed && (
+            <p className="avatar-pricing-draft-status" role="status">
+              저장 전 변경 사항
+            </p>
+          )}
+        </div>
       </div>
-    </dialog>
+    </CatalogDialog>
+  );
+}
+
+function StudentShopPreview({
+  pricing,
+  unsaved,
+  onClose,
+}: {
+  pricing: AvatarCatalogPricingState;
+  unsaved: boolean;
+  onClose: () => void;
+}) {
+  const previewAdapter = useMemo<AvatarStudioAdapter>(
+    () => ({
+      load: async () => ({
+        avatar: {
+          schemaVersion: 1,
+          catalogVersion: AVATAR_CATALOG_VERSION,
+          look: defaultAvatarLook(),
+          revision: 0,
+          lookHash: "catalog-preview",
+          ownedItemIds: [],
+          requiresThumbnailRefresh: true,
+        },
+        balance: 0,
+        pricing,
+      }),
+      purchase: async () => {
+        throw new Error("미리보기에서는 구매할 수 없습니다.");
+      },
+      save: async () => {
+        throw new Error("미리보기에서는 저장할 수 없습니다.");
+      },
+    }),
+    [pricing],
+  );
+  return (
+    <CatalogDialog
+      title="학생 미리보기"
+      className="avatar-pricing-student-dialog"
+      onClose={onClose}
+    >
+      {unsaved && (
+        <p className="avatar-pricing-draft-status">저장 전 변경 사항 포함</p>
+      )}
+      <AvatarStudio adapter={previewAdapter} mode="shop" preview />
+    </CatalogDialog>
   );
 }
 
@@ -190,8 +367,8 @@ export function AvatarPricingManager({
   const [group, setGroup] = useState("all");
   const [gender, setGender] = useState("all");
   const [changedOnly, setChangedOnly] = useState(false);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
   const sequence = useRef(0);
   const busy = useRef(false);
   const stateRef = useRef(state);
@@ -341,16 +518,33 @@ export function AvatarPricingManager({
       }
     }
   };
-  const previewBase = items.find((item) => item.id === previewId);
-  const previewDraft = previewId ? drafts[previewId] : null;
-  const previewItem =
-    previewBase && previewDraft
-      ? {
-          ...previewBase,
-          ...metadataOf(previewDraft),
-          price: priceOf(previewDraft) ?? previewBase.price,
-        }
-      : null;
+  const editingItem = items.find((item) => item.id === editingId);
+  const invalidDraft = Object.values(drafts).some((draft) =>
+    Boolean(validationFor(draft)),
+  );
+  const previewPricing = useMemo<AvatarCatalogPricingState | null>(
+    () =>
+      state
+        ? {
+            ...state,
+            prices: Object.fromEntries(
+              AVATAR_ITEMS.map((item) => [
+                item.id,
+                priceOf(drafts[item.id]) ?? state.prices[item.id],
+              ]),
+            ),
+            metadata: Object.fromEntries(
+              AVATAR_ITEMS.map((item) => [
+                item.id,
+                drafts[item.id]
+                  ? metadataOf(drafts[item.id])
+                  : avatarItemMetadata(item),
+              ]),
+            ),
+          }
+        : null,
+    [state, drafts],
+  );
 
   return (
     <section className="ws-page avatar-pricing" aria-label="아바타 아이템 관리">
@@ -362,28 +556,37 @@ export function AvatarPricingManager({
             보유한 아이템은 다시 구매하지 않습니다.
           </InfoHelp>
         </div>
-        <button
-          type="button"
-          className="avatar-pricing-reload"
-          onClick={() => void load()}
-          disabled={loading || Boolean(savingId)}
-          title="저장된 아이템 다시 불러오기"
-          aria-label="저장된 아이템 다시 불러오기"
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
+        <div className="avatar-pricing-page-actions">
+          <button
+            type="button"
+            onClick={() => setShowPreview(true)}
+            disabled={loading || Boolean(savingId) || !state || invalidDraft}
           >
-            <path d="M20 7v5h-5M20 12a8 8 0 1 0-2.35 5.65M20 7l-2.35-2.65" />
-          </svg>
-        </button>
+            학생 미리보기
+          </button>
+          <button
+            type="button"
+            className="avatar-pricing-reload"
+            onClick={() => void load()}
+            disabled={loading || Boolean(savingId)}
+            title="저장된 아이템 다시 불러오기"
+            aria-label="저장된 아이템 다시 불러오기"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M20 7v5h-5M20 12a8 8 0 1 0-2.35 5.65M20 7l-2.35-2.65" />
+            </svg>
+          </button>
+        </div>
       </div>
       {error && (
         <p className="avatar-pricing-error" role="alert">
@@ -474,14 +677,11 @@ export function AvatarPricingManager({
               const draft = drafts[item.id];
               const invalid = validationFor(draft);
               const isChanged = changed.has(item.id);
-              const editing = expanded[item.id];
               const saving = savingId === item.id;
-              const policy = avatarItemPricePolicy(item);
-              const fieldId = `avatar-item-${item.id}`;
               return (
                 <li
                   key={item.id}
-                  className={`avatar-pricing-item${isChanged ? " is-changed" : ""}${editing ? " is-editing" : ""}`}
+                  className={`avatar-pricing-item${isChanged ? " is-changed" : ""}`}
                   data-item-id={item.id}
                 >
                   <AvatarItemPreview
@@ -511,127 +711,6 @@ export function AvatarPricingManager({
                       <span className="avatar-pricing-changed">변경됨</span>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    className="avatar-pricing-edit"
-                    aria-label={`${item.label} ${editing ? "수정 접기" : "수정"}`}
-                    aria-expanded={Boolean(editing)}
-                    aria-controls={fieldId}
-                    onClick={() =>
-                      setExpanded((current) => ({
-                        ...current,
-                        [item.id]: !editing,
-                      }))
-                    }
-                  >
-                    {editing ? "접기" : "수정"}
-                    <svg
-                      viewBox="0 0 24 24"
-                      width="16"
-                      height="16"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      aria-hidden="true"
-                    >
-                      <path d={editing ? "m6 15 6-6 6 6" : "m6 9 6 6 6-6"} />
-                    </svg>
-                  </button>
-                  {editing && (
-                    <div id={fieldId} className="avatar-pricing-item-controls">
-                      <label>
-                        <span>이름</span>
-                        <input
-                          aria-label={`${item.label} 이름`}
-                          value={draft.label}
-                          maxLength={60}
-                          onChange={(event) =>
-                            updateDraft(item.id, { label: event.target.value })
-                          }
-                          disabled={saving || loading}
-                          aria-invalid={!draft.label.trim()}
-                        />
-                      </label>
-                      <label>
-                        <span>성별</span>
-                        <select
-                          aria-label={`${item.label} 성별`}
-                          value={draft.gender}
-                          onChange={(event) =>
-                            updateDraft(item.id, {
-                              gender: event.target.value as ItemDraft["gender"],
-                            })
-                          }
-                          disabled={saving || loading}
-                        >
-                          <option value="unisex">공용</option>
-                          <option value="boy">남자</option>
-                          <option value="girl">여자</option>
-                        </select>
-                      </label>
-                      <label>
-                        <span>판매 방식</span>
-                        <select
-                          aria-label={`${item.label} 무료·유료`}
-                          value={draft.paid ? "paid" : "free"}
-                          onChange={(event) =>
-                            updateDraft(item.id, {
-                              paid: event.target.value === "paid",
-                            })
-                          }
-                          disabled={saving || loading || policy !== null}
-                        >
-                          <option value="free">무료</option>
-                          <option value="paid">유료</option>
-                        </select>
-                      </label>
-                      <label>
-                        <span>가격</span>
-                        <span className="avatar-pricing-value">
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            min={1}
-                            max={MAX_PRICE}
-                            step={1}
-                            aria-label={`${item.label} 위스 가격`}
-                            aria-invalid={priceOf(draft) === null}
-                            value={draft.paid ? draft.price : ""}
-                            placeholder={draft.paid ? "가격" : "0"}
-                            onChange={(event) =>
-                              updateDraft(item.id, {
-                                price: event.target.value,
-                              })
-                            }
-                            disabled={saving || loading || !draft.paid}
-                          />
-                          <WisIcon />
-                        </span>
-                      </label>
-                      {policy && (
-                        <p className="avatar-pricing-policy">
-                          {policy === "free"
-                            ? "학교 체육복 · 무료"
-                            : "1~1,000,000 위스"}
-                        </p>
-                      )}
-                      <label>
-                        <span>설명</span>
-                        <textarea
-                          aria-label={`${item.label} 설명`}
-                          rows={3}
-                          maxLength={400}
-                          value={draft.description}
-                          onChange={(event) =>
-                            updateDraft(item.id, {
-                              description: event.target.value,
-                            })
-                          }
-                          disabled={saving || loading}
-                        />
-                      </label>
-                    </div>
-                  )}
                   {(invalid || itemErrors[item.id]) && (
                     <p className="avatar-pricing-item-error" role="alert">
                       {invalid || itemErrors[item.id]}
@@ -640,11 +719,12 @@ export function AvatarPricingManager({
                   <div className="avatar-pricing-item-actions">
                     <button
                       type="button"
-                      className="avatar-pricing-student-button"
-                      onClick={() => setPreviewId(item.id)}
-                      disabled={Boolean(invalid)}
+                      className="avatar-pricing-edit"
+                      aria-label={`${item.label} 수정`}
+                      onClick={() => setEditingId(item.id)}
+                      disabled={loading || Boolean(savingId)}
                     >
-                      학생 미리보기
+                      수정
                     </button>
                     <button
                       type="button"
@@ -669,11 +749,20 @@ export function AvatarPricingManager({
           )}
         </>
       )}
-      {previewItem && (
-        <StudentItemPreview
-          item={previewItem}
-          unsaved={changed.has(previewItem.id)}
-          onClose={() => setPreviewId(null)}
+      {editingItem && (
+        <ItemEditor
+          item={editingItem}
+          draft={drafts[editingItem.id]}
+          changed={changed.has(editingItem.id)}
+          onChange={(patch) => updateDraft(editingItem.id, patch)}
+          onClose={() => setEditingId(null)}
+        />
+      )}
+      {showPreview && previewPricing && (
+        <StudentShopPreview
+          pricing={previewPricing}
+          unsaved={changed.size > 0}
+          onClose={() => setShowPreview(false)}
         />
       )}
     </section>

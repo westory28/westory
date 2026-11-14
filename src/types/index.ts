@@ -13,6 +13,7 @@ export interface SystemConfig {
       | "yut"
       | "mypage"
       | "avatar"
+      | "avatar_shop"
       | "profile"
       | "score"
       | "wrong_note",

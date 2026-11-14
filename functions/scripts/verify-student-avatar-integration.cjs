@@ -81,6 +81,36 @@ let rules;
     const receipt = values[0].ledgerEntryId;
     assert.equal((await get(`semester_wis_ledger/${receipt}`)).type, 'ORDER_DEBIT');
   });
+  await check('avatar-shop closure blocks purchases and replays, preserves wardrobe, and supports legacy menu settings', async () => {
+    const closedSettings = [
+      { config: { studentMenuVisibility: { mypage: true, avatar: true, avatar_shop: false } } },
+      ...[{ url: '/student/points', hidden: true },
+        ...['/student/points?tab=shop', '/student/points?shop=avatar&tab=shop'].map(url => ({
+          url: '/student/points', children: [{ url, hidden: true }],
+        }))].map(item => ({ config: { studentMenuVisibility: { mypage: true, avatar: true } }, menu: { student: [item] } })),
+    ];
+    for (const { config, menu } of closedSettings) {
+      await seed();
+      await api.purchaseStudentAvatarItem(authenticated(fixture.purchase()));
+      const before = await db.doc(fixture.accountPath).get();
+      const beforeAvatar = await db.doc(fixture.avatarPath).get();
+      const beforeReceipts = (await db.collection(`${fixture.avatarPath}/requests`).get()).size;
+      await db.doc('site_settings/config').set(config);
+      if (menu) await db.doc('site_settings/menu_config').set(menu);
+      for (const input of [fixture.purchase(), fixture.purchase(fixture.paid[1], 'hidden-new-purchase')]) {
+        await assert.rejects(api.purchaseStudentAvatarItem(authenticated(input)), error => error.details?.reason === 'STUDENT_MENU_HIDDEN');
+      }
+      assert.equal((await db.doc(fixture.accountPath).get()).updateTime.toMillis(), before.updateTime.toMillis());
+      assert.equal((await db.doc(fixture.avatarPath).get()).updateTime.toMillis(), beforeAvatar.updateTime.toMillis());
+      assert.equal((await db.collection(`${fixture.avatarPath}/requests`).get()).size, beforeReceipts);
+      assert.equal((await db.collection('semester_wis_ledger').get()).size, 1);
+      const wardrobe = await api.getAvatarStudioState(authenticated(fixture.req({ year: '2026', semester: '2' })));
+      assert.equal(wardrobe.balance, before.data().balance);
+      const saved = await api.saveStudentAvatar(authenticated(await fixture.save({ expectedRevision: wardrobe.avatar.revision })));
+      assert.equal(saved.revision, wardrobe.avatar.revision + 1);
+      assert.equal((await db.doc(fixture.accountPath).get()).updateTime.toMillis(), before.updateTime.toMillis());
+    }
+  });
   await check('Firestore contention: different purchases cannot overspend or duplicate ownership', async () => {
     await seed(Math.max(fixture.paid[0].price, fixture.paid[1].price));
     const values = await Promise.allSettled([api.purchaseStudentAvatarItem(authenticated(fixture.purchase())),

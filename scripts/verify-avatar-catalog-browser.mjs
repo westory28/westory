@@ -65,8 +65,8 @@ const saveButton = () => button("아바타 저장");
 const ready = () =>
   page.waitForFunction(
     () =>
-      document.querySelector(".avatar-studio-camera button")?.disabled ===
-      false,
+      document.querySelector(".avatar-studio")?.dataset.rendererReady ===
+      "true",
   );
 const itemButton = (label) =>
   page
@@ -145,14 +145,30 @@ try {
     0,
   );
   assert(await saveButton().isDisabled(), "Unchanged saved look cannot write");
+  assert.equal(
+    await itemButton("크림 니트").count(),
+    0,
+    "Unowned garment is absent from wardrobe",
+  );
+  await button("상점 화면").click();
+  await ready();
+  assert.equal(await saveButton().count(), 0, "Shop cannot save an outfit");
+  assert.equal(await button("전체 보기").count(), 0);
+  assert.equal(await button("얼굴 보기").count(), 0);
   await itemButton("크림 니트").click();
-  assert(await saveButton().isDisabled(), "Unowned garment cannot save");
   await button("160 위스로 구매").click();
   await button("구매하기").click();
   await page.waitForFunction(() => window.avatarQa.purchases.length === 1);
   assert.equal(
     await page.evaluate(() => window.avatarQa.purchases[0].charge),
     160,
+  );
+  await button("꾸미기 화면").click();
+  await ready();
+  assert.equal(
+    await itemButton("크림 니트").count(),
+    1,
+    "Purchase appears in wardrobe",
   );
   await button("순위 화면").click();
   assert.equal(
@@ -209,7 +225,10 @@ try {
           character === "girl" ? 1 : 0,
         );
       const distinct = new Set();
-      for (const item of candidates) {
+      for (let index = 0; index < candidates.length; index++) {
+        const item = candidates[index];
+        const pageNumber = Math.floor(index / 18) + 1;
+        if (candidates.length > 18) await button(pageNumber + "페이지").click();
         await itemButton(item.label).click();
         await ready();
         await itemButton(item.label).locator("img").waitFor();
@@ -278,12 +297,15 @@ try {
     .waitFor();
   const catalogReads = await page.evaluate(() => window.avatarQa.loadCalls);
   await page
-    .getByRole("combobox", { name: "아이템 성별", exact: true })
-    .selectOption("girl");
+    .getByRole("group", { name: "아이템 성별", exact: true })
+    .getByRole("button", { name: "여자", exact: true })
+    .click();
   assert.equal(await itemButton("별빛 여행 니트").count(), 0);
   await page
-    .getByRole("combobox", { name: "아이템 성별", exact: true })
-    .selectOption("boy");
+    .getByRole("group", { name: "아이템 성별", exact: true })
+    .getByRole("button", { name: "남자", exact: true })
+    .click();
+  await button("아이템 검색 열기").click();
   assert.equal(await itemButton("별빛 여행 니트").count(), 1);
   await page
     .getByRole("searchbox", { name: "아이템 검색", exact: true })
@@ -298,8 +320,9 @@ try {
     .getByRole("searchbox", { name: "아이템 검색", exact: true })
     .fill("");
   await page
-    .getByRole("combobox", { name: "아이템 성별", exact: true })
-    .selectOption("all");
+    .getByRole("group", { name: "아이템 성별", exact: true })
+    .getByRole("button", { name: "성별 전체", exact: true })
+    .click();
   assert.equal(
     await page.evaluate(() => window.avatarQa.loadCalls),
     catalogReads,
@@ -328,6 +351,118 @@ try {
     await page.locator(".avatar-studio-item canvas").count(),
     0,
     "Catalog keeps static previews",
+  );
+  // Shop controls share one category/search row; filters and pages stay local.
+  await button("상점 화면").click();
+  await ready();
+  const shopReads = await page.evaluate(() => window.avatarQa.loadCalls);
+  const writesBeforeBrowse = await page.evaluate(() => [
+    window.avatarQa.saveCalls,
+    window.avatarQa.purchases.length,
+  ]);
+  const filters = page.getByRole("group", { name: "아이템 필터", exact: true });
+  await filters.getByRole("button", { name: "무료", exact: true }).click();
+  assert.equal(
+    await page.locator(".avatar-studio-item").count(),
+    catalog.items.filter((i) => i.slot === "top" && i.price === 0).length,
+  );
+  await filters.getByRole("button", { name: "유료", exact: true }).click();
+  assert.equal(await itemButton("하얀 반팔 교복").count(), 0);
+  await filters.getByRole("button", { name: "보유", exact: true }).click();
+  assert.equal(await itemButton("별빛 여행 니트").count(), 1);
+  await filters.getByRole("button", { name: "전체", exact: true }).click();
+  for (const width of [320, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await button(`폭 ${width}`).click();
+    const searchBox = page.getByRole("searchbox", {
+      name: "아이템 검색",
+      exact: true,
+    });
+    const narrow = await page
+      .locator(".avatar-studio-picker")
+      .evaluate((n) => n.clientWidth < 680);
+    await searchBox.waitFor({ state: narrow ? "hidden" : "visible" });
+    if (narrow) {
+      assert.equal(
+        await searchBox.isVisible(),
+        false,
+        `Search starts folded at ${width}`,
+      );
+      const before = await page.locator(".avatar-studio-toolbar").boundingBox();
+      await button("아이템 검색 열기").click();
+      await searchBox.fill("없는 검색 결과");
+      const after = await page.locator(".avatar-studio-toolbar").boundingBox();
+      assert(
+        Math.abs(before.height - after.height) < 1,
+        "Search expansion does not add a row",
+      );
+      await page.locator(".avatar-studio-empty").waitFor();
+      await searchBox.press("Escape");
+      assert.equal(await searchBox.isVisible(), false);
+      assert(
+        await button("아이템 검색 열기").evaluate(
+          (n) => document.activeElement === n,
+        ),
+      );
+    } else assert(await searchBox.isVisible(), "Desktop input stays visible");
+    const layout = await page
+      .locator(".avatar-studio-toolbar")
+      .evaluate((n) => {
+        const tabs = n
+          .querySelector(".avatar-studio-categories")
+          .getBoundingClientRect();
+        const search = n
+          .querySelector(".avatar-studio-search")
+          .getBoundingClientRect();
+        return {
+          sameRow: Math.abs(tabs.y - search.y) < 10,
+          right: search.x >= tabs.right,
+          overflow: document.documentElement.scrollWidth > innerWidth + 1,
+        };
+      });
+    assert(
+      layout.sameRow && layout.right && !layout.overflow,
+      JSON.stringify({ width, layout }),
+    );
+    const file = path.join(evidence, `shop-${width}.png`);
+    await page.screenshot({ path: file, fullPage: true });
+    screenshots.push(file);
+  }
+  if (catalog.items.filter((i) => i.slot === "top").length > 18) {
+    await button("2페이지").click();
+    assert.equal(await button("2페이지").getAttribute("aria-current"), "page");
+    await filters.getByRole("button", { name: "무료", exact: true }).click();
+    assert.equal(
+      await page.locator(".avatar-studio-pagination").count(),
+      0,
+      "Filters reset out-of-range pages",
+    );
+  }
+  assert.equal(await page.evaluate(() => window.avatarQa.loadCalls), shopReads);
+  assert.deepEqual(
+    await page.evaluate(() => [
+      window.avatarQa.saveCalls,
+      window.avatarQa.purchases.length,
+    ]),
+    writesBeforeBrowse,
+    "Browsing never saves or charges",
+  );
+  await button("순위 화면").click();
+  await page.evaluate(() => window.avatarQa.ownAll());
+  await button("꾸미기 화면").click();
+  await ready();
+  if (catalog.items.filter((i) => i.slot === "top").length > 18) {
+    await button("2페이지").click();
+    assert.equal(
+      await button("2페이지").getAttribute("aria-current"),
+      "page",
+      "Wardrobe pagination",
+    );
+  }
+  assert.equal(
+    await page.getByRole("button", { name: /위스로 구매/ }).count(),
+    0,
+    "Wardrobe has no purchase action",
   );
   // A response retained by an old client must not restore ownership or thumbnails.
   await button("순위 화면").click();

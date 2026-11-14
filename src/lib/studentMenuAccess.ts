@@ -17,6 +17,23 @@ export const buildStudentMenuVisibility = (menuConfig: MenuConfig) => {
     );
   const weplay = parentVisible("/student/weplay");
   const mypage = parentVisible("/student/mypage");
+  const avatarShopTarget = (url: string) => {
+    const { pathname, searchParams } = parseMenuUrl(url);
+    return (
+      pathname === "/student/points" &&
+      searchParams.get("tab") === "shop" &&
+      (!searchParams.has("shop") || searchParams.get("shop") === "avatar")
+    );
+  };
+  const avatarShop = !menuConfig.student.some(
+    (item) =>
+      (item.hidden === true &&
+        (parseMenuUrl(item.url).pathname === "/student/points" ||
+          item.children?.some((child) => avatarShopTarget(child.url)))) ||
+      item.children?.some(
+        (child) => child.hidden === true && avatarShopTarget(child.url),
+      ),
+  );
   return {
     weplay,
     naval:
@@ -30,6 +47,7 @@ export const buildStudentMenuVisibility = (menuConfig: MenuConfig) => {
       childVisible("/student/mypage") &&
       childVisible("/student/mypage?menu=profile"),
     avatar: mypage && childVisible("/student/mypage?menu=avatar"),
+    avatar_shop: avatarShop,
     score: mypage && childVisible("/student/mypage?menu=score"),
     wrong_note: mypage && childVisible("/student/mypage?menu=wrong_note"),
   };
@@ -400,6 +418,21 @@ export const getStudentRouteAccess = (
     };
   }
 
+  const routeParams = new URLSearchParams(normalizeSearch(target.search));
+  if (
+    pathname === "/student/points" &&
+    routeParams.get("tab") === "shop" &&
+    routeParams.get("shop") === "avatar" &&
+    (config.studentMenuVisibility?.avatar_shop === false ||
+      !buildStudentMenuVisibility(menuConfig).avatar_shop)
+  ) {
+    return {
+      allowed: false,
+      redirectTo: STUDENT_HIDDEN_MENU_REDIRECT,
+      reason: "menu-config",
+    };
+  }
+
   if (pathname === "/student/mypage" || pathname === "/student/weplay") {
     const visibility = buildStudentMenuVisibility(menuConfig);
     const visible = (key: keyof typeof visibility) =>
@@ -407,7 +440,8 @@ export const getStudentRouteAccess = (
     const params = new URLSearchParams(normalizeSearch(target.search));
     let allowed = false;
     if (pathname === "/student/mypage") {
-      const requested = params.get("menu") || "profile";
+      const menu = params.get("menu") || "profile";
+      const requested = menu === "wardrobe" ? "avatar" : menu;
       const key = ["profile", "avatar", "score", "wrong_note"].includes(
         requested,
       )

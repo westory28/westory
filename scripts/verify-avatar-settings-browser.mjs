@@ -1,4 +1,4 @@
-/** Local-only real Settings + item editor regression fixture. No Firebase calls. */
+/** Local-only real avatar shop management + wardrobe regression fixture. No Firebase calls. */
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -15,7 +15,7 @@ const labelFor = (value) =>
   catalog.items.find((item) => item.value === value).label;
 const output = path.resolve(
   process.env.AVATAR_SETTINGS_EVIDENCE ||
-    path.join(root, "output/avatar-shop-20261114/settings"),
+    path.join(root, "output/avatar-wardrobe-20261114/settings"),
 );
 await fs.mkdir(output, { recursive: true });
 const entry = `
@@ -23,7 +23,8 @@ import React,{useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {MemoryRouter} from 'react-router-dom';
 import MainLayout from './src/components/layout/MainLayout';
-import Settings from './src/pages/teacher/Settings';
+import TeacherAvatarShopPage from './src/pages/teacher/components/points/TeacherAvatarShopPage';
+import SettingsMyPage from './src/pages/teacher/components/SettingsMyPage';
 import {AVATAR_ITEMS,defaultAvatarLook} from './src/features/avatar/catalog';
 const qa=window.avatarPricingQa={reads:0,saves:[],revision:4,failLoad:false,conflict:false,deferred:false,errors:[],toasts:[],metadata:{},prices:Object.fromEntries(AVATAR_ITEMS.map(i=>[i.id,i.price]))};
 qa.prices['minimi-top-knit-cream']=0;qa.prices['minimi-top-school-white']=999;qa.prices['minimi-top-school-hoodie']=999;
@@ -32,8 +33,8 @@ window.addEventListener('error',e=>qa.errors.push(e.message));
 window.addEventListener('unhandledrejection',e=>qa.errors.push(String(e.reason)));
 qa.load=async()=>{qa.reads++;if(qa.failLoad)throw Error('가격표를 불러오지 못했습니다. 다시 불러와 주세요.');return{revision:qa.revision,prices:{...qa.prices},metadata:{...qa.metadata}}};
 qa.save=async input=>{qa.saves.push(structuredClone(input));if(qa.conflict){qa.conflict=false;qa.revision++;throw Object.assign(Error('다른 관리자가 변경했습니다. 입력 내용은 유지했습니다. 확인 후 다시 저장해 주세요.'),{details:{pricing:{revision:qa.revision,prices:{...qa.prices},metadata:{...qa.metadata}}}})}if(input.expectedRevision!==qa.revision)throw Error('revision mismatch');if(qa.deferred)await new Promise(resolve=>qa.release=resolve);qa.prices={...qa.prices,...input.prices};qa.metadata={...qa.metadata,...input.metadata};qa.revision++;return{revision:qa.revision,prices:{...qa.prices},metadata:{...qa.metadata}}};
-function App(){const[mode,setMode]=useState('normal');return <><div className="qa-controls"><button onClick={()=>{qa.conflict=!qa.conflict;setMode(qa.conflict?'conflict':'normal')}}>동시 수정 오류</button><button onClick={()=>{qa.failLoad=!qa.failLoad;setMode(qa.failLoad?'load-error':'normal')}}>조회 오류</button><button onClick={()=>{qa.deferred=!qa.deferred;setMode(qa.deferred?'delayed':'normal')}}>저장 지연</button><button onClick={()=>qa.release?.()}>저장 응답</button><output>{mode}</output></div><MainLayout><Settings/></MainLayout></>}
-createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/teacher/settings']}><App/></MemoryRouter>);
+function App(){const[mode,setMode]=useState('normal'),[view,setView]=useState('shop');qa.setView=setView;return <><div className="qa-controls"><button onClick={()=>{qa.conflict=!qa.conflict;setMode(qa.conflict?'conflict':'normal')}}>동시 수정 오류</button><button onClick={()=>{qa.failLoad=!qa.failLoad;setMode(qa.failLoad?'load-error':'normal')}}>조회 오류</button><button onClick={()=>{qa.deferred=!qa.deferred;setMode(qa.deferred?'delayed':'normal')}}>저장 지연</button><button onClick={()=>qa.release?.()}>저장 응답</button><output>{mode}</output></div><MainLayout>{view==='shop'?<TeacherAvatarShopPage/>:<div className="ws-page" id="qa-studio-content"><SettingsMyPage/></div>}</MainLayout></>}
+createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/teacher/points?tab=products&shop=avatar']}><App/></MemoryRouter>);
 `;
 const mockSections =
   /\/(SettingsGeneral|SettingsSchool|SettingsInterface|SettingsPrivacy|SettingsAccess|SettingsNotifications|SettingsSemesterArchive)$/;
@@ -118,7 +119,7 @@ const result = await build({
           namespace: "permission",
         }));
         plugin.onLoad({ filter: /.*/, namespace: "permission" }, () => ({
-          contents: `export const isAdminUser=()=>true,canAccessTeacherPortal=()=>true,canAccessTeacherPath=()=>true,getDefaultTeacherRoute=()=>'/teacher/dashboard';`,
+          contents: `export const isAdminUser=()=>true,canManageSettings=()=>true,canAccessTeacherPortal=()=>true,canAccessTeacherPath=()=>true,getDefaultTeacherRoute=()=>'/teacher/dashboard';`,
           loader: "js",
         }));
         plugin.onResolve({ filter: /^\.\/Footer$/ }, (args) => ({
@@ -238,35 +239,35 @@ try {
         : route.abort(),
     );
     await page.goto(origin);
-    const nav = page.getByRole("navigation", { name: "관리자 설정 메뉴" }),
-      toggle = page.locator(".teacher-settings-menu-toggle");
-    if (width < 768) {
-      assert.equal(await nav.isVisible(), false);
-      await toggle.focus();
-      await page.keyboard.press("Enter");
-      assert.equal(await nav.isVisible(), true);
-    }
-    await nav
-      .getByRole("button", { name: "아바타 아이템 관리", exact: true })
-      .click();
     await page.locator(".avatar-pricing-item").first().waitFor();
-    if (width < 768) {
-      assert.equal(await nav.isVisible(), false);
-      assert.equal(
-        await toggle.evaluate((el) => el === document.activeElement),
-        true,
-      );
-      await toggle.click();
-      await page.keyboard.press("Escape");
-      assert.equal(await nav.isVisible(), false);
-    }
+    await page
+      .getByRole("navigation", { name: "위스 상점 상품 종류" })
+      .getByRole("link", { name: "아바타 아이템 관리", exact: true })
+      .waitFor();
     const before = await page.evaluate(() => window.avatarPricingQa.reads);
     const itemCard = (id) => page.locator(`[data-item-id="${id}"]`);
-    const knit = itemCard("minimi-top-knit-cream");
-    const school = itemCard("minimi-top-school-white");
+    const knit = itemCard("minimi-top-knit-cream"),
+      school = itemCard("minimi-top-school-white");
+    const editor = page.getByRole("dialog", {
+      name: "아이템 수정",
+      exact: true,
+    });
+    const closeEditor = async () => {
+      await editor
+        .getByRole("button", { name: "아이템 수정 닫기", exact: true })
+        .click();
+      await editor.waitFor({ state: "hidden" });
+    };
     assert.equal(
       await page
-        .getByRole("button", { name: "가격 저장", exact: true })
+        .getByRole("button", { name: "학생 미리보기", exact: true })
+        .count(),
+      1,
+      "One page-level shop preview",
+    );
+    assert.equal(
+      await knit
+        .getByRole("button", { name: "학생 미리보기", exact: true })
         .count(),
       0,
     );
@@ -278,67 +279,104 @@ try {
     );
     await school.locator(".avatar-pricing-edit").click();
     assert.equal(
-      await school
+      await editor
         .getByLabel(labelFor("mm-school-white") + " 무료·유료", { exact: true })
         .isDisabled(),
       true,
     );
     assert.equal(
-      await school
+      await editor
         .getByLabel(labelFor("mm-school-white") + " 위스 가격", { exact: true })
         .isDisabled(),
       true,
     );
-    await school.locator(".avatar-pricing-edit").click();
-    await page.getByLabel("성별", { exact: true }).selectOption("boy");
-    await page.getByLabel("성별", { exact: true }).selectOption("girl");
-    await page.getByLabel("성별", { exact: true }).selectOption("unisex");
-    await page.getByLabel("성별", { exact: true }).selectOption("all");
+    await closeEditor();
+    assert.equal(
+      await school
+        .locator(".avatar-pricing-edit")
+        .evaluate((el) => el === document.activeElement),
+      true,
+      "Editor restores focus",
+    );
+    for (const gender of ["boy", "girl", "unisex", "all"])
+      await page.getByLabel("성별", { exact: true }).selectOption(gender);
     await page.getByLabel("아이템 검색", { exact: true }).fill("없는상품검증");
     assert.equal(await page.locator(".avatar-pricing-item").count(), 0);
     await page.getByText("해당하는 아이템이 없습니다.").waitFor();
     await page.getByLabel("아이템 검색", { exact: true }).fill("");
     await knit.locator(".avatar-pricing-edit").click();
-    const originalName = labelFor("mm-knit-cream");
-    const price = knit.getByLabel(originalName + " 위스 가격", { exact: true });
+    const originalName = labelFor("mm-knit-cream"),
+      price = editor.getByLabel(originalName + " 위스 가격", { exact: true });
     await price.fill("");
     assert.equal(await price.getAttribute("aria-invalid"), "true");
-    assert.equal(
-      await knit
-        .getByRole("button", { name: "저장", exact: true })
-        .isDisabled(),
-      true,
-    );
     await price.fill("1000001");
     assert.equal(await price.getAttribute("aria-invalid"), "true");
     await price.fill("750");
-    await knit.getByLabel(originalName + " 이름", { exact: true }).fill("");
-    assert.equal(
-      await knit
-        .getByRole("button", { name: "저장", exact: true })
-        .isDisabled(),
-      true,
-    );
-    await knit
+    await editor.getByLabel(originalName + " 이름", { exact: true }).fill("");
+    await editor.getByRole("alert").filter({ hasText: "이름은" }).waitFor();
+    await editor
       .getByLabel(originalName + " 이름", { exact: true })
       .fill("구름 크림 니트");
-    await knit
+    await editor
       .getByLabel(originalName + " 성별", { exact: true })
       .selectOption("boy");
-    await knit
+    await editor
       .getByLabel(originalName + " 설명", { exact: true })
       .fill("포근한 짜임의 긴소매 니트입니다.");
-    // A second dirty card must survive saves, conflict responses and refreshes.
+    const editorLayout = await editor.evaluate((el) => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+      image: el
+        .querySelector(".avatar-pricing-editor-image")
+        .getBoundingClientRect()
+        .toJSON(),
+      name: el.querySelector("input").getBoundingClientRect().toJSON(),
+      options: [
+        ...el.querySelectorAll(".avatar-pricing-editor-options label"),
+      ].map((e) => e.getBoundingClientRect().toJSON()),
+      description: el
+        .querySelector("textarea")
+        .getBoundingClientRect()
+        .toJSON(),
+    }));
+    assert(
+      editorLayout.scrollWidth <= editorLayout.clientWidth,
+      "Editor has no horizontal overflow",
+    );
+    if (width >= 768) {
+      assert(
+        editorLayout.image.right < editorLayout.name.left,
+        "Large image left of form",
+      );
+      assert(
+        Math.max(...editorLayout.options.map((e) => e.top)) -
+          Math.min(...editorLayout.options.map((e) => e.top)) <
+          2,
+        "Gender, sales type, price share second row",
+      );
+      assert(
+        editorLayout.name.bottom < editorLayout.options[0].top &&
+          editorLayout.options[0].bottom < editorLayout.description.top,
+      );
+    }
+    await page.screenshot({ path: path.join(output, `editor-${width}.png`) });
+    await closeEditor();
+    assert.equal(
+      await page.evaluate(() => window.avatarPricingQa.saves.length),
+      0,
+      "Closing editor does not save",
+    );
     await school.locator(".avatar-pricing-edit").click();
-    await school
+    await editor
       .getByLabel(labelFor("mm-school-white") + " 설명", { exact: true })
       .fill("다른 아이템의 저장 전 설명");
+    await closeEditor();
     assert.equal(
       await page.evaluate(() => window.avatarPricingQa.reads),
       before,
-      "Filters and editing do not fetch",
+      "Editing and filtering do not fetch",
     );
-    const previewButton = knit.getByRole("button", {
+    const previewButton = page.getByRole("button", {
       name: "학생 미리보기",
       exact: true,
     });
@@ -347,31 +385,82 @@ try {
       name: "학생 미리보기",
       exact: true,
     });
-    await dialog.waitFor();
-    assert.equal(await dialog.locator(".avatar-shop-item").count(), 1);
-    await dialog.getByText("저장 전 변경 사항", { exact: true }).waitFor();
+    await dialog
+      .getByRole("heading", { name: "아바타 상점", exact: true })
+      .waitFor();
+    assert(
+      (await dialog.locator(".avatar-shop-item").count()) > 1,
+      "Preview is the whole shop, not one card",
+    );
+    await dialog.getByText("저장 전 변경 사항 포함", { exact: true }).waitFor();
+    await page.screenshot({
+      path: path.join(output, `preview-all-${width}.png`),
+    });
+    const previewSearch = dialog.getByLabel("아이템 검색", { exact: true });
+    if (!(await previewSearch.isVisible()))
+      await dialog
+        .getByRole("button", { name: "아이템 검색 열기", exact: true })
+        .click();
+    await previewSearch.fill("구름 크림");
+    const previewCard = dialog
+      .locator(".avatar-shop-item")
+      .filter({ hasText: "구름 크림 니트" });
+    await previewCard.click();
     await dialog
       .getByText("포근한 짜임의 긴소매 니트입니다.", { exact: true })
       .waitFor();
+    const buy = dialog.getByRole("button", {
+      name: "750 위스로 구매",
+      exact: true,
+    });
+    assert.equal(await buy.isDisabled(), true, "Preview cannot purchase");
+    assert.equal(
+      await dialog
+        .getByRole("button", { name: "아바타 저장", exact: true })
+        .count(),
+      0,
+      "Preview has no avatar save",
+    );
     assert.equal(
       await page.evaluate(() => window.avatarPricingQa.saves.length),
       0,
-      "Preview never saves",
+    );
+    assert.equal(
+      await page.evaluate(() => window.avatarPricingQa.reads),
+      before,
+      "Whole preview does not query the server",
+    );
+    const dialogSize = await dialog.evaluate((el) => ({
+      scroll: el.scrollWidth,
+      client: el.clientWidth,
+    }));
+    assert(
+      dialogSize.scroll <= dialogSize.client,
+      "Preview has no horizontal overflow",
     );
     await page.screenshot({ path: path.join(output, `preview-${width}.png`) });
-    await page.keyboard.press("Escape");
+    await dialog
+      .getByRole("button", { name: "학생 미리보기 닫기", exact: true })
+      .click();
     await dialog.waitFor({ state: "hidden" });
     assert.equal(
       await previewButton.evaluate((el) => el === document.activeElement),
       true,
       "Preview restores focus",
     );
+    assert.equal(
+      await page.locator("canvas").count(),
+      0,
+      "Closing shop preview disposes the canvas",
+    );
     await page
       .getByRole("button", { name: "동시 수정 오류", exact: true })
       .click();
     await knit.getByRole("button", { name: "저장", exact: true }).click();
     await knit.getByRole("alert").filter({ hasText: "다른 관리자" }).waitFor();
+    await knit.locator(".avatar-pricing-edit").click();
     assert.equal(await price.inputValue(), "750");
+    await closeEditor();
     await knit.getByRole("button", { name: "저장", exact: true }).click();
     await page.waitForFunction(
       () => window.avatarPricingQa.toasts.length === 1,
@@ -379,11 +468,7 @@ try {
     const requests = await page.evaluate(() => window.avatarPricingQa.saves);
     assert.equal(requests.length, 2);
     assert.equal(requests[0].expectedRevision, 4);
-    assert.equal(
-      requests[1].expectedRevision,
-      5,
-      "Conflict updates revision and retains draft",
-    );
+    assert.equal(requests[1].expectedRevision, 5);
     assert.deepEqual(Object.keys(requests[1].prices), [
       "minimi-top-knit-cream",
     ]);
@@ -396,37 +481,41 @@ try {
       description: "포근한 짜임의 긴소매 니트입니다.",
     });
     assert.equal(
-      await school
-        .getByLabel(labelFor("mm-school-white") + " 설명", { exact: true })
-        .inputValue(),
-      "다른 아이템의 저장 전 설명",
-    );
-    assert.equal(
       await knit
         .getByRole("button", { name: "저장", exact: true })
         .isDisabled(),
       true,
-      "Unchanged item cannot submit",
     );
+    await school.locator(".avatar-pricing-edit").click();
+    assert.equal(
+      await editor
+        .getByLabel(labelFor("mm-school-white") + " 설명", { exact: true })
+        .inputValue(),
+      "다른 아이템의 저장 전 설명",
+    );
+    await closeEditor();
     await page.getByLabel("변경한 항목만", { exact: true }).check();
     assert.equal(await page.locator(".avatar-pricing-item").count(), 1);
     await page.getByLabel("변경한 항목만", { exact: true }).uncheck();
     if (width === 1280) {
-      const newPrice = knit.getByLabel("구름 크림 니트 위스 가격", {
-        exact: true,
-      });
-      await newPrice.fill("800");
+      await knit.locator(".avatar-pricing-edit").click();
+      await editor
+        .getByLabel("구름 크림 니트 위스 가격", { exact: true })
+        .fill("800");
+      await closeEditor();
       await page
         .getByRole("button", { name: "저장 지연", exact: true })
         .click();
       await knit.getByRole("button", { name: "저장", exact: true }).click();
-      assert.equal(await newPrice.isDisabled(), true);
+      assert.equal(
+        await knit.locator(".avatar-pricing-edit").isDisabled(),
+        true,
+      );
       assert.equal(
         await school
           .getByRole("button", { name: "저장", exact: true })
           .isDisabled(),
         true,
-        "Serial saves avoid stale revisions",
       );
       await page
         .getByRole("button", { name: "저장 응답", exact: true })
@@ -447,7 +536,10 @@ try {
         .getByRole("alert")
         .filter({ hasText: "불러오지 못했습니다" })
         .waitFor();
-      assert.equal(await newPrice.inputValue(), "800");
+      assert.match(
+        await knit.locator(".avatar-pricing-current").innerText(),
+        /800/,
+      );
       await page
         .getByRole("button", { name: "조회 오류", exact: true })
         .click();
@@ -458,16 +550,15 @@ try {
         })
         .click();
       await page.waitForFunction(() => window.avatarPricingQa.reads === 3);
+      await school.locator(".avatar-pricing-edit").click();
       assert.equal(
-        await school
+        await editor
           .getByLabel(labelFor("mm-school-white") + " 설명", { exact: true })
           .inputValue(),
         "다른 아이템의 저장 전 설명",
-        "Reload preserves dirty drafts",
       );
+      await closeEditor();
     }
-    await knit.locator(".avatar-pricing-edit").click();
-    await school.locator(".avatar-pricing-edit").click();
     await page.addStyleTag({ content: ".qa-controls{display:none}" });
     await page.evaluate(() => window.scrollTo(0, 0));
     if (process.argv.includes("--require-previews")) {
@@ -496,7 +587,7 @@ try {
         ?.getBoundingClientRect()
         .toJSON(),
       content: document
-        .querySelector("#teacher-settings-content")
+        .querySelector(".avatar-pricing")
         ?.getBoundingClientRect()
         .toJSON(),
       cards: [...document.querySelectorAll(".avatar-pricing-item")].map((el) =>
@@ -528,10 +619,11 @@ try {
         Math.abs(report.cards[0].top - report.cards[1].top) < 2,
         "Two compact cards per mobile row",
       );
-    if (width >= 1024) {
-      assert(Math.abs(report.sidebar.right - report.submenu.left) < 2);
-      assert(report.content.left >= report.submenu.right);
-    }
+    if (width >= 1024)
+      assert(
+        report.content.left >= report.sidebar.right,
+        "Management content fits beside main navigation",
+      );
     if (process.argv.includes("--require-previews")) {
       assert.equal(report.previews.length, report.items);
       assert(report.previews.every((i) => i.loaded));
@@ -549,10 +641,7 @@ try {
       !process.argv.includes("--skip-studio") &&
       [390, 768, 1280].includes(width)
     ) {
-      if (width < 768) await toggle.click();
-      await nav
-        .getByRole("button", { name: "마이페이지", exact: true })
-        .click();
+      await page.evaluate(() => window.avatarPricingQa.setView("wardrobe"));
       await page
         .getByRole("button", { name: "아바타 꾸미기", exact: true })
         .click();
@@ -561,8 +650,8 @@ try {
         .click();
       await page.waitForFunction(
         () =>
-          document.querySelector(".avatar-studio-camera button")?.disabled ===
-          false,
+          document.querySelector(".avatar-studio-save .avatar-primary")
+            ?.disabled === false,
         undefined,
         { timeout: 60000 },
       );
@@ -580,7 +669,7 @@ try {
           .getBoundingClientRect()
           .toJSON(),
         content: document
-          .querySelector("#teacher-settings-content")
+          .querySelector("#qa-studio-content")
           .getBoundingClientRect()
           .toJSON(),
       }));
@@ -625,15 +714,12 @@ try {
         .click();
       await page.waitForFunction(
         () =>
-          document.querySelector(".avatar-studio-camera button")?.disabled ===
-          false,
+          document.querySelector(".avatar-studio-save .avatar-primary")
+            ?.disabled === false,
         undefined,
         { timeout: 60000 },
       );
-      if (width < 768) await toggle.click();
-      await nav
-        .getByRole("button", { name: "아바타 아이템 관리", exact: true })
-        .click();
+      await page.evaluate(() => window.avatarPricingQa.setView("shop"));
       await page.locator(".avatar-pricing-item").first().waitFor();
       assert.equal(
         await page.locator("canvas").count(),
@@ -655,7 +741,7 @@ try {
     JSON.stringify({ passed: true, reports }, null, 2),
   );
   console.log(
-    `PASS settings navigation and avatar item management: ${reports.length} widths, local filters, metadata editing, item-only save, student preview and focus, unchanged save disabled, busy lock, failed reload, CAS draft preservation${process.argv.includes("--skip-studio") ? "" : ", hidden stage disposal"}${process.argv.includes("--require-previews") ? ", real static previews" : ""}.`,
+    `PASS avatar shop management: ${reports.length} widths, local filters, three-row editing dialog, item-only save, full student shop preview and focus, unchanged save disabled, busy lock, failed reload, CAS draft preservation${process.argv.includes("--skip-studio") ? "" : ", hidden stage disposal"}${process.argv.includes("--require-previews") ? ", real static previews" : ""}.`,
   );
 } finally {
   await browser?.close();

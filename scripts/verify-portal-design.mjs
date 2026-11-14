@@ -75,7 +75,7 @@ const bundle = await build({
   platform: "browser",
   target: "es2022",
   outfile: path.join(evidence, "fixture.js"),
-  loader: { ".svg": "dataurl", ".webp": "dataurl", ".html": "text" },
+  loader: { ".svg": "dataurl", ".webp": "dataurl", ".woff2": "dataurl", ".html": "text" },
   define: { "process.env.NODE_ENV": '"production"' },
   plugins: [
     {
@@ -330,7 +330,7 @@ async function verifyStudentLearning(page, label) {
     .getByRole("alert")
     .getByRole("button", { name: "다시 불러오기" })
     .click();
-  await page.getByText("아직 등록된 주제가 없습니다.").waitFor();
+  await page.getByText("아직 열린 주제가 없습니다.").waitFor();
   assert.deepEqual(await page.evaluate(() => window.portalDesignQa.writes), []);
 }
 async function mapLayout(page, selector, width, height) {
@@ -631,32 +631,35 @@ async function sidebarChecks(page, portal, width) {
       await queryLink.evaluate((el) => el === document.activeElement),
       "Query-only navigation preserves child focus",
     );
-  let currentHash = `#/${portal}/points?tab=hall-of-fame`;
-  let currentGroup = points;
-  if (portal === "teacher") {
-    currentHash = "#/teacher/points?tab=products";
-    await navigateHash(currentHash);
-    currentGroup = sidebar.getByRole("button", {
-      name: "위스 상점",
-      exact: true,
-    });
-    await expanded(
-      currentGroup,
-      true,
-      "A query selecting another group opens that group",
+  const currentHash =
+    portal === "teacher"
+      ? "#/teacher/points?tab=products"
+      : "#/student/points?tab=shop&shop=avatar";
+  await navigateHash(currentHash);
+  const currentGroup = sidebar.getByRole("button", {
+    name: "위스 상점",
+    exact: true,
+  });
+  await expanded(
+    currentGroup,
+    true,
+    "A query selecting another group opens that group",
+  );
+  await expanded(
+    points,
+    false,
+    "A cross-group query closes the previous group",
+  );
+  if (portal === "student")
+    assert.equal(
+      await sidebar.getByRole("link", { name: "아바타 상점", exact: true }).count(),
+      1,
+      "The expanded shop group exposes the avatar shop",
     );
-    await expanded(
-      points,
-      false,
-      "A cross-group query closes the previous group",
-    );
-  }
   await page.goBack();
   await page.waitForFunction(
     (hash) => location.hash === hash,
-    portal === "teacher"
-      ? "#/teacher/points?tab=hall-of-fame"
-      : "#/student/points",
+    `#/${portal}/points?tab=hall-of-fame`,
   );
   await checkMobileReturn();
   await expanded(points, true, "Back restores the selected group");
@@ -674,7 +677,7 @@ async function sidebarChecks(page, portal, width) {
     });
     await myPageGroup.press("Enter");
     await expanded(myPageGroup, true, "MyPage exposes its controlled children");
-    for (const name of ["내 정보", "아바타 꾸미기", "내 성적", "오답 노트"])
+    for (const name of ["내 정보", "아바타 옷장", "내 성적", "오답 노트"])
       assert.equal(await sidebar.getByRole("link", { name, exact: true }).count(), 1);
     await navigateLink("내 정보");
     await expanded(myPageGroup, true, "MyPage child navigation keeps its group open");

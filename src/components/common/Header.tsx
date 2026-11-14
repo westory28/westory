@@ -18,6 +18,7 @@ import {
   HISTORY_DICTIONARY_PATH,
 } from "../../constants/historyDictionaryPanels";
 import { MENUS, type MenuChild } from "../../constants/menus";
+import { getWisShopMenuKey } from "../../lib/avatarRoutes";
 import { TEACHER_POINT_TAB_LABELS } from "../../constants/pointLabels";
 import TeacherSidebar, {
   type TeacherSidebarGroup,
@@ -250,8 +251,29 @@ const Header: React.FC<{
   const getVisibleChildren = (item: { children?: MenuChild[] }) => {
     if (!item.children?.length) return [];
     return isTeacherPortal
-      ? item.children
-      : item.children.filter((child) => child.hidden !== true);
+      ? item.children.filter(
+          (child) =>
+            getWisShopMenuKey(child.url, "teacher") !== "avatar" ||
+            canManageSettings(userData, currentUser?.email),
+        )
+      : item.children.filter(
+          (child) =>
+            child.hidden !== true &&
+            (getWisShopMenuKey(child.url, "student") !== "avatar" ||
+              (getStudentRouteAccess(
+                { pathname: "/student/mypage", search: "?menu=avatar" },
+                config,
+                menuConfig,
+              ).allowed &&
+                getStudentRouteAccess(
+                  {
+                    pathname: "/student/points",
+                    search: "?tab=shop&shop=avatar",
+                  },
+                  config,
+                  menuConfig,
+                ).allowed)),
+        );
   };
   const home = isTeacherPortal
     ? getDefaultTeacherRoute(userData, currentUser?.email || "")
@@ -352,12 +374,7 @@ const Header: React.FC<{
     "/teacher/students": "students",
     "/teacher/weplay": "game",
   };
-  const shopTabs = new Set(["products", "requests"]);
-  const getShopTab = (url: string) => {
-    const [path, query] = url.split("?");
-    const tab = new URLSearchParams(query).get("tab") || "";
-    return path === "/teacher/points" && shopTabs.has(tab) ? tab : "";
-  };
+  const getShopTab = (url: string) => getWisShopMenuKey(url, "teacher");
   const dictionaryUrl = HISTORY_DICTIONARY_PATH;
   const resolvedTeacherMenus = useTeacherSidebar
     ? menuItems.map((item) => {
@@ -452,6 +469,8 @@ const Header: React.FC<{
   ).filter(
     (child) =>
       getShopTab(child.resolvedUrl) &&
+      (getShopTab(child.resolvedUrl) !== "avatar" ||
+        canManageSettings(userData, currentUser?.email)) &&
       !configuredShopTabs.has(getShopTab(child.resolvedUrl)),
   );
   const shopChildren = [...configuredShopChildren, ...defaultShopChildren];
@@ -519,7 +538,7 @@ const Header: React.FC<{
           item.url,
           getVisibleChildren(item),
           "student",
-        );
+        ).filter((child) => !getWisShopMenuKey(child.resolvedUrl, "student"));
         const id = item.url.split("/")[2] || item.name;
         return {
           id,
@@ -541,6 +560,25 @@ const Header: React.FC<{
         };
       })
     : [];
+  const studentShopChildren = useStudentSidebar
+    ? menuItems
+        .flatMap((item) =>
+          getResolvedChildUrls(item.url, getVisibleChildren(item), "student"),
+        )
+        .filter((child) => getWisShopMenuKey(child.resolvedUrl, "student"))
+        .map((child) =>
+          child.name === "위스 상점" && !child.nameCustomized
+            ? { ...child, name: "일반 상품" }
+            : child,
+        )
+    : [];
+  if (studentShopChildren.length)
+    studentSidebarGroups.push({
+      id: "shop",
+      name: "위스 상점",
+      icon: "shop",
+      children: studentShopChildren,
+    });
 
   const activeDesktopSubmenu = menuItems
     .map((item) => {
