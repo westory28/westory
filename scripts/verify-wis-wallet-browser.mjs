@@ -35,37 +35,45 @@ const user={uid:teacher?'teacher':'student-a',email:'fixture@example.invalid',ge
 let config={year:'2026',semester:'2'};
 qa.setSemester=semester=>{config={...config,semester};window.renderWalletFixture()};
 const profile={uid:user.uid,role:teacher?'teacher':'student',name:'합성학생',grade:'3',class:'1',number:'7'};
-export const useAuth=()=>({currentUser:user,userData:profile,config,configReady:true,authGeneration:1,interfaceConfig:{},refreshInterfaceConfig:async()=>{}});
+export const useAuth=()=>({currentUser:auth.currentUser,userData:profile,config,configReady:true,authGeneration:qa.authGeneration||1,interfaceConfig:{},refreshInterfaceConfig:async()=>{}});
 export const useAppToast=()=>({showToast:value=>qa.toasts.push(value)});
 export const useAppDialog=()=>({confirm:async()=>true});
 export const isSemesterArchive=false;
 export const archiveScope=null;
 export const auth={currentUser:user};
 qa.setAuthenticated=value=>{auth.currentUser=value?user:null};
+qa.switchIdentity=()=>{auth.currentUser={...user,uid:'other-teacher'};qa.authGeneration=(qa.authGeneration||1)+1;window.renderWalletFixture()};
 export const db={};
 export const getHttpsCallable=async()=>{throw Error('Unexpected callable')};
 export const getFirebaseStorage=async()=>{throw Error('Unexpected storage')};
 export const canManagePoints=()=>true,canReadPoints=()=>true;
 export const ensureSensitiveOperation=async()=>{};
 export const POINT_POLICY_FALLBACK={manualAdjustEnabled:true,allowNegativeBalance:false,rankPolicy:{enabled:false},rewardPolicy:{},controlPolicy:{}};
-export const getPointPolicy=async()=>POINT_POLICY_FALLBACK;
+export const getPointPolicy=async()=>{qa.calls.push({kind:'policy'});return POINT_POLICY_FALLBACK};
 export const getPointRankManualAdjustEarnedPointsMap=async()=>({});
 export const getPointRankManualAdjustEarnedPointsByUid=async()=>0;
 const wallet=()=>({uid:'student-a',studentName:'합성학생',grade:'3',class:'1',number:'7',balance:qa.balance,revision:qa.revision,earnedTotal:130,rankEarnedTotal:130,spentTotal:30,adjustedTotal:0});
 const entry=(id,type,delta,balanceAfter,sourceLabel)=>({id,uid:'student-a',type,activityType:type,delta,balanceAfter,sourceLabel,createdAt:{seconds:1793050000+Number(id.slice(1))},canReverse:false});
 const page=async(scope,uid,cursor='')=>{
 qa.calls.push({kind:'page',uid,cursor});
-const result={wallet:wallet(),transactions:cursor?[entry('l1','manual_adjust',110,110,'시작 지급')]:qa.revision>=6?[entry('l6','manual_adjust',80,qa.balance,'최신 지급 내역')]:qa.editable?[{...entry('l4','manual_adjust',10,qa.balance,'수정할 지급'),canReverse:true}]:[entry('l3','weplay_cost',-30,100,'충무공 도전 비용'),entry('l2','weplay_reward',20,130,'충무공 도전 보상')],nextCursor:cursor?'':'older'};
+const result={wallet:qa.pageRows?.find(row=>row.uid===uid)||wallet(),transactions:cursor?[entry('l1','manual_adjust',110,110,'시작 지급')]:qa.revision>=6?[entry('l6','manual_adjust',80,qa.balance,'최신 지급 내역')]:qa.editable?[{...entry('l4','manual_adjust',10,qa.balance,'수정할 지급'),canReverse:true}]:[entry('l3','weplay_cost',-30,100,'충무공 도전 비용'),entry('l2','weplay_reward',20,130,'충무공 도전 보상')],nextCursor:cursor?'':'older'};
 if(qa.holdNext){qa.holdNext=false;await new Promise(resolve=>qa.release=resolve)}
 if(qa.failRead||(!cursor&&qa.failCoreRead))throw Error('synthetic read failed');return result;
 };
 export const getStudentPointTransactionPage=page,getCanonicalPointTransactionPage=page;
 export const getStudentPointWallet=async()=>wallet();
+export const getCanonicalPointWallet=async()=>{qa.calls.push({kind:'wallet'});const result=wallet();if(qa.holdNext){qa.holdNext=false;await new Promise(resolve=>qa.release=resolve)}if(qa.failRead)throw Error('synthetic wallet failed');return result};
 export const listPointWallets=async()=>{qa.calls.push({kind:'roster',semester:config.semester});const result=[wallet()];if(qa.holdRosterNext){qa.holdRosterNext=false;await new Promise(resolve=>qa.releaseRoster=resolve)}return result};
+export const getCanonicalPointWalletPage=async(scope,selection,cursor='',limit=20)=>{qa.calls.push({kind:'roster',semester:scope.semester,selection,cursor,limit});
+if(cursor&&qa.changedRosterPage){qa.changedRosterPage=false;throw Object.assign(Error('changed roster generation'),{details:{reason:'WIS_OVERVIEW_PAGE_CHANGED'}})}
+let rows=(qa.pageRows||[wallet()]).filter(row=>(!selection.grade||row.grade===selection.grade)&&(!selection.classNumber||row.class===selection.classNumber)&&(!selection.studentNumber||row.number===selection.studentNumber)&&(!selection.namePrefix||row.studentName.startsWith(selection.namePrefix)));
+rows.sort((a,b)=>selection.namePrefix?a.studentName.localeCompare(b.studentName):(selection.direction==='asc'?1:-1)*(a[selection.sortField]-b[selection.sortField])||a.uid.localeCompare(b.uid));
+const start=cursor?rows.findIndex(row=>row.uid===cursor)+1:0,chunk=rows.slice(start,start+limit);const result={wallets:chunk,nextCursor:rows.length>start+limit?chunk.at(-1).uid:''};
+if(qa.holdRosterNext){qa.holdRosterNext=false;await new Promise(resolve=>qa.releaseRoster=resolve)}if(qa.failRoster)throw Error('synthetic roster failed');return result};
 export const listPointStudentTargets=async()=>[wallet()],listPointStudentTargetsByClass=async()=>[wallet()];
-export const getPointSchoolOptions=async()=>({grades:[{value:'3',label:'3학년'}],classes:[{value:'1',label:'1반'}]});
+export const getPointSchoolOptions=async()=>{qa.calls.push({kind:'school'});return{grades:[{value:'3',label:'3학년'}],classes:[{value:'1',label:'1반'},{value:'2',label:'2반'}]}};
 export const listStudentPointOrders=async()=>[],listStudentPointProducts=async()=>[];
-export const listPointProducts=async()=>[],listPointOrders=async()=>[],listPointTransactionsByUid=async()=>[];
+export const listPointProducts=async()=>{qa.calls.push({kind:'products'});return[]},listPointOrders=async()=>{qa.calls.push({kind:'orders'});return[]},listPointTransactionsByUid=async()=>[];
 export const getStudentPointHallOfFame=async()=>null;
 export const getPendingCanonicalPointAdjustment=()=>null;
 export const latestWisWallet=(current,next)=>current&&next&&current.uid===next.uid&&current.revision>next.revision?current:next;
@@ -115,7 +123,7 @@ const bundle = await build({
         plugin.onResolve(
           {
             filter:
-              /(?:^|\/)(StudentPointHallOfFameTab|PointPolicyTab|PointRanksTab|HallOfFameManagementTab)$/,
+              /(?:^|\/)(StudentPointHallOfFameTab|PointPolicyTab|PointRanksTab|HallOfFameManagementTab|TeacherWisStocks)$/,
           },
           () => ({ path: "empty", namespace: "fixture" }),
         );
@@ -333,7 +341,7 @@ try {
   );
   await revisionRefresh.close();
   const teacher = await open(1280, true, "grant");
-  await teacher.getByLabel("학생 이름 검색").fill("합성");
+  await teacher.getByLabel("학생 이름 앞부분 검색").fill("합성");
   await teacher.getByPlaceholder("지급할 위스 수량").fill("10");
   await teacher.locator("textarea").fill("수업 참여");
   const rosterReads = await teacher.evaluate(
@@ -385,7 +393,7 @@ try {
   );
   await teacher.close();
   const race = await open(1280, true, "grant");
-  await race.getByLabel("학생 이름 검색").fill("합성");
+  await race.getByLabel("학생 이름 앞부분 검색").fill("합성");
   await race.getByPlaceholder("지급할 위스 수량").fill("10");
   await race.locator("textarea").fill("수업 참여");
   await race.evaluate(() => {
@@ -420,7 +428,7 @@ try {
   await overview.evaluate(() => {
     window.wisWalletQa.editable = true;
   });
-  await overview.getByRole("button", { name: "새로고침", exact: true }).click();
+  await overview.getByRole("button", { name: "거래 내역 새로고침", exact: true }).click();
   await overview.getByText("수정할 지급", { exact: true }).click();
   await overview.evaluate(() => {
     window.wisWalletQa.holdRosterNext = true;
@@ -435,7 +443,7 @@ try {
     window.wisWalletQa.balance = 180;
     window.wisWalletQa.revision = 6;
   });
-  await overview.getByRole("button", { name: "새로고침", exact: true }).click();
+  await overview.getByRole("button", { name: "거래 내역 새로고침", exact: true }).click();
   await overview.getByText("최신 지급 내역", { exact: true }).waitFor();
   await overview.evaluate(() => {
     window.wisWalletQa.holdNext = true;
@@ -458,7 +466,7 @@ try {
   await scope.evaluate(() => {
     window.wisWalletQa.editable = true;
   });
-  await scope.getByRole("button", { name: "새로고침", exact: true }).click();
+  await scope.getByRole("button", { name: "거래 내역 새로고침", exact: true }).click();
   await scope.getByText("수정할 지급", { exact: true }).click();
   await scope.evaluate(() => {
     window.wisWalletQa.holdRosterNext = true;
@@ -582,6 +590,248 @@ try {
   await teacherForeground.close();
   checks.push(
     "Visible student focus/visibility/online bursts refresh once across shared subscribers; hidden, signed-out and teacher sessions do not read; unmount cancels the pending foreground event.",
+  );
+  for (const [tab, expected] of [
+    ["policy", ["policy"]],
+    ["ranks", ["policy"]],
+    ["products", ["products"]],
+    ["requests", ["orders"]],
+    ["grant", ["policy", "school"]],
+    ["stocks", []],
+  ]) {
+    const scoped = await open(1280, true, tab);
+    if (expected.length)
+      await scoped.waitForFunction(() => window.wisWalletQa.calls.length > 0);
+    await scoped.waitForTimeout(120);
+    assert.deepEqual(
+      await scoped.evaluate(() =>
+        window.wisWalletQa.calls.map((call) => call.kind).sort(),
+      ),
+      [...expected].sort(),
+      `${tab} only reads its own dependencies`,
+    );
+    await scoped.close();
+  }
+  checks.push(
+    "Teacher policy/ranks read only policy; products only catalog; requests only orders; grant only school/policy before choosing pupils; stocks performs zero wallet reads.",
+  );
+  const paging = await open(1280, true);
+  await paging.getByText("충무공 도전 비용", { exact: true }).waitFor();
+  await paging.evaluate(() => {
+    window.wisWalletQa.pageRows = Array.from({ length: 45 }, (_, index) => ({
+      uid: "fixture-" + String(index).padStart(2, "0"),
+      studentName: "가학생" + String(index + 1).padStart(2, "0"),
+      grade: "3",
+      class: index < 22 ? "1" : "2",
+      number: String((index % 22) + 1),
+      balance: 100 - index,
+      revision: 4,
+      earnedTotal: 200 - index,
+      rankEarnedTotal: 200 - index,
+      spentTotal: index,
+      adjustedTotal: 0,
+    }));
+  });
+  await paging.getByRole("button", { name: "보유 위스", exact: true }).click();
+  await paging.getByText("현재 페이지 20명", { exact: true }).waitFor();
+  const list = paging.getByRole("region", {
+    name: "학생별 위스 목록",
+    exact: true,
+  });
+  await list.getByRole("button", { name: "다음", exact: true }).press("Enter");
+  await paging.getByText("2페이지", { exact: true }).waitFor();
+  await paging.waitForFunction(
+    () =>
+      window.wisWalletQa.calls.filter((call) => call.kind === "roster").at(-1)
+        ?.cursor === "fixture-19",
+  );
+  await list.getByRole("button", { name: "이전", exact: true }).click();
+  await paging.getByText("1페이지", { exact: true }).waitFor();
+  await paging.evaluate(() => {
+    window.wisWalletQa.failRoster = true;
+  });
+  await list.getByRole("button", { name: "다음", exact: true }).click();
+  await paging
+    .getByRole("alert")
+    .filter({ hasText: "synthetic roster failed" })
+    .waitFor();
+  await paging.evaluate(() => {
+    window.wisWalletQa.failRoster = false;
+  });
+  await paging
+    .getByRole("button", { name: "다시 불러오기", exact: true })
+    .click();
+  await paging.getByText("현재 페이지 20명", { exact: true }).waitFor();
+  await list.getByRole("button", { name: "이전", exact: true }).click();
+  await paging.getByText("현재 페이지 20명", { exact: true }).waitFor();
+  await paging.evaluate(() => {
+    window.wisWalletQa.changedRosterPage = true;
+  });
+  await list.getByRole("button", { name: "다음", exact: true }).click();
+  await paging.waitForFunction(
+    () =>
+      !window.wisWalletQa.changedRosterPage &&
+      window.wisWalletQa.calls.filter((call) => call.kind === "roster").at(-1)
+        ?.cursor === "",
+  );
+  await paging.getByText("1페이지", { exact: true }).waitFor();
+  await paging.getByText("현재 페이지 20명", { exact: true }).waitFor();
+  await paging.getByLabel("학년 필터", { exact: true }).selectOption("3");
+  await paging.getByLabel("반 필터", { exact: true }).selectOption("2");
+  await paging.getByText("현재 페이지 20명", { exact: true }).waitFor();
+  await paging.getByLabel("번호 필터", { exact: true }).fill("1");
+  await paging.getByText("현재 페이지 2명", { exact: true }).waitFor();
+  await paging
+    .getByLabel("학생 이름 앞부분 검색", { exact: true })
+    .fill("가학생23");
+  await paging.getByText("현재 페이지 1명 · 이름순", { exact: true }).waitFor();
+  assert.equal(
+    await paging
+      .getByRole("button", { name: "보유 위스", exact: true })
+      .isDisabled(),
+    true,
+  );
+  assert.equal(
+    await paging
+      .getByLabel("학생 이름 앞부분 검색", { exact: true })
+      .evaluate((element) => element === document.activeElement),
+    true,
+  );
+  const queries = await paging.evaluate(() =>
+    window.wisWalletQa.calls.filter((call) => call.kind === "roster"),
+  );
+  assert(queries.every((call) => call.limit === 20));
+  assert.deepEqual(queries.at(-1).selection, {
+    grade: "3",
+    classNumber: "2",
+    studentNumber: "1",
+    namePrefix: "가학생23",
+    sortField: "balance",
+    direction: "desc",
+  });
+  await paging.screenshot({
+    path: path.join(evidence, "teacher-server-filtered-page.png"),
+    fullPage: true,
+  });
+  await paging.close();
+  checks.push(
+    "Overview sends 20-row cursor queries; keyboard next/previous, failed next-page retry, changed-generation first-page recovery, grade/class/number/prefix filters and search focus retention pass. Search uses name order and disables conflicting numeric sort.",
+  );
+  const grantPaging = await open(1280, true, "grant");
+  await grantPaging.evaluate(() => {
+    window.wisWalletQa.pageRows = Array.from({ length: 45 }, (_, index) => ({
+      uid: "grant-" + String(index).padStart(2, "0"),
+      studentName: "나학생" + String(index + 1).padStart(2, "0"),
+      grade: "3",
+      class: "1",
+      number: String(index + 1),
+      balance: 100 - index,
+      revision: 4,
+      earnedTotal: 200,
+      rankEarnedTotal: 200,
+      spentTotal: 0,
+      adjustedTotal: 0,
+    }));
+  });
+  await grantPaging.getByLabel("학년 필터", { exact: true }).selectOption("3");
+  await grantPaging.getByLabel("반 필터", { exact: true }).selectOption("1");
+  await grantPaging.getByText("현재 페이지 20명", { exact: true }).waitFor();
+  const grantList = grantPaging.getByRole("region", {
+    name: "위스 지급 및 환수 대상 목록",
+    exact: true,
+  });
+  await grantList
+    .getByRole("button", { name: "다음", exact: true })
+    .press("Enter");
+  await grantPaging.getByText("2페이지", { exact: true }).waitFor();
+  await grantPaging.getByText("현재 페이지 20명", { exact: true }).waitFor();
+  await grantPaging.evaluate(() => {
+    window.wisWalletQa.changedRosterPage = true;
+  });
+  await grantList.getByRole("button", { name: "다음", exact: true }).click();
+  await grantPaging.getByText("1페이지", { exact: true }).waitFor();
+  await grantPaging.getByText("현재 페이지 20명", { exact: true }).waitFor();
+  await grantPaging.evaluate(() => {
+    window.wisWalletQa.failRoster = true;
+  });
+  await grantList.getByRole("button", { name: "다음", exact: true }).click();
+  await grantPaging
+    .getByRole("alert")
+    .filter({ hasText: "synthetic roster failed" })
+    .waitFor();
+  await grantPaging.evaluate(() => {
+    window.wisWalletQa.failRoster = false;
+  });
+  await grantPaging
+    .getByRole("button", { name: "다시 불러오기", exact: true })
+    .click();
+  await grantPaging.getByText("현재 페이지 20명", { exact: true }).waitFor();
+  assert.equal(
+    await grantPaging.evaluate(
+      () =>
+        window.wisWalletQa.calls.filter((call) => call.kind === "page").length,
+    ),
+    0,
+  );
+  await grantPaging.close();
+  checks.push(
+    "Grant candidates use bounded class pages; next-page keyboard control, generation change recovery and read failure/retry pass without hidden ledger reads.",
+  );
+  const abandoned = await open(1280, true);
+  await abandoned.getByText("충무공 도전 비용", { exact: true }).waitFor();
+  await abandoned.evaluate(() => {
+    window.wisWalletQa.holdRosterNext = true;
+  });
+  await abandoned
+    .getByRole("button", { name: "보유 위스", exact: true })
+    .click();
+  await abandoned.waitForFunction(
+    () => typeof window.wisWalletQa.releaseRoster === "function",
+  );
+  await abandoned.evaluate(() => {
+    location.hash = "/teacher/manage-points?tab=products";
+  });
+  await abandoned.waitForFunction(() =>
+    window.wisWalletQa.calls.some((call) => call.kind === "products"),
+  );
+  const beforeRelease = await abandoned.evaluate(
+    () =>
+      window.wisWalletQa.calls.filter((call) => call.kind === "page").length,
+  );
+  await abandoned.evaluate(() => window.wisWalletQa.releaseRoster());
+  await abandoned.waitForTimeout(100);
+  assert.equal(
+    await abandoned.evaluate(
+      () =>
+        window.wisWalletQa.calls.filter((call) => call.kind === "page").length,
+    ),
+    beforeRelease,
+  );
+  await abandoned.evaluate(() => {
+    location.hash = "/teacher/manage-points?tab=overview";
+  });
+  await abandoned.getByText("충무공 도전 비용", { exact: true }).waitFor();
+  await abandoned.evaluate(() => {
+    window.wisWalletQa.holdRosterNext = true;
+  });
+  await abandoned
+    .getByRole("button", { name: "상점 사용", exact: true })
+    .click();
+  await abandoned.waitForFunction(
+    () => typeof window.wisWalletQa.releaseRoster === "function",
+  );
+  await abandoned.evaluate(() => {
+    window.wisWalletQa.balance = 70;
+    window.wisWalletQa.revision = 1;
+    window.wisWalletQa.switchIdentity();
+  });
+  await abandoned.getByText("70 ₩s", { exact: true }).first().waitFor();
+  await abandoned.evaluate(() => window.wisWalletQa.releaseRoster());
+  await abandoned.waitForTimeout(100);
+  assert.equal(await abandoned.getByText("100 ₩s", { exact: true }).count(), 0);
+  await abandoned.close();
+  checks.push(
+    "A completed abandoned tab request cannot block re-entry or launch hidden ledger reads; an account switch resets cached revisions and rejects a held prior-account overview response.",
   );
   assert.deepEqual(errors, []);
 } catch (error) {

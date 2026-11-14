@@ -13,7 +13,16 @@ import {
 } from "./wisEconomyClient";
 import type { PointRankPolicy } from "../types";
 
-type RankingState = WisState & { rankPolicy?: Partial<PointRankPolicy> };
+export type WisRankingMetric = "cumulative" | "current";
+export type WisRankingClass = {
+  key: string;
+  grade: string;
+  classNumber: string;
+};
+type RankingState = WisState & {
+  rankPolicy?: Partial<PointRankPolicy>;
+  rankingClasses?: WisRankingClass[];
+};
 const flights = new WeakMap<
   NonNullable<typeof auth.currentUser>,
   Map<string, Promise<RankingState>>
@@ -26,6 +35,7 @@ const getWisRankingState = async (
   audience: "student" | "teacher",
   projection: "ranking-preview" | "hall-of-fame" | "hall-view",
   selection?: { view: "grade" | "class"; gradeKey: string; classKey: string },
+  ranking?: { metric: WisRankingMetric; classKey: string },
 ) => {
   const user = auth.currentUser;
   assertWisOwner(user?.uid || "");
@@ -39,7 +49,7 @@ const getWisRankingState = async (
   const selectionKey = selection
     ? JSON.stringify([selection.view, selection.gradeKey, selection.classKey])
     : "";
-  const key = `${epoch}:${semesterId}:${audience}:${source}:${projection}:${selectionKey}:${getPointsRevision()}:${getAvatarRevision()}`;
+  const key = `${epoch}:${semesterId}:${audience}:${source}:${projection}:${selectionKey}:${ranking?.metric || ""}:${ranking?.classKey || ""}:${getPointsRevision()}:${getAvatarRevision()}`;
   let pending = flights.get(user);
   if (!pending) {
     pending = new Map();
@@ -53,6 +63,9 @@ const getWisRankingState = async (
       source,
       projection,
       limit: projection === "ranking-preview" ? 5 : 20,
+      ...(ranking
+        ? { rankingMetric: ranking.metric, rankingClassKey: ranking.classKey }
+        : {}),
       ...(selection
         ? {
             hallView: selection.view,
@@ -76,11 +89,19 @@ const getWisRankingState = async (
 export const getWisRankingPreview = async (
   config: WisConfig,
   audience: "student" | "teacher",
+  ranking?: { metric: WisRankingMetric; classKey: string },
 ) => {
-  const state = await getWisRankingState(config, audience, "ranking-preview");
+  const state = await getWisRankingState(
+    config,
+    audience,
+    "ranking-preview",
+    undefined,
+    ranking,
+  );
   return {
     snapshot: wisHallOfFame(state),
     rankPolicy: resolvePointRankPolicy(state.rankPolicy),
+    classes: state.rankingClasses || [],
   };
 };
 

@@ -4,6 +4,7 @@ import NumericInput from "../../../../components/common/NumericInput";
 import React from "react";
 import "../teacher-list-controls.css";
 import PointRankBadge from "../../../../components/common/PointRankBadge";
+import InfoHelp from "../../../../components/common/InfoHelp";
 import {
   POINT_TRANSACTION_TYPE_LABELS,
   getPointDeltaToneClass,
@@ -38,6 +39,7 @@ interface PointsOverviewTabProps {
   totalWalletCount: number;
   currentPage: number;
   totalPages: number;
+  loading?: boolean;
   sortKey: OverviewSortKey;
   sortDirection: OverviewSortDirection;
   selectedWallet: PointWallet | null;
@@ -56,7 +58,7 @@ interface PointsOverviewTabProps {
   transactionsError?: string;
   transactionsHasMore?: boolean;
   onLoadMoreTransactions?: () => void;
-  onReloadTransactions?: () => void;
+  onReloadTransactions?: () => void | Promise<unknown>;
   canManage: boolean;
   selectedEditableTransactionId: string;
   adjustmentDraftValue: string;
@@ -75,50 +77,12 @@ interface PointsOverviewTabProps {
   onSubmitAdjustmentCancel: () => void;
 }
 
-const buildPaginationItems = (currentPage: number, totalPages: number) => {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1);
-  }
-
-  const visiblePages = new Set<number>([
-    1,
-    totalPages,
-    currentPage - 1,
-    currentPage,
-    currentPage + 1,
-  ]);
-
-  if (currentPage <= 3) {
-    visiblePages.add(2);
-    visiblePages.add(3);
-    visiblePages.add(4);
-  }
-
-  if (currentPage >= totalPages - 2) {
-    visiblePages.add(totalPages - 1);
-    visiblePages.add(totalPages - 2);
-    visiblePages.add(totalPages - 3);
-  }
-
-  const pages = Array.from(visiblePages)
-    .filter((page) => page >= 1 && page <= totalPages)
-    .sort((left, right) => left - right);
-
-  return pages.flatMap((page, index) => {
-    const previousPage = pages[index - 1];
-    if (index === 0 || page === previousPage + 1) {
-      return [page];
-    }
-
-    return ["ellipsis", page] as const;
-  });
-};
-
 const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
   wallets,
   totalWalletCount,
   currentPage,
   totalPages,
+  loading = false,
   sortKey,
   sortDirection,
   selectedWallet,
@@ -172,7 +136,11 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                 학생별 위스 현황
               </h2>
             </div>
-            <div className="text-sm font-bold text-gray-500">{`검색 결과 ${totalWalletCount}명`}</div>
+            <div className="text-sm font-bold text-gray-500">
+              {loading
+                ? "불러오는 중"
+                : `현재 페이지 ${totalWalletCount}명${nameSearch.trim() ? " · 이름순" : ""}`}
+            </div>
           </div>
           <div className="points-student-filters mt-4 grid gap-3 md:grid-cols-4">
             <select
@@ -189,6 +157,7 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
             <select
               aria-label="반 필터"
               value={classFilter}
+              disabled={gradeFilter === "all"}
               onChange={(event) => onClassFilterChange(event.target.value)}
               className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700"
             >
@@ -197,24 +166,29 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                 <option key={option} value={option}>{`${option}반`}</option>
               ))}
             </select>
-            <select
+            <input
               aria-label="번호 필터"
-              value={numberFilter}
-              onChange={(event) => onNumberFilterChange(event.target.value)}
+              inputMode="numeric"
+              maxLength={3}
+              value={numberFilter === "all" ? "" : numberFilter}
+              disabled={classFilter === "all"}
+              placeholder="전체 번호"
+              onChange={(event) =>
+                onNumberFilterChange(
+                  event.target.value.replace(/\D/g, "").replace(/^0+/, "") ||
+                    "all",
+                )
+              }
               className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700"
-            >
-              <option value="all">전체 번호</option>
-              {numberOptions.map((option) => (
-                <option key={option} value={option}>{`${option}번`}</option>
-              ))}
-            </select>
+            />
             <input
               lang="ko"
               inputMode="text"
-              aria-label="학생 이름 검색"
+              aria-label="학생 이름 앞부분 검색"
+              maxLength={60}
               value={nameSearch}
               onChange={(event) => onNameSearchChange(event.target.value)}
-              placeholder="이름 또는 일부 검색"
+              placeholder="이름 앞부분 검색"
               className="rounded-lg border border-gray-300 px-4 py-2 text-sm"
             />
           </div>
@@ -228,23 +202,12 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
         >
           <div className="grid grid-cols-[minmax(220px,1.65fr)_minmax(108px,0.95fr)_114px_124px_124px] gap-3 border-b border-gray-100 px-5 py-3 text-xs font-bold uppercase tracking-wide text-gray-500">
             <div>학생</div>
-            <div>
-              <button
-                type="button"
-                onClick={() => onSortChange("affiliation")}
-                className="inline-flex items-center gap-1 transition hover:text-blue-600"
-              >
-                소속
-                <i
-                  className={`fas ${sortIndicatorClass("affiliation")} text-xs`}
-                  aria-hidden="true"
-                ></i>
-              </button>
-            </div>
+            <div>소속</div>
             <div className="text-right">
               <button
                 type="button"
                 onClick={() => onSortChange("balance")}
+                disabled={!!nameSearch.trim()}
                 className="inline-flex items-center justify-end gap-1 text-right transition hover:text-blue-600"
               >
                 보유 위스
@@ -258,6 +221,7 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
               <button
                 type="button"
                 onClick={() => onSortChange("earnedTotal")}
+                disabled={!!nameSearch.trim()}
                 className="inline-flex items-center justify-end gap-1 text-right transition hover:text-blue-600"
               >
                 누적 적립
@@ -271,6 +235,7 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
               <button
                 type="button"
                 onClick={() => onSortChange("spentTotal")}
+                disabled={!!nameSearch.trim()}
                 className="inline-flex items-center justify-end gap-1 text-right transition hover:text-blue-600"
               >
                 상점 사용
@@ -282,7 +247,15 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
             </div>
           </div>
           <div className="divide-y divide-gray-100">
-            {totalWalletCount === 0 && (
+            {loading && (
+              <div
+                role="status"
+                className="px-5 py-12 text-center text-sm text-gray-500"
+              >
+                위스 명단을 불러오고 있습니다.
+              </div>
+            )}
+            {!loading && totalWalletCount === 0 && (
               <div className="px-5 py-12 text-center text-sm text-gray-400">
                 조건에 맞는 학생이 없습니다.
               </div>
@@ -332,29 +305,27 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
               );
             })}
           </div>
-          {totalPages > 1 && (
+          {(currentPage > 1 || totalPages > currentPage) && (
             <div className="flex items-center justify-center gap-1.5 border-t border-gray-100 bg-white px-5 py-3">
-              {buildPaginationItems(currentPage, totalPages).map(
-                (item, index) =>
-                  item === "ellipsis" ? (
-                    <span
-                      key={`ellipsis-${index}`}
-                      className="px-1 text-sm font-bold text-gray-400"
-                    >
-                      ...
-                    </span>
-                  ) : (
-                    <button
-                      key={item}
-                      type="button"
-                      onClick={() => onPageChange(item)}
-                      aria-current={currentPage === item ? "page" : undefined}
-                      className={`h-8 min-w-8 rounded-md px-2 text-xs font-bold transition ${currentPage === item ? "bg-blue-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-600"}`}
-                    >
-                      {item}
-                    </button>
-                  ),
-              )}
+              <button
+                type="button"
+                className="min-h-11 rounded-md px-3 text-sm font-bold text-blue-700 disabled:text-gray-400"
+                disabled={loading || currentPage <= 1}
+                onClick={() => onPageChange(currentPage - 1)}
+              >
+                이전
+              </button>
+              <span className="px-3 text-sm" aria-current="page">
+                {currentPage}페이지
+              </span>
+              <button
+                type="button"
+                className="min-h-11 rounded-md px-3 text-sm font-bold text-blue-700 disabled:text-gray-400"
+                disabled={loading || totalPages <= currentPage}
+                onClick={() => onPageChange(currentPage + 1)}
+              >
+                다음
+              </button>
             </div>
           )}
         </div>
@@ -399,8 +370,12 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
 
             <div className="mt-5 grid grid-cols-2 gap-3">
               <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                <div className="text-xs font-bold text-gray-500">
+                <div className="flex items-center gap-1 text-xs font-bold text-gray-500">
                   누적 획득 위스
+                  <InfoHelp label="누적 획득 위스 기준">
+                    초기 지급 위스는 제외합니다. 게임·상점에서 사용해도 누적
+                    획득 위스는 줄지 않습니다.
+                  </InfoHelp>
                 </div>
                 <div className="mt-1 whitespace-nowrap text-lg font-extrabold text-emerald-600">
                   {formatWisAmount(
@@ -409,8 +384,12 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                 </div>
               </div>
               <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                <div className="text-xs font-bold text-gray-500">
+                <div className="flex items-center gap-1 text-xs font-bold text-gray-500">
                   상점 사용 위스
+                  <InfoHelp label="상점 사용 위스 기준">
+                    상품·아바타 구매에서 환불을 뺀 금액입니다. 게임 비용과 교사
+                    환수는 거래 내역에서 확인할 수 있습니다.
+                  </InfoHelp>
                 </div>
                 <div className="mt-1 whitespace-nowrap text-lg font-extrabold text-rose-500">
                   {formatWisAmount(selectedWallet.spentTotal || 0)}

@@ -26,6 +26,7 @@
 - 기존 평가 분석·학급 분석·학생 명단·역사교실·질문함 브라우저 회귀와 `verify-refresh-contracts.mjs`의 실제 핸들러 검증을 통과했다.
 - `verify-performance-score-contracts`, `verify-written-score-mobile-browser`: 수행·정기시험 10개 화면 크기에서 기존 서명 현황·점수 저장 계약·새로고침 오류·재시도를 확인했다. 늦은 명단·점수·설정 응답의 계정/학기 경계와 미저장 경고 문구 보존을 검토했다.
 - `verify-refresh-avatar-browser.mjs`: 편집 모습/캐릭터/검색/보유·성별 필터 유지, 중복 클릭 조회 1회, 잔액·가격 갱신, 조회 실패 재시도 후 정상 썸네일 저장. 390/768/1280px 넘침·브라우저 오류 없음.
+- 배포 전 원격 `1e706f2c` 위스 변경을 병합했다. 기존 신규 기능은 보존하고 주문 조회의 `{scope, view}` 경계와 거래 새로고침 Promise를 연결했다. 새 주식 화면도 선택 종목·미저장 입력을 보존하는 공용 새로고침을 사용한다. 통합 후 `verify-refresh-contracts`, `verify-wis-stocks-browser`(320~1440px), `verify-wis-wallet-browser`(390/768/1280px, 커서·선택·미사용 탭·identity 포함)를 통과했다.
 
 위 검증은 합성 자료를 사용한다. 실제 학교 원본 XLSX/PDF는 이 작업에 첨부되지 않았다. 운영 학생 점수·서명·이의 상태를 시험 목적으로 수정하지 않는다. 외부 AI/OCR/에이전트 실행과 외부 데이터 전송을 추가하지 않는 기존 서비스 유지보수다.
 

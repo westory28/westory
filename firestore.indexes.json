@@ -1,6 +1,228 @@
 {
   "indexes": [
     {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "balance", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "grade", "order": "ASCENDING"},
+        {"fieldPath": "balance", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "grade", "order": "ASCENDING"},
+        {"fieldPath": "classNumber", "order": "ASCENDING"},
+        {"fieldPath": "balance", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "studentNumber", "order": "ASCENDING"},
+        {"fieldPath": "balance", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "studentNumber", "order": "ASCENDING"},
+        {"fieldPath": "balance", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "rankEarnedTotal", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "grade", "order": "ASCENDING"},
+        {"fieldPath": "rankEarnedTotal", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "grade", "order": "ASCENDING"},
+        {"fieldPath": "classNumber", "order": "ASCENDING"},
+        {"fieldPath": "rankEarnedTotal", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "studentNumber", "order": "ASCENDING"},
+        {"fieldPath": "rankEarnedTotal", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "studentNumber", "order": "ASCENDING"},
+        {"fieldPath": "rankEarnedTotal", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "spentTotal", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "grade", "order": "ASCENDING"},
+        {"fieldPath": "spentTotal", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "grade", "order": "ASCENDING"},
+        {"fieldPath": "classNumber", "order": "ASCENDING"},
+        {"fieldPath": "spentTotal", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "studentNumber", "order": "ASCENDING"},
+        {"fieldPath": "spentTotal", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "spentTotal", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "grade", "order": "ASCENDING"},
+        {"fieldPath": "spentTotal", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "grade", "order": "ASCENDING"},
+        {"fieldPath": "classNumber", "order": "ASCENDING"},
+        {"fieldPath": "spentTotal", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "studentNumber", "order": "ASCENDING"},
+        {"fieldPath": "spentTotal", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "displayName", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "grade", "order": "ASCENDING"},
+        {"fieldPath": "displayName", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "grade", "order": "ASCENDING"},
+        {"fieldPath": "classNumber", "order": "ASCENDING"},
+        {"fieldPath": "displayName", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "semesterId", "order": "ASCENDING"},
+        {"fieldPath": "grade", "order": "ASCENDING"},
+        {"fieldPath": "classNumber", "order": "ASCENDING"},
+        {"fieldPath": "studentNumber", "order": "ASCENDING"},
+        {"fieldPath": "displayName", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "semester_assessment_attempts",
       "queryScope": "COLLECTION",
       "fields": [
@@ -38,6 +260,66 @@
         { "fieldPath": "grade", "order": "ASCENDING" },
         { "fieldPath": "rankEarnedTotal", "order": "DESCENDING" },
         { "fieldPath": "publicId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "semesterId", "order": "ASCENDING" },
+        { "fieldPath": "rankEarnedTotal", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "semesterId", "order": "ASCENDING" },
+        { "fieldPath": "grade", "order": "ASCENDING" },
+        { "fieldPath": "rankEarnedTotal", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "semesterId", "order": "ASCENDING" },
+        { "fieldPath": "grade", "order": "ASCENDING" },
+        { "fieldPath": "classNumber", "order": "ASCENDING" },
+        { "fieldPath": "rankEarnedTotal", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "semesterId", "order": "ASCENDING" },
+        { "fieldPath": "balance", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "semesterId", "order": "ASCENDING" },
+        { "fieldPath": "grade", "order": "ASCENDING" },
+        { "fieldPath": "balance", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "semester_wis_accounts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "semesterId", "order": "ASCENDING" },
+        { "fieldPath": "grade", "order": "ASCENDING" },
+        { "fieldPath": "classNumber", "order": "ASCENDING" },
+        { "fieldPath": "balance", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
     },
     {

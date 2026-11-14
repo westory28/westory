@@ -13,6 +13,7 @@
     "executeThinkCloudResponseFast"
   ],
   "notes": [
+    "2026-11-14: Wis wallet integrity, canonical cumulative/current ranking, scoped teacher queries and ACTIVE enrollment metadata synchronization. Transplant reviewed files into each captured live archive, include ../wisLedgerIntegrity.js for executeCommand and ../wisOverviewQuery.js for query endpoints, and preserve deployed runtime resources. No account or ledger repair; isolated stock endpoints remain teacher-only.",
     "2026-11-14: Think Cloud only: preserve live executeCommand/getThinkCloudState archives; overlay reviewed w8Domains/submit queue/wiring/query. Add executeThinkCloudResponseFast and getThinkCloudStateFast beside nam5, with minInstances 0. Keep receipts, authority, other commands and Seoul compatibility.",
     "2026-11-11: Opt-in immutable mock-paper publication and server-time overview. Deploy only executeCommand and getAssessmentState from each captured live archive plus this assessmentLifecycle patch; preserve their existing SAVE implementation and all other runtime files. Scheduled publication keeps opensAt under old-client saves. No runtime sizing, session, rules, prior-round or student-result changes.",
     "2026-11-10: Communication audit captured live saveAssessmentProgress archive SHA-256 7c82238d8ce7ed2cb25ee4129d11950cd6d9131f49e31a8923ece1afb84c9213 (updated 2026-11-09). Its older source is preserved in an isolated release with only the SAVE projection changes applied to assessmentLifecycle.js. Deploy saveAssessmentProgress only from that reviewed archive, plus the new isolated us-central1 getTeacherStudentRoster endpoint. Do not deploy the newer full gateway to existing endpoints. Runtime/session/publication policies remain unchanged.",
@@ -59,7 +60,7 @@
       "sourceFile": "archiveEnrollment.js",
       "file": "archiveEnrollment.js",
       "originalSha256": "713b48ddfa72a0212c869e8997274c56ebf90c29ddf500b7b555436060066bfb",
-      "sha256": "9e914564f35e4b04cec8359b68328980bd3c65635e5d6a723c6a5a11cda9f4d9",
+      "sha256": "7a55dbe6ae1007d7ff8a246c713e90092ada075e17e1ede5152b852f4a4c1ba6",
       "changes": []
     },
     {
@@ -464,7 +465,7 @@
       "sourceFile": "wisEconomy.js",
       "file": "wisEconomy.js",
       "originalSha256": "f6267e1d62b1e977b86cbac8de07b310b9ec4d220a46537550343978631986b4",
-      "sha256": "191605a41cabbcfcc44ac6122ffa7e14715d402b05cd66b10ecabca3cd66414a",
+      "sha256": "f9f53c84422b4cf5c8018437bdc8f1c42b6d8d0c435243cad8924a683de0ca6e",
       "changes": [
         "2026-10-18: Wis shop preserves stock=available+reserved+sold, receipt-safe student/teacher cancellation with original-payment refund, READY/fulfilled timestamps, current-semester write guard, HTTPS original/preview images and semester product snapshots.",
         "2026-10-18: Return sold inventory count and preserve optional product display order in commands, student projection and semester snapshots.",
@@ -502,7 +503,7 @@
       "sourceFile": "wisEconomy.js",
       "file": "wisEconomyQuery.js",
       "originalSha256": "560fd24282179aa9e4bd4ac9b7b99556cb533f7c4f67baac9339b22cb13b6f46",
-      "sha256": "1631f96b103377e677cf86ee6da0f4d435c25d92eaeec252d945b270bd96d6f2",
+      "sha256": "3d89f36ba190785a9a0ef150226d3ac5f045f0878b60c5c6f97bbd7c48a1527c",
       "changes": [
         "Restore the live EXPLICIT teacher archive query independently of the command closure.",
         "Expose only requested full name, student number and selected-entry profile emoji; preserve pseudonymous public IDs, zero balances, tie caps and grade/class limits.",

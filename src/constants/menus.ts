@@ -140,6 +140,7 @@ export const MENUS: MenuConfig = {
         { name: "명예의 전당 관리", url: "/teacher/points?tab=hall-of-fame" },
         { name: "상품 관리", url: "/teacher/points?tab=products" },
         { name: "구매 요청 관리", url: "/teacher/points?tab=requests" },
+        { name: "위스 주식", url: "/teacher/points?tab=stocks" },
       ],
     },
     {

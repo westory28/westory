@@ -37,6 +37,12 @@ class Transaction {
     return { exists: this.documents.has(path), data: structuredClone(this.documents.get(path)), path };
   }
   getAll(paths) { return Promise.all(paths.map((path) => this.get(path))); }
+  async query(collection, options) {
+    assert.equal(this.writing, false, "all reads precede writes");
+    return [...this.documents].filter(([path, data]) => path.startsWith(collection + "/") &&
+      (!options.field || data[options.field] === options.value)).slice(0, options.limit)
+      .map(([path, data]) => ({ path, data: structuredClone(data), exists: true }));
+  }
   set(path, data, options) {
     this.writing = true;
     this.documents.set(path, structuredClone(options?.merge ? { ...this.documents.get(path), ...data } : data));
@@ -241,4 +247,27 @@ test("a stale aggregate revision permits one funded purchase while stock and acc
   await unchanged(f.store, () => f.core.execute({ ...input, data: { ...input.data, commandId: randomUUID() } }), "WIS_ACCOUNT_REVISION_CONFLICT");
   assert.equal((await f.endpoints.executeCommand.run(input)).replayed, true);
   assert.equal(f.store.documents.get(accountPath).balance, 900);
+});
+
+test("explicit rebuild repairs only projections and rejects corrupt scoped ledger trails before any write", async () => {
+  const rebuildRequest = () => request({}, { commandType: "rebuildWisProjection", payload: {
+    semesterId: scope, expectedSemesterRevision: 7, expectedEconomyRevision: 30, accountId, reason: "합성 원장 대조",
+  } });
+  const ledger = { schemaVersion: 1, policyVersion: "w7-v1", accountId, semesterId: scope, studentUid: "student",
+    ledgerEntryId: "opening", type: "INITIAL_GRANT", delta: 150, balanceBefore: 0, balanceAfter: 150 };
+  for (const patch of [{ studentUid: "other" }, { semesterId: "2026-1" }, { delta: 150.5 },
+    { balanceAfter: 151 }, { type: "UNKNOWN" }, { balanceBefore: 100, balanceAfter: 250 },
+    { delta: Number.MAX_SAFE_INTEGER + 1, balanceAfter: Number.MAX_SAFE_INTEGER + 1 }]) {
+    const f = fixture();
+    f.store.documents.set("semester_wis_ledger/opening", { ...ledger, ...patch });
+    await unchanged(f.store, () => f.core.execute(rebuildRequest()), "WIS_LEDGER_INVALID");
+  }
+  const f = fixture();
+  f.store.documents.set("semester_wis_ledger/opening", ledger);
+  const result = await f.core.execute(rebuildRequest());
+  assert.equal(result.result.balance, 150);
+  assert.equal(f.store.documents.get(accountPath).balance, 150);
+  assert.equal(f.store.documents.get(accountPath).earnedTotal, 150);
+  assert.equal(f.store.documents.get(accountPath).rankEarnedTotal, 0);
+  assert.deepEqual(f.store.documents.get("semester_wis_ledger/opening"), ledger);
 });

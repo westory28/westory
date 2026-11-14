@@ -2,6 +2,7 @@ const { createHash } = require("node:crypto");
 const { HttpsError } = require("firebase-functions/v2/https");
 const { resolveStudentProfileEmoji } = require("../studentProfileEmojiPolicy");
 const { sanitizePublicAvatar } = require("../studentAvatarCatalog");
+const { normalizeWisOverviewQuery, queryWisOverviewPage, matchesWisOverview } = require("../wisOverviewQuery");
 
 const semesterCore = require("./semesterCore");
 const archiveEnrollment = require("./archiveEnrollment");
@@ -2536,6 +2537,9 @@ const normalizeQuery = (raw) => {
       "hallView",
       "hallGradeKey",
       "hallClassKey",
+      "rankingMetric",
+      "rankingClassKey",
+      "overview",
       "_session",
     ],
     "getWisEconomyState payload",
@@ -2557,10 +2561,16 @@ const normalizeQuery = (raw) => {
     fail("invalid-argument", "hallView is invalid.", "WIS_QUERY_INVALID");
   const hallGradeKey = optionalText(value.hallGradeKey, "hallGradeKey", 80);
   const hallClassKey = optionalText(value.hallClassKey, "hallClassKey", 160);
+  const rankingMetric = value.rankingMetric || "";
+  if (rankingMetric && (projection !== "ranking-preview" || !["cumulative", "current"].includes(rankingMetric)))
+    fail("invalid-argument", "rankingMetric is invalid.", "WIS_QUERY_INVALID");
+  const rankingClassKey = optionalText(value.rankingClassKey, "rankingClassKey", 160);
+  if (rankingClassKey && (!rankingMetric || !/^\d+-\d+$/.test(rankingClassKey)))
+    fail("invalid-argument", "rankingClassKey is invalid.", "WIS_QUERY_INVALID");
   if (projection === "hall-view" && hallView === "class" && hallClassKey &&
     (hallClassKey.indexOf("-") < 1 || hallClassKey.endsWith("-")))
     fail("invalid-argument", "hallClassKey is invalid.", "WIS_QUERY_INVALID");
-  const cursor = value.cursor ? text(value.cursor, "cursor", 160) : "";
+  const cursor = value.cursor ? text(value.cursor, "cursor", value.overview ? 1024 : 160) : "";
   if (value.includeLedger !== undefined && typeof value.includeLedger !== "boolean")
     fail("invalid-argument", "includeLedger is invalid.", "WIS_QUERY_INVALID");
   const targetStudentUid = value.studentUid ? text(value.studentUid, "studentUid", 128) : "";
@@ -2577,6 +2587,9 @@ const normalizeQuery = (raw) => {
     hallView,
     hallGradeKey,
     hallClassKey,
+    rankingMetric,
+    rankingClassKey,
+    overview: normalizeWisOverviewQuery(value.overview, audience, projection),
     accountId: value.accountId ? text(value.accountId, "accountId", 80) : "",
     studentUid: targetStudentUid,
     includeLedger: value.includeLedger !== false,
@@ -2847,6 +2860,7 @@ const projectWisAccount = (account) =>
         rankEarnedTotal: Number(account.rankEarnedTotal || 0),
         spentTotal: Number(account.spentTotal || 0),
         adjustedTotal: Number(account.adjustedTotal || 0),
+        lastTransactionAt: account.lastTransactionAt || account.updatedAt || null,
       }
     : null;
 
@@ -3142,7 +3156,7 @@ const addHallProfileIcons = async (transaction, hall, accounts, scope) => {
 // A preview request reuses documents already read for its actor or candidates.
 // This cache lasts only for the enclosing read transaction; authority is never
 // reused across requests, even when the ranking inputs below remain warm.
-const memoizeRankingPreviewReads = (transaction, { maskAccounts = false } = {}) => {
+const memoizeRankingPreviewReads = (transaction, { maskAccounts = false, includeBalance = false } = {}) => {
   const documents = new Map();
   const getAll = async (paths) => {
     const missing = [...new Set(paths.filter((path) => !documents.has(path)))];
@@ -3151,7 +3165,8 @@ const memoizeRankingPreviewReads = (transaction, { maskAccounts = false } = {}) 
       // account documents can never enter another request's financial reads.
       const masked = maskAccounts ? missing.filter(path => path.startsWith(`${WIS_ACCOUNT_COLLECTION}/`)) : [];
       const ordinary = masked.length ? missing.filter(path => !path.startsWith(`${WIS_ACCOUNT_COLLECTION}/`)) : missing;
-      for (const [paths, options] of [[ordinary, undefined], [masked, { fieldMask: WIS_HALL_ACCOUNT_FIELDS }]]) {
+      for (const [paths, options] of [[ordinary, undefined], [masked, { fieldMask: includeBalance
+        ? [...WIS_HALL_ACCOUNT_FIELDS, "balance"] : WIS_HALL_ACCOUNT_FIELDS }]]) {
         if (!paths.length) continue;
         const batch = transaction.getAll(paths, options);
         paths.forEach((path, index) => documents.set(path, batch.then(rows => rows[index])));
@@ -3341,6 +3356,122 @@ const queryRankingPreview = async ({ transaction, scope, config, studentAccount,
   }
   fail("resource-exhausted", "Wis ranking preview candidate limit was exceeded.",
     "WIS_HALL_ACCOUNT_LIMIT_EXCEEDED", { limit: WIS_HALL_ACCOUNT_LIMIT });
+};
+
+// Selectable dashboard rankings use separate numeric fields. Spending can never
+// be interpreted as a negative earned score. Only a bounded ordered candidate
+// page is fetched; canonical membership and visible balances are revalidated.
+const querySelectableRankingPreview = async ({ transaction, scope, config, studentAccount,
+  explicitTeacherRead, archived = null, rankPolicy, metric, classKey, now }) => {
+  const ownGrade = String(studentAccount?.grade || "").trim();
+  const classRows = archived ? archived.accounts.map(data => ({ data })) : await transaction.query(archiveEnrollment.SEMESTER_CLASS_COLLECTION, {
+    field: "semesterId", operator: "==", value: scope,
+    fieldMask: ["semesterId", "classId", "grade", "classNumber", "status"],
+    limit: WIS_HALL_ACCOUNT_LIMIT + 1,
+  });
+  if (classRows.length > WIS_HALL_ACCOUNT_LIMIT) fail("resource-exhausted",
+    "Wis class directory limit was exceeded.", "WIS_HALL_ACCOUNT_LIMIT_EXCEEDED");
+  const classes = [...new Map(classRows.filter(({ data }) => data?.semesterId === scope &&
+    (explicitTeacherRead || data.status === "ACTIVE") &&
+    (!ownGrade || String(data.grade) === ownGrade) && /^\d+$/.test(String(data.grade)) &&
+    /^\d+$/.test(String(data.classNumber))).map(({ data }) => {
+      const grade = String(data.grade), classNumber = String(data.classNumber);
+      return [`${grade}-${classNumber}`, { key: `${grade}-${classNumber}`, grade, classNumber }];
+    })).values()].sort((a, b) => Number(a.grade) - Number(b.grade) || Number(a.classNumber) - Number(b.classNumber));
+  if (classKey && !classes.some(item => item.key === classKey)) fail("permission-denied",
+    "The requested ranking class is unavailable.", "WIS_RANKING_CLASS_UNAVAILABLE");
+  const [selectedGrade = "", selectedClass = ""] = classKey.split("-");
+  const grade = ownGrade || selectedGrade;
+  const scoreField = metric === "current" ? "balance" : "rankEarnedTotal";
+  const publicLimit = Math.min(5, classKey ? config.publicRange.classRankLimit : config.publicRange.gradeRankLimit);
+  const score = account => Number(account[scoreField]);
+  const validScore = account => Number.isSafeInteger(account?.[scoreField]) && account[scoreField] >= 0;
+  const inScope = account => (!grade || String(account.grade) === grade) &&
+    (!selectedClass || String(account.classNumber) === selectedClass);
+  // Tie order matches the canonical query cursor, independently of public IDs.
+  const compare = (a, b) => score(b) - score(a) || String(a.accountId).localeCompare(String(b.accountId));
+  const select = accounts => {
+    let previous = null, rank = 0;
+    return accounts.sort(compare).filter((account, index) => {
+      if (score(account) !== previous) rank = index + 1;
+      previous = score(account);
+      return config.publicRange.includeTies && score(account) > 0 ? rank <= publicLimit : index < publicLimit;
+    }).slice(0, 5);
+  };
+  const candidates = new Map();
+  const verified = new Map(), rejected = new Set(), seen = new Set();
+  let cursor = "", selected = [];
+  while (seen.size < WIS_HALL_ACCOUNT_LIMIT) {
+    const limit = Math.min(WIS_RANKING_PREVIEW_PAGE_SIZE, WIS_HALL_ACCOUNT_LIMIT - seen.size);
+    const rows = await transaction.query(WIS_ACCOUNT_COLLECTION, {
+      filters: [{ field: "semesterId", operator: "==", value: scope },
+        ...(grade ? [{ field: "grade", operator: "==", value: grade }] : []),
+        ...(selectedClass ? [{ field: "classNumber", operator: "==", value: selectedClass }] : [])],
+      orderBy: [{ field: scoreField, direction: "desc" }],
+      fieldMask: [...WIS_HALL_ACCOUNT_FIELDS, "balance"],
+      documentIdOrder: "asc", ...(cursor ? { startAfterPath: cursor } : {}), limit,
+    });
+    for (const row of rows) {
+      if (!row.path || seen.has(row.path)) fail("failed-precondition",
+        "Wis ranking pagination did not advance.", "WIS_RANKING_PREVIEW_CURSOR_INVALID");
+      seen.add(row.path);
+      const account = row.data;
+      if (isCanonicalRankingPreviewAccount(account, scope) &&
+        documentIdFromPath(row.path) === account.accountId && validScore(account) && inScope(account))
+        candidates.set(account.studentUid, account);
+    }
+    for (let pass = 0; pass <= candidates.size; pass++) {
+      selected = select([...candidates.values()].filter(account => !rejected.has(account.studentUid))
+        .map(account => verified.get(account.studentUid) || account));
+      const unread = selected.filter(account => !verified.has(account.studentUid));
+      if (!unread.length) break;
+      // The ordered page already contains these canonical account snapshots.
+      // Re-read only the current slot/enrollment/class authority, never the
+      // account or its large recent-ledger array a second time.
+      const current = new Map((explicitTeacherRead ? unread : await readRankingPreviewRoster(transaction, unread, scope))
+        .map(account => [account.studentUid, account]));
+      for (const candidate of unread) {
+        const account = current.get(candidate.studentUid);
+        if (!account || !validScore(account) || !inScope(account) || isWisHallTestAccount(account) ||
+          !String(account.grade || "") || !String(account.classNumber || "") ||
+          (score(account) === 0 && account.hallZeroEligible !== true)) rejected.add(candidate.studentUid);
+        else verified.set(candidate.studentUid, account);
+      }
+    }
+    const last = rows.at(-1)?.data, cutoff = selected.at(-1);
+    const target = config.publicRange.includeTies && cutoff && score(cutoff) > 0 ? 5 : publicLimit;
+    const rangeComplete = selected.length >= publicLimit && selected.length < target && last && cutoff && Number(last[scoreField]) < score(cutoff);
+    const complete = rows.length < limit || rangeComplete || (selected.length >= target && last && cutoff &&
+      (Number(last[scoreField]) < score(cutoff) || (Number(last[scoreField]) === score(cutoff) &&
+        String(last.accountId).localeCompare(String(cutoff.accountId)) >= 0)));
+    if (complete) {
+      let previousScore = null, previousRank = 0;
+      const profiles = await transaction.getAll(selected.map(account => `users/${account.studentUid}`));
+      const entries = selected.map((account, index) => {
+        const value = score(account), rank = value === previousScore ? previousRank : index + 1;
+        previousScore = value; previousRank = rank;
+        const profile = profiles[index]?.exists ? profiles[index].data : {};
+        const avatar = sanitizePublicAvatar(profile.avatar);
+        return { uid: hallPublicId(scope, account.studentUid), rank,
+          grade: String(account.grade), class: String(account.classNumber),
+          classKey: `${account.grade}-${account.classNumber}`, number: String(account.studentNumber || ""),
+          studentName: String(account.displayName || "학생"), displayName: String(account.displayName || "학생"),
+          currentBalance: Number(account.balance || 0), cumulativeEarned: account.rankEarnedTotal,
+          profileIcon: resolveStudentProfileEmoji({ profileEmojiId: profile.profileEmojiId,
+            profileIcon: profile.profileIcon, rankEarnedTotal: account.rankEarnedTotal, rankPolicy }).profileIcon,
+          ...(avatar ? { avatar } : {}) };
+      });
+      const hall = buildWisHallOfFameProjection({ accounts: [], config, scope });
+      return { rankingClasses: classes, hallOfFame: { ...hall,
+        rankingMetric: metric === "current" ? "currentBalance" : "cumulativeEarned",
+        primaryGradeKey: grade || "all", gradeLeaderboardByGrade: { [grade || "all"]: entries },
+        gradeTop3ByGrade: {}, classLeaderboardByClassKey: {}, classTop3ByClassKey: {},
+        snapshotKey: `w7_${sha256(canonicalJson([metric, classKey, entries])).slice(0, 32)}`,
+        updatedAt: new Date(now).toISOString(), updatedAtMs: now, sourceUpdatedAtMs: now } };
+    }
+    cursor = rows.at(-1)?.path || "";
+  }
+  fail("resource-exhausted", "Wis ranking candidate limit was exceeded.", "WIS_HALL_ACCOUNT_LIMIT_EXCEEDED");
 };
 
 // The full hall has many grade/class groups. Read the small private index once
@@ -3833,7 +3964,7 @@ const createWisQueryCore = ({
         ? { view: query.hallView, gradeKey: query.hallGradeKey, classKey: query.hallClassKey } : null;
       const isIndexedRankingRead = isRankingPreview || isIndexedHall;
       const transaction = isIndexedRankingRead ? memoizeRankingPreviewReads(rawTransaction,
-        { maskAccounts: isIndexedHall }) : rawTransaction;
+        { maskAccounts: isIndexedHall || Boolean(query.rankingMetric), includeBalance: Boolean(query.rankingMetric) }) : rawTransaction;
       const [year, semester] = query.semesterId.split("-");
       const ownAccountId = accountIdFor(query.semesterId, uid);
       const [manifest, economySnapshot, interfaceSnapshot, activePointer, policySnapshot, ownPreviewAccount] =
@@ -3943,6 +4074,16 @@ const createWisQueryCore = ({
             reason: "WIS_ACTIVE_ENROLLMENT_REQUIRED" }), rankPolicy: policySnapshot?.data?.rankPolicy || null };
         }
         const rankPolicy = policySnapshot?.data?.rankPolicy || null;
+        if (isRankingPreview && query.rankingMetric) {
+          const selected = await querySelectableRankingPreview({ transaction, scope: query.semesterId,
+            config: hallOfFameConfig, studentAccount, explicitTeacherRead, rankPolicy,
+            archived: explicitTeacherRead ? await loadRankingPreviewInputs(transaction, query.semesterId, true) : null,
+            metric: query.rankingMetric, classKey: query.rankingClassKey, now: now() });
+          return { ...base, economy: query.audience === "student"
+            ? projectStudentEconomy(economySnapshot.data) : base.economy,
+            ...selected, rankPolicy, status: Object.values(selected.hallOfFame.gradeLeaderboardByGrade)
+              .some(rows => rows.length) ? "CONTENT" : "EMPTY" };
+        }
         let hallOfFame;
         if (isIndexedHall && explicitTeacherRead) {
           // Historical teacher reads keep the original account snapshots, even
@@ -4169,6 +4310,23 @@ const createWisQueryCore = ({
       }
 
       if (query.projection === "overview") {
+        if (query.overview) {
+          // A closed or moved enrollment may leave an older account hint behind.
+          // Check the canonical roster, then continue within the same server filter
+          // until the visible page is full or the scoped source is exhausted.
+          const accounts = [];
+          let cursor = query.cursor;
+          do {
+            const page = await queryWisOverviewPage(transaction, { ...query, cursor,
+              limit: query.limit - accounts.length, economyRevision: economySnapshot.data?.revision });
+            const projected = await projectRoster(transaction, page.rows, query.semesterId);
+            accounts.push(...projected.filter(account =>
+              (explicitTeacherRead || Boolean(account.enrollmentId && account.classId && account.grade && account.classNumber))
+              && matchesWisOverview(account, query.semesterId, query.overview)).map(projectWisAccount));
+            cursor = page.nextCursor;
+          } while (cursor && accounts.length < query.limit);
+          return { ...base, accounts, nextCursor: cursor, status: accounts.length ? "CONTENT" : "EMPTY" };
+        }
         const page = await queryBoundedDocumentPage(
           transaction,
           WIS_ACCOUNT_COLLECTION,

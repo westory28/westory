@@ -6,7 +6,11 @@ import { InlineLoading } from "./LoadingState";
 import PointRankBadge from "./PointRankBadge";
 import WisIcon from "./WisIcon";
 import { getWisHallOfFameGradeLeaderboard } from "../../lib/wisHallOfFame";
-import { getWisRankingPreview } from "../../lib/wisRankingPreview";
+import {
+  getWisRankingPreview,
+  type WisRankingMetric,
+  type WisRankingClass,
+} from "../../lib/wisRankingPreview";
 import { subscribePointsUpdated } from "../../lib/appEvents";
 import { subscribeAvatarUpdated } from "../../features/avatar/events";
 import AvatarPlaceholder from "../../features/avatar/AvatarPlaceholder";
@@ -117,6 +121,10 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
   const [loadError, setLoadError] = useState(false);
   const [refreshRevision, setRefreshRevision] = useState(0);
   const [selectedUid, setSelectedUid] = useState("");
+  const [metric, setMetric] = useState<WisRankingMetric>("cumulative");
+  const [classSelection, setClassSelection] = useState({ scope: "", key: "" });
+  const [rankingClasses, setRankingClasses] = useState<WisRankingClass[]>([]);
+  const [classesScope, setClassesScope] = useState("");
   const [paused, setPaused] = useState(false);
   const [visible, setVisible] = useState(
     () => typeof document === "undefined" || !document.hidden,
@@ -131,7 +139,14 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
   const needsRefresh = useRef(false);
   const available = useRef(false);
   const savedScope = useRef("");
-  const scopeKey = `${currentUser?.uid || ""}:${authGeneration}:${year}:${semester}:${studentAudience}`;
+  const identityScope = `${currentUser?.uid || ""}:${authGeneration}:${year}:${semester}:${studentAudience}`;
+  const classKey =
+    classSelection.scope === identityScope ? classSelection.key : "";
+  const scopeKey = `${identityScope}:${metric}:${classKey}`;
+  const visibleClasses = classesScope === identityScope ? rankingClasses : [];
+  const metricLabel = metric === "current" ? "현재" : "누적";
+  const entryScore = (entry: WisHallOfFameEntry) =>
+    metric === "current" ? entry.currentBalance : entry.cumulativeEarned;
   const scopeLoading = loading || loadedScope !== scopeKey;
   const selectedEntry =
     loadedScope === scopeKey
@@ -209,13 +224,20 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
     const scope = { year, semester };
     void (async () => {
       try {
-        const { snapshot, rankPolicy: policy } = await getWisRankingPreview(
+        const {
+          snapshot,
+          rankPolicy: policy,
+          classes,
+        } = await getWisRankingPreview(
           scope,
           studentAudience ? "student" : "teacher",
+          { metric, classKey },
         );
         if (cancelled) return;
         setLoadedScope(scopeKey);
         setEntries(getWisHallOfFameGradeLeaderboard(snapshot).slice(0, 5));
+        setRankingClasses(classes);
+        setClassesScope(identityScope);
         setRankPolicy(policy);
         setDefaultProfileIcon(getPointRankDefaultEmojiValue(policy));
         setLoadDurationMs(Math.round(performance.now() - startedAt));
@@ -240,6 +262,9 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
     currentUser,
     authGeneration,
     scopeKey,
+    identityScope,
+    metric,
+    classKey,
     refreshRevision,
   ]);
 
@@ -261,7 +286,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
       className="wis-ranking-panel wis-ranking-with-avatar flex h-full min-h-[260px] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0"
       data-ranking-load-ms={loadDurationMs ?? undefined}
     >
-      <div className="wis-ranking-heading flex items-center justify-between gap-2">
+      <div className="wis-ranking-heading wis-ranking-controls">
         {hallOfFamePath ? (
           <button
             type="button"
@@ -278,6 +303,68 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
             위스 순위
           </h3>
         )}
+        <div
+          className="wis-ranking-metrics"
+          role="radiogroup"
+          aria-label="위스 순위 기준"
+        >
+          {(["cumulative", "current"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={metric === value}
+              tabIndex={metric === value ? 0 : -1}
+              className="wis-ranking-metric"
+              onClick={() => setMetric(value)}
+              onKeyDown={(event) => {
+                if (
+                  ![
+                    "ArrowLeft",
+                    "ArrowRight",
+                    "ArrowUp",
+                    "ArrowDown",
+                    "Home",
+                    "End",
+                  ].includes(event.key)
+                )
+                  return;
+                event.preventDefault();
+                const next =
+                  event.key === "Home"
+                    ? "cumulative"
+                    : event.key === "End"
+                      ? "current"
+                      : value === "cumulative"
+                        ? "current"
+                        : "cumulative";
+                setMetric(next);
+                const buttons =
+                  event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+                    "button",
+                  );
+                buttons?.[next === "cumulative" ? 0 : 1]?.focus();
+              }}
+            >
+              <span>{value === "cumulative" ? "누적" : "현재"}</span>
+            </button>
+          ))}
+        </div>
+        <select
+          className="wis-ranking-class-select"
+          aria-label="위스 순위 학급"
+          value={classKey}
+          onChange={(event) =>
+            setClassSelection({ scope: identityScope, key: event.target.value })
+          }
+        >
+          <option value="">전체</option>
+          {visibleClasses.map((item) => (
+            <option key={item.key} value={item.key}>
+              {item.grade}학년 {item.classNumber}반
+            </option>
+          ))}
+        </select>
         {hallOfFamePath && (
           <button
             type="button"
@@ -329,10 +416,11 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
             )}
 
             {!scopeLoading &&
+              !loadError &&
               entries.map((entry, index) => {
-                const rank = index + 1;
+                const rank = Number(entry.rank || index + 1);
                 const scoreRank =
-                  Number(entry.cumulativeEarned || 0) > 0
+                  Number(entryScore(entry) || 0) > 0
                     ? Number(entry.rank || rank)
                     : 4;
                 const iconClassName = rankIcon(scoreRank);
@@ -349,7 +437,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
                     type="button"
                     className={`wis-ranking-row ${rankAccent} rounded-lg border ${rankTone(scoreRank)}${selectedEntry?.uid === entry.uid ? " is-selected" : ""}`}
                     aria-pressed={selectedEntry?.uid === entry.uid}
-                    aria-label={`${rank}위 ${entry.displayName || entry.studentName}, ${entry.grade}학년 ${entry.class}반, ${formatWis(entry.cumulativeEarned)} 위스, 아바타 선택`}
+                    aria-label={`${rank}위 ${entry.displayName || entry.studentName}, ${entry.grade}학년 ${entry.class}반, ${metricLabel} ${formatWis(entryScore(entry))} 위스, 아바타 선택`}
                     onClick={() => {
                       setSelectedUid(entry.uid);
                       setPaused(true);
@@ -395,10 +483,10 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
                     </span>
                     <span
                       className="wis-ranking-score"
-                      aria-label={`${formatWis(entry.cumulativeEarned)} 위스`}
-                      title={`${formatWis(entry.cumulativeEarned)} 위스`}
+                      aria-label={`${metricLabel} ${formatWis(entryScore(entry))} 위스`}
+                      title={`${metricLabel} ${formatWis(entryScore(entry))} 위스`}
                     >
-                      <span>{formatWis(entry.cumulativeEarned)}</span>
+                      <span>{formatWis(entryScore(entry))}</span>
                       <WisIcon />
                     </span>
                   </button>
@@ -406,7 +494,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
               })}
           </div>
         </div>
-        {!scopeLoading && selectedEntry && (
+        {!scopeLoading && !loadError && selectedEntry && (
           <div className="wis-ranking-avatar-aside">
             <RankingAvatar key={selectedKey} entry={selectedEntry} />
           </div>

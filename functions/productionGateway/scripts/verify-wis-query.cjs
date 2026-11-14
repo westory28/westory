@@ -1891,6 +1891,37 @@ const run = async () => {
   assert.equal(cohortFirst.writeCount + cohortLast.writeCount, 0);
   cohort501.assertUnchanged();
 
+  // New scoped overview must skip withdrawn/stale roster hints and continue,
+  // including when an entire raw page is inactive. No whole-class error or
+  // short-page truncation may hide the following active pupils.
+  for (const inactiveCount of [1, 20, 25, 30]) {
+    const scoped = createOverviewCohort(30);
+    for (let index = 0; index < 30; index += 1) {
+      const suffix = String(index).padStart(3, "0");
+      const entry = scoped.transaction.documents.get(`semester_enrollments/cohort-enrollment-${suffix}`);
+      const account = scoped.transaction.documents.get(`semester_wis_accounts/cohort-account-${suffix}`);
+      Object.assign(account, { grade: "2", classNumber: "3", studentNumber: String(index + 1),
+        displayName: entry.displayName, enrollmentId: entry.enrollmentId, classId: entry.classId });
+      if (index < inactiveCount) entry.enrollmentStatus = "WITHDRAWN";
+    }
+    const before = structuredClone(scoped.transaction.documents);
+    const overview = { grade: "2", classNumber: "3", sortField: "balance", direction: "desc" };
+    const collected = [];
+    let cursor = "";
+    do {
+      const page = await scoped.request({ overview, limit: 20, cursor });
+      collected.push(...page.accounts); cursor = page.nextCursor;
+      assert.equal(page.writeCount, 0);
+      assert(page.accounts.length <= 20);
+      if (cursor) assert.equal(page.accounts.length, 20, "A short page cannot hide later active rows");
+    } while (cursor);
+    assert.equal(collected.length, 30 - inactiveCount);
+    assert.equal(new Set(collected.map(row => row.accountId)).size, 30 - inactiveCount);
+    assert(collected.every(row => row.grade === "2" && row.classNumber === "3"));
+    assert(scoped.transaction.readStats.maxQueryDocuments <= 21);
+    assert.deepEqual(scoped.transaction.documents, before);
+  }
+
   const largeRequest = (cursor = "") =>
     largeQueryCore.getWisEconomyState({
       auth: {

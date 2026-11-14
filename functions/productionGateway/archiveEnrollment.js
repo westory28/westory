@@ -994,6 +994,52 @@ const validateRoster = async ({ reader, payload }) => {
   return { passed, validationHash, summary, classIdsByKey, userDocuments };
 };
 
+// Reuse the profile command's projection contract only when enrollment changes.
+// Lazy import avoids the existing wisEconomy -> archiveEnrollment dependency.
+const readWisEnrollmentProjections = async (transaction, semesterId, studentUids) => {
+  if (!studentUids.length) return new Map();
+  const wis = require("./wisEconomy");
+  const ids = [...new Set(studentUids)];
+  const paths = ids.flatMap((uid) => [wis.WIS_ACCOUNT_COLLECTION, wis.WIS_BALANCE_COLLECTION,
+    wis.WIS_RANKING_COLLECTION].map((collection) => `${collection}/${wis.accountIdFor(semesterId, uid)}`));
+  const snapshots = await readDocuments(transaction, paths);
+  return new Map(ids.map((uid, index) => {
+    const accountId = wis.accountIdFor(semesterId, uid);
+    const projections = snapshots.slice(index * 3, index * 3 + 3).filter((snapshot) => snapshot.exists);
+    if (projections.length !== 0 && projections.length !== 3) {
+      fail("failed-precondition", "학생 위스 계정 표시 정보가 일부 누락되었습니다.",
+        "STUDENT_PROFILE_WIS_PROJECTION_INCOMPLETE");
+    }
+    for (const projection of projections) {
+      if (projection.data?.accountId !== accountId || projection.data?.studentUid !== uid ||
+          projection.data?.semesterId !== semesterId) {
+        fail("failed-precondition", "학생 위스 계정 범위를 확인해 주세요.",
+          "STUDENT_PROFILE_WIS_SCOPE_INVALID");
+      }
+    }
+    if (projections.length) {
+      const [account, balance, ranking] = projections.map((snapshot) => snapshot.data);
+      const totals = ["balance", "earnedTotal", "rankEarnedTotal", "spentTotal", "adjustedTotal"];
+      if (!Number.isSafeInteger(account.revision) || account.revision < 1 ||
+          totals.some((field) => !Number.isSafeInteger(account[field]) ||
+            (field !== "adjustedTotal" && account[field] < 0) || balance[field] !== account[field]) ||
+          balance.ledgerRevision !== account.revision || ranking.ledgerRevision !== account.revision ||
+          ranking.balance !== account.balance || ranking.rankEarnedTotal !== account.rankEarnedTotal) {
+        fail("failed-precondition", "학생 위스 계정의 잔액 정보를 먼저 확인해 주세요.",
+          "STUDENT_PROFILE_WIS_PROJECTION_INVALID");
+      }
+    }
+    return [uid, projections];
+  }));
+};
+const writeWisEnrollmentMetadata = (transaction, projections, metadata, timestamp, actorUid) => {
+  const changed = projections.filter((projection) => Object.entries(metadata)
+    .some(([field, value]) => projection.data[field] !== value));
+  for (const projection of changed) transaction.set(projection.path,
+    { ...metadata, updatedAt: timestamp, updatedBy: actorUid }, { merge: true });
+  return changed.map((projection) => projection.path);
+};
+
 const createArchiveEnrollmentCommandAdapter = () => {
   const apply = async ({
     transaction,
@@ -1297,6 +1343,14 @@ const createArchiveEnrollmentCommandAdapter = () => {
         }
       });
 
+      // Preparing/cutover keeps its existing enrollment-only receipt boundary;
+      // Wis account creation is a separate, later cutover operation.
+      const newEnrollmentUids = manifest.status === "ACTIVE"
+        ? payload.entries.filter((_, index) => !enrollments[index].exists).map((entry) => entry.studentUid)
+        : [];
+      const wisByStudent = await readWisEnrollmentProjections(transaction, payload.semesterId, newEnrollmentUids);
+      const wisRefs = [];
+
       payload.classes.forEach((entry, index) => {
         if (classDocuments[index].exists) return;
         const classId = validation.classIdsByKey.get(entry.classKey);
@@ -1384,6 +1438,13 @@ const createArchiveEnrollmentCommandAdapter = () => {
           updatedAt: timestamp,
           updatedBy: actor.actorUid,
         });
+        if (wisByStudent.has(entry.studentUid)) {
+          const classDefinition = payload.classes.find((item) => item.classKey === entry.classKey);
+          wisRefs.push(...writeWisEnrollmentMetadata(transaction, wisByStudent.get(entry.studentUid), {
+            enrollmentId, classId, grade: classDefinition.grade, classNumber: classDefinition.classNumber,
+            studentNumber: entry.studentNumber, displayName: entry.displayName,
+          }, timestamp, actor.actorUid));
+        }
       });
 
       const summary = {
@@ -1450,6 +1511,7 @@ const createArchiveEnrollmentCommandAdapter = () => {
             ...payload.entries.map((entry) =>
               slotPathFor(payload.semesterId, entry.studentUid),
             ),
+            ...wisRefs,
           ],
         },
         sourceHash: payload.sourceHash,
@@ -1548,6 +1610,9 @@ const createArchiveEnrollmentCommandAdapter = () => {
           "ENROLLMENT_ID_CONFLICT",
         );
       }
+      const wisProjections = manifest.status === "ACTIVE"
+        ? (await readWisEnrollmentProjections(transaction, payload.semesterId, [payload.studentUid])).get(payload.studentUid)
+        : [];
       const enrollment = {
         enrollmentId,
         studentUid: payload.studentUid,
@@ -1587,6 +1652,11 @@ const createArchiveEnrollmentCommandAdapter = () => {
         updatedAt: timestamp,
         updatedBy: actor.actorUid,
       });
+      const wisRefs = writeWisEnrollmentMetadata(transaction, wisProjections, {
+        enrollmentId, classId: payload.classId, grade: String(classSnapshot.data.grade),
+        classNumber: String(classSnapshot.data.classNumber), studentNumber: payload.studentNumber,
+        displayName: payload.displayName,
+      }, timestamp, actor.actorUid);
       const readinessInvalidated = applyReadinessInvalidation({
         transaction,
         reportSnapshot,
@@ -1601,7 +1671,7 @@ const createArchiveEnrollmentCommandAdapter = () => {
         target: {
           semesterId: payload.semesterId,
           enrollmentId,
-          refs: [enrollmentPath, slotPath],
+          refs: [enrollmentPath, slotPath, ...wisRefs],
         },
         sourceHash: null,
         result: {
@@ -1699,6 +1769,16 @@ const createArchiveEnrollmentCommandAdapter = () => {
           "ENROLLMENT_ID_CONFLICT",
         );
       }
+      const wisProjections = (await readWisEnrollmentProjections(transaction,
+        payload.semesterId, [payload.studentUid])).get(payload.studentUid);
+      const wisMetadata = {
+        enrollmentId: nextEnrollmentId,
+        classId: payload.targetClassId,
+        grade: String(targetClassSnapshot.data.grade),
+        classNumber: String(targetClassSnapshot.data.classNumber),
+        studentNumber: payload.studentNumber,
+        displayName: identitySnapshot.data.displayName,
+      };
       transaction.set(
         activePath,
         {
@@ -1748,6 +1828,7 @@ const createArchiveEnrollmentCommandAdapter = () => {
         },
         { merge: true },
       );
+      const wisRefs = writeWisEnrollmentMetadata(transaction, wisProjections, wisMetadata, timestamp, actor.actorUid);
       const readinessInvalidated = applyReadinessInvalidation({
         transaction,
         reportSnapshot,
@@ -1763,7 +1844,7 @@ const createArchiveEnrollmentCommandAdapter = () => {
           semesterId: payload.semesterId,
           enrollmentId: nextEnrollmentId,
           previousEnrollmentId: payload.activeEnrollmentId,
-          refs: [activePath, nextPath, slotPath],
+          refs: [activePath, nextPath, slotPath, ...wisRefs],
         },
         sourceHash: null,
         result: {

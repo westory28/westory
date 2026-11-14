@@ -65,7 +65,9 @@ const orders = await handler(
     scopeReady: true,
     isCurrentScope: () => current,
     loadInFlightRef: { current: null },
-    requestScope: "teacher:2026:2",
+    requestScope: { identity: "teacher:2026:2" },
+    activeTab: "requests",
+    currentViewRef: { current: "requests" },
     config,
     isSemesterArchive: false,
     setShopLoadError: (value) => errors.push(value),
@@ -129,6 +131,42 @@ assert.equal(
 );
 pending = null;
 current = true;
+orders.context.loadInFlightRef.current = {
+  scope: orders.context.requestScope,
+  view: "requests",
+};
+const beforeInFlight = calls.length;
+await orders.run();
+assert.equal(
+  calls.length,
+  beforeInFlight,
+  "The initial request-tab load cannot be duplicated by refresh",
+);
+orders.context.loadInFlightRef.current = null;
+pending = {
+  promise: new Promise((resolve) => {
+    release = resolve;
+  }),
+};
+const leavingTab = orders.run();
+const priorOrderStates = states.length;
+orders.context.currentViewRef.current = "stocks";
+release();
+await leavingTab;
+assert.equal(
+  states.length,
+  priorOrderStates,
+  "Leaving the request tab discards its delayed refresh response",
+);
+pending = null;
+const beforeInactive = calls.length;
+await orders.run();
+assert.equal(
+  calls.length,
+  beforeInactive,
+  "An inactive request tab does not read orders",
+);
+orders.context.currentViewRef.current = "requests";
 orders.context.isSemesterArchive = true;
 await orders.run();
 assert.equal(calls.at(-1).kind, "archive-orders");
@@ -143,6 +181,68 @@ assert.equal(
 
 console.log(
   "PASS real refresh handlers: fresh roster read, order-only read, no unrelated tab/setting resets, duplicate suppression, failure preservation, explicit retry, stale identity discard, archive and permission boundaries.",
+);
+
+const stockEvents = [];
+let stockReads = 0,
+  stockFailure = false;
+const stockOwner = { current: "teacher:1:2026:2" };
+const stockEditor = { current: { selectedId: "stock-one", dirty: true } };
+const stockLoad = await handler(
+  "src/pages/teacher/components/points/TeacherWisStocks.tsx",
+  "load",
+  {
+    useCallback: (callback) => callback,
+    ownerKey: stockOwner.current,
+    owner: stockOwner,
+    year: "2026",
+    semester: "2",
+    generation: { current: 0 },
+    editor: stockEditor,
+    setLoading: (value) => stockEvents.push(["loading", value]),
+    setError: (value) => stockEvents.push(["error", value]),
+    setMarket: (value) => stockEvents.push(["market", value]),
+    setDraft: (value) => stockEvents.push(["draft", value]),
+    wisStockErrorMessage: (error) => error.message,
+    getWisStockManagement: async (scope) => {
+      stockReads++;
+      assert.equal(scope.year, "2026");
+      assert.equal(scope.semester, "2");
+      if (stockFailure) throw Error("Synthetic stock refresh failure");
+      return {
+        stocks: [{ id: "stock-one", settings: { name: "최신 종목 이름" } }],
+      };
+    },
+  },
+);
+await stockLoad.run();
+assert.equal(stockReads, 1);
+assert.ok(stockEvents.some(([kind]) => kind === "market"));
+assert.equal(
+  stockEvents.some(([kind]) => kind === "draft"),
+  false,
+  "Stock refresh retains unsaved settings and selected stock",
+);
+stockEvents.length = 0;
+stockFailure = true;
+await stockLoad.run();
+assert.equal(
+  stockEvents.some(([kind]) => ["market", "draft"].includes(kind)),
+  false,
+  "Stock refresh failure preserves the market and editor",
+);
+stockEvents.length = 0;
+stockFailure = false;
+stockEditor.current.dirty = false;
+await stockLoad.run();
+assert.equal(stockReads, 3, "An explicit stock retry makes one scoped read");
+assert.equal(
+  stockEvents.find(([kind]) => kind === "draft")[1].name,
+  "최신 종목 이름",
+  "A clean editor receives updated server settings without losing selection",
+);
+console.log(
+  "PASS stock refresh: one current-semester read, selected stock and unsaved draft preserved, failure/retry recovery, clean editor gets fresh settings.",
 );
 
 const scoreFile = "src/pages/teacher/components/PerformanceScoreManager.tsx";

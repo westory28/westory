@@ -1,5 +1,6 @@
 const { createHash } = require("node:crypto");
 const { HttpsError } = require("firebase-functions/v2/https");
+const { inspectWisLedger } = require("../wisLedgerIntegrity");
 
 const semesterCore = require("./semesterCore");
 const archiveEnrollment = require("./archiveEnrollment");
@@ -1969,14 +1970,18 @@ const createWisCommandAdapter = ({ projectId, now } = {}) => ({
           { limit: WIS_REBUILD_LEDGER_LIMIT },
         );
       await assertLegacyLedgerProvenance(transaction, entries, account);
-      const balance = entries.reduce(
-        (sum, entry) => sum + Number(entry.data?.delta || 0),
-        0,
-      );
-      if (balance < 0)
+      const inspection = inspectWisLedger(account, entries.map(entry => entry.data || {}));
+      const balance = inspection.balance;
+      // The stored projection can be wrong: that is the purpose of this command.
+      // Every original entry still must be valid, scoped and connected.
+      const ledgerIssues = inspection.issues.filter(issue => !["invalid_balance", "ledger_balance_mismatch"].includes(issue));
+      const totals = totalsFromLedgerEntries(entries);
+      if (ledgerIssues.length || !Number.isSafeInteger(balance) || balance < 0 ||
+          !["earnedTotal", "rankEarnedTotal", "spentTotal"].every(key => Number.isSafeInteger(totals[key]) && totals[key] >= 0) ||
+          !Number.isSafeInteger(totals.adjustedTotal))
         fail(
           "failed-precondition",
-          "Ledger produces a negative balance.",
+          "위스 원장의 금액과 연결을 확인한 뒤 다시 시도해 주세요.",
           "WIS_LEDGER_INVALID",
         );
       const accountRevision = writeProjection(
@@ -1985,7 +1990,7 @@ const createWisCommandAdapter = ({ projectId, now } = {}) => ({
         balance,
         projectionTimestamp,
         actor.actorUid,
-        totalsFromLedgerEntries(entries),
+        totals,
         entries
           .map((entry) => entry.data || {})
           .slice(0, WIS_RECENT_LEDGER_LIMIT),
@@ -3780,4 +3785,5 @@ module.exports = {
   initialGrantTotalsFor: (amount) => ({ balance: amount, ...ledgerTotalsContribution("INITIAL_GRANT", amount) }),
   ledgerIdFor,
   normalizeWisPayload,
+  totalsFromLedgerEntries,
 };
