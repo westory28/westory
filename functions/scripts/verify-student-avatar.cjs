@@ -4,7 +4,7 @@ const { createHash } = require('node:crypto');
 const sharp = require('sharp');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { createStudentAvatarHandlers, createStudentAvatarDeletionHandler, encodeThumbnail } = require('../studentAvatar');
-const { defaultLook, catalog, validateLook, sanitizePublicAvatar, lookHash } = require('../studentAvatarCatalog');
+const { defaultLook, catalog, validateLook, canWearItem, sanitizePublicAvatar, lookHash } = require('../studentAvatarCatalog');
 const { accountIdFor } = require('../studentWisWallet');
 
 const uid = 'avatar-student', semesterId = '2026-2', accountId = accountIdFor(semesterId, uid);
@@ -305,9 +305,16 @@ test('existing navy skirt keeps its body restriction and new clothing follows ex
     for (const character of item.characters) {
       const compatible = fixture();
       await compatible.api.purchaseStudentAvatarItem(purchase(item));
-      const result = await compatible.api.saveStudentAvatar(await save({ look: { ...defaultLook(character), bottom: item.value }, expectedRevision: 1 }));
-      assert.equal(result.look.character, character); assert.equal(result.look.bottom, item.value);
-      assert.ok(result.ownedItemIds.includes(item.id));
+      const input = await save({ look: { ...defaultLook(character), bottom: item.value }, expectedRevision: 1 });
+      if (canWearItem(item, character)) {
+        const result = await compatible.api.saveStudentAvatar(input);
+        assert.equal(result.look.character, character); assert.equal(result.look.bottom, item.value);
+        assert.ok(result.ownedItemIds.includes(item.id));
+      } else {
+        await assert.rejects(compatible.api.saveStudentAvatar(input), reason('AVATAR_GENDER_MISMATCH'));
+        assert.ok(compatible.documents.get(avatarPath).ownedItemIds.includes(item.id));
+        assert.equal(compatible.bucket.objects.size, 0);
+      }
     }
   }
 });
@@ -367,6 +374,21 @@ test('old thumbnails are bounded to current and previous after three committed s
   const state = fixture();
   for (let index = 0; index < 3; index++) { state.advance(); await state.api.saveStudentAvatar(await save({ expectedRevision: index, requestId: `save-000000${index}` })); }
   assert.equal(state.bucket.objects.size, 2);
+});
+test('submitted avatar image is retained across later saves and cleanup removes personal marker fields without reopening participation', async () => {
+  const state = fixture(); await state.api.saveStudentAvatar(await save());
+  const markerPath = `avatar_event_participations/${createHash('sha256').update(uid).digest('hex')}`;
+  const submittedPath = state.documents.get(avatarPath).thumbnailPath;
+  state.documents.set(markerPath, { schemaVersion: 1, semesterId: '2026-2', questionId: 'avatar-example',
+    thumbnailPath: submittedPath, submittedAt: 1, rewardWis: 100, rewardedAt: 2, rewardedBy: 'teacher' });
+  for (let index = 1; index < 4; index++) { state.advance(); await state.api.saveStudentAvatar(await save({ expectedRevision: index, requestId: `event-save-000${index}` })); }
+  assert.equal(state.bucket.objects.has(submittedPath), true); assert.equal(state.bucket.objects.size, 3);
+  state.documents.delete(`users/${uid}`);
+  const cleanup = createStudentAvatarDeletionHandler(state);
+  const event = { id: 'delete-event-participant', params: { uid }, data: { data: () => ({ role: 'student' }) } };
+  await cleanup(event); await cleanup(event);
+  assert.equal(state.bucket.objects.size, 0);
+  assert.deepEqual(state.documents.get(markerPath), { schemaVersion: 1, deleted: true, participated: true, rewarded: true });
 });
 test('URL, SVG, malformed, animated and oversized image inputs cannot become public image payloads', async () => {
   for (const value of ['https://evil.test/a.webp', 'data:image/svg+xml;base64,PHN2Zz4=', 'data:image/webp;base64,YWJj', `data:image/webp;base64,${'A'.repeat(180000)}`]) {

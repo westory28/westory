@@ -1,4 +1,6 @@
 import type { PixelPalette, TopCut } from "./wardrobe";
+import { drawBowlHair } from "./bowlHair";
+import { drawSoftHair } from "./softHair";
 type Point = readonly [number, number];
 export type PixelPen = {
   rect: (
@@ -19,8 +21,13 @@ export function drawHairDetails(
   style: string,
   hair: PixelPalette,
   front: boolean,
+  decoration = true,
 ) {
   const { rect, line, poly } = p;
+  if (style === "mm-ash-cloud" || style === "mm-blossom-bob") {
+    drawSoftHair(p, style, hair, front, decoration);
+    return;
+  }
   if (!front) {
     if (style === "mm-twin-ribbon" || style === "mm-braided-twin") {
       for (const flip of [-1, 1]) {
@@ -140,7 +147,9 @@ export function drawHairDetails(
     }
     return;
   }
-  if (style === "mm-cloud-crop" || style === "mm-fluffy-curl") {
+  if (style === "mm-ash-bowl") {
+    drawBowlHair(p, hair);
+  } else if (style === "mm-cloud-crop" || style === "mm-fluffy-curl") {
     const curls =
       style === "mm-cloud-crop"
         ? [

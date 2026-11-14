@@ -5,7 +5,7 @@ const sharp = require('sharp');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 const { readStudentMenuAccess, assertStudentMenuVisible } = require('./studentMenuVisibility');
 const { createStudentWisWallet } = require('./studentWisWallet');
-const { catalog, items, defaultLook, validateLook, restoreStoredLook, lookHash } = require('./studentAvatarCatalog');
+const { catalog, items, defaultLook, validateLook, validateWearableLook, restoreStoredLook, lookHash } = require('./studentAvatarCatalog');
 const { readAvatarPricing, assertAvatarIdentity, readAvatarTeacher, ownedLookIds, canUsePricedLook } = require('./avatarCatalogPricing');
 const { resolveRankPolicy, getProfileEmojiEntryById, DEFAULT_PROFILE_EMOJI_ID } = require('./studentProfileEmojiPolicy');
 
@@ -185,12 +185,12 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
     const scope = scopeOf(data);
     return db.runTransaction(async tx => {
       const profile = await readStudent(tx, uid, identity);
-      const [state, policy] = await Promise.all([readState(tx, uid), loadPolicy(tx, scope.year, scope.semester)]);
+      const [state, policy, pricing] = await Promise.all([readState(tx, uid), loadPolicy(tx, scope.year, scope.semester), readAvatarPricing(tx, db)]);
       const emojiRegistry = resolveRankPolicy(policy?.rankPolicy).emojiRegistry.filter(entry => entry.enabled !== false);
       const selected = emojiRegistry.find(entry => entry.id === profile.profileEmojiId)
         || emojiRegistry.find(entry => entry.emoji === profile.profileIcon)
         || emojiRegistry.find(entry => entry.id === DEFAULT_PROFILE_EMOJI_ID) || emojiRegistry[0];
-      return { avatar: exposeState(state), allAvailable: true, emojiRegistry,
+      return { avatar: exposeState(state), pricing, allAvailable: true, emojiRegistry,
         profileEmojiId: selected?.id || '', profileIcon: selected?.emoji || '😀' };
     }, { readOnly: true });
   };
@@ -295,8 +295,11 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
       if (previous) return { previous };
       const state = await readState(tx, uid);
       if (state.revision !== data.expectedRevision) fail('aborted', '다른 화면에서 아바타가 변경되었습니다. 보관함을 새로고침해 주세요.', 'AVATAR_REVISION_CONFLICT', { currentRevision: state.revision });
+      const pricing = await readAvatarPricing(tx, db);
+      if (!validateWearableLook(look, pricing.metadata)) {
+        fail('permission-denied', '현재 아바타 성별에 맞지 않는 아이템이 있습니다. 아이템을 다시 선택해 주세요.', 'AVATAR_GENDER_MISMATCH', { pricing });
+      }
       if (!teacher) {
-        const pricing = await readAvatarPricing(tx, db);
         if (!canUsePricedLook(look, state.ownedItemIds, pricing)) {
           fail('permission-denied', '현재 가격표에서 구매하지 않은 아이템이 있습니다. 가격을 확인해 주세요.', 'AVATAR_ITEM_NOT_OWNED', { pricing });
         }
@@ -347,7 +350,8 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
       if (retiredPath && retiredPath !== objectPath && retiredPath.startsWith(`${thumbnailFolder}/v2/${hash(uid)}/`)) {
         try {
           const current = (await db.doc(`${collection}/${uid}`).get()).data() || {};
-          if (![current.thumbnailPath, current.previousThumbnailPath].includes(retiredPath)) await storageBucket.file(retiredPath).delete({ ignoreNotFound: true });
+          const event = teacher ? null : (await db.doc(`avatar_event_participations/${hash(uid)}`).get()).data();
+          if (![current.thumbnailPath, current.previousThumbnailPath, event?.thumbnailPath].includes(retiredPath)) await storageBucket.file(retiredPath).delete({ ignoreNotFound: true });
         } catch (_) { /* Retention cleanup may be retried operationally. */ }
       }
       return result;
@@ -402,8 +406,15 @@ const createStudentAvatarDeletionHandler = ({ db, bucket, audience = 'student' }
   }
   await db.recursiveDelete(db.doc(`${collection}/${uid}`));
   await db.runTransaction(async tx => {
-    const lock = await tx.get(lockRef);
-    if (lock.exists && lock.data().eventHash === eventHash) tx.delete(lockRef);
+    const markerRef = db.doc(`avatar_event_participations/${hash(uid)}`);
+    const [lock, marker] = await tx.getAll(lockRef, ...(!teacher ? [markerRef] : []));
+    if (lock.exists && lock.data().eventHash === eventHash) {
+      // Preserve only the lifetime uniqueness tombstone after account deletion;
+      // semester cleanup separately removes questions and private receipts.
+      if (marker?.exists) tx.set(markerRef, { schemaVersion: 1, deleted: true, participated: true,
+        rewarded: Boolean(marker.data().rewardedAt || marker.data().rewarded) });
+      tx.delete(lockRef);
+    }
   });
 };
 

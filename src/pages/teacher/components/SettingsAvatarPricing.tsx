@@ -366,6 +366,7 @@ export function AvatarPricingManager({
   const [slot, setSlot] = useState("top");
   const [group, setGroup] = useState("all");
   const [gender, setGender] = useState("all");
+  const [sale, setSale] = useState("all");
   const [changedOnly, setChangedOnly] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
@@ -459,13 +460,15 @@ export function AvatarPricingManager({
         (slot === "all" || item.slot === slot) &&
         (group === "all" || getAvatarItemGroup(item) === group) &&
         (gender === "all" || avatarItemMetadata(item).gender === gender) &&
+        (sale === "all" ||
+          (sale === "paid" ? item.price > 0 : item.price === 0)) &&
         (!changedOnly || changed.has(item.id)) &&
         (!query ||
           `${item.label} ${item.description || ""} ${avatarItemTypeLabel(item)} ${getAvatarItemGroup(item)}`
             .toLocaleLowerCase()
             .includes(query)),
     );
-  }, [search, slot, group, gender, changedOnly, changed, items]);
+  }, [search, slot, group, gender, sale, changedOnly, changed, items]);
   const updateDraft = (id: string, patch: Partial<ItemDraft>) => {
     setItemErrors((current) => ({ ...current, [id]: "" }));
     setDrafts((current) => ({
@@ -644,19 +647,53 @@ export function AvatarPricingManager({
                 ))}
               </select>
             </label>
-            <label>
-              <span>성별</span>
-              <select
-                aria-label="성별"
-                value={gender}
-                onChange={(event) => setGender(event.target.value)}
-              >
-                <option value="all">전체</option>
-                <option value="boy">남자</option>
-                <option value="girl">여자</option>
-                <option value="unisex">공용</option>
-              </select>
-            </label>
+          </div>
+          <div className="avatar-pricing-browse">
+            <div
+              className="avatar-pricing-filter"
+              role="group"
+              aria-label="판매 방식"
+            >
+              {(
+                [
+                  ["all", "전체"],
+                  ["paid", "유료"],
+                  ["free", "무료"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={sale === value}
+                  onClick={() => setSale(value)}
+                >
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+            <div
+              className="avatar-pricing-filter"
+              role="group"
+              aria-label="성별"
+            >
+              {(
+                [
+                  ["all", "성별 전체"],
+                  ["boy", "남자"],
+                  ["girl", "여자"],
+                  ["unisex", "공용"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={gender === value}
+                  onClick={() => setGender(value)}
+                >
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
           </div>
           <div className="avatar-pricing-summary">
             <span role="status">
@@ -690,7 +727,9 @@ export function AvatarPricingManager({
                     className="avatar-pricing-preview"
                   />
                   <div className="avatar-pricing-item-identity">
-                    <h4>{draft.label.trim() || item.label}</h4>
+                    <h4 title={draft.label.trim() || item.label}>
+                      {draft.label.trim() || item.label}
+                    </h4>
                     <div className="avatar-pricing-labels">
                       <span>{avatarItemTypeLabel(item)}</span>
                       <span>{genderLabels[draft.gender]}</span>

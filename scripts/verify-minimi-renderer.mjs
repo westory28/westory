@@ -8,7 +8,9 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const output = path.join(root, "output/avatar-hanbok-20261114");
+const output =
+  process.env.AVATAR_ART_EVIDENCE_DIR ||
+  path.join(root, "output/avatar-hanbok-20261114");
 const exhaustive = !process.argv.includes("--details-only");
 await fs.mkdir(output, { recursive: true });
 const require = createRequire(import.meta.url);
@@ -50,7 +52,7 @@ let headwearChecks=0;
 for(const character of V.character)for(const hairStyle of V.hairStyle)for(const accessory of V.accessory)for(const pose of V.pose)for(const skinTone of V.skinTone){
  const look={...defaultAvatarLook(character),hairStyle,accessory,pose,skinTone};const full=pixels(look).slice();
  for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(full[(y*W+x)*4+3])assert(x>0&&x<W-1&&y>0&&y<H-1,'Headwear clipping: '+JSON.stringify(look));
- const brim=hanbokHatHairLine(accessory);
+ const brim=accessory==='mm-cap'?21:hanbokHatHairLine(accessory);
  if(brim){drawMinimi(ctx,look,{itemOnly:'accessory'});const hat=ctx.getImageData(0,0,W,H).data;for(let y=0;y<brim;y++)for(let x=0;x<W;x++){const n=(y*W+x)*4;assert(full.slice(n,n+4).every((v,i)=>v===hat[n+i]),'Hair protrudes above hat: '+JSON.stringify(look));}}
  headwearChecks++;
 }
@@ -79,6 +81,33 @@ for(const character of V.character)for(const bottom of V.bottom.filter(value=>AV
  for(let y=91;y<=104;y++)for(let x=26;x<=55;x++) { const i=(y*W+x)*4;if(footwear[i+3])assert(footwear.slice(i,i+4).every((v,k)=>v===full[i+k]),'Footwear fitting/occlusion: '+JSON.stringify(look)); }
  footwearChecks++;
 }
+// The full fringe must cover the scalp in every tint and pose without skin-color seams.
+let bowlFringeChecks=0;
+for(const character of V.character)for(const hairTone of V.hairTone)for(const pose of V.pose){
+ const look={...defaultAvatarLook(character),hairStyle:'mm-ash-bowl',hairTone,pose};
+ const light=pixels({...look,skinTone:'mm-ivory'}).slice(),dark=pixels({...look,skinTone:'mm-deep'});
+ for(let y=12;y<=27;y++)for(let x=27;x<=53;x++){const p=(y*W+x)*4;assert(light[p+3]===255,'Bowl fringe gap');assert(light.slice(p,p+4).every((v,i)=>v===dark[p+i]),'Skin leaks through full bowl fringe');}
+ bowlFringeChecks++;
+}
+let schoolUniformChecks=0;
+let softHairChecks=0;
+for(const hairStyle of ['mm-ash-cloud','mm-blossom-bob'])for(const character of V.character)for(const hairTone of V.hairTone)for(const pose of V.pose){
+ const look={...defaultAvatarLook(character),hairStyle,hairTone,pose};
+ const light=pixels({...look,skinTone:'mm-ivory'}).slice(),dark=pixels({...look,skinTone:'mm-deep'});
+ for(let y=13;y<=23;y++)for(let x=27;x<=52;x++){const p=(y*W+x)*4;assert(light[p+3]===255,'Soft hair crown gap');assert(light.slice(p,p+4).every((v,i)=>v===dark[p+i]),'Skin leaks through soft hair crown');}
+ softHairChecks++;
+}
+const colorAt=(data,x,y)=>Array.from(data.slice((y*W+x)*4,(y*W+x)*4+3));
+for(const character of V.character)for(const pose of V.pose){
+ const look={...defaultAvatarLook(character),pose};
+ const white=pixels({...look,top:'mm-school-white'}).slice();
+ const whiteBody=colorAt(white,40,67),navyCollar=colorAt(white,36,55);
+ assert(Math.min(...whiteBody)>=240,'White school uniform is not bright white');
+ assert(navyCollar[2]>navyCollar[0]&&Math.max(...navyCollar)<120,'White school uniform needs a navy collar');
+ const navy=pixels({...look,top:'mm-school-navy'});
+ assert(new Set([[34,52],[36,52],[36,54],[35,54],[36,56]].map(([x,y])=>colorAt(navy,x,y).join(','))).size>=3,'Navy school collar needs visible checks');
+ schoolUniformChecks++;
+}
 // Every advertised option is accepted, with no accidental identical visual variants.
 const distinct={};
 for(const slot of ['hairStyle','expression','pose','top','bottom','shoes','accessory','hairTone','skinTone']){const seen=new Set();for(const value of V[slot]){drawMinimi(ctx,{...defaultAvatarLook(),[slot]:value});seen.add(sprite.toDataURL())}assert(seen.size===V[slot].length,'Duplicate visual option '+slot);distinct[slot]=seen.size}
@@ -103,6 +132,20 @@ const overviewSamples=[
 const overviewCanvas=document.createElement('canvas');overviewCanvas.width=1152;overviewCanvas.height=320;const overviewContext=overviewCanvas.getContext('2d');overviewContext.imageSmoothingEnabled=false;overviewContext.fillStyle='#f8fafc';overviewContext.fillRect(0,0,1152,320);
 overviewSamples.forEach(([character,top,hairStyle,expression,pose,label],i)=>{drawMinimi(ctx,{...defaultAvatarLook(character),top,hairStyle,expression,pose,bottom:/hoodie|halfzip/.test(top)?'mm-school-joggers':'mm-school-shorts'});overviewContext.drawImage(sprite,i*192+16,24,160,224);overviewContext.fillStyle='#334155';overviewContext.textAlign='center';overviewContext.font='bold 16px "Malgun Gothic",sans-serif';overviewContext.fillText(label,i*192+96,280)});
 const overview=overviewCanvas.toDataURL('image/png');
+const polishLooks=[];
+for(const character of V.character)for(const top of ['mm-school-white','mm-school-navy'])for(const pose of V.pose)
+ polishLooks.push({...defaultAvatarLook(character),hairStyle:'mm-ash-bowl',hairTone:top==='mm-school-white'?'mm-ink':'mm-silver',top,pose,accessory:pose==='mm-idle'?'mm-none':'mm-sunglasses'});
+const polishCanvas=document.createElement('canvas');polishCanvas.width=6*240;polishCanvas.height=2*360;const pc=polishCanvas.getContext('2d');pc.fillStyle='#f0f4f8';pc.fillRect(0,0,polishCanvas.width,polishCanvas.height);pc.imageSmoothingEnabled=false;
+polishLooks.forEach((look,i)=>{drawMinimi(ctx,look);const x=i%6*240,y=Math.floor(i/6)*360;pc.drawImage(sprite,x,y,240,336);pc.fillStyle='#334155';pc.font='12px sans-serif';pc.fillText(look.character+' / '+look.top.replace('mm-school-','')+' / '+look.pose.replace('mm-',''),x+12,y+352)});
+const polishSheet=polishCanvas.toDataURL('image/png');
+const softLooks=[];
+for(const [character,hairStyle,top,bottom] of [['boy','mm-ash-cloud','mm-school-white','mm-school-shorts'],['girl','mm-blossom-bob','mm-hanbok-plum','mm-hanbok-chima-plum']])for(const hairTone of ['mm-ink','mm-brown'])for(const pose of V.pose)
+ softLooks.push({...defaultAvatarLook(character),hairStyle,hairTone,top,bottom,pose});
+for(const [character,hairStyle,accessories] of [['boy','mm-ash-cloud',['mm-cap','mm-hanbok-gat','mm-hanbok-baekrip']],['girl','mm-blossom-bob',['mm-cap','mm-hanbok-jokduri','mm-hanbok-satgat']]])for(const accessory of accessories)
+ softLooks.push({...defaultAvatarLook(character),hairStyle,accessory,pose:'mm-wave'});
+const softCanvas=document.createElement('canvas');softCanvas.width=6*240;softCanvas.height=Math.ceil(softLooks.length/6)*360;const sc=softCanvas.getContext('2d');sc.fillStyle='#f0f4f8';sc.fillRect(0,0,softCanvas.width,softCanvas.height);sc.imageSmoothingEnabled=false;
+softLooks.forEach((look,i)=>{drawMinimi(ctx,look);const x=i%6*240,y=Math.floor(i/6)*360;sc.drawImage(sprite,x,y,240,336);sc.fillStyle='#334155';sc.font='11px sans-serif';sc.fillText(look.hairStyle.replace('mm-','')+' / '+(look.accessory==='mm-none'?look.hairTone.replace('mm-','')+' / '+look.pose.replace('mm-',''):look.accessory.replace('mm-','')),x+8,y+352)});
+const softHairSheet=softCanvas.toDataURL('image/png');
 const stage=await createAvatarStage(document.getElementById('stage'),defaultAvatarLook());
 await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));const before=stage.stats.renderedFrames;await new Promise(resolve=>setTimeout(resolve,120));assert(stage.stats.renderedFrames===before,'Renderer runs when idle');
 const capture=stage.capture();stage.focusFace();assert(stage.capture()===capture,'Camera framing contaminates saved image');stage.resetView();
@@ -111,7 +154,7 @@ assert(!stage.setLook({hairStyle:'old-hair'}).applied,'Unknown values accepted')
 assert(stage.setLook({pose:'mm-wave'}).applied,'Valid pose rejected');assert(stage.capture()!==capture,'Pose did not update capture');
 const abort=new AbortController();abort.abort();let aborted=false;try{await stage.prepareLook(defaultAvatarLook(),{signal:abort.signal})}catch(e){aborted=e.name==='AbortError'}assert(aborted,'Cancelled preparation applied');
 stage.dispose();assert(!document.querySelector('#stage canvas'),'Canvas leaked on dispose');assert(!stage.setPose('mm-cheer').applied,'Disposed stage accepts changes');
-return {exhaustive:${exhaustive},combinations,headwearChecks,isolatedChecks,skinChecks,footwearChecks,distinct,minPixels,maxPixels,poseSheet,hanbokSheet,overview,lifecycle:true};
+return {exhaustive:${exhaustive},combinations,headwearChecks,isolatedChecks,skinChecks,footwearChecks,bowlFringeChecks,softHairChecks,schoolUniformChecks,distinct,minPixels,maxPixels,poseSheet,hanbokSheet,overview,polishSheet,softHairSheet,lifecycle:true};
 };`,
     loader: "ts",
     resolveDir: root,
@@ -164,6 +207,16 @@ try {
     Buffer.from(result.overview.split(",")[1], "base64"),
   );
   delete result.overview;
+  await fs.writeFile(
+    path.join(output, "polish-review.png"),
+    Buffer.from(result.polishSheet.split(",")[1], "base64"),
+  );
+  delete result.polishSheet;
+  await fs.writeFile(
+    path.join(output, "soft-hair-review.png"),
+    Buffer.from(result.softHairSheet.split(",")[1], "base64"),
+  );
+  delete result.softHairSheet;
   await fs.writeFile(
     path.join(
       output,

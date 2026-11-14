@@ -49,6 +49,19 @@ const validateLook = (look, ownedItemIds) => {
   }
   return result;
 };
+// Editing eligibility follows the administrator's current gender setting. Keep
+// this separate from stored/public validation so older saved looks still render.
+const canWearItem = (item, character, metadata = {}) => {
+  if (!item || !item.characters.includes(character)) return false;
+  if (item.slot === 'character') return item.value === character;
+  const gender = metadata[item.id]?.gender ?? itemMetadata(item).gender;
+  return gender === 'unisex' || gender === character;
+};
+const validateWearableLook = (look, metadata = {}) => {
+  const validated = validateLook(look);
+  return validated && SLOTS.every(slot => canWearItem(items.get(itemIdFor(slot, validated[slot])), validated.character, metadata))
+    ? validated : null;
+};
 // Retired generations must never reconnect through a per-slot fallback.
 const restoreStoredLook = look => validateLook(look);
 const lookHash = look => createHash('sha256').update(JSON.stringify(SLOTS.map(slot => [slot, look[slot]]))).digest('hex');
@@ -67,4 +80,4 @@ const sanitizePublicAvatar = value => {
   return result;
 };
 
-module.exports = { SLOTS, catalog, items, itemIdFor, itemMetadata, itemPricePolicy, effectiveAvatarPrice, defaultLook, validateLook, restoreStoredLook, lookHash, sanitizePublicAvatar };
+module.exports = { SLOTS, catalog, items, itemIdFor, itemMetadata, itemPricePolicy, effectiveAvatarPrice, defaultLook, validateLook, canWearItem, validateWearableLook, restoreStoredLook, lookHash, sanitizePublicAvatar };

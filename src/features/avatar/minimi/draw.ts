@@ -85,6 +85,7 @@ export const MINIMI_VALUES = Object.freeze({
   accessory: [
     "mm-none",
     "mm-glasses",
+    "mm-sunglasses",
     "mm-ribbon",
     "mm-cap",
     ...HANBOK_ACCESSORIES,
@@ -204,7 +205,11 @@ export function drawMinimi(
   const customTop = TOPS[look.top];
   const customBottom = BOTTOMS[look.bottom];
   const customShoe = SHOES[look.shoes];
-  const hatLine = bodyVisible ? hanbokHatHairLine(look.accessory) : 0;
+  const hatLine = bodyVisible
+    ? look.accessory === "mm-cap"
+      ? 21
+      : hanbokHatHairLine(look.accessory)
+    : 0;
   const clipHair = () => {
     ctx.save();
     if (hatLine) {
@@ -231,7 +236,7 @@ export function drawMinimi(
           ? ["#fff3d6", "#e8d9b7", "#c9b793", "#a7957c"]
           : sweat
             ? ["#b6d6ed", "#81adce", "#5e88b2", "#41668e"]
-            : ["#fffdf1", "#eee9d9", "#cbc9bf", "#9a9da0"]);
+            : ["#ffffff", "#f7faff", "#dce5ed", "#9aaec1"]);
   const mint = "#5dbaa8",
     mintLight = "#c9f2db",
     trim = "#36475d";
@@ -798,8 +803,8 @@ export function drawMinimi(
           [36, 58],
           [32, 53],
         ],
-        fabric[0],
-        navy ? "#e6e0cf" : trim,
+        navy ? "#dbe2ec" : trim,
+        navy ? "#64768c" : "#202f48",
       );
       poly(
         [
@@ -808,9 +813,29 @@ export function drawMinimi(
           [44, 58],
           [48, 53],
         ],
-        fabric[0],
-        navy ? "#e6e0cf" : trim,
+        navy ? "#dbe2ec" : trim,
+        navy ? "#64768c" : "#202f48",
       );
+      if (navy) {
+        // Woven checks stay inside both collar leaves, even in raised-arm poses.
+        for (const side of [-1, 1]) {
+          const patch = (
+            x: number,
+            y: number,
+            width: number,
+            height: number,
+            color: string,
+          ) => rect(side < 0 ? x : 80 - x - width + 1, y, width, height, color);
+          patch(34, 52, 2, 2, "#7a8aa2");
+          patch(36, 54, 2, 2, "#7a8aa2");
+          patch(36, 52, 2, 1, "#f2f5fa");
+          patch(35, 54, 1, 2, "#f2f5fa");
+          patch(36, 56, 1, 1, "#465b77");
+        }
+      } else {
+        line([35, 52], [37, 54], "#5a7292");
+        line([45, 52], [43, 54], "#5a7292");
+      }
       rect(39, 55, 3, 8, fabric[0]);
       for (const y of [56, 59, 62]) rect(40, y, 1, 1, trim);
     } else {
@@ -1362,7 +1387,14 @@ export function drawMinimi(
       line([45, 18], [48, 21], hair[0]);
     }
 
-    drawHairDetails(pen, look.hairStyle, hair, true);
+    drawHairDetails(
+      pen,
+      look.hairStyle,
+      hair,
+      true,
+      !bodyVisible ||
+        ["mm-none", "mm-glasses", "mm-sunglasses"].includes(look.accessory),
+    );
     ctx.restore();
   }
 
@@ -1378,6 +1410,35 @@ export function drawMinimi(
         rect(x + 1, 33, 2, 1, "#e0eee9");
       }
       line([37, 34], [43, 34], INK);
+    } else if (look.accessory === "mm-sunglasses") {
+      for (const x of [26, 43]) {
+        poly(
+          [
+            [x, 32],
+            [x + 12, 32],
+            [x + 11, 39],
+            [x + 9, 41],
+            [x + 3, 41],
+            [x + 1, 39],
+          ],
+          "#273448",
+          "#151c2b",
+        );
+        poly(
+          [
+            [x + 2, 33],
+            [x + 10, 33],
+            [x + 9, 36],
+            [x + 2, 38],
+          ],
+          "#536781",
+        );
+        line([x + 3, 34], [x + 7, 34], "#b7d3e5");
+        line([x + 2, 39], [x + 9, 39], "#34445b");
+      }
+      line([38, 34], [43, 34], "#151c2b", 2);
+      line([23, 32], [26, 33], "#151c2b", 2);
+      line([55, 33], [58, 32], "#151c2b", 2);
     } else if (look.accessory === "mm-ribbon") {
       poly(
         [

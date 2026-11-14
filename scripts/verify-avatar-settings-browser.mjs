@@ -13,9 +13,28 @@ const catalog = JSON.parse(
 );
 const labelFor = (value) =>
   catalog.items.find((item) => item.value === value).label;
+const genderFor = (item) =>
+  item.gender || (item.characters.length === 1 ? item.characters[0] : "unisex");
+const longNames = Object.fromEntries(
+  catalog.items
+    .filter((item) => item.slot === "top")
+    .slice(-5)
+    .map((item, index) => [
+      item.id,
+      {
+        label:
+          `${index + 1}번째 긴 이름 검증 상품 ${"봄날의 다채로운 우리 옷 ".repeat(5)}`.slice(
+            0,
+            60,
+          ),
+        gender: genderFor(item),
+        description: "긴 상품명 표시 검증",
+      },
+    ]),
+);
 const output = path.resolve(
   process.env.AVATAR_SETTINGS_EVIDENCE ||
-    path.join(root, "output/avatar-wardrobe-20261114/settings"),
+    path.join(root, "output/avatar-polish-20261114/admin"),
 );
 await fs.mkdir(output, { recursive: true });
 const entry = `
@@ -27,6 +46,7 @@ import TeacherAvatarShopPage from './src/pages/teacher/components/points/Teacher
 import SettingsMyPage from './src/pages/teacher/components/SettingsMyPage';
 import {AVATAR_ITEMS,defaultAvatarLook} from './src/features/avatar/catalog';
 const qa=window.avatarPricingQa={reads:0,saves:[],revision:4,failLoad:false,conflict:false,deferred:false,errors:[],toasts:[],metadata:{},prices:Object.fromEntries(AVATAR_ITEMS.map(i=>[i.id,i.price]))};
+qa.metadata=${JSON.stringify(longNames)};
 qa.prices['minimi-top-knit-cream']=0;qa.prices['minimi-top-school-white']=999;qa.prices['minimi-top-school-hoodie']=999;
 qa.avatar={schemaVersion:1,catalogVersion:2,look:defaultAvatarLook('boy'),revision:1,lookHash:'fixture',ownedItemIds:[],thumbnailUrl:''};
 window.addEventListener('error',e=>qa.errors.push(e.message));
@@ -44,11 +64,12 @@ const shellMocks = {
   safeStorage: `export const readStorage=()=>null;`,
   loginPerf: `export const markLoginPerf=()=>{},measureLoginPerf=()=>{};`,
   browserTasks: `export const runAfterNextPaint=callback=>{callback();return()=>{}};`,
-  semesterArchive: `export const isSemesterArchive=false;`,
+  semesterArchive: `export const isSemesterArchive=false,archiveScope=null;`,
   SemesterArchiveBoundary: `export const SemesterArchiveBanner=()=>null,SemesterArchiveUnavailable=()=>null,isArchiveUnavailableRoute=()=>false;`,
   studentMenuAccess: `export const getStudentRouteAccess=()=>({allowed:true}),isStudentVisibilityControlledPath=()=>false;`,
   AuthRecoveryState: `export default ()=>null;`,
   weplayPreload: `export const preloadStudentWeplay=()=>{};`,
+  gongsinmoongo: `export const useGongsinAvailability=()=>({loaded:true,error:false,enabled:false,avatarEventEnabled:false});export const getGongsinmoongo=()=>{throw Error('Unexpected event read')},manageGongsinmoongo=()=>{throw Error('Unexpected event write')},newGongsinRequestId=()=>crypto.randomUUID();`,
 };
 const result = await build({
   stdin: { contents: entry, loader: "tsx", resolveDir: root },
@@ -69,7 +90,7 @@ const result = await build({
         plugin.onResolve(
           {
             filter:
-              /\/(Header|AppToastProvider|safeStorage|loginPerf|browserTasks|semesterArchive|SemesterArchiveBoundary|studentMenuAccess|AuthRecoveryState|weplayPreload)$/,
+              /\/(Header|AppToastProvider|safeStorage|loginPerf|browserTasks|semesterArchive|SemesterArchiveBoundary|studentMenuAccess|AuthRecoveryState|weplayPreload|gongsinmoongo)$/,
           },
           (args) => ({ path: path.basename(args.path), namespace: "shell" }),
         );
@@ -111,7 +132,7 @@ const result = await build({
           }),
         );
         plugin.onLoad({ filter: /.*/, namespace: "pricing" }, () => ({
-          contents: `export const avatarErrorMessage=e=>e.message,avatarPricingFromError=e=>e.details?.pricing||null;export const getAvatarCatalogPricing=()=>window.avatarPricingQa.load();export const updateAvatarCatalogPricing=x=>window.avatarPricingQa.save(x);export const getTeacherMyPage=async()=>({avatar:window.avatarPricingQa.avatar,profileEmojiId:'sun',profileIcon:'☀️',emojiRegistry:[{id:'sun',emoji:'☀️',label:'햇살'}],allAvailable:true});export const saveTeacherAvatar=async()=>{throw Error('Unexpected avatar write')},updateTeacherProfileIcon=async()=>{throw Error('Unexpected emoji write')},makeAvatarThumbnail=()=>'',getAvatarStudioState=async()=>{throw Error('Unexpected student read')},purchaseAvatarItem=async()=>{throw Error('Unexpected purchase')},saveStudentAvatar=async()=>{throw Error('Unexpected student write')};`,
+          contents: `export const avatarErrorMessage=e=>e.message,avatarPricingFromError=e=>e.details?.pricing||null;export const getAvatarCatalogPricing=()=>window.avatarPricingQa.load();export const updateAvatarCatalogPricing=x=>window.avatarPricingQa.save(x);export const getTeacherMyPage=async()=>{const qa=window.avatarPricingQa;qa.teacherReads=(qa.teacherReads||0)+1;return{avatar:qa.avatar,pricing:{revision:qa.revision,prices:{...qa.prices},metadata:{...qa.metadata}},profileEmojiId:'sun',profileIcon:'☀️',emojiRegistry:[{id:'sun',emoji:'☀️',label:'햇살'}],allAvailable:true}};export const saveTeacherAvatar=async()=>{throw Error('Unexpected avatar write')},updateTeacherProfileIcon=async()=>{throw Error('Unexpected emoji write')},makeAvatarThumbnail=()=>'',getAvatarStudioState=async()=>{throw Error('Unexpected student read')},purchaseAvatarItem=async()=>{throw Error('Unexpected purchase')},saveStudentAvatar=async()=>{throw Error('Unexpected student write')};`,
           loader: "js",
         }));
         plugin.onResolve({ filter: /\/permissions$/ }, (args) => ({
@@ -298,8 +319,100 @@ try {
       true,
       "Editor restores focus",
     );
-    for (const gender of ["boy", "girl", "unisex", "all"])
-      await page.getByLabel("성별", { exact: true }).selectOption(gender);
+    const genderFilter = page.getByRole("group", { name: "성별", exact: true });
+    const saleFilter = page.getByRole("group", {
+      name: "판매 방식",
+      exact: true,
+    });
+    for (const [sale, saleLabel] of [
+      ["paid", "유료"],
+      ["free", "무료"],
+      ["all", "전체"],
+    ]) {
+      await saleFilter
+        .getByRole("button", { name: saleLabel, exact: true })
+        .click();
+      for (const [gender, genderLabel] of [
+        ["boy", "남자"],
+        ["girl", "여자"],
+        ["unisex", "공용"],
+        ["all", "성별 전체"],
+      ]) {
+        await genderFilter
+          .getByRole("button", { name: genderLabel, exact: true })
+          .click();
+        const ids = await page
+          .locator(".avatar-pricing-item")
+          .evaluateAll((elements) =>
+            elements.map((element) => element.dataset.itemId).sort(),
+          );
+        const expected = catalog.items
+          .filter(
+            (item) =>
+              item.slot === "top" &&
+              (sale === "all" ||
+                (sale === "paid" ? item.price > 0 : item.price === 0)) &&
+              (gender === "all" || genderFor(item) === gender),
+          )
+          .map((item) => item.id)
+          .sort();
+        assert.deepEqual(
+          ids,
+          expected,
+          `Local ${sale}/${gender} filters match saved catalog`,
+        );
+      }
+    }
+    assert.equal(
+      await page.evaluate(() => window.avatarPricingQa.reads),
+      before,
+      "All paid/free and gender combinations add zero reads",
+    );
+    assert.equal(
+      await page.evaluate(() => window.avatarPricingQa.saves.length),
+      0,
+      "Filters add zero writes",
+    );
+    const badgeTargets = await page
+      .locator(".avatar-pricing-filter button")
+      .evaluateAll((elements) =>
+        elements.map((element) => {
+          const bounds = element.getBoundingClientRect();
+          return { width: bounds.width, height: bounds.height };
+        }),
+      );
+    assert(
+      badgeTargets.every((bounds) => bounds.width >= 44 && bounds.height >= 44),
+      "Badge hit targets are at least 44px",
+    );
+    await page.getByLabel("꾸미기 종류", { exact: true }).selectOption("all");
+    const allKindsBounds = await page
+      .locator(".avatar-pricing-item")
+      .evaluateAll((elements) =>
+        elements.map((element) => {
+          const bounds = element.getBoundingClientRect();
+          return { width: bounds.width, height: bounds.height };
+        }),
+      );
+    assert.equal(allKindsBounds.length, catalog.items.length);
+    for (const dimension of ["width", "height"])
+      assert(
+        Math.max(...allKindsBounds.map((bounds) => bounds[dimension])) -
+          Math.min(...allKindsBounds.map((bounds) => bounds[dimension])) <
+          1,
+        `Every catalog category keeps the same card ${dimension}`,
+      );
+    await page.getByLabel("꾸미기 종류", { exact: true }).selectOption("top");
+    assert.equal(
+      await page.evaluate(() => window.avatarPricingQa.reads),
+      before,
+      "Category filters add zero reads",
+    );
+    assert.equal(
+      await page.evaluate(() => window.avatarPricingQa.saves.length),
+      0,
+      "Category filters add zero writes",
+    );
     await page.getByLabel("아이템 검색", { exact: true }).fill("없는상품검증");
     assert.equal(await page.locator(".avatar-pricing-item").count(), 0);
     await page.getByText("해당하는 아이템이 없습니다.").waitFor();
@@ -393,6 +506,14 @@ try {
       "Preview is the whole shop, not one card",
     );
     await dialog.getByText("저장 전 변경 사항 포함", { exact: true }).waitFor();
+    await dialog
+      .getByRole("button", { name: "남학생 아바타", exact: true })
+      .click();
+    await dialog.getByRole("button", { name: "상의", exact: true }).click();
+    await dialog
+      .getByRole("group", { name: "아이템 성별", exact: true })
+      .getByRole("button", { name: "성별 전체", exact: true })
+      .click();
     await page.screenshot({
       path: path.join(output, `preview-all-${width}.png`),
     });
@@ -458,6 +579,15 @@ try {
       .click();
     await knit.getByRole("button", { name: "저장", exact: true }).click();
     await knit.getByRole("alert").filter({ hasText: "다른 관리자" }).waitFor();
+    const errorHeights = await page
+      .locator(".avatar-pricing-item")
+      .evaluateAll((elements) =>
+        elements.map((element) => element.getBoundingClientRect().height),
+      );
+    assert(
+      Math.max(...errorHeights) - Math.min(...errorHeights) < 1,
+      "Error recovery keeps card heights aligned across rows",
+    );
     await knit.locator(".avatar-pricing-edit").click();
     assert.equal(await price.inputValue(), "750");
     await closeEditor();
@@ -593,6 +723,15 @@ try {
       cards: [...document.querySelectorAll(".avatar-pricing-item")].map((el) =>
         el.getBoundingClientRect().toJSON(),
       ),
+      titles: [...document.querySelectorAll(".avatar-pricing-item h4")].map(
+        (element) => ({
+          label: element.textContent,
+          title: element.title,
+          height: element.getBoundingClientRect().height,
+          clipped: element.scrollHeight > element.clientHeight,
+          clamp: getComputedStyle(element).webkitLineClamp,
+        }),
+      ),
       headerBackground: getComputedStyle(
         document.querySelector(".avatar-pricing .ws-page-header"),
       ).backgroundColor,
@@ -614,6 +753,31 @@ try {
     );
     assert.equal(report.canvas, 0);
     assert.deepEqual(report.errors, []);
+    assert(
+      Math.max(...report.cards.map((card) => card.width)) -
+        Math.min(...report.cards.map((card) => card.width)) <
+        1,
+      "All card columns keep equal widths",
+    );
+    assert(
+      Math.max(...report.cards.map((card) => card.height)) -
+        Math.min(...report.cards.map((card) => card.height)) <
+        1,
+      "Cards have one height across every grid row, including long names and unsaved changes",
+    );
+    assert(
+      report.titles.every(
+        (title) =>
+          title.height === 48 &&
+          title.clamp === "2" &&
+          title.label === title.title,
+      ),
+      "Every title reserves two lines and exposes the full name",
+    );
+    assert(
+      report.titles.some((title) => title.label.length === 60 && title.clipped),
+      "Long-name fixture actually exercises clipping",
+    );
     if (width < 640)
       assert(
         Math.abs(report.cards[0].top - report.cards[1].top) < 2,
@@ -636,18 +800,73 @@ try {
       path: path.join(output, `pricing-${width}.png`),
       fullPage: false,
     });
+    await itemCard(Object.keys(longNames)[0]).scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: path.join(output, `long-names-${width}.png`),
+    });
     reports.push(report);
     if (
       !process.argv.includes("--skip-studio") &&
       [390, 768, 1280].includes(width)
     ) {
-      await page.evaluate(() => window.avatarPricingQa.setView("wardrobe"));
+      await page.evaluate(() => {
+        const qa = window.avatarPricingQa;
+        qa.avatar = {
+          ...qa.avatar,
+          requiresThumbnailRefresh: true,
+          look: {
+            ...qa.avatar.look,
+            character: "girl",
+            hairStyle: "mm-bob",
+            top: "mm-knit-cream",
+          },
+        };
+        qa.setView("wardrobe");
+      });
       await page
         .getByRole("button", { name: "아바타 꾸미기", exact: true })
         .click();
+      assert.equal(
+        await page
+          .getByRole("button", { name: "여성 아바타", exact: true })
+          .getAttribute("aria-pressed"),
+        "true",
+      );
+      await page.getByRole("button", { name: "상의", exact: true }).click();
+      assert.equal(
+        await page.locator(".avatar-shop-item-details strong").textContent(),
+        labelFor("mm-school-white"),
+        "Initial teacher load repairs now-incompatible saved clothing using current metadata",
+      );
+      await page
+        .getByRole("group", { name: "아이템 성별", exact: true })
+        .getByRole("button", { name: "성별 전체", exact: true })
+        .click();
+      const teacherKnit = page.locator(
+        '.avatar-studio-items button[title="구름 크림 니트"]',
+      );
+      assert.equal(
+        await teacherKnit.isDisabled(),
+        true,
+        "Latest male-only classification blocks the female teacher avatar before any failed save",
+      );
       await page
         .getByRole("button", { name: "남성 아바타", exact: true })
         .click();
+      assert.equal(
+        await teacherKnit.isEnabled(),
+        true,
+        "Male avatar can wear the current male-only item",
+      );
+      await teacherKnit.click();
+      await page
+        .getByText("포근한 짜임의 긴소매 니트입니다.", { exact: true })
+        .waitFor();
+      assert.equal(
+        await page.evaluate(() => window.avatarPricingQa.teacherReads),
+        1,
+        "Teacher inventory and current metadata arrive in one combined load",
+      );
       await page.waitForFunction(
         () =>
           document.querySelector(".avatar-studio-save .avatar-primary")
@@ -727,6 +946,11 @@ try {
         "Switching settings disposes the previous stage",
       );
       report.studio = studio;
+      report.teacherInitialMetadata = {
+        combinedLoads: 1,
+        repairedHistoricalGender: true,
+        oppositeGenderBlocked: true,
+      };
       report.rendererErrors = rendererErrors;
       assert.deepEqual(rendererErrors, [], "Renderer reports no shader errors");
       assert.deepEqual(

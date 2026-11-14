@@ -5,22 +5,24 @@
   "scale": "integer-fit",
   "format": "lossless-webp",
   "sources": {
-    "scripts/render-avatar-item-previews.mjs": "842e89b498352c211280e065b532c06f0dc17f984944f77206aa7f56a6790b57",
-    "functions/avatarCatalog.json": "d84238a6789943346783befcb61aa8149779516f2e4af3375f4248314a14dda0",
-    "src/features/avatar/catalog.ts": "aea57330160db17f5648f9ae2e52ca50fc478965cdb935b53f25a4c71336e0d1",
-    "src/features/avatar/minimi/details.ts": "f6db0071804ed7784fdba56754e6be975d2bce3f480c385871f30fe5924fc9ab",
-    "src/features/avatar/minimi/draw.ts": "fc2638c0240140ae7573b46d9afaacf67f1b6da9425fc36c074db082fee7ec60",
+    "scripts/render-avatar-item-previews.mjs": "21824d36525ab7d768cbffcf376b344c7f4c7614313d71010615812afb4d3ff5",
+    "functions/avatarCatalog.json": "3b8c7e787481b3d69bca846784ebe55a9a5e0f2ee845932e34dea1cd1aea3b77",
+    "src/features/avatar/catalog.ts": "38a42452afcba47a5b0361a2109800d20c256fab2edcec513fe869bd89937710",
+    "src/features/avatar/minimi/bowlHair.ts": "d94aa59ddeb07cee0a6ece2cde6e28192edfae4aab4fd37fbb1f328580a6c9ad",
+    "src/features/avatar/minimi/details.ts": "f44c2dadba1c474f3a827334acd5afbc0bc6258bdd99c9a2ed85e0bcb64f2906",
+    "src/features/avatar/minimi/draw.ts": "f5542796b6d10dc02cb19cd7151eebc7ba0e9a89f05f5b8d46d81fb9aeeba4c4",
     "src/features/avatar/minimi/engine.ts": "9967b104d4ae495018c0dfa8a6b8e88d6af9cc7c5f70d005aff5e694c3d3aff1",
     "src/features/avatar/minimi/hanbok.ts": "70facfef7ef3892ccbda9aa91a5d1133ea5a467c47d2a2ecad05c620dbb34b94",
-    "src/features/avatar/minimi/wardrobe.ts": "89d5940a32f734cf05d1f93e0b584c4c22582acee0636852dc0d2eccbd995b71"
+    "src/features/avatar/minimi/softHair.ts": "338cfc0973cf61179ee0e4d3776b768e281ebee82a0eeb5ec4d3f60a84a65b13",
+    "src/features/avatar/minimi/wardrobe.ts": "83ff85be7ddefe35bb5ffee004b43d75c312ca3b85bca039af53f1a42e2f2468"
   },
   "items": [
     {
       "id": "minimi-character-girl",
       "character": "girl",
       "file": "girl/character-girl.webp",
-      "bytes": 1088,
-      "sha256": "8bcd89e5ef55e4b7bd5bc2f44e28b50409a08a02e357c718485227a8ea4cf4b1"
+      "bytes": 1064,
+      "sha256": "717d71b5e637bc1fe173a959476a0d563e3a8e3948428ead6623001e412a6509"
     },
     {
       "id": "minimi-skinTone-ivory",
@@ -159,36 +161,36 @@
       "id": "minimi-pose-idle",
       "character": "girl",
       "file": "girl/pose-mm-idle.webp",
-      "bytes": 1088,
-      "sha256": "8bcd89e5ef55e4b7bd5bc2f44e28b50409a08a02e357c718485227a8ea4cf4b1"
+      "bytes": 1064,
+      "sha256": "717d71b5e637bc1fe173a959476a0d563e3a8e3948428ead6623001e412a6509"
     },
     {
       "id": "minimi-pose-wave",
       "character": "girl",
       "file": "girl/pose-mm-wave.webp",
-      "bytes": 1150,
-      "sha256": "5ddbd0ad341f9b8a123cfaaa6ea73006672bc2b8345e0fdca1fbfd0f2fe53d08"
+      "bytes": 1126,
+      "sha256": "dd22c42273fe742e0086c71d6a4a9ad43162ce08e7242068ff2dcb2d3e6ec4a1"
     },
     {
       "id": "minimi-pose-cheer",
       "character": "girl",
       "file": "girl/pose-mm-cheer.webp",
-      "bytes": 1160,
-      "sha256": "ed7897d9d8708adcfbf1103d391d571c602b3474eaee5a7fe080eab2e1b99c0f"
+      "bytes": 1130,
+      "sha256": "028bb53861f3ceca5f05ef7a5aa2993857467bd93bcf611b832e8b28d209b180"
     },
     {
       "id": "minimi-top-school-white",
       "character": "girl",
       "file": "girl/top-mm-school-white.webp",
-      "bytes": 318,
-      "sha256": "9224925bc9ed25c688316984d49dd37cd16c131d4e667b538e59e26765a648ea"
+      "bytes": 354,
+      "sha256": "8fda5d43c0169795785f5d1252b4ab18b3416278c72bae26358bc195f5db4025"
     },
     {
       "id": "minimi-top-school-navy",
       "character": "girl",
       "file": "girl/top-mm-school-navy.webp",
-      "bytes": 338,
-      "sha256": "8e69144f8da4fc50ec5d6aea6d261f39abbad7fcc8281f21012d5d8a61b9b71e"
+      "bytes": 378,
+      "sha256": "e07c5baf636c21e8ca0de0ceb32681d4bad7f566a9dcd6bd15a80c020e748fa7"
     },
     {
       "id": "minimi-top-school-hoodie",
@@ -800,11 +802,39 @@
       "sha256": "8a7303c3b04fb9399a97131decb5bfc41f3d9f30895651986b2dc4cc157c89aa"
     },
     {
+      "id": "minimi-hairStyle-ash-bowl",
+      "character": "girl",
+      "file": "girl/hairStyle-mm-ash-bowl.webp",
+      "bytes": 778,
+      "sha256": "67940cfabeeea6600200c623b8db17345934f7ca39950780c810ba18b9483957"
+    },
+    {
+      "id": "minimi-accessory-sunglasses",
+      "character": "girl",
+      "file": "girl/accessory-mm-sunglasses.webp",
+      "bytes": 236,
+      "sha256": "f62c96925e05cffaedd141497b7276179249737f69e638977e66e25544b972d3"
+    },
+    {
+      "id": "minimi-hairStyle-ash-cloud",
+      "character": "girl",
+      "file": "girl/hairStyle-mm-ash-cloud.webp",
+      "bytes": 798,
+      "sha256": "2b7c54b34faa821a344056e45d1e445068cb37d6673ecbb256d595789c686130"
+    },
+    {
+      "id": "minimi-hairStyle-blossom-bob",
+      "character": "girl",
+      "file": "girl/hairStyle-mm-blossom-bob.webp",
+      "bytes": 908,
+      "sha256": "16658d0728fecf85fef075f8f9013cfc55312d09ea609c91cf551e23f8655f7f"
+    },
+    {
       "id": "minimi-character-boy",
       "character": "boy",
       "file": "boy/character-boy.webp",
-      "bytes": 1096,
-      "sha256": "f154524bdffd146e4f61eedd8c4963e87d328a1355f82114bb03d8d992fd945e"
+      "bytes": 1054,
+      "sha256": "5f58d2efa640dfc76bb79e653e243da7895410cf32a544d464d43f62a308c45a"
     },
     {
       "id": "minimi-skinTone-ivory",
@@ -943,36 +973,36 @@
       "id": "minimi-pose-idle",
       "character": "boy",
       "file": "boy/pose-mm-idle.webp",
-      "bytes": 1096,
-      "sha256": "f154524bdffd146e4f61eedd8c4963e87d328a1355f82114bb03d8d992fd945e"
+      "bytes": 1054,
+      "sha256": "5f58d2efa640dfc76bb79e653e243da7895410cf32a544d464d43f62a308c45a"
     },
     {
       "id": "minimi-pose-wave",
       "character": "boy",
       "file": "boy/pose-mm-wave.webp",
-      "bytes": 1156,
-      "sha256": "7825dea4f934b6afe9f8082ddb95373b482fd94d1877c5fc21bb557241283692"
+      "bytes": 1116,
+      "sha256": "76b0daa6207ca5bf3ffa988aabc858944bbe6042a8453fd3b9f147f5262f028b"
     },
     {
       "id": "minimi-pose-cheer",
       "character": "boy",
       "file": "boy/pose-mm-cheer.webp",
-      "bytes": 1164,
-      "sha256": "2e5102d7de26ded175fe619f6618a777dabb9abe339bc3a08ab42700194b6b02"
+      "bytes": 1118,
+      "sha256": "033cb7e3149a1adeebea4a8dc1a83fb98324f4e104bc07cbfedfa96c3a90b5d0"
     },
     {
       "id": "minimi-top-school-white",
       "character": "boy",
       "file": "boy/top-mm-school-white.webp",
-      "bytes": 318,
-      "sha256": "9224925bc9ed25c688316984d49dd37cd16c131d4e667b538e59e26765a648ea"
+      "bytes": 354,
+      "sha256": "8fda5d43c0169795785f5d1252b4ab18b3416278c72bae26358bc195f5db4025"
     },
     {
       "id": "minimi-top-school-navy",
       "character": "boy",
       "file": "boy/top-mm-school-navy.webp",
-      "bytes": 338,
-      "sha256": "8e69144f8da4fc50ec5d6aea6d261f39abbad7fcc8281f21012d5d8a61b9b71e"
+      "bytes": 378,
+      "sha256": "e07c5baf636c21e8ca0de0ceb32681d4bad7f566a9dcd6bd15a80c020e748fa7"
     },
     {
       "id": "minimi-top-school-hoodie",
@@ -1575,6 +1605,34 @@
       "file": "boy/accessory-mm-hanbok-binyeo.webp",
       "bytes": 220,
       "sha256": "8a7303c3b04fb9399a97131decb5bfc41f3d9f30895651986b2dc4cc157c89aa"
+    },
+    {
+      "id": "minimi-hairStyle-ash-bowl",
+      "character": "boy",
+      "file": "boy/hairStyle-mm-ash-bowl.webp",
+      "bytes": 776,
+      "sha256": "347110b7ee7152c392ec11912e46922e3e414547c38aaf16636966f176e132d3"
+    },
+    {
+      "id": "minimi-accessory-sunglasses",
+      "character": "boy",
+      "file": "boy/accessory-mm-sunglasses.webp",
+      "bytes": 236,
+      "sha256": "f62c96925e05cffaedd141497b7276179249737f69e638977e66e25544b972d3"
+    },
+    {
+      "id": "minimi-hairStyle-ash-cloud",
+      "character": "boy",
+      "file": "boy/hairStyle-mm-ash-cloud.webp",
+      "bytes": 804,
+      "sha256": "f9d7542944b500fd5a12939276416e493543160e62b07ad7b5302cf33de484bc"
+    },
+    {
+      "id": "minimi-hairStyle-blossom-bob",
+      "character": "boy",
+      "file": "boy/hairStyle-mm-blossom-bob.webp",
+      "bytes": 908,
+      "sha256": "53e97152c4eacb460daa16c95a76ffd90040e5010846d4af552d4499c2d25c2c"
     }
   ]
 }

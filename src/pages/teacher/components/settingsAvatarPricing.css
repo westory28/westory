@@ -90,6 +90,42 @@
   font-size: 14px;
   color: var(--ws-text-muted, #64748b);
 }
+.avatar-pricing-browse {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 16px;
+  margin-bottom: 8px;
+}
+.avatar-pricing-filter {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+}
+.avatar-pricing-filter button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+}
+.avatar-pricing-filter button span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: var(--ws-text-muted, #64748b);
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.avatar-pricing-filter button[aria-pressed="true"] span {
+  color: var(--ws-primary-text, #1e3a8a);
+  background: var(--ws-primary-soft, #eff6ff);
+  font-weight: 700;
+}
 .avatar-pricing-summary {
   display: flex;
   flex-wrap: wrap;
@@ -116,13 +152,15 @@
 .avatar-pricing-items {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  align-items: start;
+  grid-auto-rows: 1fr;
+  align-items: stretch;
   gap: 12px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .avatar-pricing-item {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -154,6 +192,11 @@
   padding-inline: 4px;
 }
 .avatar-pricing-item h4 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  height: 48px;
+  overflow: hidden;
   margin: 0 0 4px;
   color: var(--ws-text-strong, #111827);
   font-size: 16px;
@@ -163,7 +206,7 @@
 }
 .avatar-pricing-labels {
   display: flex;
-  flex-wrap: wrap;
+  white-space: nowrap;
   gap: 4px 8px;
   color: var(--ws-text-muted, #64748b);
   font-size: 14px;
@@ -182,14 +225,20 @@
   font-size: 16px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  min-height: 24px;
+  white-space: nowrap;
 }
 .avatar-pricing-current .wis-icon {
   width: 20px;
   height: 20px;
 }
 .avatar-pricing-changed {
-  display: inline-block;
-  margin-top: 4px;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--ws-primary-soft, #eff6ff);
   color: var(--ws-primary, #2563eb);
   font-size: 14px;
   font-weight: 700;

@@ -4,9 +4,11 @@ import { auth, db } from "./firebase";
 import { callWithApplicationSession } from "./applicationSession";
 import { useAuth } from "../contexts/AuthContext";
 import { getYearSemester } from "./semesterScope";
+import type { AvatarLook } from "../features/avatar/catalog";
 
 export type GongsinSourceKind =
   | "general"
+  | "avatar"
   | "lesson"
   | "dictionary"
   | "mock"
@@ -24,6 +26,7 @@ export interface GongsinSource {
 }
 export const GONGSIN_SOURCE_LABELS: Record<GongsinSourceKind, string> = {
   general: "학습 질문",
+  avatar: "아바타 자랑",
   lesson: "수업자료",
   dictionary: "역사 사전",
   mock: "모의고사 오답 노트",
@@ -38,8 +41,27 @@ export interface GongsinSettings {
   teacherQuestionNotifications: boolean;
   studentReplyNotifications: boolean;
   warning: { enabled: boolean; title: string; body: string; revision: number };
-  allowedSources: Exclude<GongsinSourceKind, "general">[];
+  allowedSources: Exclude<GongsinSourceKind, "general" | "avatar">[];
   defaultRestrictionMs: number;
+  avatarEvent?: { enabled: boolean; rewardWis: number };
+}
+export interface GongsinAvatarSubmission {
+  questionId: string;
+  semesterId: string;
+  description: string;
+  thumbnailUrl: string;
+  look: AvatarLook;
+  avatarRevision: number;
+  rewardWis: number;
+  submittedAt: number;
+  rewardedAt?: number;
+  ledgerEntryId?: string;
+}
+export interface GongsinAvatarEventState {
+  enabled: boolean;
+  rewardWis: number;
+  participated: boolean;
+  submission?: GongsinAvatarSubmission;
 }
 export interface GongsinRestriction {
   until: number;
@@ -59,6 +81,7 @@ export interface GongsinQuestion {
   createdAt: number;
   updatedAt: number;
   revision: number;
+  avatarEvent?: GongsinAvatarSubmission;
 }
 export interface GongsinStory {
   id: string;
@@ -83,6 +106,13 @@ export interface GongsinMutation {
   restriction?: GongsinRestriction | null;
   acknowledgedWarningRevision?: number;
   replayed: boolean;
+  avatarEvent?: GongsinAvatarEventState;
+  reward?: {
+    awarded: boolean;
+    amount: number;
+    balance?: number;
+    ledgerEntryId?: string;
+  };
 }
 export async function getGongsinmoongo<T>(
   semesterId: string,
@@ -151,6 +181,7 @@ export function parseGongsinSource(search: string): GongsinSource {
   return source;
 }
 export function getGongsinSourceUrl(source: GongsinSource) {
+  if (source.kind === "avatar") return "/student/mypage?menu=avatar";
   if (source.kind === "lesson" && source.unitId)
     return `/student/lesson/note?id=${encodeURIComponent(source.unitId)}${source.page ? `&page=${source.page}` : ""}`;
   if (source.kind === "dictionary" && source.termId)
@@ -168,6 +199,8 @@ interface Availability {
   contentRevision: number;
   loaded: boolean;
   error: boolean;
+  avatarEventEnabled: boolean;
+  avatarEventRewardWis: number;
 }
 const CLOSED: Availability = {
   enabled: false,
@@ -175,6 +208,8 @@ const CLOSED: Availability = {
   contentRevision: 0,
   loaded: false,
   error: false,
+  avatarEventEnabled: false,
+  avatarEventRewardWis: 100,
 };
 const availability = new Map<
   string,
@@ -220,6 +255,10 @@ export function useGongsinAvailability(active = true) {
               enabled: snapshot.data()?.enabled === true,
               revision: Number(snapshot.data()?.revision || 0),
               contentRevision: Number(snapshot.data()?.contentRevision || 0),
+              avatarEventEnabled: snapshot.data()?.avatarEventEnabled === true,
+              avatarEventRewardWis: Number(
+                snapshot.data()?.avatarEventRewardWis || 100,
+              ),
               loaded: true,
               error: false,
             };

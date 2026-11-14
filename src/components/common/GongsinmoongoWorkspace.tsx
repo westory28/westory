@@ -217,6 +217,7 @@ export default function GongsinmoongoWorkspace({
   const conversationRequest = useRef(0);
   const conversationRef = useRef<HTMLDivElement>(null);
   const mutation = useRef<{ fingerprint: string; id: string } | null>(null);
+  const rewardInFlight = useRef<string | null>(null);
   const source = useMemo(
     () => parseGongsinSource(location.search),
     [location.search],
@@ -493,6 +494,23 @@ export default function GongsinmoongoWorkspace({
       if (operationScope === mutationScopeRef.current) setBusy(false);
     }
   }
+  async function rewardAvatar(item: GongsinQuestion) {
+    if (!teacher || busy || !item.avatarEvent || item.avatarEvent.rewardedAt)
+      return;
+    const operationScope = mutationScopeRef.current;
+    if (rewardInFlight.current === operationScope) return;
+    rewardInFlight.current = operationScope;
+    try {
+      const result = await command("rewardAvatar", {
+        questionId: item.id,
+        expectedRevision: item.revision,
+      });
+      if (result) notify("아바타 이벤트 보상을 지급했습니다.");
+    } finally {
+      if (rewardInFlight.current === operationScope)
+        rewardInFlight.current = null;
+    }
+  }
   const submit = async () => {
     if (!question.trim() || !state) return;
     if (
@@ -634,7 +652,8 @@ export default function GongsinmoongoWorkspace({
   const restricted = Boolean(restriction && restriction.until > Date.now());
   const sourceAllowed =
     source.kind === "general" ||
-    state?.settings.allowedSources.includes(source.kind);
+    (source.kind !== "avatar" &&
+      state?.settings.allowedSources.includes(source.kind));
   const sendDisabled =
     busy ||
     !state?.settings.acceptingQuestions ||
@@ -935,6 +954,55 @@ export default function GongsinmoongoWorkspace({
                       </div>
                     )}
                     <time>{timeText(item.createdAt)}</time>
+                    {item.source.kind === "avatar" &&
+                      item.avatarEvent &&
+                      (!teacher || selected?.id === item.id) && (
+                        <section
+                          className="gsm-avatar-event"
+                          aria-label="아바타 이벤트 접수"
+                        >
+                          <img
+                            src={item.avatarEvent.thumbnailUrl}
+                            alt="접수한 아바타"
+                            width={120}
+                            height={160}
+                          />
+                          <div className="gsm-avatar-event-details">
+                            <strong>한마디 소개</strong>
+                            <p>{item.avatarEvent.description}</p>
+                            {item.avatarEvent.rewardedAt ? (
+                              <div
+                                className="gsm-avatar-event-reward"
+                                role="status"
+                              >
+                                <strong>
+                                  {item.avatarEvent.rewardWis.toLocaleString()}{" "}
+                                  위스 지급 완료
+                                </strong>
+                                <time>
+                                  {timeText(item.avatarEvent.rewardedAt)}
+                                </time>
+                              </div>
+                            ) : (
+                              <>
+                                <span className="gsm-avatar-event-pending">
+                                  {item.avatarEvent.rewardWis.toLocaleString()}{" "}
+                                  위스 · 지급 대기
+                                </span>
+                                {teacher && (
+                                  <button
+                                    className="gsm-primary"
+                                    disabled={busy}
+                                    onClick={() => void rewardAvatar(item)}
+                                  >
+                                    보상 지급하기
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </section>
+                      )}
                   </div>
                   {item.reply ? (
                     <div className={`gsm-message ${teacher ? "is-mine" : ""}`}>
@@ -1001,7 +1069,21 @@ export default function GongsinmoongoWorkspace({
                   )}
                   {!sourceAllowed && (
                     <p className="gsm-restriction">
-                      이 자료에서는 지금 질문할 수 없습니다.
+                      {source.kind === "avatar" ? (
+                        <>
+                          아바타 이벤트는 옷장에서 참여해 주세요.{" "}
+                          <button
+                            className="gsm-button"
+                            onClick={() =>
+                              navigate("/student/mypage?menu=avatar")
+                            }
+                          >
+                            옷장으로 이동
+                          </button>
+                        </>
+                      ) : (
+                        "이 자료에서는 지금 질문할 수 없습니다."
+                      )}
                     </p>
                   )}
                   <label
@@ -1233,6 +1315,9 @@ function StoryEditor({
   const [checked, setChecked] = useState(false);
   return (
     <Dialog title="공개용 문구 편집" error={error} onClose={onClose}>
+      {question.source.kind === "avatar" && (
+        <p className="gsm-story-privacy">아바타 이미지는 공개되지 않습니다.</p>
+      )}
       <label className="gsm-field">
         공개 질문
         <textarea
@@ -1362,7 +1447,19 @@ function SettingsEditor({
   ) => Promise<boolean>;
   semesterId: string;
 }) {
-  const [draft, setDraft] = useState(settings);
+  const baseline = useMemo(
+    () => ({
+      ...settings,
+      avatarEvent: settings.avatarEvent ?? { enabled: false, rewardWis: 100 },
+    }),
+    [settings],
+  );
+  const [draft, setDraft] = useState(baseline);
+  const rewardValid =
+    Number.isInteger(draft.avatarEvent.rewardWis) &&
+    draft.avatarEvent.rewardWis >= 1 &&
+    draft.avatarEvent.rewardWis <= 1_000_000;
+  const changed = JSON.stringify(draft) !== JSON.stringify(baseline);
   const [restrictions, setRestrictions] = useState<
     GongsinPage<
       GongsinRestriction & { studentId: string; studentLabel: string }
@@ -1371,7 +1468,7 @@ function SettingsEditor({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const loadRequest = useRef(0);
-  useEffect(() => setDraft(settings), [settings]);
+  useEffect(() => setDraft(baseline), [baseline]);
   const load = async (more = false) => {
     const id = ++loadRequest.current;
     setLoading(true);
@@ -1470,7 +1567,7 @@ function SettingsEditor({
             {(
               Object.keys(GONGSIN_SOURCE_LABELS) as Array<GongsinSource["kind"]>
             )
-              .filter((kind) => kind !== "general")
+              .filter((kind) => kind !== "general" && kind !== "avatar")
               .map((kind) => (
                 <label className="gsm-toggle" key={kind}>
                   {kind === "mock" ? "모의고사" : GONGSIN_SOURCE_LABELS[kind]}
@@ -1478,7 +1575,7 @@ function SettingsEditor({
                     type="checkbox"
                     aria-label={GONGSIN_SOURCE_LABELS[kind]}
                     checked={draft.allowedSources.includes(
-                      kind as Exclude<typeof kind, "general">,
+                      kind as Exclude<typeof kind, "general" | "avatar">,
                     )}
                     onChange={(e) =>
                       setDraft((value) => ({
@@ -1486,7 +1583,10 @@ function SettingsEditor({
                         allowedSources: e.target.checked
                           ? [
                               ...value.allowedSources,
-                              kind as Exclude<typeof kind, "general">,
+                              kind as Exclude<
+                                typeof kind,
+                                "general" | "avatar"
+                              >,
                             ]
                           : value.allowedSources.filter(
                               (item) => item !== kind,
@@ -1496,6 +1596,74 @@ function SettingsEditor({
                   />
                 </label>
               ))}
+          </div>
+        </section>
+        <section
+          className="gsm-settings-section"
+          aria-label="아바타 이벤트 설정"
+        >
+          <h2>아바타 이벤트</h2>
+          <div>
+            <div className="gsm-settings-options">
+              <label className="gsm-toggle">
+                이벤트 접수
+                <input
+                  type="checkbox"
+                  checked={draft.avatarEvent.enabled}
+                  disabled={busy}
+                  onChange={(e) =>
+                    setDraft((value) => ({
+                      ...value,
+                      avatarEvent: {
+                        ...value.avatarEvent,
+                        enabled: e.target.checked,
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <label className="gsm-setting-reward">
+                지급 위스
+                <input
+                  type="number"
+                  min={1}
+                  max={1_000_000}
+                  step={1}
+                  inputMode="numeric"
+                  value={
+                    Number.isNaN(draft.avatarEvent.rewardWis)
+                      ? ""
+                      : draft.avatarEvent.rewardWis
+                  }
+                  disabled={busy}
+                  aria-invalid={!rewardValid}
+                  aria-describedby={
+                    !rewardValid ? "gsm-avatar-reward-error" : undefined
+                  }
+                  onChange={(e) =>
+                    setDraft((value) => ({
+                      ...value,
+                      avatarEvent: {
+                        ...value.avatarEvent,
+                        rewardWis: e.target.valueAsNumber,
+                      },
+                    }))
+                  }
+                />
+              </label>
+              <span className="gsm-avatar-event-policy">
+                계정당 1회 접수 · 교사 확인 후 지급
+              </span>
+            </div>
+            {!rewardValid && (
+              <p
+                id="gsm-avatar-reward-error"
+                className="gsm-avatar-event-validation"
+                role="alert"
+              >
+                지급 위스는 1~1,000,000 사이의 정수로 입력해 주세요.
+              </p>
+            )}
           </div>
         </section>
         <section className="gsm-settings-section" aria-label="이용 안내 설정">
@@ -1599,8 +1767,8 @@ function SettingsEditor({
       <div className="gsm-settings-actions">
         <button
           className="gsm-button"
-          disabled={busy || JSON.stringify(draft) === JSON.stringify(settings)}
-          onClick={() => setDraft(settings)}
+          disabled={busy || !changed}
+          onClick={() => setDraft(baseline)}
         >
           되돌리기
         </button>
@@ -1608,7 +1776,8 @@ function SettingsEditor({
           className="gsm-primary"
           disabled={
             busy ||
-            JSON.stringify(draft) === JSON.stringify(settings) ||
+            !changed ||
+            !rewardValid ||
             (draft.warning.enabled &&
               (!draft.warning.title.trim() || !draft.warning.body.trim()))
           }

@@ -352,6 +352,9 @@ await service.updateAvatarCatalogPricing({
 assert.equal(calls.at(-1).payload.metadata, editedMetadata);
 assert.deepEqual(Object.keys(calls.at(-1).payload.prices), ["top:test"]);
 const latestCatalog = { ...pricing, revision: 4, metadata: editedMetadata };
+const genderFailure = {details:{reason:"AVATAR_GENDER_MISMATCH",pricing:latestCatalog}};
+assert.equal(service.avatarPricingFromError(genderFailure),latestCatalog);
+assert.match(service.avatarErrorMessage(genderFailure), /성별 설정/);
 assert.equal(
   service.avatarPricingFromError({
     details: {

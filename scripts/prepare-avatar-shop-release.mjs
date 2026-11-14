@@ -15,6 +15,9 @@ const audit = path.resolve(
 const baselineCommit = process.argv[3];
 const patchRoot = path.resolve(process.argv[4] || root);
 const wardrobeRelease = process.argv.includes("--wardrobe");
+const eventRelease = process.argv.includes("--event");
+const polishRelease = process.argv.includes("--polish") || eventRelease;
+assert.ok(!(wardrobeRelease && polishRelease), "Choose one release mode");
 assert.match(
   baselineCommit || "",
   /^[a-f0-9]{40}$/,
@@ -57,8 +60,19 @@ const projectionTargets = new Set([
   "getWisEconomyState",
   "getWisEconomyStateFast",
 ]);
+const eventTargets = new Set(["getGongsinmoongo", "manageGongsinmoongo"]);
+const deletionHandler = (text) => {
+  const start = text.indexOf("const createStudentAvatarDeletionHandler =");
+  const end = text.indexOf("\nmodule.exports =", start);
+  assert.ok(start > 0 && end > start, "Expected isolated avatar deletion handler");
+  return { start, end, text: text.slice(start, end) };
+};
 const baselineFilesFor = (mode) =>
-  mode === "projection"
+  mode === "event"
+    ? ["gongsinmoongo.js", "studentMenuVisibility.js"]
+    : mode === "cleanup"
+      ? []
+      : mode === "projection"
     ? ["avatarCatalog.json", "studentAvatarCatalog.js"]
     : mode === "pricing"
       ? [
@@ -73,11 +87,19 @@ const baselineFilesFor = (mode) =>
           "studentAvatar.js",
         ];
 const filesFor = (mode) =>
-  wardrobeRelease
+  mode === "event"
+    ? ["avatarEvent.js", "gongsinmoongo.js", "avatarCatalog.json", "studentAvatarCatalog.js", "studentWisWallet.js"]
+    : mode === "cleanup"
+      ? ["studentAvatar.js"]
+      : polishRelease
     ? mode === "avatar"
-      ? ["avatarCatalog.json", "studentAvatar.js"]
-      : ["avatarCatalog.json"]
-    : baselineFilesFor(mode);
+      ? ["avatarCatalog.json", "studentAvatarCatalog.js", "studentAvatar.js"]
+      : ["avatarCatalog.json", "studentAvatarCatalog.js"]
+    : wardrobeRelease
+      ? mode === "avatar"
+        ? ["avatarCatalog.json", "studentAvatar.js"]
+        : ["avatarCatalog.json"]
+      : baselineFilesFor(mode);
 const groups = new Map();
 const sourceMap = [];
 const metadataFiles = (await fs.readdir(path.join(audit, "metadata")))
@@ -92,7 +114,11 @@ for (const filename of metadataFiles) {
       ? "pricing"
       : projectionTargets.has(name)
         ? "projection"
-        : null;
+        : eventRelease && eventTargets.has(name)
+          ? "event"
+          : eventRelease && name === "cleanupStudentAvatarOnUserDelete"
+            ? "cleanup"
+            : null;
   assert.ok(
     mode && ["us-central1", "asia-northeast3"].includes(region),
     `Unexpected target: ${target}`,
@@ -137,8 +163,8 @@ for (const filename of metadataFiles) {
 }
 assert.equal(
   sourceMap.length,
-  12,
-  "All 12 deployed targets, including both getWisEconomyState regions, must be audited",
+  eventRelease ? 15 : 12,
+  "Every reviewed deployed target, including both getWisEconomyState regions, must be audited",
 );
 await fs.writeFile(
   path.join(audit, "source-map.json"),
@@ -186,17 +212,33 @@ for (const group of groups.values()) {
     filter: (file) => path.basename(file) !== "node_modules",
   });
   const allowed = filesFor(group.mode);
-  for (const file of allowed)
-    await fs.copyFile(
-      path.join(patchRoot, "functions", file),
-      path.join(destination, file),
-    );
+  if (group.mode === "cleanup") {
+    const file = path.join(destination, "studentAvatar.js");
+    const original = normalized(await fs.readFile(file, "utf8"));
+    const before = deletionHandler(original);
+    const baseline = normalized(execFileSync("git", ["show", `${baselineCommit}:functions/studentAvatar.js`], { cwd: root, encoding: "utf8" }));
+    assert.equal(before.text, deletionHandler(baseline).text, "Unreviewed production cleanup handler difference");
+    const after = deletionHandler(normalized(await fs.readFile(path.join(patchRoot, "functions/studentAvatar.js"), "utf8")));
+    await fs.writeFile(file, original.slice(0, before.start) + after.text + original.slice(before.end));
+  } else {
+    for (const file of allowed)
+      await fs.copyFile(path.join(patchRoot, "functions", file), path.join(destination, file));
+  }
+  if (group.mode === "event") {
+    // The production Q&A archive predates the current canonical wallet's loaded
+    // snapshot guard. Upgrade that exact reviewed dependency, not the live index.
+    const wallet = normalized(await fs.readFile(path.join(patchRoot, "functions/studentWisWallet.js"), "utf8"));
+    assert.equal(wallet, normalized(execFileSync("git", ["show", `${baselineCommit}:functions/studentWisWallet.js`], { cwd: root, encoding: "utf8" })));
+  }
   const changes = [];
   for (const before of group.baseline) {
     const after = sha(await fs.readFile(path.join(destination, before.path)));
     if (after !== before.sha256)
       changes.push({ path: before.path, before: before.sha256, after });
   }
+  const added = allowed.filter(file => !group.baseline.some(entry => entry.path === file));
+  assert.deepEqual(added, group.mode === "event" ? ["avatarEvent.js"] : []);
+  for (const file of added) changes.push({ path: file, before: null, after: sha(await fs.readFile(path.join(destination, file))) });
   assert.deepEqual(
     changes.map((entry) => entry.path).sort(),
     allowed.slice().sort(),
@@ -204,7 +246,7 @@ for (const group of groups.values()) {
   );
   assert.deepEqual(
     (await walk(destination)).map((file) => relative(destination, file)),
-    group.baseline.map((entry) => entry.path),
+    [...group.baseline.map((entry) => entry.path), ...added].sort(),
   );
   for (const file of allowed.filter((file) => file.endsWith(".js")))
     execFileSync(process.execPath, ["--check", path.join(destination, file)]);
@@ -267,7 +309,7 @@ for (const group of groups.values()) {
   const deploymentCommand = `firebase deploy --only "${names.map((name) => `functions:${name}`).join(",")}" --project history-quiz-yongsin --config firebase.json`;
   const manifest = {
     name: group.name,
-    patchKind: wardrobeRelease ? "wardrobe" : "shop",
+    patchKind: eventRelease ? "event" : polishRelease ? "polish" : wardrobeRelease ? "wardrobe" : "shop",
     baselineCommit,
     patchRoot,
     targets: group.targets,
@@ -280,6 +322,8 @@ for (const group of groups.values()) {
       "runtime declarations",
       "all unrelated source files and session/role authorization",
     ],
+    ...(group.mode === "event" ? { dependencyUpgrades: ["v2 avatar catalog/sanitizer for saved snapshot validation", "current reviewed canonical studentWisWallet snapshot guard"], addedFiles: added } : {}),
+    ...(group.mode === "cleanup" ? { partialTransplants: ["studentAvatar.js:createStudentAvatarDeletionHandler only"] } : {}),
     deploymentCommand,
   };
   await fs.writeFile(

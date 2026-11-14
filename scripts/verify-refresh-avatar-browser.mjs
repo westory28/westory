@@ -117,6 +117,7 @@ try {
   await page.locator(".avatar-studio").waitFor();
   assert.equal(await page.evaluate(() => window.avatarQa.loadCalls), 2);
   await page.locator(".avatar-studio-characters button").first().click();
+  await page.getByRole("button", { name: "상의", exact: true }).click();
   await page
     .getByRole("searchbox", { name: "아이템 검색" })
     .fill("새로고침 검증");
@@ -300,6 +301,7 @@ try {
     .getByRole("button", { name: "다시 불러오기", exact: true })
     .click();
   await page.locator('.avatar-studio[aria-label="아바타 상점"]').waitFor();
+  await page.getByRole("button", { name: "상의", exact: true }).click();
   assert.equal(await save.count(), 0, "shop cannot save an avatar");
   assert.equal(
     (await page.locator(".avatar-studio-wallet strong").textContent()).trim(),

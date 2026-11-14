@@ -5,6 +5,7 @@
   position: relative;
   min-width: 0;
   min-height: 0;
+  height: 100%;
   padding: 0 0 8px;
   gap: 4px;
   overflow: hidden;
@@ -79,6 +80,8 @@ button.avatar-shop-item:disabled {
   font-size: 14px;
   line-height: 20px;
   font-weight: 700;
+  height: 40px;
+  flex: 0 0 40px;
   word-break: keep-all;
   overflow-wrap: anywhere;
 }

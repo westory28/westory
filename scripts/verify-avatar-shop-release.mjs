@@ -33,12 +33,20 @@ for (const plan of plans) {
       `Prepared source drift: ${plan.group}/${file.path}`,
     );
   }
-  for (const file of manifest.changes)
-    assert.equal(
+  for (const file of manifest.changes) {
+    assert.equal(sha(await fs.readFile(path.join(directory, file.path))), file.after,
+      `Prepared changed source drift: ${file.path}`);
+    if (plan.mode !== "cleanup") assert.equal(
       sha(await fs.readFile(path.join(root, "functions", file.path))),
       file.after,
       `Working patch changed after preparation: ${file.path}`,
     );
+  }
+  if (["event", "cleanup"].includes(plan.mode)) {
+    summaries.push({ group: plan.group, verifiedFiles: manifest.baselineFiles.length + manifest.changes.filter(file => file.before === null).length,
+      eventOrCleanupFunctionalVerification: "verify-avatar-event-release.mjs and prepared-source emulator" });
+    continue;
+  }
   const catalog = require(path.join(directory, "studentAvatarCatalog.js"));
   let combinations = 0;
   for (const item of catalog.catalog.items) {
@@ -69,7 +77,8 @@ for (const plan of plans) {
   }
   let settingsReads = 0,
     settingsWrites = 0,
-    avatarSaved = false;
+    avatarSaved = false,
+    genderGuardVerified = false;
   if (plan.mode !== "projection") {
     const pricingModule = require(
       path.join(directory, "avatarCatalogPricing.js"),
@@ -166,6 +175,54 @@ for (const plan of plans) {
       assert.deepEqual(avatar.look, look);
       assert.ok(avatar.ownedItemIds.includes(item.id));
       avatarSaved = true;
+      if (["polish", "event"].includes(manifest.patchKind)) {
+        const opposite = avatar.look.character === "girl" ? "boy" : "girl";
+        const updatedPricing = await pricing.updateAvatarCatalogPricing(
+          teacher({
+            expectedRevision: saved.revision,
+            prices: {},
+            metadata: { [item.id]: { ...metadata, gender: opposite } },
+          }),
+        );
+        const beforeWrites = state.writes.length;
+        const beforeImages = state.bucket.objects.size;
+        const input = await fixture.save({
+          look,
+          expectedRevision: avatar.revision,
+          requestId: "bundle-gender-save",
+        });
+        await assert.rejects(
+          api.saveStudentAvatar(input),
+          (error) =>
+            error.details?.reason === "AVATAR_GENDER_MISMATCH" &&
+            error.details.pricing.revision === updatedPricing.revision,
+        );
+        assert.deepEqual(
+          (await api.getStudentAvatar(fixture.req({}))).look,
+          avatar.look,
+        );
+        const teacherApi = createStudentAvatarHandlers({
+          db: state.db,
+          bucket: state.bucket,
+          assertSession,
+          audience: "teacher",
+          now: () => 100000,
+          loadPolicy: async () => ({}),
+        });
+        await assert.rejects(
+          teacherApi.saveStudentAvatar(
+            teacher({ ...input.data, expectedRevision: 0 }),
+          ),
+          (error) => error.details?.reason === "AVATAR_GENDER_MISMATCH",
+        );
+        const teacherPage = await teacherApi.getTeacherMyPage(
+          teacher({ year: "2026", semester: "2" }),
+        );
+        assert.equal(teacherPage.pricing.metadata[item.id].gender, opposite);
+        assert.equal(state.writes.length, beforeWrites);
+        assert.equal(state.bucket.objects.size, beforeImages);
+        genderGuardVerified = true;
+      }
     }
   }
   summaries.push({
@@ -175,6 +232,7 @@ for (const plan of plans) {
     settingsReadsPerSave: settingsReads,
     settingsWritesPerSave: settingsWrites,
     savedNewItemWithMetadata: avatarSaved,
+    genderGuardVerified,
   });
 }
 await fs.writeFile(

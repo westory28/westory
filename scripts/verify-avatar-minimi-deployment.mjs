@@ -39,9 +39,12 @@ for (const group of groups) {
         const expected = changes.get(file.path) || file.sha256;
         assert.equal(sha(await fs.readFile(path.join(source, file.path))), expected, `${target}: ${file.path}`);
       }
+      for (const file of manifest.changes.filter(row => row.before === null)) {
+        assert.equal(sha(await fs.readFile(path.join(source, file.path))), file.after, `${target}: added ${file.path}`);
+      }
     }
     result.push({ target, active: true, settingsPreserved: true,
-      verifiedSourceFiles: process.argv.includes('--metadata-only') ? 0 : manifest.baselineFiles.length });
+      verifiedSourceFiles: process.argv.includes('--metadata-only') ? 0 : manifest.baselineFiles.length + manifest.changes.filter(row => row.before === null).length });
   }
 }
 await fs.writeFile(path.join(audit, groupName ? `post-deploy-${groupName}-verification.json` : 'post-deploy-verification.json'), JSON.stringify(result, null, 2) + '\n');

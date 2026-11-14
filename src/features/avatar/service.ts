@@ -34,6 +34,7 @@ export interface TeacherProfileEmoji {
   enabled?: boolean;
 }
 export interface TeacherMyPageState {
+  pricing?: AvatarCatalogPricingState;
   avatar: AvatarState;
   profileEmojiId: string;
   profileIcon: string;
@@ -130,6 +131,8 @@ export const avatarErrorMessage = (error: unknown) => {
   const reason = `${e.details?.reason || ""} ${e.code || ""}`;
   if (/AVATAR_PRICE_CHANGED/.test(reason))
     return "아이템 정보가 변경되었습니다. 이름과 가격을 확인한 뒤 다시 구매해 주세요.";
+  if (/AVATAR_GENDER_MISMATCH/.test(reason))
+    return "아이템의 성별 설정이 변경되었습니다. 선택한 아바타에 맞는 아이템을 확인한 뒤 다시 저장해 주세요.";
   if (/AVATAR_PRICING_INPUT_INVALID/.test(reason))
     return "아이템 이름, 가격, 성별, 설명을 확인해 주세요.";
   if (/AVATAR_PRICING_REVISION_CONFLICT/.test(reason))
@@ -163,6 +166,7 @@ export const avatarPricingFromError = (
   )?.details;
   return (details?.reason === "AVATAR_PRICE_CHANGED" ||
     details?.reason === "AVATAR_ITEM_NOT_OWNED" ||
+    details?.reason === "AVATAR_GENDER_MISMATCH" ||
     details?.reason === "AVATAR_PRICING_REVISION_CONFLICT") &&
     details.pricing
     ? details.pricing

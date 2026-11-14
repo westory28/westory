@@ -30,6 +30,7 @@ const imageTags = [manifest.cover, ...manifest.panels].map(
   (asset) =>
     `<figure><img src="/assets/${asset.file}" alt="${asset.alt}" width="${asset.file === "hero.webp" ? 1200 : 1024}" height="${asset.file === "hero.webp" ? 675 : 1536}"></figure>`,
 );
+const avatarThumbnail = `data:image/webp;base64,${await fs.readFile(path.join(root, "public/avatar/minimi-v2/previews/boy/character-boy.webp"), "base64")}`;
 const article = `<article class="westory-event-article we-notice-images we-notice-images--reopen"><div class="we-notice-images__cover">${imageTags[0]}</div><section class="we-notice-images__details">${imageTags.slice(1).join("")}</section></article>`;
 // DeveloperLog selects its single-column event/image renderer only for notice posts.
 // A direct NoticeImageArticle fixture alone cannot catch an incorrect post category.
@@ -64,6 +65,12 @@ const settings={enabled:!params.has('closed'),revision:1,acceptingQuestions:true
 const row=(id,studentId,label,question,reply='',emoji='book')=>({id,studentId,studentLabel:label,profileEmojiId:emoji,source:{kind:'lesson',title:'조선 전기의 대외 관계',unitId:'unit-a'},question,reply,publicQuestion:'교린은 어떤 관계인가요?',publicReply:'이웃 나라와의 관계를 살펴보세요.',selected:!!reply,createdAt:1794300000000+Number(id.replace(/\\D/g,''))*1000,updatedAt:1794300000000,revision:1});
 export const qa=window.gongsinLiveQa={teacher,user:{uid:teacher?'teacher-a':'student-a',email:'fixture@example.invalid'},config:{year:'2026',semester:'2'},reads:[],writes:[],toasts:[],listenerCount:0,listenerStopped:0,settings,ack:params.has('ack')?1:0,restriction:params.has('restricted')?{until:Date.now()+3600000,reason:'학습과 관계없는 대화 반복'}:null,rows:[row('q1','student-a','예시 학생 A','4군 6진의 위치가 궁금해요.','압록강과 두만강을 먼저 찾아보세요.'),row('q2','student-a','예시 학생 A','교린 관계의 근거를 어떻게 찾아요?'),row('q3','student-b','다른 학생 B','다른 학생의 비공개 질문이므로 학생 A에게 보이면 안 됩니다.')],receipts:new Map(),failRead:params.has('read-error')?'state':'',failAction:'',holdAction:'',holdRead:'',commitThenFail:false};
 if(params.has('many'))qa.rows.push(...Array.from({length:24},(_,i)=>row('q'+(i+4),'student-a','예시 학생 A','합성 질문 '+(i+4))));
+qa.rewardTransactions=0;
+if(params.has('avatar-event')){
+ const event=(id,studentId,label)=>({...row(id,studentId,label,'아바타 이벤트 참여'),source:{kind:'avatar',title:'아바타 자랑'},publicQuestion:'',publicReply:'',selected:false,avatarEvent:{questionId:id,semesterId:'2026-2',thumbnailUrl:${JSON.stringify(avatarThumbnail)},look:{character:'boy'},avatarRevision:1,description:studentId==='student-a'?'파란 교복과 은빛 머리로 꾸민 나의 아바타입니다.':'다른 학생의 비공개 아바타 소개',rewardWis:100,submittedAt:1794300000000,rewardedAt:null,ledgerEntryId:null}});
+ qa.rows.push(event('q4','student-a','예시 학생 A'),event('q5','student-b','다른 학생 B'));
+ settings.avatarEvent={enabled:true,rewardWis:500};
+}
 qa.setGate=enabled=>{settings.enabled=enabled;settings.revision++;gates.forEach(cb=>cb({data:()=>({enabled,revision:settings.revision})}));};
 qa.switchAccount=uid=>{qa.user={uid,email:'fixture@example.invalid'};auth.currentUser=qa.user;authListeners.forEach(cb=>cb());};
 export const auth={currentUser:qa.user},db={};
@@ -93,6 +100,7 @@ export const getHttpsCallable=async name=>async input=>{
  if(input.action==='ack'){qa.ack=input.warningRevision;result={acknowledgedWarningRevision:qa.ack,replayed:false};}
  else if(input.action==='submit'){if(!settings.enabled||qa.restriction?.until>Date.now())throw Error('지금은 질문을 보낼 수 없습니다.');const q=row('q'+(qa.rows.length+1),qa.user.uid,'예시 학생 A',input.question);q.source=input.source;qa.rows.push(q);result={question:clone(q),replayed:false};}
  else if(input.action==='answer'||input.action==='story'){const q=qa.rows.find(q=>q.id===input.questionId);if(input.expectedRevision!==q.revision)throw Error('다른 변경이 있습니다.');if(input.action==='answer')q.reply=input.reply;else Object.assign(q,{publicQuestion:input.publicQuestion,publicReply:input.publicReply,selected:input.selected});q.revision++;result={question:clone(q),replayed:false};}
+ else if(input.action==='rewardAvatar'){if(!teacher)throw Error('교사만 지급할 수 있습니다.');const q=qa.rows.find(q=>q.id===input.questionId);if(!q.avatarEvent.rewardedAt){if(input.expectedRevision!==q.revision)throw Error('다른 변경이 있습니다.');q.avatarEvent.rewardedAt=1794300060000;q.avatarEvent.ledgerEntryId='avatar-event-'+q.studentId;qa.rewardTransactions++;q.revision++;}result={question:clone(q),replayed:false};}
  else if(input.action==='settings'){Object.assign(settings,clone(input.settings),{revision:settings.revision+1});result={settings:clone(settings),replayed:false};}
  else if(input.action==='restrict'){qa.restriction=input.durationMs?{until:Date.now()+input.durationMs,reason:input.reason}:null;result={restriction:clone(qa.restriction),replayed:false};}
  else throw Error('Unexpected mutation '+input.action);
@@ -118,7 +126,7 @@ import{getGongsinQuestionUrl,parseGongsinSource}from'./src/lib/gongsinmoongo';
 import{qa}from'fixture:service';import'./src/assets/index.css';import'./src/components/layout/teacherLayout.css';import'./src/pages/developerEventArticles.css';
 window.gongsinSourceHelpers={getGongsinQuestionUrl,parseGongsinSource};
 const params=new URLSearchParams(location.search),articleMode=params.has('article'),historyMode=params.has('history');
-const url=(qa.teacher?'/teacher':'/student')+'/gongsinmoongo'+(params.get('question')?'?question='+params.get('question'):'');
+const url=(qa.teacher?'/teacher':'/student')+'/gongsinmoongo'+(params.get('question')?'?question='+params.get('question'):params.get('source')?'?source='+params.get('source'):'');
 createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={[url]}><PortalWorkspaceFooterProvider>{articleMode?<main className="developer-log-rich-text developer-log-image-post"><NoticeImageArticle bodyHtml={${JSON.stringify(article)}} title={${JSON.stringify(manifest.title)}}/></main>:historyMode?<main className="ws-page"><MyQuizHistory semesterId={params.has('archive')?'2026-1':'2026-2'} active requestedAttemptId="saved-paper" onSelect={()=>{}} onClose={()=>{}} onStart={()=>{}}/></main>:<div className={'flex min-h-screen flex-col bg-gray-50 '+(qa.teacher?'teacher-layout':'student-layout')}><aside className="teacher-sidebar" aria-hidden="true"><div className="teacher-sidebar-brand-row">Westory</div></aside><header className="teacher-header teacher-account-header"><div className="header-container"><div className="teacher-header-start">Westory</div><div className="header-right"><span>{qa.teacher?'예시 교사':'예시 학생'}</span><button type="button" aria-label="기존 상단 알림">알림</button><button className="btn-logout" disabled>로그아웃</button></div></div></header><main className="min-h-0 w-full flex-1"><Workspace teacher={qa.teacher}/></main><PortalFallbackFooter teacher/></div>}</PortalWorkspaceFooterProvider></MemoryRouter>);
 `;
 const bundle = await build({
@@ -465,7 +473,29 @@ try {
           await page.locator(".gsm-settings .ws-page-tabs").count(),
           0,
         );
-        assert.equal(await page.locator(".gsm-settings-section").count(), 5);
+        assert.equal(await page.locator(".gsm-settings-section").count(), 6);
+        assert.equal(
+          await page.getByLabel("지급 위스", { exact: true }).inputValue(),
+          "100",
+        );
+        assert.equal(
+          await page
+            .getByRole("checkbox", { name: "이벤트 접수", exact: true })
+            .isChecked(),
+          false,
+        );
+        assert.equal(
+          await page
+            .getByRole("button", { name: "변경사항 저장", exact: true })
+            .isEnabled(),
+          false,
+        );
+        assert.equal(
+          await page
+            .locator('[aria-label="학습 연결 설정"] input[type="checkbox"]')
+            .count(),
+          5,
+        );
         await page
           .getByText("현재 질문이 제한된 학생이 없습니다.", { exact: true })
           .waitFor();
@@ -507,7 +537,7 @@ try {
           });
           assert(
             settingsFit,
-            "All five sections and save fit the desktop viewport",
+            "All six sections and save fit the desktop viewport",
           );
         }
         await page.screenshot({
@@ -562,6 +592,311 @@ try {
   await collapsed.close();
   checks.push(
     "teacher/student responsive layout through 1920px, status badge, tabs below title, account-aligned content with expanded/collapsed sidebar, desktop viewport, private DOM, shared gate listener, existing bell only",
+  );
+  const eventSettings = await pageAt("?role=teacher&ack");
+  await eventSettings.locator(".gsm-thread").first().waitFor();
+  await eventSettings
+    .getByRole("button", { name: "운영 설정", exact: true })
+    .click();
+  await eventSettings
+    .getByText("현재 질문이 제한된 학생이 없습니다.", { exact: true })
+    .waitFor();
+  const eventSettingsReads = await eventSettings.evaluate(
+    () => window.gongsinLiveQa.reads.length,
+  );
+  const eventReward = eventSettings.getByLabel("지급 위스", { exact: true });
+  const eventSave = eventSettings.getByRole("button", {
+    name: "변경사항 저장",
+    exact: true,
+  });
+  await eventSettings
+    .getByRole("checkbox", { name: "이벤트 접수", exact: true })
+    .check();
+  for (const invalid of ["", "0", "-1", "1.5", "1000001"]) {
+    await eventReward.fill(invalid);
+    assert.equal(
+      await eventSave.isEnabled(),
+      false,
+      `Invalid reward ${invalid} must block save`,
+    );
+    assert.equal(await eventReward.getAttribute("aria-invalid"), "true");
+  }
+  await eventReward.fill("250");
+  assert.equal(await eventSave.isEnabled(), true);
+  await eventSettings.evaluate(() => {
+    window.gongsinLiveQa.failAction = "settings";
+  });
+  await eventSave.click();
+  await eventSettings
+    .getByRole("alert")
+    .filter({ hasText: "합성 저장 실패" })
+    .waitFor();
+  assert.equal(await eventReward.inputValue(), "250");
+  assert.equal(
+    await eventSettings
+      .getByRole("checkbox", { name: "이벤트 접수", exact: true })
+      .isChecked(),
+    true,
+  );
+  await eventSave.click();
+  await eventSettings.waitForFunction(
+    () => window.gongsinLiveQa.settings.avatarEvent?.rewardWis === 250,
+  );
+  assert.equal(await eventSave.isEnabled(), false);
+  assert.deepEqual(
+    await eventSettings.evaluate(() => {
+      const qa = window.gongsinLiveQa;
+      return {
+        reads: qa.reads.length,
+        calls: qa.writes.length,
+        ids: new Set(qa.writes.map((x) => x.requestId)).size,
+        settings: qa.settings.avatarEvent,
+      };
+    }),
+    {
+      reads: eventSettingsReads,
+      calls: 2,
+      ids: 1,
+      settings: { enabled: true, rewardWis: 250 },
+    },
+  );
+  await eventSettings.close();
+  checks.push(
+    "avatar settings missing-field false/100 fallback is unchanged; separate learning sources; integer/range validation; failed save preserves draft and retries with same receipt; zero extra reads and no-op writes",
+  );
+  for (const [width, height] of [
+    [320, 800],
+    [390, 844],
+    [768, 900],
+    [1280, 720],
+  ]) {
+    const page = await pageAt(
+      "?role=teacher&ack&avatar-event&question=q4",
+      width,
+      height,
+    );
+    const event = page.getByRole("region", {
+      name: "아바타 이벤트 접수",
+      exact: true,
+    });
+    await event.waitFor();
+    await page.waitForFunction(
+      () => !document.querySelector(".ws-loading__logo"),
+    );
+    await event
+      .getByRole("img", { name: "접수한 아바타", exact: true })
+      .evaluate((img) => img.decode());
+    assert.equal(
+      await event.getByText("100 위스 · 지급 대기", { exact: true }).count(),
+      1,
+    );
+    assert.equal(
+      await page
+        .getByText("다른 학생의 비공개 아바타 소개", { exact: true })
+        .count(),
+      0,
+    );
+    assert.equal(
+      await page.evaluate(
+        () => window.gongsinLiveQa.rows.find((q) => q.id === "q4").selected,
+      ),
+      false,
+    );
+    assert.equal(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+      true,
+    );
+    const imageBox = await event.locator("img").boundingBox();
+    assert(imageBox.width >= 80 && imageBox.height >= 100);
+    const reads = await page.evaluate(() => window.gongsinLiveQa.reads.length);
+    await page.screenshot({
+      path: path.join(evidence, `avatar-event-${width}.png`),
+      fullPage: true,
+    });
+    const reward = event.getByRole("button", {
+      name: "보상 지급하기",
+      exact: true,
+    });
+    assert((await reward.boundingBox()).height >= 44);
+    await page.evaluate(() => {
+      window.gongsinLiveQa.holdAction = "rewardAvatar";
+    });
+    await reward.evaluate((button) => {
+      button.click();
+      button.click();
+    });
+    await page.waitForFunction(() => !!window.gongsinLiveQa.releaseMutation);
+    assert.equal(await reward.isEnabled(), false);
+    assert.equal(
+      await page.evaluate(() => window.gongsinLiveQa.writes.length),
+      1,
+    );
+    await page.evaluate(() => window.gongsinLiveQa.releaseMutation());
+    await event.getByText("100 위스 지급 완료", { exact: true }).waitFor();
+    assert.equal(
+      await event
+        .getByRole("button", { name: "보상 지급하기", exact: true })
+        .count(),
+      0,
+    );
+    assert.equal(
+      await event.locator(".gsm-avatar-event-reward time").count(),
+      1,
+    );
+    assert.deepEqual(
+      await page.evaluate(() => ({
+        reads: window.gongsinLiveQa.reads.length,
+        awards: window.gongsinLiveQa.rewardTransactions,
+        selected: window.gongsinLiveQa.rows.find((q) => q.id === "q4").selected,
+      })),
+      { reads, awards: 1, selected: false },
+    );
+    await page
+      .getByRole("button", { name: "공개용 문구 편집", exact: true })
+      .click();
+    const editor = page.getByRole("dialog", {
+      name: "공개용 문구 편집",
+      exact: true,
+    });
+    await editor
+      .getByText("아바타 이미지는 공개되지 않습니다.", { exact: true })
+      .waitFor();
+    assert.equal(await editor.locator("img").count(), 0);
+    assert.equal(
+      await editor
+        .getByRole("button", { name: "스토리 선정", exact: true })
+        .isEnabled(),
+      false,
+    );
+    await page.close();
+  }
+  const rewardRetry = await pageAt(
+    "?role=teacher&ack&avatar-event&question=q4",
+  );
+  const retryEvent = rewardRetry.getByRole("region", {
+    name: "아바타 이벤트 접수",
+    exact: true,
+  });
+  await retryEvent.waitFor();
+  await rewardRetry.waitForFunction(
+    () => !document.querySelector(".ws-loading__logo"),
+  );
+  const retryRewardButton = retryEvent.getByRole("button", {
+    name: "보상 지급하기",
+    exact: true,
+  });
+  const rewardRetryReads = await rewardRetry.evaluate(
+    () => window.gongsinLiveQa.reads.length,
+  );
+  await rewardRetry.evaluate(() => {
+    window.gongsinLiveQa.failAction = "rewardAvatar";
+  });
+  await retryRewardButton.click();
+  await rewardRetry
+    .getByRole("alert")
+    .filter({ hasText: "합성 저장 실패" })
+    .waitFor();
+  assert.equal(
+    await rewardRetry.evaluate(() => window.gongsinLiveQa.rewardTransactions),
+    0,
+  );
+  await rewardRetry.evaluate(() => {
+    window.gongsinLiveQa.failAction = "rewardAvatar";
+    window.gongsinLiveQa.commitThenFail = true;
+  });
+  await retryRewardButton.click();
+  await rewardRetry
+    .getByRole("alert")
+    .filter({ hasText: "응답을 확인하지 못했습니다" })
+    .waitFor();
+  assert.equal(
+    await rewardRetry.evaluate(() => window.gongsinLiveQa.rewardTransactions),
+    1,
+  );
+  await retryRewardButton.click();
+  await retryEvent.getByText("100 위스 지급 완료", { exact: true }).waitFor();
+  assert.deepEqual(
+    await rewardRetry.evaluate(() => {
+      const qa = window.gongsinLiveQa;
+      return {
+        calls: qa.writes.length,
+        ids: new Set(qa.writes.map((x) => x.requestId)).size,
+        awards: qa.rewardTransactions,
+        reads: qa.reads.length,
+      };
+    }),
+    { calls: 3, ids: 1, awards: 1, reads: rewardRetryReads },
+  );
+  await rewardRetry.close();
+  for (const [width, height] of [
+    [320, 800],
+    [390, 844],
+    [768, 900],
+    [1280, 720],
+  ]) {
+    const page = await pageAt("?role=student&ack&avatar-event", width, height);
+    await page
+      .getByRole("region", { name: "아바타 이벤트 접수", exact: true })
+      .waitFor();
+    assert.equal(
+      await page
+        .getByText("다른 학생의 비공개 아바타 소개", { exact: true })
+        .count(),
+      0,
+    );
+    assert.equal(
+      await page
+        .getByRole("button", { name: "보상 지급하기", exact: true })
+        .count(),
+      0,
+    );
+    assert.equal(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+      true,
+    );
+    assert.deepEqual(
+      await page.evaluate(() => ({
+        reads: window.gongsinLiveQa.reads.map((x) => ({
+          mode: x.mode,
+          studentId: x.studentId ?? null,
+        })),
+        writes: window.gongsinLiveQa.writes.length,
+      })),
+      {
+        reads: [
+          { mode: "state", studentId: null },
+          { mode: "questions", studentId: null },
+        ],
+        writes: 0,
+      },
+    );
+    await page.screenshot({
+      path: path.join(evidence, `avatar-event-student-${width}.png`),
+      fullPage: true,
+    });
+    await page.close();
+  }
+  const avatarSource = await pageAt("?role=student&ack&source=avatar");
+  await avatarSource
+    .getByRole("button", { name: "옷장으로 이동", exact: true })
+    .waitFor();
+  assert.equal(
+    await avatarSource
+      .getByRole("button", { name: "질문 보내기", exact: true })
+      .isEnabled(),
+    false,
+  );
+  assert.equal(
+    await avatarSource.evaluate(() => window.gongsinLiveQa.writes.length),
+    0,
+  );
+  await avatarSource.close();
+  checks.push(
+    "avatar event teacher/student 320/390/768/1280; selected receipt image/intro; submission price snapshot; no foreign student detail reads; teacher-only manual reward, double-click lock, failure and lost-response retry pay once; no automatic story/image publication; direct avatar source routes to wardrobe",
   );
   const student = await pageAt("?role=student");
   await acknowledge(student);
@@ -642,17 +977,50 @@ try {
   await failed.close();
   checks.push("restriction disables composer; initial read error recovers");
   const gateFailed = await pageAt("?role=student&ack&gate-error");
-  const gateRefresh = gateFailed.getByRole("button", {name:"질문함 새로고침", exact:true});
-  await gateFailed.getByText("질문함을 확인하지 못했습니다. 새로고침해 주세요.", {exact:true}).waitFor();
-  assert.equal(await gateFailed.evaluate(()=>window.gongsinLiveQa.reads.length),0,"failed public gate blocks personal reads");
-  await gateFailed.evaluate(()=>{window.gongsinLiveQa.gateRecovered=true; window.refreshMarker=true;});
+  const gateRefresh = gateFailed.getByRole("button", {
+    name: "질문함 새로고침",
+    exact: true,
+  });
+  await gateFailed
+    .getByText("질문함을 확인하지 못했습니다. 새로고침해 주세요.", {
+      exact: true,
+    })
+    .waitFor();
+  assert.equal(
+    await gateFailed.evaluate(() => window.gongsinLiveQa.reads.length),
+    0,
+    "failed public gate blocks personal reads",
+  );
+  await gateFailed.evaluate(() => {
+    window.gongsinLiveQa.gateRecovered = true;
+    window.refreshMarker = true;
+  });
   await gateRefresh.click();
   await gateFailed.locator(".gsm-thread").first().waitFor();
-  assert.equal(await gateFailed.evaluate(()=>window.refreshMarker),true,"gate retry does not reload the document");
-  assert.deepEqual(await gateFailed.evaluate(()=>window.gongsinLiveQa.reads.map(row=>row.mode)),["state","questions"]);
-  assert.equal(await gateFailed.evaluate(()=>window.gongsinLiveQa.listenerCount-window.gongsinLiveQa.listenerStopped),1,"retry restores one shared listener");
+  assert.equal(
+    await gateFailed.evaluate(() => window.refreshMarker),
+    true,
+    "gate retry does not reload the document",
+  );
+  assert.deepEqual(
+    await gateFailed.evaluate(() =>
+      window.gongsinLiveQa.reads.map((row) => row.mode),
+    ),
+    ["state", "questions"],
+  );
+  assert.equal(
+    await gateFailed.evaluate(
+      () =>
+        window.gongsinLiveQa.listenerCount -
+        window.gongsinLiveQa.listenerStopped,
+    ),
+    1,
+    "retry restores one shared listener",
+  );
   await gateFailed.close();
-  checks.push("failed public listener retries in place, one shared listener, then only current student state/questions reads");
+  checks.push(
+    "failed public listener retries in place, one shared listener, then only current student state/questions reads",
+  );
   const paged = await pageAt("?role=teacher&many");
   await paged.locator(".gsm-thread").first().waitFor();
   const initialReads = await paged.evaluate(
@@ -694,14 +1062,37 @@ try {
     ...pagedReads,
   });
   await paged.locator("#gongsin-reply").fill("유지할 답변 초안");
-  const refreshStart=await paged.evaluate(()=>window.gongsinLiveQa.reads.length);
-  await paged.getByRole("button", {name:"질문함 새로고침", exact:true}).click();
-  await paged.waitForFunction(start=>window.gongsinLiveQa.reads.length===start+3,refreshStart);
-  await paged.getByRole("button", {name:"질문함 새로고침", exact:true}).waitFor();
-  assert.equal(await paged.locator(".gsm-filter select").inputValue(),"waiting");
-  assert.equal(await paged.locator("#gongsin-reply").inputValue(),"유지할 답변 초안");
-  assert.deepEqual(await paged.evaluate(start=>window.gongsinLiveQa.reads.slice(start).map(row=>row.mode),refreshStart),["state","questions","questions"]);
-  checks.push("teacher refresh preserves question filter and unsent reply, reads state/current page/current conversation only");
+  const refreshStart = await paged.evaluate(
+    () => window.gongsinLiveQa.reads.length,
+  );
+  await paged
+    .getByRole("button", { name: "질문함 새로고침", exact: true })
+    .click();
+  await paged.waitForFunction(
+    (start) => window.gongsinLiveQa.reads.length === start + 3,
+    refreshStart,
+  );
+  await paged
+    .getByRole("button", { name: "질문함 새로고침", exact: true })
+    .waitFor();
+  assert.equal(
+    await paged.locator(".gsm-filter select").inputValue(),
+    "waiting",
+  );
+  assert.equal(
+    await paged.locator("#gongsin-reply").inputValue(),
+    "유지할 답변 초안",
+  );
+  assert.deepEqual(
+    await paged.evaluate(
+      (start) => window.gongsinLiveQa.reads.slice(start).map((row) => row.mode),
+      refreshStart,
+    ),
+    ["state", "questions", "questions"],
+  );
+  checks.push(
+    "teacher refresh preserves question filter and unsent reply, reads state/current page/current conversation only",
+  );
   await paged.close();
   checks.push(
     "20-row cursor reads, four local page changes add zero reads/writes, filters do not reread settings",

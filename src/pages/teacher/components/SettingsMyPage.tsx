@@ -14,6 +14,7 @@ import {
 } from "../../../features/avatar/AvatarStudio";
 import {
   avatarErrorMessage,
+  avatarPricingFromError,
   getTeacherMyPage,
   saveTeacherAvatar,
   updateTeacherProfileIcon,
@@ -68,12 +69,32 @@ export default function SettingsMyPage() {
     };
   }, [load]);
 
-  const adapter = useMemo<AvatarStudioAdapter>(
-    () => ({
+  const adapter = useMemo<AvatarStudioAdapter>(() => {
+    let initialLoad = true;
+    return {
       load: async () => {
         const current = dataRef.current;
         if (!current) throw new Error("마이페이지를 다시 열어 주세요.");
-        return { avatar: current.avatar, balance: null };
+        if (initialLoad) {
+          initialLoad = false;
+          return {
+            avatar: current.avatar,
+            balance: null,
+            pricing: current.pricing,
+          };
+        }
+        if (!year || !semester) throw new Error("학기를 확인해 주세요.");
+        const requestGeneration = generation.current;
+        const refreshed = await getTeacherMyPage({ year, semester });
+        if (requestGeneration !== generation.current)
+          throw new Error("로그인 상태가 변경되었습니다. 다시 열어 주세요.");
+        dataRef.current = refreshed;
+        setData(refreshed);
+        return {
+          avatar: refreshed.avatar,
+          balance: null,
+          pricing: refreshed.pricing,
+        };
       },
       purchase: async () => {
         throw new Error("교사 아바타는 구매 없이 사용할 수 있습니다.");
@@ -81,21 +102,34 @@ export default function SettingsMyPage() {
       save: async (look, revision, thumbnail) => {
         if (!year || !semester) throw new Error("학기를 확인해 주세요.");
         const current = generation.current;
-        const avatar = await saveTeacherAvatar(
-          { year, semester },
-          look,
-          revision,
-          thumbnail,
-        );
+        let avatar;
+        try {
+          avatar = await saveTeacherAvatar(
+            { year, semester },
+            look,
+            revision,
+            thumbnail,
+          );
+        } catch (failure) {
+          const latestPricing = avatarPricingFromError(failure);
+          if (
+            current === generation.current &&
+            dataRef.current &&
+            latestPricing
+          ) {
+            dataRef.current = { ...dataRef.current, pricing: latestPricing };
+            setData(dataRef.current);
+          }
+          throw failure;
+        }
         if (current === generation.current && dataRef.current) {
           dataRef.current = { ...dataRef.current, avatar };
           setData(dataRef.current);
         }
         return avatar;
       },
-    }),
-    [user?.uid, year, semester, authGeneration],
-  );
+    };
+  }, [user?.uid, year, semester, authGeneration]);
 
   const saveEmoji = async () => {
     if (

@@ -19,6 +19,10 @@ const {
   restoreAvatarLook,
   restoreAvatarState,
   AVATAR_CATALOG_VERSION,
+  canWearAvatarItem,
+  reconcileAvatarLook,
+  applyAvatarCatalogSettings,
+  avatarAccessoryGroup,
 } = module.exports;
 const skirts = AVATAR_ITEMS.filter(
   (item) => item.slot === "bottom" && item.value === "mm-skirt-navy",
@@ -26,6 +30,21 @@ const skirts = AVATAR_ITEMS.filter(
 const boy = defaultAvatarLook("boy"),
   girl = defaultAvatarLook("girl");
 const boyItem = AVATAR_ITEMS.find((item) => item.id === "minimi-character-boy");
+const longHair = AVATAR_ITEMS.find(item => item.value === "mm-long");
+assert.equal(canWearAvatarItem(longHair, "boy"), false);
+assert.equal(selectAvatarItem(boy, longHair), boy, "other-gender click does not change the draft");
+assert.equal(selectAvatarItem({...girl, hairStyle:longHair.value}, boyItem).hairStyle, boy.hairStyle);
+const unisex = AVATAR_ITEMS.find(item => item.value === "mm-knit-cream");
+assert(canWearAvatarItem(unisex, "boy") && canWearAvatarItem(unisex, "girl"));
+const reassigned = applyAvatarCatalogSettings(unisex, {prices:{}, metadata:{[unisex.id]:{label:unisex.label,description:"",gender:"girl"}}});
+assert.equal(canWearAvatarItem(reassigned, "boy"),false);
+assert.equal(selectAvatarItem(boy,reassigned),boy);
+const reassignedCatalog = AVATAR_ITEMS.map(item => item.id===unisex.id ? reassigned : item);
+const previous = {...boy, top:unisex.value};
+assert.equal(reconcileAvatarLook(previous,reassignedCatalog).top,boy.top);
+assert.equal(previous.top,unisex.value,"repair leaves stored input untouched");
+assert.equal(restoreAvatarLook({...boy,hairStyle:longHair.value}).hairStyle,longHair.value,"historical geometry-valid reads remain intact");
+for(const item of AVATAR_ITEMS.filter(item=>item.slot==='accessory')) assert(['hat','accessory','glasses'].includes(avatarAccessoryGroup(item)));
 assert.equal(skirts.length, 1);
 for (const skirt of skirts) {
   assert.equal(
@@ -66,5 +85,5 @@ assert.equal(retired.ownedItemIds.length, 0);
 assert.equal(retired.thumbnailUrl, undefined);
 assert.equal(retired.requiresThumbnailRefresh, undefined);
 console.log(
-  "PASS minimi clothing: skirt restriction, character switch, saved choices and complete retired-catalog reset.",
+  "PASS minimi clothing: gender restriction, metadata reassignment, character switch, historical read preservation, accessory groups and retired-catalog reset.",
 );

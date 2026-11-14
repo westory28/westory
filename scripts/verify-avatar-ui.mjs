@@ -113,6 +113,8 @@ const mock = `
 const authState={currentUser:{uid:'qa-student'},authGeneration:1,configReady:true};
 export const useAuth=()=>authState;
 export const auth={currentUser:null};
+export const useGongsinAvailability=()=>({loaded:true,error:false,enabled:false,avatarEventEnabled:false});
+export const getGongsinmoongo=()=>{throw Error('Unexpected event read')},manageGongsinmoongo=()=>{throw Error('Unexpected event write')},newGongsinRequestId=()=>crypto.randomUUID();
 export const getHistoryDictionaryCallable=()=>{throw Error('Production calls are disabled in this fixture')};
 export const getStudentWisState=()=>{throw Error('Production calls are disabled in this fixture')};
 export const getStudentPointWallet=getStudentWisState;
@@ -164,7 +166,7 @@ const bundle = await build({
         plugin.onResolve(
           {
             filter:
-              /\/(AuthContext|wisRankingPreview|wisHallOfFame|pointRanks|studentWis|historyDictionarySession|firebase)$/,
+              /\/(AuthContext|wisRankingPreview|wisHallOfFame|pointRanks|studentWis|historyDictionarySession|firebase|gongsinmoongo)$/,
           },
           (args) => ({ path: args.path, namespace: "fixture" }),
         );

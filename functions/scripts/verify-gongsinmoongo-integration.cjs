@@ -10,7 +10,8 @@ const { initializeApp, deleteApp } = require('firebase-admin/app');
 const { getFirestore, Timestamp, DocumentReference } = require('firebase-admin/firestore');
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
 const client = require('firebase/firestore');
-const { createGongsinmoongoHandlers, defaultSettings, collectGongsinmoongoStudentRefs } = require('../gongsinmoongo');
+const eventSource = process.env.AVATAR_EVENT_SOURCE_ROOT ? require('node:path').resolve(process.env.AVATAR_EVENT_SOURCE_ROOT) : require('node:path').resolve(__dirname, '..');
+const { createGongsinmoongoHandlers, defaultSettings, collectGongsinmoongoStudentRefs } = require(require('node:path').join(eventSource, 'gongsinmoongo'));
 const { buildEnrollmentSlotId } = require('../productionGateway/archiveEnrollment');
 const app = initializeApp({ projectId }), db = getFirestore(app);
 const root = 'years/2026/semesters/2', scope = '2026-2';
@@ -201,7 +202,8 @@ let rules;
     await assert.rejects(command('teacher', 'settings', { settings, expectedRevision: 1 }), reason('GONGSIN_ADMIN_REQUIRED'));
     const saved = await command('admin', 'settings', { settings, expectedRevision: 1 });
     assert.equal(saved.settings.revision, 2); assert.equal(saved.settings.warning.revision, 2);
-    assert.deepEqual(await get(`${root}/gongsinmoongo_config/public`), { enabled: true, revision: 2, contentRevision: 0 });
+    assert.deepEqual(await get(`${root}/gongsinmoongo_config/public`), { enabled: true, revision: 2, contentRevision: 0,
+      avatarEventEnabled: false, avatarEventRewardWis: 100 });
     await assert.rejects(command('a', 'submit', questionInput), reason('GONGSIN_WARNING_REQUIRED'));
     resetMetrics(); await command('admin', 'settings', { settings: saved.settings, expectedRevision: 2 }); assert.equal(metrics.writes, 0);
   });
@@ -220,6 +222,8 @@ let rules;
     assert.equal(receipts.length, 1); assert.equal((await get(receipts[0].path)).actorUid, 'teacher');
     assert(!refs.some(ref => ref.path.endsWith('/q24')));
   });
+  await require('./verify-avatar-event-integration.cjs')({ db, api, request, command, query, check, counts, get,
+    resetMetrics, metrics: () => metrics, now: () => tick, scope, root, reason, instrumented });
   await check('Firestore rules expose only active nonpersonal gate; content and other inboxes are callable-only', async () => {
     rules = await initializeTestEnvironment({ projectId, firestore: { host: host.split(':')[0], port: Number(host.split(':')[1]), rules: fs.readFileSync('firestore.rules', 'utf8') } });
     const a = rules.authenticatedContext('a', { email: 'a@yongshin-ms.ms.kr', auth_time: epoch }).firestore();
@@ -231,6 +235,9 @@ let rules;
       await assertFails(client.getDocs(client.collection(connection, `${root}/gongsinmoongo_questions`)));
       await assertFails(client.getDoc(client.doc(connection, `${root}/gongsinmoongo_config/settings`)));
       await assertFails(client.setDoc(client.doc(connection, `${root}/gongsinmoongo_config/public`), { enabled: true }));
+      const participationPath = require('../avatarEvent').participationPath('a');
+      await assertFails(client.getDoc(client.doc(connection, participationPath)));
+      await assertFails(client.setDoc(client.doc(connection, participationPath), { participated: true }));
     }
     await assertFails(client.getDocs(client.collection(a, `${root}/notification_inboxes/teacher/items`)));
     await assertSucceeds(client.getDocs(client.collection(teacher, `${root}/notification_inboxes/teacher/items`)));

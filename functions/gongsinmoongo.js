@@ -3,7 +3,10 @@ const { FieldPath, FieldValue, Timestamp } = require('firebase-admin/firestore')
 const { HttpsError } = require('firebase-functions/v2/https');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 const { buildEnrollmentSlotId } = require('./productionGateway/archiveEnrollment');
-const { accountIdFor } = require('./studentWisWallet');
+const { accountIdFor, createStudentWisWallet } = require('./studentWisWallet');
+const { readStudentMenuAccess } = require('./studentMenuVisibility');
+const { defaultAvatarEvent, normalizeAvatarEvent, readAvatarParticipation,
+  avatarEventState, readSavedAvatarSnapshot } = require('./avatarEvent');
 const { resolveStudentProfileEmoji } = require('./studentProfileEmojiPolicy');
 const { frozenWrongQuestion } = require('./studentQuizReviewNotes');
 
@@ -35,10 +38,11 @@ const defaultSettings = () => ({
   warning: { enabled: true, title: '질문하기 전에 확인해 주세요',
     body: '학습과 관련된 질문만 보내 주세요.\n사담·욕설·같은 질문의 반복 전송은 하지 않아요.\n반복하면 정해진 시간이나 기간 동안 질문이 제한될 수 있어요.', revision: 1 },
   allowedSources: [...SOURCE_KINDS], defaultRestrictionMs: 3600000,
+  avatarEvent: defaultAvatarEvent(),
 });
 function normalizeSettings(raw, previous = defaultSettings()) {
   checkKeys(raw, ['enabled', 'revision', 'acceptingQuestions', 'storiesVisible', 'teacherQuestionNotifications',
-    'studentReplyNotifications', 'warning', 'allowedSources', 'defaultRestrictionMs']);
+    'studentReplyNotifications', 'warning', 'allowedSources', 'defaultRestrictionMs', 'avatarEvent']);
   for (const key of ['enabled', 'acceptingQuestions', 'storiesVisible', 'teacherQuestionNotifications', 'studentReplyNotifications'])
     if (typeof raw[key] !== 'boolean') fail('invalid-argument', '운영 설정을 확인해 주세요.', 'GONGSIN_SETTINGS_INVALID');
   checkKeys(raw.warning, ['enabled', 'title', 'body', 'revision']);
@@ -51,19 +55,20 @@ function normalizeSettings(raw, previous = defaultSettings()) {
     storiesVisible: raw.storiesVisible, teacherQuestionNotifications: raw.teacherQuestionNotifications,
     studentReplyNotifications: raw.studentReplyNotifications,
     warning: { ...warning, revision: previous.warning.revision + (changed ? 1 : 0) },
-    allowedSources: SOURCE_KINDS.filter(kind => raw.allowedSources.includes(kind)), defaultRestrictionMs: raw.defaultRestrictionMs };
+    allowedSources: SOURCE_KINDS.filter(kind => raw.allowedSources.includes(kind)), defaultRestrictionMs: raw.defaultRestrictionMs,
+    avatarEvent: normalizeAvatarEvent(raw.avatarEvent, previous.avatarEvent || defaultAvatarEvent()) };
 }
 function normalizeInput(data, mutation) {
   const common = ['semesterId', '_session'];
   const fields = mutation ? ['action', 'requestId', 'settings', 'expectedRevision', 'warningRevision', 'question', 'source',
-    'questionId', 'reply', 'publicQuestion', 'publicReply', 'selected', 'studentId', 'durationMs', 'reason']
+    'questionId', 'reply', 'publicQuestion', 'publicReply', 'selected', 'studentId', 'durationMs', 'reason', 'description', 'expectedAvatarRevision']
     : ['mode', 'cursor', 'filter', 'questionId', 'studentId'];
   checkKeys(data, [...common, ...fields]);
   if (!/^\d{4}-[12]$/.test(data.semesterId || '')) fail('invalid-argument', '현재 학기를 확인해 주세요.', 'GONGSIN_SCOPE_INVALID');
   if (mutation) {
-    if (!['settings', 'ack', 'submit', 'answer', 'story', 'restrict'].includes(data.action)
+    if (!['settings', 'ack', 'submit', 'submitAvatar', 'rewardAvatar', 'answer', 'story', 'restrict'].includes(data.action)
       || !/^[A-Za-z0-9_-]{16,100}$/.test(data.requestId || '')) fail('invalid-argument', '저장 요청을 다시 확인해 주세요.', 'GONGSIN_ACTION_INVALID');
-  } else if (!['state', 'questions', 'detail', 'stories', 'restrictions'].includes(data.mode)
+  } else if (!['state', 'avatar-event', 'questions', 'detail', 'stories', 'restrictions'].includes(data.mode)
     || (data.filter !== undefined && !['all', 'waiting', 'selected'].includes(data.filter))
     || (data.cursor !== undefined && data.cursor !== null && (typeof data.cursor !== 'string' || data.cursor.length > 500)))
     fail('invalid-argument', '조회할 목록을 확인해 주세요.', 'GONGSIN_QUERY_INVALID');
@@ -90,6 +95,7 @@ function normalizeSource(raw) {
 }
 const projectQuestion = (id, data, teacher) => ({ id, studentId: data.studentId, studentLabel: data.studentLabel,
   profileEmojiId: data.profileEmojiId, source: data.source, question: data.question, reply: data.reply,
+  ...(data.source?.kind === 'avatar' && data.avatarEvent ? { avatarEvent: data.avatarEvent } : {}),
   ...(teacher ? { publicQuestion: data.publicQuestion || '', publicReply: data.publicReply || '', selected: data.selected === true } : {}),
   createdAt: data.createdAt, updatedAt: data.updatedAt, revision: data.revision });
 const projectStory = (id, data) => ({ id, question: data.question, answer: data.answer, source: data.source,
@@ -123,7 +129,8 @@ async function readContext(db, tx, request, scope) {
     if (!classroom || classroom.semesterId !== scope || classroom.status !== 'ACTIVE' || classroom.readOnly === true)
       fail('permission-denied', '현재 학급을 확인해 주세요.', 'GONGSIN_CLASS_REQUIRED');
   }
-  return { uid, profile, admin, teacher, enrollment, settings: settingsDoc.data() || defaultSettings(), scope };
+  const settings = settingsDoc.data() || defaultSettings();
+  return { uid, profile, admin, teacher, enrollment, settings: { ...settings, avatarEvent: normalizeAvatarEvent(settings.avatarEvent) }, scope };
 }
 const requireOpen = context => {
   if (!context.teacher && context.settings.enabled !== true)
@@ -253,6 +260,9 @@ function writeNotifications(db, tx, scope, plans) {
 }
 
 function createGongsinmoongoHandlers({ db, assertSession = assertScoreWorkflowSession, now = () => Date.now() }) {
+  const avatarWallet = createStudentWisWallet({ db, actorUid: 'system:avatar-event', validateStudentProfile: profile => {
+    if (!activeProfile(profile)) fail('permission-denied', '이용할 수 있는 학생 계정을 확인해 주세요.', 'GONGSIN_PROFILE_INVALID');
+  } });
   const session = async request => { const identity = await assertSession(request, { recentAuth: false, highRisk: false });
     if (!request.auth?.uid || identity?.uid && identity.uid !== request.auth.uid) fail('unauthenticated', '로그인 상태를 확인해 주세요.', 'GONGSIN_SESSION_INVALID'); };
   const getGongsinmoongo = async request => {
@@ -261,6 +271,11 @@ function createGongsinmoongoHandlers({ db, assertSession = assertScoreWorkflowSe
     return db.runTransaction(async tx => {
       const context = await readContext(db, tx, request, input.semesterId), { scope, uid, teacher, settings } = context;
       if (input.studentId !== undefined && !teacher) fail('permission-denied', '본인의 질문만 조회할 수 있습니다.', 'GONGSIN_OWNER_REQUIRED');
+      if (input.mode === 'avatar-event') {
+        if (teacher) fail('permission-denied', '학생 본인의 행사 참여 기록입니다.', 'GONGSIN_STUDENT_REQUIRED');
+        await readStudentMenuAccess(tx, db, ['mypage', 'avatar']);
+        return avatarEventState(settings, await readAvatarParticipation(db, tx, uid));
+      }
       if (input.mode === 'state') {
         const [restriction, ack] = teacher ? [null, null] : await tx.getAll(db.doc(path(scope, 'restrictions', uid)), db.doc(path(scope, 'acknowledgments', uid)));
         return { role: teacher ? 'teacher' : 'student', canManageSettings: context.admin, settings,
@@ -293,13 +308,15 @@ function createGongsinmoongoHandlers({ db, assertSession = assertScoreWorkflowSe
       const context = await readContext(db, tx, request, scope), { uid, teacher, settings } = context;
       const receiptRef = db.doc(path(scope, 'receipts', hash(`${uid}:${input.requestId}`)));
       const receipt = (await tx.get(receiptRef)).data();
-      if (['settings', 'answer', 'story', 'restrict'].includes(input.action)) requireTeacher(context);
+      if (['settings', 'answer', 'story', 'restrict', 'rewardAvatar'].includes(input.action)) requireTeacher(context);
       else if (teacher) fail('permission-denied', '학생 본인만 질문을 보낼 수 있습니다.', 'GONGSIN_STUDENT_REQUIRED');
       if (input.action === 'settings' && !context.admin) fail('permission-denied', '관리자만 운영 설정을 변경할 수 있습니다.', 'GONGSIN_ADMIN_REQUIRED');
       requireOpen(context);
+      if (input.action === 'submitAvatar') await readStudentMenuAccess(tx, db, ['mypage', 'avatar']);
       if (receipt) {
         if (receipt.payloadHash !== payloadHash) fail('invalid-argument', '변경한 내용은 새 요청으로 저장해 주세요.', 'GONGSIN_REQUEST_REUSED');
-        return { ...receipt.response, replayed: true };
+        return { ...receipt.response, ...(input.action === 'rewardAvatar' && receipt.response.reward
+          ? { reward: { ...receipt.response.reward, awarded: false } } : {}), replayed: true };
       }
       const stamp = now();
       let response;
@@ -312,6 +329,7 @@ function createGongsinmoongoHandlers({ db, assertSession = assertScoreWorkflowSe
         if (!unchanged) {
           tx.set(db.doc(path(scope, 'config', 'settings')), value);
           tx.set(db.doc(path(scope, 'config', 'public')), { enabled: value.enabled, revision: value.revision,
+            avatarEventEnabled: value.avatarEvent.enabled, avatarEventRewardWis: value.avatarEvent.rewardWis,
             contentRevision: publicState?.contentRevision || 0 });
         }
         response = { settings: unchanged ? settings : value };
@@ -321,6 +339,54 @@ function createGongsinmoongoHandlers({ db, assertSession = assertScoreWorkflowSe
         if (existing?.warningRevision === input.warningRevision) return { acknowledgedWarningRevision: input.warningRevision, replayed: false };
         tx.set(db.doc(path(scope, 'acknowledgments', uid)), { studentId: uid, warningRevision: input.warningRevision, acknowledgedAt: stamp });
         response = { acknowledgedWarningRevision: input.warningRevision };
+      } else if (input.action === 'submitAvatar') {
+        checkKeys(input, ['semesterId', 'action', 'requestId', 'description', 'expectedAvatarRevision']);
+        const participation = await readAvatarParticipation(db, tx, uid);
+        if (participation.marker) return { avatarEvent: avatarEventState(settings, participation),
+          ...(participation.question ? { question: projectQuestion(participation.marker.questionId, participation.question, false) } : {}), replayed: true };
+        if (!settings.avatarEvent.enabled) fail('failed-precondition', '아바타 소개 행사는 지금 접수하지 않습니다.', 'GONGSIN_AVATAR_EVENT_CLOSED');
+        const description = clean(input.description, 300);
+        const restriction = (await tx.get(db.doc(path(scope, 'restrictions', uid)))).data();
+        if (restriction?.until > stamp) fail('permission-denied', '질문 제한 기간이 끝난 뒤 이용해 주세요.', 'GONGSIN_STUDENT_RESTRICTED');
+        const snapshot = await readSavedAvatarSnapshot(db, tx, uid, input.expectedAvatarRevision);
+        const questionId = `avatar_${hash(uid)}`, profileEmojiId = await profileEmoji(db, tx, context);
+        const studentLabel = String(context.enrollment?.snapshot?.displayName || context.profile.name || context.profile.displayName || '학생').slice(0, 80);
+        const plans = await notificationPlan(db, tx, { ...context, studentLabel }, 'question_created', questionId, 1, stamp);
+        const { thumbnailPath, ...avatar } = snapshot;
+        const avatarEvent = { ...avatar, description, rewardWis: settings.avatarEvent.rewardWis, submittedAt: stamp };
+        const value = { semesterId: scope, studentId: uid, studentLabel, profileEmojiId,
+          source: { kind: 'avatar', title: '아바타 소개' }, avatarEvent, question: description, reply: '',
+          publicQuestion: '', publicReply: '', selected: false, status: 'waiting', revision: 1, createdAt: stamp, updatedAt: stamp };
+        const marker = { schemaVersion: 1, semesterId: scope, questionId,
+          rewardWis: settings.avatarEvent.rewardWis, thumbnailPath, submittedAt: stamp };
+        tx.create(db.doc(path(scope, 'questions', questionId)), value);
+        tx.create(participation.ref, marker);
+        writeNotifications(db, tx, scope, plans);
+        response = { avatarEvent: avatarEventState(settings, { marker, question: value }), question: projectQuestion(questionId, value, false) };
+      } else if (input.action === 'rewardAvatar') {
+        checkKeys(input, ['semesterId', 'action', 'requestId', 'questionId', 'expectedRevision']);
+        const { value, ref } = await readQuestion(db, tx, context, input.questionId);
+        if (value.source?.kind !== 'avatar' || !value.avatarEvent) fail('invalid-argument', '아바타 소개 접수를 선택해 주세요.', 'GONGSIN_AVATAR_QUESTION_REQUIRED');
+        const participation = await readAvatarParticipation(db, tx, value.studentId), marker = participation.marker;
+        if (!marker || marker.deleted || marker.questionId !== input.questionId || marker.semesterId !== scope
+          || marker.rewardWis !== value.avatarEvent.rewardWis || !Number.isSafeInteger(marker.rewardWis) || marker.rewardWis < 1 || marker.rewardWis > 1000000)
+          fail('failed-precondition', '아바타 행사 참여 기록을 확인해 주세요.', 'GONGSIN_AVATAR_PARTICIPATION_INVALID');
+        if (marker.rewardedAt) return { avatarEvent: avatarEventState(settings, participation), question: projectQuestion(input.questionId, value, true),
+          reward: { awarded: false, amount: marker.rewardWis, ledgerEntryId: marker.ledgerEntryId }, replayed: true };
+        requireRevision(value.revision, input.expectedRevision);
+        const walletScope = { year: scope.slice(0, 4), semester: scope.slice(-1) };
+        const loaded = await avatarWallet.read(tx, walletScope, value.studentId);
+        const amount = marker.rewardWis, activityType = 'avatar_event', sourceId = hash(value.studentId);
+        const ledgerEntryId = `wisled_${hash([scope, loaded.wallet.accountId, 'GRANT', `${activityType}:${sourceId}`].join('\n'))}`;
+        const nextEvent = { ...value.avatarEvent, rewardedAt: stamp, ledgerEntryId, rewardedBy: uid };
+        const next = { ...value, avatarEvent: nextEvent, reply: `${value.reply ? `${value.reply}\n\n` : ''}아바타 소개 참여 보상 ${amount.toLocaleString('ko-KR')}위스를 지급했습니다.`,
+          status: 'answered', revision: value.revision + 1, updatedAt: stamp, answeredBy: uid };
+        const plans = await notificationPlan(db, tx, { ...context, recipientUid: value.studentId }, 'question_replied', input.questionId, next.revision, stamp);
+        const balance = avatarWallet.write(tx, walletScope, value.studentId, amount, activityType, sourceId, '아바타 소개 참여 보상', loaded, receiptRef.path);
+        const nextMarker = { ...marker, rewardedAt: stamp, ledgerEntryId, rewardedBy: uid };
+        tx.set(ref, next); tx.set(participation.ref, nextMarker); writeNotifications(db, tx, scope, plans);
+        response = { avatarEvent: avatarEventState(settings, { marker: nextMarker, question: next }), question: projectQuestion(input.questionId, next, true),
+          reward: { awarded: true, amount, balance, ledgerEntryId } };
       } else if (input.action === 'submit') {
         if (!settings.acceptingQuestions) fail('failed-precondition', '지금은 새 질문을 받지 않습니다.', 'GONGSIN_NOT_ACCEPTING');
         const question = clean(input.question, 2000), questionId = `q_${hash(`${uid}:${input.requestId}`)}`;
@@ -377,6 +443,7 @@ function createGongsinmoongoHandlers({ db, assertSession = assertScoreWorkflowSe
             tx.set(storyRef, { question: publicQuestion, answer: publicReply, source, createdAt: value.createdAt, updatedAt: stamp });
           } else tx.delete(storyRef);
           tx.set(db.doc(path(scope, 'config', 'public')), { enabled: settings.enabled, revision: settings.revision,
+            avatarEventEnabled: settings.avatarEvent.enabled, avatarEventRewardWis: settings.avatarEvent.rewardWis,
             contentRevision: (publicState?.contentRevision || 0) + 1 });
           response = { question: projectQuestion(input.questionId, next, true) };
         }

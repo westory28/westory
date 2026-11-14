@@ -11,7 +11,9 @@ import { build } from "esbuild";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
 const destination = path.join(root, "public/avatar/minimi-v2/previews");
-const evidence = path.join(root, "output/avatar-wardrobe-20261114");
+const evidence =
+  process.env.AVATAR_ART_EVIDENCE_DIR ||
+  path.join(root, "output/avatar-wardrobe-20261114");
 const catalog = JSON.parse(
   await fs.readFile(path.join(root, "functions/avatarCatalog.json"), "utf8"),
 );

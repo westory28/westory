@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { fixture, uid, req, purchase, save, paid, accountPath } = require('./verify-student-avatar.cjs');
-const { catalog, defaultLook, lookHash, sanitizePublicAvatar, itemIdFor, itemMetadata, validateLook } = require('../studentAvatarCatalog');
+const { catalog, defaultLook, lookHash, sanitizePublicAvatar, itemIdFor, itemMetadata, validateLook, validateWearableLook, canWearItem } = require('../studentAvatarCatalog');
 const { createStudentAvatarHandlers, createStudentAvatarDeletionHandler } = require('../studentAvatar');
 const { createAvatarCatalogPricingHandlers, PRICING_PATH, MAX_AVATAR_PRICE, MAX_AVATAR_LABEL_LENGTH, MAX_AVATAR_DESCRIPTION_LENGTH } = require('../avatarCatalogPricing');
 const reason = expected => error => error.details?.reason === expected;
@@ -22,6 +22,93 @@ const setPrices = (state, prices, revision = 1) => state.documents.set(PRICING_P
 const quotedPurchase = (item = paid[0], price = item.price, revision = 0, requestId = 'priced-purchase-1') =>
   req({ year: '2026', semester: '2', itemId: item.id, requestId, expectedPrice: price, expectedPricingRevision: revision,
     expectedPricingPolicyVersion: catalog.pricingPolicyVersion });
+
+test('wearing eligibility checks gender and geometry while historical public looks remain valid', () => {
+  for (const character of ['girl', 'boy']) {
+    assert.ok(validateWearableLook(defaultLook(character)));
+    for (const item of catalog.items.filter(item => item.slot !== 'character')) {
+      const look = { ...defaultLook(character), [item.slot]: item.value };
+      assert.equal(Boolean(validateWearableLook(look)), canWearItem(item, character), `${item.id}:${character}`);
+    }
+  }
+  const maleHair = catalog.items.find(item => item.slot === 'hairStyle' && item.gender === 'boy' && item.characters.includes('girl'));
+  const look = { ...defaultLook('girl'), hairStyle: maleHair.value };
+  assert.ok(validateLook(look)); assert.equal(validateWearableLook(look), null);
+  const old = { schemaVersion: 1, catalogVersion: catalog.version, revision: 3, look, lookHash: lookHash(look),
+    thumbnailUrl: `https://firebasestorage.googleapis.com/v0/b/avatar-test.appspot.com/o/student_avatar_thumbnails%2Fv2%2F${'a'.repeat(64)}%2F${'b'.repeat(64)}.webp?alt=media&token=${'c'.repeat(36)}` };
+  assert.deepEqual(sanitizePublicAvatar(old), old);
+  const skirt = catalog.items.find(item => item.id === 'minimi-bottom-skirt-navy');
+  assert.equal(canWearItem(skirt, 'boy', { [skirt.id]: { gender: 'unisex' } }), false);
+  for (const character of ['girl', 'boy']) {
+    const body = catalog.items.find(item => item.slot === 'character' && item.value === character);
+    const other = character === 'girl' ? 'boy' : 'girl';
+    assert.ok(validateWearableLook(defaultLook(character), { [body.id]: { gender: other } }));
+    assert.equal(canWearItem(body, other, { [body.id]: { gender: 'unisex' } }), false);
+  }
+});
+
+test('student and teacher reject opposite-gender saves before upload or writes with one metadata read', async () => {
+  for (const teacher of [false, true]) for (const character of ['girl', 'boy']) {
+    const state = setup(), other = character === 'girl' ? 'boy' : 'girl';
+    const hair = catalog.items.find(item => item.slot === 'hairStyle' && item.gender === other && item.characters.includes(character));
+    const input = await save({ look: { ...defaultLook(character), hairStyle: hair.value } });
+    const api = teacher ? state.teacher : state.api;
+    await assert.rejects(api.saveStudentAvatar(teacher ? teacherRequest(input.data) : input), error => {
+      assert.equal(error.details.reason, 'AVATAR_GENDER_MISMATCH');
+      assert.equal(error.details.pricing.metadata[hair.id].gender, other);
+      return true;
+    });
+    assert.equal(state.reads.filter(path => path === PRICING_PATH).length, 1);
+    assert.equal(state.bucket.objects.size, 0); assert.equal(state.writes.length, 0);
+    assert.equal(state.documents.get(accountPath).balance, 1000);
+  }
+});
+
+test('admin reclassification governs new saves but keeps old reads, ownership, thumbnails and receipt retries', async () => {
+  for (const teacher of [false, true]) {
+    const state = setup(), api = teacher ? state.teacher : state.api;
+    const item = catalog.items.find(item => item.id === itemIdFor('hairStyle', defaultLook().hairStyle));
+    const input = await save();
+    const request = teacher ? teacherRequest(input.data) : input;
+    const first = await api.saveStudentAvatar(request);
+    assert.equal(state.reads.filter(path => path === PRICING_PATH).length, 2);
+    const avatarPath = teacher ? `teacher_avatars/${teacherUid}` : `student_avatars/${uid}`;
+    const before = structuredClone(state.documents.get(avatarPath));
+    await state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 0, prices: {},
+      metadata: { [item.id]: { ...itemMetadata(item), gender: 'boy' } } }));
+    state.reads.length = 0; state.writes.length = 0;
+    const current = await api.getStudentAvatar(teacher ? teacherRequest({}) : req({}));
+    assert.equal(current.thumbnailUrl, first.thumbnailUrl); assert.deepEqual(current.look, first.look);
+    assert.deepEqual(current.ownedItemIds, first.ownedItemIds);
+    assert.equal(state.reads.includes(PRICING_PATH), false, 'Historical reads do not fetch metadata');
+    const retry = await api.saveStudentAvatar(request);
+    assert.equal(retry.duplicate, true); assert.equal(state.writes.length, 0);
+    const edited = await save({ expectedRevision: first.revision, requestId: 'gender-new-save' });
+    await assert.rejects(api.saveStudentAvatar(teacher ? teacherRequest(edited.data) : edited), reason('AVATAR_GENDER_MISMATCH'));
+    assert.equal(state.writes.length, 0); assert.equal(state.bucket.objects.size, 1);
+    assert.deepEqual(structuredClone(state.documents.get(avatarPath)), before);
+    await state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 1, prices: {},
+      metadata: { [item.id]: { ...itemMetadata(item), gender: 'unisex' } } }));
+    state.advance();
+    state.documents.set(avatarPath, { ...state.documents.get(avatarPath), lastSavedAtMs: 1 });
+    const compatible = await api.saveStudentAvatar(teacher ? teacherRequest(edited.data) : edited);
+    assert.equal(compatible.revision, first.revision + 1);
+  }
+});
+
+test('gender changes during upload are rechecked for both roles and clean the uncommitted image', async () => {
+  for (const teacher of [false, true]) {
+    const state = setup(), item = catalog.items.find(item => item.id === itemIdFor('hairStyle', defaultLook().hairStyle));
+    state.bucket.afterSave = async () => state.documents.set(PRICING_PATH, { schemaVersion: 1, revision: 1, prices: {},
+      metadata: { [item.id]: { ...itemMetadata(item), gender: 'boy' } } });
+    const input = await save();
+    await assert.rejects((teacher ? state.teacher : state.api).saveStudentAvatar(teacher ? teacherRequest(input.data) : input), reason('AVATAR_GENDER_MISMATCH'));
+    assert.equal(state.reads.filter(path => path === PRICING_PATH).length, 2);
+    assert.equal(state.writes.length, 0); assert.equal(state.bucket.objects.size, 0);
+    assert.equal(state.documents.has(teacher ? `teacher_avatars/${teacherUid}` : `student_avatars/${uid}`), false);
+    assert.equal(state.documents.get(accountPath).balance, 1000);
+  }
+});
 
 test('pricing read uses one policy document and settings authority excludes staff/student portal flags', async () => {
   const state = setup();
@@ -284,25 +371,30 @@ test('price changes during thumbnail upload fail atomically and leave no free ow
   assert.equal(state.documents.has(`student_avatars/${uid}`), false); assert.equal(state.bucket.objects.size, 0);
 });
 
-test('teacher My Page returns all items and enabled emoji choices with no wallet or pricing lookup', async () => {
+test('teacher My Page returns all items, effective metadata and enabled emoji choices with one pricing read and no wallet lookup', async () => {
   const state = setup();
   state.documents.set('fixture_policy/current', { rankPolicy: { emojiRegistry: [
     { id: 'smile', emoji: '😀', label: '웃음', enabled: true },
     { id: 'teacher_star', emoji: '⭐', label: '별', enabled: true },
     { id: 'hidden', emoji: '❌', label: '숨김', enabled: false },
   ] } });
+  const hair = catalog.items.find(item => item.id === itemIdFor('hairStyle', defaultLook().hairStyle));
+  state.documents.set(PRICING_PATH, { schemaVersion: 1, revision: 1, prices: {},
+    metadata: { [hair.id]: { ...itemMetadata(hair), gender: 'boy' } } });
   const page = await state.teacher.getTeacherMyPage(scopedTeacherRequest({}));
   assert.equal(page.allAvailable, true); assert.equal(page.avatar.ownedItemIds.length, catalog.items.length);
+  assert.equal(page.pricing.metadata[hair.id].gender, 'boy');
   assert.deepEqual(page.emojiRegistry.map(item => item.id), ['smile', 'teacher_star']);
   const emoji = await state.teacher.updateTeacherProfileIcon(scopedTeacherRequest({ emojiId: 'teacher_star' }));
   assert.equal(emoji.profileIcon, '⭐'); assert.equal(state.documents.get(`users/${teacherUid}`).untouched, 'preserved');
   await assert.rejects(state.teacher.updateTeacherProfileIcon(scopedTeacherRequest({ emojiId: 'hidden' })), reason('AVATAR_EMOJI_INVALID'));
-  assert.equal(state.reads.some(path => path.startsWith('semester_wis_') || path === PRICING_PATH), false);
+  assert.equal(state.reads.filter(path => path === PRICING_PATH).length, 1);
+  assert.equal(state.reads.some(path => path.startsWith('semester_wis_')), false);
 });
 
 test('teacher can save paid items into own isolated namespace without ledger or student changes', async () => {
   const state = setup(), look = defaultLook();
-  for (const item of paid.filter(item => item.characters.includes('girl') && item.slot !== 'character')) look[item.slot] = item.value;
+  for (const item of paid.filter(item => canWearItem(item, 'girl') && item.slot !== 'character')) look[item.slot] = item.value;
   const input = await save({ look });
   const result = await state.teacher.saveStudentAvatar(teacherRequest(input.data));
   assert.equal(result.revision, 1); assert.equal(result.ownedItemIds.length, catalog.items.length);

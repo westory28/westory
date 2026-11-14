@@ -485,7 +485,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "accessoryGroup": "accessory"
     },
     {
       "id": "minimi-accessory-glasses",
@@ -497,7 +498,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "accessoryGroup": "glasses"
     },
     {
       "id": "minimi-accessory-ribbon",
@@ -509,7 +511,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "accessoryGroup": "accessory"
     },
     {
       "id": "minimi-accessory-cap",
@@ -521,7 +524,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "accessoryGroup": "hat"
     },
     {
       "id": "minimi-hairStyle-cloud-crop",
@@ -1435,7 +1439,8 @@
         "boy"
       ],
       "gender": "boy",
-      "description": "넓은 양태와 구슬 끈이 있는 검은 갓입니다."
+      "description": "넓은 양태와 구슬 끈이 있는 검은 갓입니다.",
+      "accessoryGroup": "hat"
     },
     {
       "id": "minimi-accessory-hanbok-baekrip",
@@ -1449,7 +1454,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "밝은 빛깔과 작은 구슬 끈이 돋보이는 갓입니다."
+      "description": "밝은 빛깔과 작은 구슬 끈이 돋보이는 갓입니다.",
+      "accessoryGroup": "hat"
     },
     {
       "id": "minimi-accessory-hanbok-jokduri",
@@ -1463,7 +1469,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "꽃과 금빛 장식을 얹은 작은 족두리입니다."
+      "description": "꽃과 금빛 장식을 얹은 작은 족두리입니다.",
+      "accessoryGroup": "hat"
     },
     {
       "id": "minimi-accessory-hanbok-satgat",
@@ -1477,7 +1484,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "촘촘하게 엮은 결을 표현한 넓은 삿갓입니다."
+      "description": "촘촘하게 엮은 결을 표현한 넓은 삿갓입니다.",
+      "accessoryGroup": "hat"
     },
     {
       "id": "minimi-accessory-hanbok-ayam",
@@ -1491,7 +1499,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "둥근 머리 부분과 길게 내린 뒷드림을 표현했습니다."
+      "description": "둥근 머리 부분과 길게 내린 뒷드림을 표현했습니다.",
+      "accessoryGroup": "hat"
     },
     {
       "id": "minimi-accessory-hanbok-daenggi",
@@ -1505,7 +1514,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "꽃무늬와 금빛 선이 있는 긴 붉은 댕기입니다."
+      "description": "꽃무늬와 금빛 선이 있는 긴 붉은 댕기입니다.",
+      "accessoryGroup": "accessory"
     },
     {
       "id": "minimi-accessory-hanbok-samo",
@@ -1519,7 +1529,8 @@
         "boy"
       ],
       "gender": "boy",
-      "description": "양옆 사모뿔과 앞 장식을 표현한 검은 관모입니다."
+      "description": "양옆 사모뿔과 앞 장식을 표현한 검은 관모입니다.",
+      "accessoryGroup": "hat"
     },
     {
       "id": "minimi-accessory-hanbok-binyeo",
@@ -1533,7 +1544,65 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "두 송이 꽃과 작은 드리개가 달린 비녀 장식입니다."
+      "description": "두 송이 꽃과 작은 드리개가 달린 비녀 장식입니다.",
+      "accessoryGroup": "accessory"
+    },
+    {
+      "id": "minimi-hairStyle-ash-bowl",
+      "slot": "hairStyle",
+      "value": "mm-ash-bowl",
+      "label": "애쉬 보울 헤어",
+      "price": 260,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "둥근 볼륨과 촘촘한 앞머리에 은은한 결을 더한 헤어입니다."
+    },
+    {
+      "id": "minimi-accessory-sunglasses",
+      "slot": "accessory",
+      "value": "mm-sunglasses",
+      "label": "미드나잇 선글라스",
+      "price": 120,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "accessoryGroup": "glasses",
+      "description": "짙은 렌즈와 은은한 빛 반사가 어우러진 선글라스입니다."
+    },
+    {
+      "id": "minimi-hairStyle-ash-cloud",
+      "slot": "hairStyle",
+      "value": "mm-ash-cloud",
+      "label": "애쉬 몽실 헤어",
+      "price": 280,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "둥글고 풍성한 볼륨에 부드러운 앞머리와 은은한 반사광을 더했습니다."
+    },
+    {
+      "id": "minimi-hairStyle-blossom-bob",
+      "slot": "hairStyle",
+      "value": "mm-blossom-bob",
+      "label": "꽃리본 단발 헤어",
+      "price": 280,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "안쪽으로 둥글게 말린 단발에 작은 꽃리본을 달았습니다."
     }
   ]
 }

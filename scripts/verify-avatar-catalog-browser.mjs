@@ -76,6 +76,8 @@ try {
   await page.goto(origin);
   await button("꾸미기 화면").click();
   await page.locator(".avatar-studio").waitFor();
+  assert.equal(await button("헤어").getAttribute("aria-pressed"), "true");
+  assert.deepEqual((await page.locator('.avatar-studio-categories button').allTextContents()).map(text=>text.trim()).slice(0,5), ['헤어','눈매·표정','피부색','상의','하의']);
   assert.equal(
     await page.evaluate(() => window.avatarQa.loadCalls),
     1,
@@ -89,6 +91,19 @@ try {
   await button("여학생 아바타").focus();
   await page.keyboard.press("Enter");
   await ready();
+  const genderFilters = page.getByRole('group',{name:'아이템 성별',exact:true});
+  assert.equal(await genderFilters.getByRole('button',{name:'여자',exact:true}).getAttribute('aria-pressed'),'true');
+  await itemButton(labelFor('mm-long')).click();
+  await button('남학생 아바타').click();
+  await ready();
+  assert.equal(await genderFilters.getByRole('button',{name:'남자',exact:true}).getAttribute('aria-pressed'),'true');
+  assert.equal(await itemButton(labelFor('mm-long')).count(),0,'opposite gender hidden by default');
+  await genderFilters.getByRole('button',{name:'성별 전체',exact:true}).click();
+  assert(await itemButton(labelFor('mm-long')).isDisabled(),'opposite gender cannot be clicked');
+  await button('여학생 아바타').click();
+  await ready();
+  assert.equal(await genderFilters.getByRole('button',{name:'여자',exact:true}).getAttribute('aria-pressed'),'true');
+  await button('상의').click();
   await itemButton(labelFor("mm-school-hoodie")).click();
   await button("하의").click();
   await itemButton(labelFor("mm-school-joggers")).click();
@@ -152,6 +167,7 @@ try {
   );
   await button("상점 화면").click();
   await ready();
+  await button('상의').click();
   assert.equal(await saveButton().count(), 0, "Shop cannot save an outfit");
   assert.equal(await button("전체 보기").count(), 0);
   assert.equal(await button("얼굴 보기").count(), 0);
@@ -165,6 +181,7 @@ try {
   );
   await button("꾸미기 화면").click();
   await ready();
+  await button('상의').click();
   assert.equal(
     await itemButton("크림 니트").count(),
     1,
@@ -217,7 +234,7 @@ try {
     for (const [slot, label] of Object.entries(slotLabels)) {
       await button(label).click();
       const candidates = catalog.items.filter(
-        (i) => i.slot === slot && i.characters.includes(character),
+        (i) => i.slot === slot && i.characters.includes(character) && (!i.gender || i.gender==='unisex' || i.gender===character),
       );
       if (slot === "bottom")
         assert.equal(
@@ -290,6 +307,8 @@ try {
   await button("학생 문맥").click();
   await button("꾸미기 화면").click();
   await ready();
+  await page.locator('.avatar-studio-characters button').nth(1).click();
+  await ready();
   await button("상의").click();
   await itemButton("별빛 여행 니트").click();
   await page
@@ -355,6 +374,16 @@ try {
   // Shop controls share one category/search row; filters and pages stay local.
   await button("상점 화면").click();
   await ready();
+  await page.locator('.avatar-studio-characters button').nth(1).click();
+  await ready();
+  await button('장식').click();
+  await page.getByRole('group',{name:'장식 종류'}).getByRole('button',{name:'안경',exact:true}).click();
+  assert.equal(await page.locator('.avatar-studio-item').count(),2,'glasses and sunglasses grouped together');
+  await itemButton(labelFor('mm-sunglasses')).click();
+  await ready();
+  await page.getByRole('group',{name:'장식 종류'}).getByRole('button',{name:'모자',exact:true}).click();
+  assert.equal(await itemButton(labelFor('mm-sunglasses')).count(),0);
+  await button('상의').click();
   const shopReads = await page.evaluate(() => window.avatarQa.loadCalls);
   const writesBeforeBrowse = await page.evaluate(() => [
     window.avatarQa.saveCalls,
@@ -414,20 +443,27 @@ try {
         const search = n
           .querySelector(".avatar-studio-search")
           .getBoundingClientRect();
+        const input=n.querySelector('input').getBoundingClientRect();
         return {
           sameRow: Math.abs(tabs.y - search.y) < 10,
           right: search.x >= tabs.right,
           overflow: document.documentElement.scrollWidth > innerWidth + 1,
+          inputHeight:input.height,
+          inputGap: input.height ? n.getBoundingClientRect().bottom-input.bottom : null,
         };
       });
     assert(
       layout.sameRow && layout.right && !layout.overflow,
       JSON.stringify({ width, layout }),
     );
+    if(!narrow) assert(layout.inputHeight===36 && layout.inputGap>=4,JSON.stringify(layout));
+    const sizes=await page.locator('.avatar-studio-item').evaluateAll(nodes=>nodes.map(n=>({w:n.getBoundingClientRect().width,h:n.getBoundingClientRect().height})));
+    assert(sizes.every(s=>Math.abs(s.h-sizes[0].h)<1 && Math.abs(s.w-sizes[0].w)<1),'uniform cards across every row');
     const file = path.join(evidence, `shop-${width}.png`);
     await page.screenshot({ path: file, fullPage: true });
     screenshots.push(file);
   }
+  await genderFilters.getByRole('button',{name:'성별 전체',exact:true}).click();
   if (catalog.items.filter((i) => i.slot === "top").length > 18) {
     await button("2페이지").click();
     assert.equal(await button("2페이지").getAttribute("aria-current"), "page");
@@ -451,6 +487,8 @@ try {
   await page.evaluate(() => window.avatarQa.ownAll());
   await button("꾸미기 화면").click();
   await ready();
+  await button('상의').click();
+  await genderFilters.getByRole('button',{name:'성별 전체',exact:true}).click();
   if (catalog.items.filter((i) => i.slot === "top").length > 18) {
     await button("2페이지").click();
     assert.equal(

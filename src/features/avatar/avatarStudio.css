@@ -214,11 +214,13 @@
   max-width: calc(100% - 52px);
 }
 .avatar-studio-search input {
-  min-height: 44px;
+  min-height: 36px;
+  height: 36px;
+  margin-block: 4px;
   border: 1px solid var(--ws-border, #e5e7eb);
   border-radius: 8px;
   background: var(--ws-surface, #fff);
-  padding: 8px 12px;
+  padding: 4px 12px;
   color: inherit;
   font: inherit;
   font-size: 14px;
@@ -268,6 +270,12 @@
   grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
   gap: 8px;
   align-items: stretch;
+  grid-auto-rows: 1fr;
+}
+.avatar-studio-accessory-groups {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 4px;
 }
 .avatar-studio-selected {
   display: flex;

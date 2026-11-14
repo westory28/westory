@@ -13,7 +13,7 @@ const { getFirestore, Timestamp } = require('firebase-admin/firestore');
 const app = initializeApp({ projectId }), db = getFirestore(app);
 const { createStudentAvatarHandlers, createStudentAvatarDeletionHandler } = require('../studentAvatar');
 const { createAvatarCatalogPricingHandlers, PRICING_PATH } = require('../avatarCatalogPricing');
-const { catalog, defaultLook, lookHash } = require('../studentAvatarCatalog');
+const { catalog, defaultLook, lookHash, itemIdFor, itemMetadata, sanitizePublicAvatar } = require('../studentAvatarCatalog');
 const fixture = require('./verify-student-avatar.cjs');
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
 const { doc, setDoc, updateDoc, getDoc } = require('firebase/firestore');
@@ -191,6 +191,62 @@ let rules;
     assert.equal(result.revision, 2);
     assert.equal((await get(fixture.accountPath)).balance, 1000);
     assert.equal((await db.collection('semester_wis_ledger').get()).size, 0);
+  });
+  await check('effective gender rejects new student and teacher saves before upload while preserving saved avatars and receipts', async () => {
+    const item = catalog.items.find(item => item.id === itemIdFor('hairStyle', defaultLook().hairStyle));
+    for (const teacher of [false, true]) {
+      await seed(); await seedTeacher();
+      const selectedApi = teacher ? teacherApi : api;
+      const request = data => teacher ? teacherRequest(data) : authenticated(fixture.req(data));
+      const avatarPath = teacher ? `teacher_avatars/${teacherUid}` : fixture.avatarPath;
+      const profilePath = `users/${teacher ? teacherUid : fixture.uid}`;
+      const input = (await fixture.save()).data;
+      const first = await selectedApi.saveStudentAvatar(request(input));
+      const before = await db.doc(avatarPath).get(), profile = await db.doc(profilePath).get();
+      const wallet = await db.doc(fixture.accountPath).get();
+      await pricingApi.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 0, prices: {},
+        metadata: { [item.id]: { ...itemMetadata(item), gender: 'boy' } } }));
+      const historical = await selectedApi.getStudentAvatar(request({}));
+      assert.deepEqual(historical.look, first.look); assert.equal(historical.thumbnailUrl, first.thumbnailUrl);
+      assert.deepEqual(historical.ownedItemIds, first.ownedItemIds);
+      if (teacher) {
+        const teacherPage = await teacherApi.getTeacherMyPage(teacherRequest({ year: '2026', semester: '2' }));
+        assert.equal(teacherPage.pricing.metadata[item.id].gender, 'boy');
+        assert.equal(teacherPage.avatar.thumbnailUrl, first.thumbnailUrl);
+      }
+      if (!teacher) assert.equal(sanitizePublicAvatar(profile.data().avatar).thumbnailUrl, first.thumbnailUrl);
+      const replay = await selectedApi.saveStudentAvatar(request(input)); assert.equal(replay.duplicate, true);
+      await assert.rejects(selectedApi.saveStudentAvatar(request({ ...input, expectedRevision: 1, requestId: 'gender-new-save-1' })),
+        error => error.details?.reason === 'AVATAR_GENDER_MISMATCH' && error.details.pricing.metadata[item.id].gender === 'boy');
+      assert.equal(bucket.objects.size, 1);
+      assert.equal((await db.doc(avatarPath).get()).updateTime.toMillis(), before.updateTime.toMillis());
+      assert.equal((await db.doc(profilePath).get()).updateTime.toMillis(), profile.updateTime.toMillis());
+      assert.equal((await db.doc(fixture.accountPath).get()).updateTime.toMillis(), wallet.updateTime.toMillis());
+      assert.equal((await db.collection(`${avatarPath}/requests`).get()).size, 1);
+      assert.equal((await db.collection('semester_wis_ledger').get()).size, 0);
+      await pricingApi.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 1, prices: {},
+        metadata: { [item.id]: { ...itemMetadata(item), gender: 'unisex' } } }));
+      await db.doc(avatarPath).update({ lastSavedAtMs: Date.now() - 10000 });
+      const recovered = await selectedApi.saveStudentAvatar(request({ ...input, expectedRevision: 1, requestId: 'gender-new-save-1' }));
+      assert.equal(recovered.revision, 2);
+    }
+  });
+  await check('metadata gender change between preparation and commit leaves no new image or avatar writes', async () => {
+    const item = catalog.items.find(item => item.id === itemIdFor('hairStyle', defaultLook().hairStyle));
+    for (const teacher of [false, true]) {
+      await seed(); await seedTeacher();
+      const selectedApi = teacher ? teacherApi : api;
+      bucket.afterSave = async () => db.doc(PRICING_PATH).set({ schemaVersion: 1, revision: 1, prices: {},
+        metadata: { [item.id]: { ...itemMetadata(item), gender: 'boy' } } });
+      const input = await fixture.save();
+      await assert.rejects(selectedApi.saveStudentAvatar(teacher ? teacherRequest(input.data) : authenticated(input)),
+        error => error.details?.reason === 'AVATAR_GENDER_MISMATCH');
+      bucket.afterSave = null;
+      assert.equal(bucket.objects.size, 0);
+      assert.equal((await db.doc(teacher ? `teacher_avatars/${teacherUid}` : fixture.avatarPath).get()).exists, false);
+      assert.equal((await db.collection('semester_wis_ledger').get()).size, 0);
+      assert.equal((await get(fixture.accountPath)).balance, 1000);
+    }
   });
   await check('generation reset is idempotent, preserves receipts and money, and skips concurrent new avatars', async () => {
     await seed();

@@ -12,9 +12,13 @@ import RefreshButton from "../../components/common/RefreshButton";
 import {
   AVATAR_ITEMS,
   AVATAR_SLOTS,
+  AVATAR_ACCESSORY_GROUPS,
   defaultAvatarLook,
   applyAvatarCatalogSettings,
   avatarItemGender,
+  avatarAccessoryGroup,
+  canWearAvatarItem,
+  reconcileAvatarLook,
   ownsAvatarItem,
   restoreAvatarState,
   selectAvatarItem,
@@ -22,6 +26,7 @@ import {
   type AvatarLook,
   type AvatarSlot,
   type AvatarState,
+  type AvatarAccessoryGroup,
 } from "./catalog";
 import {
   avatarErrorMessage,
@@ -37,6 +42,7 @@ import AvatarStage from "./AvatarStage";
 import AvatarPlaceholder from "./AvatarPlaceholder";
 import AvatarShopItemCard from "./AvatarShopItemCard";
 import AvatarShopItemDetails from "./AvatarShopItemDetails";
+import AvatarEventSubmission from "./AvatarEventSubmission";
 import "./avatarStudio.css";
 
 export interface AvatarStudioAdapter {
@@ -70,12 +76,14 @@ export function AvatarStudio({
   active = true,
   mode = "wardrobe",
   preview = false,
+  studentAvatarEvent = false,
 }: {
   adapter: AvatarStudioAdapter;
   access?: "student" | "teacher";
   active?: boolean;
   mode?: "shop" | "wardrobe";
   preview?: boolean;
+  studentAvatarEvent?: boolean;
 }) {
   const allAvailable = access === "teacher";
   const isShop = mode === "shop";
@@ -88,12 +96,15 @@ export function AvatarStudio({
     revision: 0,
     prices: {},
   });
-  const [slot, setSlot] = useState<AvatarSlot>("top");
+  const [slot, setSlot] = useState<AvatarSlot>("hairStyle");
   const [filter, setFilter] = useState<"all" | "owned" | "premium" | "free">(
     "all",
   );
+  const [accessoryGroup, setAccessoryGroup] = useState<
+    AvatarAccessoryGroup | "all"
+  >("all");
   const [gender, setGender] = useState<"all" | "boy" | "girl" | "unisex">(
-    "all",
+    "girl",
   );
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -117,9 +128,9 @@ export function AvatarStudio({
   const busyRef = useRef(false);
   const loadedOnce = useRef(false);
   const load = useCallback(
-    async (options: { preserveDraft?: boolean } = {}) => {
+    async (options: { preserveDraft?: boolean; background?: boolean } = {}) => {
       const current = ++generation.current;
-      setLoading(true);
+      if (!options.background) setLoading(true);
       setError("");
       try {
         const data = await adapter.load();
@@ -127,7 +138,18 @@ export function AvatarStudio({
         const restored = restoreAvatarState(data.avatar);
         setSaved(restored);
         if (!options.preserveDraft || !loadedOnce.current) {
-          setLook(restored.look);
+          setLook(
+            reconcileAvatarLook(
+              restored.look,
+              AVATAR_ITEMS.map((item) =>
+                applyAvatarCatalogSettings(
+                  item,
+                  data.pricing || { revision: 0, prices: {} },
+                ),
+              ),
+            ),
+          );
+          setGender(restored.look.character);
           setCharacterChosen(
             preview ||
               Boolean(
@@ -140,11 +162,14 @@ export function AvatarStudio({
         setNeedsThumbnailRefresh(Boolean(restored.requiresThumbnailRefresh));
         setBalance(data.balance);
         setPricing(data.pricing || { revision: 0, prices: {} });
+        return restored;
       } catch (failure) {
         if (current === generation.current)
           setError(avatarErrorMessage(failure));
+        if (options.background) throw failure;
       } finally {
-        if (current === generation.current) setLoading(false);
+        if (current === generation.current && !options.background)
+          setLoading(false);
       }
     },
     [adapter, preview],
@@ -196,7 +221,7 @@ export function AvatarStudio({
   }, [loading]);
   useEffect(() => {
     setPage(1);
-  }, [slot, filter, gender, search, look.character, mode]);
+  }, [slot, filter, gender, search, accessoryGroup, look.character, mode]);
   const onReady = useCallback((controller: StageControls) => {
     stage.current = controller;
     setReady(true);
@@ -218,6 +243,9 @@ export function AvatarStudio({
     () => AVATAR_ITEMS.map((item) => applyAvatarCatalogSettings(item, pricing)),
     [pricing],
   );
+  useEffect(() => {
+    setLook((previous) => reconcileAvatarLook(previous, pricedItems));
+  }, [pricedItems]);
   const available = (item: AvatarItem) =>
     allAvailable || ownsAvatarItem(item, owned);
   const itemForCurrentLook = (key: AvatarSlot) =>
@@ -233,7 +261,12 @@ export function AvatarStudio({
       item.slot === slot &&
       item.characters.includes(look.character) &&
       (isShop || available(item)) &&
-      (gender === "all" || avatarItemGender(item) === gender) &&
+      (gender === "all" ||
+        avatarItemGender(item) === gender ||
+        (gender !== "unisex" && avatarItemGender(item) === "unisex")) &&
+      (slot !== "accessory" ||
+        accessoryGroup === "all" ||
+        avatarAccessoryGroup(item) === accessoryGroup) &&
       (!search.trim() ||
         `${item.label} ${item.description || ""}`
           .toLocaleLowerCase("ko-KR")
@@ -252,6 +285,10 @@ export function AvatarStudio({
   const missing = AVATAR_SLOTS.map(({ key }) => itemForCurrentLook(key)).filter(
     (item): item is AvatarItem => Boolean(item && !available(item)),
   );
+  const incompatible = AVATAR_SLOTS.some(({ key }) => {
+    const item = itemForCurrentLook(key);
+    return !item || !canWearAvatarItem(item, look.character);
+  });
   const dirty =
     saved &&
     characterChosen &&
@@ -259,9 +296,12 @@ export function AvatarStudio({
       JSON.stringify(saved.look) !== JSON.stringify(look));
   const choose = (item: AvatarItem) => {
     if (busyRef.current) return;
+    if (item.slot !== "character" && !canWearAvatarItem(item, look.character))
+      return;
     if (!isShop && !available(item)) return;
     if (item.slot !== "character" && !characterChosen) return;
     if (item.slot === "character" && !available(item)) setSlot("character");
+    if (item.slot === "character") setGender(item.value as "boy" | "girl");
     if (
       item.slot === "character" &&
       (!characterChosen || item.value !== look.character)
@@ -270,7 +310,7 @@ export function AvatarStudio({
       setReady(false);
       setCharacterChosen(true);
     }
-    setLook((previous) => selectAvatarItem(previous, item));
+    setLook((previous) => selectAvatarItem(previous, item, pricedItems));
   };
   const buy = async () => {
     if (
@@ -282,6 +322,11 @@ export function AvatarStudio({
       busyRef.current
     )
       return;
+    const currentItem = pricedItems.find((item) => item.id === purchase.id);
+    if (!currentItem || !canWearAvatarItem(currentItem, look.character)) {
+      setConfirmError("선택한 아바타에 맞는 아이템을 선택해 주세요.");
+      return;
+    }
     busyRef.current = true;
     setBusy("buy");
     setConfirmError("");
@@ -329,7 +374,8 @@ export function AvatarStudio({
       !saved ||
       !stage.current ||
       busyRef.current ||
-      missing.length
+      missing.length ||
+      incompatible
     )
       return;
     busyRef.current = true;
@@ -473,7 +519,8 @@ export function AvatarStudio({
               type="button"
               disabled={Boolean(busy)}
               onClick={() => {
-                setLook(saved.look);
+                setLook(reconcileAvatarLook(saved.look, pricedItems));
+                setGender(saved.look.character);
                 setCharacterChosen(
                   preview ||
                     Boolean(
@@ -497,6 +544,7 @@ export function AvatarStudio({
                   !ready ||
                   Boolean(busy) ||
                   missing.length > 0 ||
+                  incompatible ||
                   (!dirty &&
                     !needsThumbnailRefresh &&
                     Boolean(saved.thumbnailUrl))
@@ -507,6 +555,25 @@ export function AvatarStudio({
               </button>
             )}
           </div>
+          {studentAvatarEvent && !allAvailable && !isShop && !preview && (
+            <AvatarEventSubmission
+              avatar={saved}
+              refreshAvatar={() => load({ background: true })}
+              readyForSubmission={Boolean(
+                ready &&
+                !busy &&
+                !dirty &&
+                !needsThumbnailRefresh &&
+                saved.thumbnailUrl &&
+                !incompatible,
+              )}
+            />
+          )}
+          {incompatible && characterChosen && (
+            <p className="avatar-studio-error" role="alert">
+              선택한 아바타에 맞는 아이템을 선택해 주세요.
+            </p>
+          )}
           {!isShop && missing.length > 0 && (
             <p className="avatar-studio-pending" role="status">
               미보유 아이템 {missing.length}개 · 구매 후 저장할 수 있습니다.
@@ -610,6 +677,24 @@ export function AvatarStudio({
               </button>
             </form>
           </div>
+          {slot === "accessory" && (
+            <div
+              className="avatar-studio-filter avatar-studio-accessory-groups"
+              role="group"
+              aria-label="장식 종류"
+            >
+              {AVATAR_ACCESSORY_GROUPS.map(({ key, label }) => (
+                <button
+                  type="button"
+                  key={key}
+                  aria-pressed={accessoryGroup === key}
+                  onClick={() => setAccessoryGroup(key)}
+                >
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="avatar-studio-browse">
             {!allAvailable && isShop && (
               <div
@@ -674,7 +759,8 @@ export function AvatarStudio({
                     preview ||
                     !characterChosen ||
                     Boolean(busy) ||
-                    balance === null
+                    balance === null ||
+                    !canWearAvatarItem(selected, look.character)
                   }
                   onClick={() => {
                     setConfirmError("");
@@ -704,7 +790,11 @@ export function AvatarStudio({
                 selected={selected?.id === item.id}
                 owned={available(item)}
                 hidePrice={allAvailable || !isShop}
-                disabled={!characterChosen || Boolean(busy)}
+                disabled={
+                  !characterChosen ||
+                  Boolean(busy) ||
+                  !canWearAvatarItem(item, look.character)
+                }
                 onSelect={() => choose(item)}
               />
             ))}
@@ -878,6 +968,7 @@ export default function StudentAvatarStudio({
       key={`${user?.uid}:${authGeneration}:${config?.year}:${config?.semester}:${mode}`}
       adapter={adapter}
       mode={mode}
+      studentAvatarEvent={mode === "wardrobe"}
     />
   );
 }
