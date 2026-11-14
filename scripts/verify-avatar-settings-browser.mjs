@@ -261,10 +261,13 @@ try {
     );
     await page.goto(origin);
     await page.locator(".avatar-pricing-item").first().waitFor();
+    const villageToggle = page.locator('.wis-village-navigation .teacher-settings-menu-toggle');
+    if (await villageToggle.isVisible()) await villageToggle.click();
     await page
       .getByRole("navigation", { name: "위스 마을" })
       .getByRole("link", { name: "아바타 상점", exact: true })
       .waitFor();
+    if (await villageToggle.isVisible()) await villageToggle.press('Escape');
     const before = await page.evaluate(() => window.avatarPricingQa.reads);
     const itemCard = (id) => page.locator(`[data-item-id="${id}"]`);
     const knit = itemCard("minimi-top-knit-cream"),

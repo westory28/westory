@@ -1,77 +1,48 @@
-/* Explicit teacher village navigation exception (2026-11-15). */
-.wis-village-workspace {
-  display: grid;
-  grid-template-columns: 128px minmax(0, 1fr);
-  align-items: start;
-  gap: 16px;
-  min-width: 0;
-}
-
-.wis-village-content { min-width: 0; }
-
-.wis-village-rail {
-  display: flex;
-  flex-direction: column;
-  align-self: start;
-  gap: 4px;
-  width: 128px;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-right: 1px solid var(--ws-border, #e5e7eb);
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.wis-village-rail > a {
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  min-height: 48px;
-  padding: 8px 6px;
-  border: 0;
-  border-left: 3px solid transparent;
-  border-radius: 0;
-  background: transparent;
-  color: var(--ws-text-muted, #6b7280);
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 1.5;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.wis-village-rail > a > svg { flex: 0 0 20px; }
-.wis-village-rail > a:hover { color: var(--ws-primary, #2563eb); }
-.wis-village-rail > a[aria-current="page"] {
-  border-left-color: var(--ws-primary, #2563eb);
-  color: var(--ws-primary, #2563eb);
-  font-weight: 700;
-}
-.wis-village-rail > a:focus-visible {
-  outline: 2px solid var(--ws-ring, #3b82f6);
-  outline-offset: -2px;
-}
-.wis-village-rail__short { display: none; }
-
-/* The route already supplies the page gutters; avoid nesting a second page. */
+/* Assessment-style full-height navigation; scoped to the teacher village. */
+.wis-village-menu { display: flex; flex-direction: column; gap: 4px; }
+.wis-village-navigation .teacher-settings-heading { padding: 24px 16px; }
+.wis-village-navigation .teacher-settings-sections { padding-inline: 8px; }
+.wis-village-menu > .teacher-settings-section { gap: 8px; min-height: 48px; padding: 10px; text-decoration: none; }
+.wis-village-menu > .teacher-settings-section::before { inset: 2px 0; }
+.wis-village-menu > .teacher-settings-section.is-active::before { border: 1px solid var(--ws-border-blue, #dbeafe); }
+.wis-village-menu > .teacher-settings-section > svg { flex: 0 0 20px; }
+.wis-village-content { min-width: 0; padding: 24px 32px; }
 .wis-village-content > .avatar-pricing.ws-page { padding: 0; }
-
-@media (max-width: 767px) {
-  .wis-village-workspace { grid-template-columns: 64px minmax(0, 1fr); gap: 8px; }
-  .wis-village-rail { width: 64px; }
-  .wis-village-rail > a {
-    flex-direction: column;
-    justify-content: center;
-    gap: 2px;
-    min-height: 60px;
-    padding: 6px 2px;
-    font-size: 12px;
+.wis-village-collapse { display: none; }
+@media (min-width: 768px) {
+  .teacher-sub-workspace.wis-village-workspace,
+  .teacher-layout .teacher-sub-workspace.wis-village-workspace {
+    --teacher-sub-navigation-width: 180px;
+    grid-template-columns: var(--teacher-sub-navigation-width) minmax(0, 1fr);
   }
-  .wis-village-rail__full { display: none; }
-  .wis-village-rail__short { display: inline; }
+  .wis-village-workspace > .wis-village-navigation { width: var(--teacher-sub-navigation-width); }
+  .wis-village-navigation > .teacher-settings-navigation-inner {
+    display: flex; flex-direction: column; height: calc(100dvh - var(--teacher-account-height, 48px));
+    padding-bottom: 8px; overflow: hidden;
+  }
+  .wis-village-navigation .teacher-settings-sections { flex: 1; min-height: 0; }
+  .wis-village-menu { min-height: 0; overflow-y: auto; }
+  .wis-village-collapse {
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 44px; height: 44px; margin: auto 0 0 auto;
+    border: 1px solid var(--ws-border, #e5e7eb); border-radius: 8px;
+    background: var(--ws-surface, #fff); color: var(--ws-text-muted, #6b7280);
+  }
+  .wis-village-collapse:hover { background: var(--ws-primary-soft, #eff6ff); color: var(--ws-primary, #2563eb); }
+  .wis-village-collapse:focus-visible { outline: 2px solid var(--ws-ring, #3b82f6); outline-offset: -2px; }
+  .wis-village-collapse svg { width: 20px; height: 20px; transform: rotate(90deg); }
+  .teacher-sub-workspace.wis-village-workspace.is-village-collapsed,
+  .teacher-layout .teacher-sub-workspace.wis-village-workspace.is-village-collapsed { --teacher-sub-navigation-width: 56px; }
+  .is-village-collapsed > .wis-village-navigation .teacher-settings-heading,
+  .is-village-collapsed .wis-village-menu { display: none; }
+  .is-village-collapsed > .wis-village-navigation .teacher-settings-sections { padding-inline: 6px; }
+  .is-village-collapsed .wis-village-collapse svg { transform: rotate(-90deg); }
+}
+@media (min-width: 1024px) {
+  .wis-village-workspace > .wis-village-navigation > .teacher-settings-navigation-inner { height: 100dvh; }
+}
+@media (max-width: 1279px) { .wis-village-content { padding: 24px; } }
+@media (max-width: 767px) {
+  .wis-village-content { padding: 16px; }
+  .wis-village-navigation .teacher-settings-heading { padding: 16px 16px 8px; }
 }

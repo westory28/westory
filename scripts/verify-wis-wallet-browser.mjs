@@ -695,7 +695,8 @@ try {
     await tabs.waitFor();
     assert.deepEqual(await tabs.getByRole("link").allTextContents(), ["상품 관리", "구매 요청 관리"]);
     assert.equal(await tabs.getByRole("link", { name: "상품 관리", exact: true }).getAttribute("aria-current"), "page");
-    const village = shop.getByRole("navigation", { name: "위스 마을", exact: true });
+    if (width < 768) await shop.locator('.wis-village-navigation .teacher-settings-menu-toggle').click();
+    const village = shop.getByRole("navigation", { name: "위스 마을 메뉴", exact: true });
     assert.equal(await village.getByRole("link", { name: "위스 상점", exact: true }).getAttribute("aria-current"), "page");
     // The synthetic teacher lacks avatar settings privileges; the common nav
     // still exposes the released shop and teacher-only WsPI.

@@ -14,18 +14,14 @@ export default function TeacherAvatarShopPage() {
   const { userData, currentUser } = useAuth();
   const allowed = canManageSettings(userData, currentUser?.email);
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
-      <main className="ws-page flex-1">
-        <TeacherWisVillage active="avatar">
-          {allowed ? (
-            <React.Suspense fallback={<InlineLoading />}>
-              <SettingsAvatarPricing />
-            </React.Suspense>
-          ) : (
-            <p role="alert">관리자 계정에서 사용할 수 있습니다.</p>
-          )}
-        </TeacherWisVillage>
-      </main>
-    </div>
+    <TeacherWisVillage active="avatar">
+      {allowed ? (
+        <React.Suspense fallback={<InlineLoading />}>
+          <SettingsAvatarPricing />
+        </React.Suspense>
+      ) : (
+        <p role="alert">관리자 계정에서 사용할 수 있습니다.</p>
+      )}
+    </TeacherWisVillage>
   );
 }

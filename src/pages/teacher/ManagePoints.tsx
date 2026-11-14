@@ -268,6 +268,7 @@ const ManagePoints: React.FC = () => {
     Object.prototype.hasOwnProperty.call(TEACHER_POINT_TAB_LABELS, requestedTab)
       ? (requestedTab as TeacherPointTab)
       : "overview";
+  const isVillage = ["products", "requests", "stocks"].includes(activeTab);
   const [pointLoading, setLoading] = useState(true);
   const [loadedScope, setLoadedScope] = useState<object | null>(null);
   const [loadedView, setLoadedView] = useState("");
@@ -2173,20 +2174,20 @@ const ManagePoints: React.FC = () => {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
+    <div
+      className={
+        isVillage
+          ? "flex min-w-0 flex-col bg-gray-50"
+          : "flex min-h-screen flex-col bg-gray-50"
+      }
+    >
       <main
         className={
-          activeTab === "policy" || activeTab === "ranks"
+          isVillage || activeTab === "policy" || activeTab === "ranks"
             ? "flex w-full flex-1 flex-col"
             : "ws-page flex flex-1 flex-col"
         }
       >
-        {!canManage && activeTab !== "policy" && activeTab !== "ranks" && (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
-            읽기 전용 권한으로 접속 중입니다.
-          </div>
-        )}
-
         <TeacherWisVillage
           active={
             activeTab === "stocks"
@@ -2196,6 +2197,11 @@ const ManagePoints: React.FC = () => {
                 : undefined
           }
         >
+          {!canManage && activeTab !== "policy" && activeTab !== "ranks" && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
+              읽기 전용 권한으로 접속 중입니다.
+            </div>
+          )}
           {(activeTab === "products" || activeTab === "requests") && (
             <PortalSubNavigation
               title="위스 상점"

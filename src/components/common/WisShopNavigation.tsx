@@ -36,26 +36,24 @@ export default function WisShopNavigation({
   portal,
   active,
   variant = "tabs",
+  onNavigate,
 }: {
   portal: "student" | "teacher";
   active: "products" | "avatar" | "stocks";
-  variant?: "tabs" | "rail";
+  variant?: "tabs" | "items";
+  onNavigate?: () => void;
 }) {
   const { currentUser, userData, config, menuConfig } = useAuth();
-  // The compact side rail is a teacher-only village layout exception.
-  const rail = portal === "teacher" && variant === "rail";
-  const label = (
-    kind: "products" | "avatar" | "stocks",
-    full: string,
-    short: string,
-  ) =>
-    rail ? (
+  const items = portal === "teacher" && variant === "items";
+  const itemClass = (key: typeof active) =>
+    items
+      ? `teacher-settings-section${active === key ? " is-active" : ""}`
+      : undefined;
+  const label = (kind: "products" | "avatar" | "stocks", full: string) =>
+    items ? (
       <>
         <VillageIcon kind={kind} />
-        <span className="wis-village-rail__full">{full}</span>
-        <span className="wis-village-rail__short" aria-hidden="true">
-          {short}
-        </span>
+        <span>{full}</span>
       </>
     ) : (
       full
@@ -73,11 +71,8 @@ export default function WisShopNavigation({
           config,
           menuConfig,
         ).allowed;
-  return (
-    <nav
-      className={rail ? "wis-village-rail" : "ws-page-tabs mb-4"}
-      aria-label="위스 마을"
-    >
+  const links = (
+    <>
       <Link
         to={
           portal === "student"
@@ -85,7 +80,8 @@ export default function WisShopNavigation({
             : "/teacher/points?tab=products"
         }
         aria-current={active === "products" ? "page" : undefined}
-        aria-label={rail ? "위스 상점" : undefined}
+        className={itemClass("products")}
+        onClick={onNavigate}
       >
         {portal === "student"
           ? getStudentMenuLabel(
@@ -93,7 +89,7 @@ export default function WisShopNavigation({
               "/student/points?tab=shop",
               "위스 상점",
             )
-          : label("products", "위스 상점", "상점")}
+          : label("products", "위스 상점")}
       </Link>
       {avatarAllowed && (
         <Link
@@ -103,7 +99,8 @@ export default function WisShopNavigation({
               : TEACHER_AVATAR_SHOP_URL
           }
           aria-current={active === "avatar" ? "page" : undefined}
-          aria-label={rail ? "아바타 상점" : undefined}
+          className={itemClass("avatar")}
+          onClick={onNavigate}
         >
           {portal === "student"
             ? getStudentMenuLabel(
@@ -111,18 +108,26 @@ export default function WisShopNavigation({
                 STUDENT_AVATAR_SHOP_URL,
                 "아바타 상점",
               )
-            : label("avatar", "아바타 상점", "아바타")}
+            : label("avatar", "아바타 상점")}
         </Link>
       )}
       {portal === "teacher" && canReadPoints(userData, currentUser?.email) && (
         <Link
           to="/teacher/points?tab=stocks"
           aria-current={active === "stocks" ? "page" : undefined}
-          aria-label={rail ? "위스피(WsPI)" : undefined}
+          className={itemClass("stocks")}
+          onClick={onNavigate}
         >
-          {label("stocks", "위스피(WsPI)", "위스피")}
+          {label("stocks", "위스피(WsPI)")}
         </Link>
       )}
+    </>
+  );
+  return items ? (
+    links
+  ) : (
+    <nav className="ws-page-tabs mb-4" aria-label="위스 마을">
+      {links}
     </nav>
   );
 }
