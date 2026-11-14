@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import useNoticeCarouselInteraction from "../../../components/common/useNoticeCarouselInteraction";
 import { db } from "../../../lib/firebase";
+import { getNoticeCategoryLabel as getCategoryLabel } from "../../../constants/noticeCategories";
 import { useAuth } from "../../../contexts/AuthContext";
 import { getYearSemester } from "../../../lib/semesterScope";
 import { getNoticeDestination } from "../../../lib/noticeDestination";
@@ -13,15 +14,6 @@ import {
 } from "../../../lib/visibleSchedule";
 
 type Notice = VisibleNotice;
-
-const getCategoryLabel = (category?: string) => {
-  if (category === "event") return "학교 행사";
-  if (category === "exam") return "정기 시험";
-  if (category === "performance") return "수행평가";
-  if (category === "prep") return "준비";
-  if (category === "dday") return "D-Day";
-  return "공지";
-};
 
 const NoticeBoard: React.FC = () => {
   const { config, userData } = useAuth();

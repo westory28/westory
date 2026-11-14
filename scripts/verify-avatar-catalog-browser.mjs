@@ -172,7 +172,22 @@ try {
   assert.equal(await button("전체 보기").count(), 0);
   assert.equal(await button("얼굴 보기").count(), 0);
   await itemButton("크림 니트").click();
+  assert.equal(
+    await page.locator('.avatar-studio-selected, .avatar-studio .avatar-shop-item-details').count(),
+    0,
+    'The item grid has no repeated selection details',
+  );
+  assert.equal(
+    await page.locator('.avatar-studio-preview .avatar-studio-purchase').count(),
+    1,
+    'Purchase remains with the worn avatar preview',
+  );
   await button("160 위스로 구매").click();
+  assert.equal(
+    await page.locator('.avatar-purchase-dialog .avatar-shop-item-details strong').textContent(),
+    '크림 니트',
+    'Purchase dialog identifies the selected item',
+  );
   await button("구매하기").click();
   await page.waitForFunction(() => window.avatarQa.purchases.length === 1);
   assert.equal(
@@ -249,6 +264,9 @@ try {
         await itemButton(item.label).click();
         await ready();
         await itemButton(item.label).locator("img").waitFor();
+        await itemButton(item.label).locator("img").evaluate(async (image) => {
+          if (!image.complete) await image.decode();
+        });
         assert(
           await itemButton(item.label)
             .locator("img")
@@ -311,9 +329,8 @@ try {
   await ready();
   await button("상의").click();
   await itemButton("별빛 여행 니트").click();
-  await page
-    .getByText("작은 별무늬와 부드러운 소매의 니트입니다.", { exact: true })
-    .waitFor();
+  assert.equal(await itemButton("별빛 여행 니트").getAttribute("aria-pressed"), "true");
+  assert.equal(await page.locator('.avatar-shop-item-details').count(), 0);
   const catalogReads = await page.evaluate(() => window.avatarQa.loadCalls);
   await page
     .getByRole("group", { name: "아이템 성별", exact: true })

@@ -330,9 +330,10 @@
       "sourceFile": "schoolBanners.js",
       "file": "schoolBanners.js",
       "originalSha256": "04d17758ee28b9524e774d291e8dea54c906a8aa2d8d23c5306271b28416e3bb",
-      "sha256": "ad19b96fd71297f30e1f3cda424080e3ae39ad730fc32bf8a5c53573b101f1d9",
+      "sha256": "8970e5c99bef7874f7bc82b40a188f6592092129833bfa4a2738ec436963d21a",
       "changes": [
-        "2026-11-10: Reject non-raster upload bytes before invoking sharp/native loaders; preserve existing authority, storage lifecycle and raster formats."
+        "2026-11-10: Reject non-raster upload bytes before invoking sharp/native loaders; preserve existing authority, storage lifecycle and raster formats.",
+        "2026-11-14: Accept special_event notice category separately from the existing school event category; explicitly retain registerSchoolBanner's deployed maximum of 20 instances."
       ]
     },
     {

@@ -121,10 +121,7 @@ export function drawSoftHair(
         [25, 9],
         [31, 7],
         [36, 6],
-        [37, 3],
-        [41, 2],
-        [45, 5],
-        [43, 7],
+        [43, 6],
         [50, 8],
         [56, 11],
         [60, 16],
@@ -335,8 +332,7 @@ export function drawSoftHair(
     line([39, 16], [41, 17], glow);
     line([46, 17], [48, 18], shine);
     line([53, 19], [55, 21], glow);
-    line([37, 5], [41, 4], middle);
-    rect(39, 3, 2, 1, glow);
+    line([37, 7], [42, 7], middle);
     line([28, 27], [29, 29], middle);
     rect(33, 28, 1, 2, glow);
     rect(40, 26, 1, 2, middle);

@@ -91,11 +91,20 @@ for(const character of V.character)for(const hairTone of V.hairTone)for(const po
 }
 let schoolUniformChecks=0;
 let softHairChecks=0;
-for(const hairStyle of ['mm-ash-cloud','mm-blossom-bob'])for(const character of V.character)for(const hairTone of V.hairTone)for(const pose of V.pose){
+for(const hairStyle of ['mm-ash-cloud','mm-blossom-bob','mm-royal-ash','mm-royal-choco-bob'])for(const character of V.character)for(const hairTone of V.hairTone)for(const pose of V.pose){
  const look={...defaultAvatarLook(character),hairStyle,hairTone,pose};
  const light=pixels({...look,skinTone:'mm-ivory'}).slice(),dark=pixels({...look,skinTone:'mm-deep'});
  for(let y=13;y<=23;y++)for(let x=27;x<=52;x++){const p=(y*W+x)*4;assert(light[p+3]===255,'Soft hair crown gap');assert(light.slice(p,p+4).every((v,i)=>v===dark[p+i]),'Skin leaks through soft hair crown');}
  softHairChecks++;
+}
+let roundedCrownChecks=0;
+for(const hairStyle of ['mm-ash-cloud','mm-royal-ash','mm-royal-choco-bob'])for(const character of V.character)for(const hairTone of V.hairTone)for(const pose of V.pose)for(const skinTone of V.skinTone){
+ const look={...defaultAvatarLook(character),hairStyle,hairTone,pose,skinTone};
+ drawMinimi(ctx,look,{itemOnly:'hairStyle'});const data=ctx.getImageData(0,0,W,H).data;
+ const crownTop=hairStyle==='mm-royal-choco-bob'?8:6;
+ for(let y=0;y<crownTop;y++)for(let x=0;x<W;x++)assert(data[(y*W+x)*4+3]===0,'Unexpected tuft above rounded crown: '+JSON.stringify(look));
+ if(hairStyle==='mm-ash-cloud')assert(Array.from({length:8},(_,i)=>data[(6*W+36+i)*4+3]).every(alpha=>alpha===255),'Ash-cloud crown must be a continuous rounded cap');
+ roundedCrownChecks++;
 }
 const colorAt=(data,x,y)=>Array.from(data.slice((y*W+x)*4,(y*W+x)*4+3));
 for(const character of V.character)for(const pose of V.pose){
@@ -146,6 +155,17 @@ for(const [character,hairStyle,accessories] of [['boy','mm-ash-cloud',['mm-cap',
 const softCanvas=document.createElement('canvas');softCanvas.width=6*240;softCanvas.height=Math.ceil(softLooks.length/6)*360;const sc=softCanvas.getContext('2d');sc.fillStyle='#f0f4f8';sc.fillRect(0,0,softCanvas.width,softCanvas.height);sc.imageSmoothingEnabled=false;
 softLooks.forEach((look,i)=>{drawMinimi(ctx,look);const x=i%6*240,y=Math.floor(i/6)*360;sc.drawImage(sprite,x,y,240,336);sc.fillStyle='#334155';sc.font='11px sans-serif';sc.fillText(look.hairStyle.replace('mm-','')+' / '+(look.accessory==='mm-none'?look.hairTone.replace('mm-','')+' / '+look.pose.replace('mm-',''):look.accessory.replace('mm-','')),x+8,y+352)});
 const softHairSheet=softCanvas.toDataURL('image/png');
+const royalLooks=[];
+for(const [character,hairStyle,accessory] of [['boy','mm-royal-ash','mm-none'],['girl','mm-royal-choco-bob','mm-none'],['girl','mm-royal-choco-bob','mm-cherry-ribbon'],['boy','mm-ash-cloud','mm-none']])for(const pose of V.pose)
+ royalLooks.push({...defaultAvatarLook(character),hairStyle,accessory,pose});
+for(const [character,hairStyle,accessories] of [['boy','mm-royal-ash',['mm-cap','mm-hanbok-gat','mm-hanbok-baekrip']],['girl','mm-royal-choco-bob',['mm-cap','mm-hanbok-jokduri','mm-hanbok-satgat']]])for(const accessory of accessories)
+ royalLooks.push({...defaultAvatarLook(character),hairStyle,accessory,pose:'mm-wave'});
+const royalCanvas=document.createElement('canvas');royalCanvas.width=6*240;royalCanvas.height=Math.ceil(royalLooks.length/6)*360;const rc=royalCanvas.getContext('2d');rc.fillStyle='#f0f4f8';rc.fillRect(0,0,royalCanvas.width,royalCanvas.height);rc.imageSmoothingEnabled=false;
+royalLooks.forEach((look,i)=>{drawMinimi(ctx,look);const x=i%6*240,y=Math.floor(i/6)*360;rc.drawImage(sprite,x,y,240,336);rc.fillStyle='#334155';rc.font='10px sans-serif';rc.fillText(look.hairStyle.replace('mm-','')+' / '+look.accessory.replace('mm-','')+' / '+look.pose.replace('mm-',''),x+8,y+352)});
+const royalSheet=royalCanvas.toDataURL('image/png');
+const royalHeads=document.createElement('canvas');royalHeads.width=4*280;royalHeads.height=288;const rh=royalHeads.getContext('2d');rh.fillStyle='#f0f4f8';rh.fillRect(0,0,royalHeads.width,royalHeads.height);rh.imageSmoothingEnabled=false;
+for(const [i,look] of [royalLooks[9],royalLooks[0],royalLooks[3],royalLooks[6]].entries()){drawMinimi(ctx,look);rh.drawImage(sprite,8,0,64,53,i*280+12,8,256,212);rh.drawImage(sprite,8,0,64,53,i*280+108,226,64,53);rh.fillStyle='#334155';rh.font='10px sans-serif';rh.fillText(look.hairStyle.replace('mm-','')+(look.accessory==='mm-none'?'':' + flower'),i*280+8,284)}
+const royalHeadSheet=royalHeads.toDataURL('image/png');
 const stage=await createAvatarStage(document.getElementById('stage'),defaultAvatarLook());
 await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));const before=stage.stats.renderedFrames;await new Promise(resolve=>setTimeout(resolve,120));assert(stage.stats.renderedFrames===before,'Renderer runs when idle');
 const capture=stage.capture();stage.focusFace();assert(stage.capture()===capture,'Camera framing contaminates saved image');stage.resetView();
@@ -154,7 +174,7 @@ assert(!stage.setLook({hairStyle:'old-hair'}).applied,'Unknown values accepted')
 assert(stage.setLook({pose:'mm-wave'}).applied,'Valid pose rejected');assert(stage.capture()!==capture,'Pose did not update capture');
 const abort=new AbortController();abort.abort();let aborted=false;try{await stage.prepareLook(defaultAvatarLook(),{signal:abort.signal})}catch(e){aborted=e.name==='AbortError'}assert(aborted,'Cancelled preparation applied');
 stage.dispose();assert(!document.querySelector('#stage canvas'),'Canvas leaked on dispose');assert(!stage.setPose('mm-cheer').applied,'Disposed stage accepts changes');
-return {exhaustive:${exhaustive},combinations,headwearChecks,isolatedChecks,skinChecks,footwearChecks,bowlFringeChecks,softHairChecks,schoolUniformChecks,distinct,minPixels,maxPixels,poseSheet,hanbokSheet,overview,polishSheet,softHairSheet,lifecycle:true};
+return {exhaustive:${exhaustive},combinations,headwearChecks,isolatedChecks,skinChecks,footwearChecks,bowlFringeChecks,softHairChecks,roundedCrownChecks,schoolUniformChecks,distinct,minPixels,maxPixels,poseSheet,hanbokSheet,overview,polishSheet,softHairSheet,royalSheet,royalHeadSheet,lifecycle:true};
 };`,
     loader: "ts",
     resolveDir: root,
@@ -217,6 +237,16 @@ try {
     Buffer.from(result.softHairSheet.split(",")[1], "base64"),
   );
   delete result.softHairSheet;
+  await fs.writeFile(
+    path.join(output, "royal-review.png"),
+    Buffer.from(result.royalSheet.split(",")[1], "base64"),
+  );
+  delete result.royalSheet;
+  await fs.writeFile(
+    path.join(output, "royal-heads.png"),
+    Buffer.from(result.royalHeadSheet.split(",")[1], "base64"),
+  );
+  delete result.royalHeadSheet;
   await fs.writeFile(
     path.join(
       output,

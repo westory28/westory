@@ -3,6 +3,7 @@ import { doc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
+import { getNoticeCategoryLabel as getCategoryLabel } from "../../../constants/noticeCategories";
 
 interface NoticeOrderItem {
   id: string;
@@ -23,15 +24,6 @@ interface NoticeOrderModalProps {
   onBusyChange?: (busy: boolean) => void;
   onDirtyChange?: (dirty: boolean) => void;
 }
-
-const getCategoryLabel = (category?: string) => {
-  if (category === "event") return "학교 행사";
-  if (category === "exam") return "정기 시험";
-  if (category === "performance") return "수행평가";
-  if (category === "prep") return "준비";
-  if (category === "dday") return "D-Day";
-  return "공지";
-};
 
 const NoticeOrderModal: React.FC<NoticeOrderModalProps> = ({
   isOpen,

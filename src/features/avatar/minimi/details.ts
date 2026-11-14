@@ -1,6 +1,7 @@
 import type { PixelPalette, TopCut } from "./wardrobe";
 import { drawBowlHair } from "./bowlHair";
 import { drawSoftHair } from "./softHair";
+import { drawRoyalHair } from "./royalHair";
 type Point = readonly [number, number];
 export type PixelPen = {
   rect: (
@@ -24,6 +25,10 @@ export function drawHairDetails(
   decoration = true,
 ) {
   const { rect, line, poly } = p;
+  if (style === "mm-royal-ash" || style === "mm-royal-choco-bob") {
+    drawRoyalHair(p, style, hair, front);
+    return;
+  }
   if (style === "mm-ash-cloud" || style === "mm-blossom-bob") {
     drawSoftHair(p, style, hair, front, decoration);
     return;

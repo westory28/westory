@@ -1603,6 +1603,49 @@
       ],
       "gender": "girl",
       "description": "안쪽으로 둥글게 말린 단발에 작은 꽃리본을 달았습니다."
+    },
+    {
+      "id": "minimi-hairStyle-royal-ash",
+      "slot": "hairStyle",
+      "value": "mm-royal-ash",
+      "label": "로열 애쉬 헤어",
+      "price": 500,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "둥글게 겹친 애쉬빛 앞머리에 넓고 부드러운 윤기를 더한 헤어입니다."
+    },
+    {
+      "id": "minimi-hairStyle-royal-choco-bob",
+      "slot": "hairStyle",
+      "value": "mm-royal-choco-bob",
+      "label": "로열 초코 단발",
+      "price": 500,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "진한 초코빛 앞머리와 안쪽으로 둥글게 감기는 C컬 단발입니다."
+    },
+    {
+      "id": "minimi-accessory-cherry-ribbon",
+      "slot": "accessory",
+      "value": "mm-cherry-ribbon",
+      "label": "벚꽃 리본핀",
+      "price": 500,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "accessoryGroup": "accessory",
+      "description": "노란 꽃술의 분홍 벚꽃 아래로 긴 리본이 드리워진 머리핀입니다."
     }
   ]
 }

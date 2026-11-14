@@ -51,6 +51,7 @@ const normalizeMetadata = (data) => {
       if (
         ![
           "event",
+          "special_event",
           "exam",
           "performance",
           "prep",
@@ -808,6 +809,7 @@ exports.registerSchoolBanner = onCall(
   {
     region: "asia-northeast3",
     enforceAppCheck: true,
+    maxInstances: 20,
     timeoutSeconds: 120,
     memory: "512MiB",
   },

@@ -6,15 +6,16 @@
   "format": "lossless-webp",
   "sources": {
     "scripts/render-avatar-item-previews.mjs": "21824d36525ab7d768cbffcf376b344c7f4c7614313d71010615812afb4d3ff5",
-    "functions/avatarCatalog.json": "3b8c7e787481b3d69bca846784ebe55a9a5e0f2ee845932e34dea1cd1aea3b77",
+    "functions/avatarCatalog.json": "7e127ccdfb6b2aa2e2c0d61f53c9df12ea41c71f1c1c6affe3a8219c6481292f",
     "src/features/avatar/catalog.ts": "38a42452afcba47a5b0361a2109800d20c256fab2edcec513fe869bd89937710",
     "src/features/avatar/minimi/bowlHair.ts": "d94aa59ddeb07cee0a6ece2cde6e28192edfae4aab4fd37fbb1f328580a6c9ad",
-    "src/features/avatar/minimi/details.ts": "f44c2dadba1c474f3a827334acd5afbc0bc6258bdd99c9a2ed85e0bcb64f2906",
-    "src/features/avatar/minimi/draw.ts": "f5542796b6d10dc02cb19cd7151eebc7ba0e9a89f05f5b8d46d81fb9aeeba4c4",
+    "src/features/avatar/minimi/details.ts": "c22afd163a170ad1a8be4f05fb680bb10505a3f9cb0f190573fca490aba6bc39",
+    "src/features/avatar/minimi/draw.ts": "4ceba0cb5963eb010860b924269bfce4053b2186801c6d6cfe4d733a997e68db",
     "src/features/avatar/minimi/engine.ts": "9967b104d4ae495018c0dfa8a6b8e88d6af9cc7c5f70d005aff5e694c3d3aff1",
     "src/features/avatar/minimi/hanbok.ts": "70facfef7ef3892ccbda9aa91a5d1133ea5a467c47d2a2ecad05c620dbb34b94",
-    "src/features/avatar/minimi/softHair.ts": "338cfc0973cf61179ee0e4d3776b768e281ebee82a0eeb5ec4d3f60a84a65b13",
-    "src/features/avatar/minimi/wardrobe.ts": "83ff85be7ddefe35bb5ffee004b43d75c312ca3b85bca039af53f1a42e2f2468"
+    "src/features/avatar/minimi/royalHair.ts": "3cb10e9b1c38dcd684bb20a3234eff28d248c7b59f943931092f03bba1132d5c",
+    "src/features/avatar/minimi/softHair.ts": "d6367cc25fcd0e14b2365a6ce31e88df095f483451bdf4349ef4f8b11f0bf382",
+    "src/features/avatar/minimi/wardrobe.ts": "bc5007b54be9b05dd739001f5050914c508c359105cb9a9fc333b20c08d6f239"
   },
   "items": [
     {
@@ -819,8 +820,8 @@
       "id": "minimi-hairStyle-ash-cloud",
       "character": "girl",
       "file": "girl/hairStyle-mm-ash-cloud.webp",
-      "bytes": 798,
-      "sha256": "2b7c54b34faa821a344056e45d1e445068cb37d6673ecbb256d595789c686130"
+      "bytes": 770,
+      "sha256": "73a3d7254eff1690f401b32c561603684954543ba4329778bbdf71d3f458957a"
     },
     {
       "id": "minimi-hairStyle-blossom-bob",
@@ -828,6 +829,27 @@
       "file": "girl/hairStyle-mm-blossom-bob.webp",
       "bytes": 908,
       "sha256": "16658d0728fecf85fef075f8f9013cfc55312d09ea609c91cf551e23f8655f7f"
+    },
+    {
+      "id": "minimi-hairStyle-royal-ash",
+      "character": "girl",
+      "file": "girl/hairStyle-mm-royal-ash.webp",
+      "bytes": 814,
+      "sha256": "ab8df54cccda8e9265a9749458257e15d0d624bf8dfc2cddacac7e41ea56872a"
+    },
+    {
+      "id": "minimi-hairStyle-royal-choco-bob",
+      "character": "girl",
+      "file": "girl/hairStyle-mm-royal-choco-bob.webp",
+      "bytes": 828,
+      "sha256": "bbaa9b050caac0d17150c1d17c8849b975e0a9b0c3223c756afbf8dc64c2ba62"
+    },
+    {
+      "id": "minimi-accessory-cherry-ribbon",
+      "character": "girl",
+      "file": "girl/accessory-mm-cherry-ribbon.webp",
+      "bytes": 410,
+      "sha256": "bd4508d64ad2d8142f07b91dfb45645de9c2802ea41090db86a79b0005929719"
     },
     {
       "id": "minimi-character-boy",
@@ -1624,8 +1646,8 @@
       "id": "minimi-hairStyle-ash-cloud",
       "character": "boy",
       "file": "boy/hairStyle-mm-ash-cloud.webp",
-      "bytes": 804,
-      "sha256": "f9d7542944b500fd5a12939276416e493543160e62b07ad7b5302cf33de484bc"
+      "bytes": 774,
+      "sha256": "053f99f41bd8575736f8b85616ab4544c2fe7874ee83b7470b6298fbb6f4a475"
     },
     {
       "id": "minimi-hairStyle-blossom-bob",
@@ -1633,6 +1655,27 @@
       "file": "boy/hairStyle-mm-blossom-bob.webp",
       "bytes": 908,
       "sha256": "53e97152c4eacb460daa16c95a76ffd90040e5010846d4af552d4499c2d25c2c"
+    },
+    {
+      "id": "minimi-hairStyle-royal-ash",
+      "character": "boy",
+      "file": "boy/hairStyle-mm-royal-ash.webp",
+      "bytes": 816,
+      "sha256": "a49fb42cae63218dbfe6692260449aa5fb2c067d0db02df0df9764fb7e379cb8"
+    },
+    {
+      "id": "minimi-hairStyle-royal-choco-bob",
+      "character": "boy",
+      "file": "boy/hairStyle-mm-royal-choco-bob.webp",
+      "bytes": 830,
+      "sha256": "f8778be7548dec8b7a692e19dbb8c9e41657bc2441c263e490bf5a70c1c49104"
+    },
+    {
+      "id": "minimi-accessory-cherry-ribbon",
+      "character": "boy",
+      "file": "boy/accessory-mm-cherry-ribbon.webp",
+      "bytes": 410,
+      "sha256": "bd4508d64ad2d8142f07b91dfb45645de9c2802ea41090db86a79b0005929719"
     }
   ]
 }

@@ -132,6 +132,10 @@
 .avatar-studio-save button {
   flex: 1;
 }
+.avatar-studio-purchase {
+  width: 100%;
+  margin-top: 8px;
+}
 .avatar-studio-picker {
   min-width: 0;
   container: avatar-picker / inline-size;
@@ -277,26 +281,6 @@
   flex-wrap: wrap;
   margin-top: 4px;
 }
-.avatar-studio-selected {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 12px;
-  padding: 0 0 12px;
-  border-bottom: 1px solid var(--ws-border, #e5e7eb);
-}
-.avatar-studio-selected > div {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1 1 160px;
-}
-.avatar-studio-owned {
-  font-size: 14px;
-  color: var(--ws-muted, #64748b);
-}
 .avatar-studio-status {
   padding: 24px;
   text-align: center;
@@ -331,9 +315,6 @@
   margin: 0 0 16px;
   font-size: 20px;
   font-weight: 800;
-}
-.avatar-purchase-name {
-  font-weight: 700;
 }
 .avatar-purchase-dialog dl {
   margin: 16px 0;

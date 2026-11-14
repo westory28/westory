@@ -307,21 +307,24 @@ try {
     (await page.locator(".avatar-studio-wallet strong").textContent()).trim(),
     "725",
   );
+  await page.getByRole("searchbox", { name: "아이템 검색" }).fill(draftLabel);
   assert.equal(
-    (
-      await page.locator(".avatar-shop-item-details strong").textContent()
-    ).trim(),
-    draftLabel,
-    "shop restores the saved wardrobe look",
+    await draftItem.getAttribute("aria-pressed"),
+    "true",
+    "shop restores the saved wardrobe look even when its item is beyond page one",
   );
   await page.getByRole("searchbox", { name: "아이템 검색" }).fill("크림 니트");
   await page.locator('.avatar-studio-items button[title="크림 니트"]').click();
-  assert.match(
+  assert.equal(
     await page
-      .locator(".avatar-shop-item-details .avatar-shop-item-price")
+      .locator(
+        '.avatar-studio-item[aria-pressed="true"] .avatar-shop-item-price',
+      )
       .textContent(),
-    /345/,
+    "보유",
+    "Owned items show ownership without repeating the configured price",
   );
+  assert.equal(await page.locator('.avatar-studio-purchase').count(), 0);
   await page
     .getByRole("searchbox", { name: "아이템 검색" })
     .fill("새로고침 검증");
@@ -359,7 +362,7 @@ try {
       "pagination page 2",
     ],
     refreshed: [
-      "balance and catalog price in shop",
+      "balance and owned-item display in shop",
       "saved appearance after wardrobe save",
     ],
     localShopControlsNoRequests: [

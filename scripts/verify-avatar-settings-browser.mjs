@@ -527,10 +527,9 @@ try {
       .locator(".avatar-shop-item")
       .filter({ hasText: "구름 크림 니트" });
     await previewCard.click();
-    await dialog
-      .getByText("포근한 짜임의 긴소매 니트입니다.", { exact: true })
-      .waitFor();
-    const buy = dialog.getByRole("button", {
+    assert.equal(await previewCard.getAttribute("aria-pressed"), "true");
+    assert.equal(await dialog.locator(".avatar-shop-item-details").count(), 0);
+    const buy = dialog.locator(".avatar-studio-preview").getByRole("button", {
       name: "750 위스로 구매",
       exact: true,
     });
@@ -834,7 +833,11 @@ try {
       );
       await page.getByRole("button", { name: "상의", exact: true }).click();
       assert.equal(
-        await page.locator(".avatar-shop-item-details strong").textContent(),
+        await page
+          .locator(
+            '.avatar-studio-item[aria-pressed="true"] .avatar-studio-item-name',
+          )
+          .textContent(),
         labelFor("mm-school-white"),
         "Initial teacher load repairs now-incompatible saved clothing using current metadata",
       );
@@ -859,9 +862,7 @@ try {
         "Male avatar can wear the current male-only item",
       );
       await teacherKnit.click();
-      await page
-        .getByText("포근한 짜임의 긴소매 니트입니다.", { exact: true })
-        .waitFor();
+      assert.equal(await teacherKnit.getAttribute("aria-pressed"), "true");
       assert.equal(
         await page.evaluate(() => window.avatarPricingQa.teacherReads),
         1,

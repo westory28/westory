@@ -555,6 +555,25 @@ export function AvatarStudio({
               </button>
             )}
           </div>
+          {isShop && selected && !available(selected) && (
+            <button
+              type="button"
+              className="avatar-primary avatar-studio-purchase"
+              disabled={
+                preview ||
+                !characterChosen ||
+                Boolean(busy) ||
+                balance === null ||
+                !canWearAvatarItem(selected, look.character)
+              }
+              onClick={() => {
+                setConfirmError("");
+                setPurchase(selected);
+              }}
+            >
+              {selected.price.toLocaleString()} 위스로 구매
+            </button>
+          )}
           {studentAvatarEvent && !allAvailable && !isShop && !preview && (
             <AvatarEventSubmission
               avatar={saved}
@@ -745,37 +764,6 @@ export function AvatarStudio({
               ))}
             </div>
           </div>
-          {selected && (
-            <div className="avatar-studio-selected">
-              <AvatarShopItemDetails
-                item={selected}
-                hidePrice={allAvailable || !isShop}
-              />
-              {isShop && !available(selected) ? (
-                <button
-                  type="button"
-                  className="avatar-primary"
-                  disabled={
-                    preview ||
-                    !characterChosen ||
-                    Boolean(busy) ||
-                    balance === null ||
-                    !canWearAvatarItem(selected, look.character)
-                  }
-                  onClick={() => {
-                    setConfirmError("");
-                    setPurchase(selected);
-                  }}
-                >
-                  {selected.price.toLocaleString()} 위스로 구매
-                </button>
-              ) : (
-                <span className="avatar-studio-owned">
-                  {isShop ? "보유" : "착용 중"}
-                </span>
-              )}
-            </div>
-          )}
           <div
             className="avatar-studio-items"
             aria-label={
@@ -886,7 +874,7 @@ export function AvatarStudio({
         <h3 id="avatar-purchase-title">아이템 구매</h3>
         {purchase && (
           <>
-            <p className="avatar-purchase-name">{purchase.label}</p>
+            <AvatarShopItemDetails item={purchase} hidePrice />
             <dl>
               <div>
                 <dt>가격</dt>

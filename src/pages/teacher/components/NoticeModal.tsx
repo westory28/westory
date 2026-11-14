@@ -14,6 +14,7 @@ import {
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
+import { NOTICE_CATEGORIES } from "../../../constants/noticeCategories";
 import {
   NOTICE_IMAGE_RECOMMENDED_HEIGHT,
   NOTICE_IMAGE_RECOMMENDED_WIDTH,
@@ -38,15 +39,6 @@ interface NoticeModalProps {
   onPreview?: (url: string) => void;
   recommendedImageSize?: { width: number; height: number };
 }
-
-const NOTICE_CATEGORIES = [
-  { val: "normal", label: "공지" },
-  { val: "event", label: "학교 행사" },
-  { val: "exam", label: "정기 시험" },
-  { val: "performance", label: "수행평가" },
-  { val: "prep", label: "준비" },
-  { val: "dday", label: "D-Day" },
-] as const;
 
 const toLocalDateTimeInputValue = (value?: unknown) => {
   if (!value) return "";

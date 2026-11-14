@@ -1,6 +1,7 @@
 import type { AvatarLook, AvatarSlot } from "../catalog";
 import { TOPS, BOTTOMS, SHOES, HAIR_BASES } from "./wardrobe";
 import { drawHairDetails, drawTopDetails } from "./details";
+import { royalHairPalette, drawCherryRibbon } from "./royalHair";
 import {
   HANBOK_ACCESSORIES,
   hanbokHatHairLine,
@@ -87,6 +88,7 @@ export const MINIMI_VALUES = Object.freeze({
     "mm-glasses",
     "mm-sunglasses",
     "mm-ribbon",
+    "mm-cherry-ribbon",
     "mm-cap",
     ...HANBOK_ACCESSORIES,
   ],
@@ -219,7 +221,11 @@ export function drawMinimi(
     }
   };
   const skin = SKIN[look.skinTone] || SKIN["mm-ivory"];
-  const hair = HAIR[look.hairTone] || HAIR["mm-ink"];
+  const hair = royalHairPalette(
+    look.hairStyle,
+    look.hairTone,
+    HAIR[look.hairTone] || HAIR["mm-ink"],
+  );
   const winter =
     look.top === "mm-school-hoodie" || look.top === "mm-school-halfzip";
   const navy = look.top === "mm-school-navy";
@@ -1439,6 +1445,8 @@ export function drawMinimi(
       line([38, 34], [43, 34], "#151c2b", 2);
       line([23, 32], [26, 33], "#151c2b", 2);
       line([55, 33], [58, 32], "#151c2b", 2);
+    } else if (look.accessory === "mm-cherry-ribbon") {
+      drawCherryRibbon(pen);
     } else if (look.accessory === "mm-ribbon") {
       poly(
         [

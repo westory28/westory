@@ -252,6 +252,8 @@ export const SHOES: Record<
 };
 
 export const HAIR_BASES: Record<string, string> = {
+  "mm-royal-ash": "mm-royal-rounded",
+  "mm-royal-choco-bob": "mm-royal-c-bob",
   "mm-ash-cloud": "mm-soft-cloud",
   "mm-blossom-bob": "mm-soft-bob",
   "mm-ash-bowl": "mm-bowl",

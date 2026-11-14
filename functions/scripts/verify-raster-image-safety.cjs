@@ -18,7 +18,7 @@ const releaseFiles = {
   "productionGateway/sourceArchiveManagement.js": "uploadSourceArchiveAsset/sourceArchiveManagement.js",
   "productionGateway/schoolBanners.js": "registerSchoolBanner/schoolBanners.js",
 };
-const load = (relative, mocks = {}) => {
+const load = (relative, mocks = {}, testExports = "") => {
   const released = verifyRelease && releaseFiles[relative];
   const filename = path.isAbsolute(relative) ? relative : released
     ? path.join(releaseRoot, released.split("/")[0], "functions", released.split("/")[1])
@@ -27,7 +27,7 @@ const load = (relative, mocks = {}) => {
   const module = { exports: {} };
   const context = { module, exports: module.exports, Buffer, console, process,
     require: name => Object.hasOwn(mocks, name) ? mocks[name] : localRequire(name) };
-  vm.runInNewContext(fs.readFileSync(filename, "utf8"), context, { filename });
+  vm.runInNewContext(fs.readFileSync(filename, "utf8") + testExports, context, { filename });
   return module.exports;
 };
 const auth = { uid: "fixture-teacher", token: { email: "fixture@yongshin-ms.ms.kr" } };
@@ -38,6 +38,12 @@ const rejection = error => error.code === "invalid-argument" && error.details?.r
 const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8"/></svg>');
 
 (async () => {
+  if (!verifyRelease) {
+    const { normalizeMetadata } = load("productionGateway/schoolBanners.js", {},
+      "\nmodule.exports.normalizeMetadata = normalizeMetadata;");
+    assert.equal(normalizeMetadata({ category: "special_event" }).category, "special_event");
+    assert.equal(normalizeMetadata({ category: "event" }).category, "event");
+  }
   const fixtures = {};
   for (const format of ["png", "jpeg", "webp", "gif", "avif", "tiff"]) {
     fixtures[format] = await sharp({ create: { width: 8, height: 6, channels: 3, background: "#345678" } })[format]().toBuffer();

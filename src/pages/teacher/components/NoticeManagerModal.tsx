@@ -2,6 +2,7 @@ import { acquirePageScrollLock } from "../../../lib/pageScrollLock";
 import React, { useEffect, useId, useRef, useState } from "react";
 import NoticeModal from "./NoticeModal";
 import NoticeOrderModal from "./NoticeOrderModal";
+import { getNoticeCategoryLabel as categoryLabel } from "../../../constants/noticeCategories";
 
 export interface ManagedNotice {
   id: string;
@@ -22,14 +23,6 @@ interface Props {
   onClose: () => void;
 }
 
-const categoryLabel = (category: string) =>
-  ({
-    event: "학교 행사",
-    exam: "정기 시험",
-    performance: "수행평가",
-    prep: "준비",
-    dday: "D-Day",
-  })[category] || "공지";
 const period = (value: unknown, fallback: string) => {
   if (!value) return fallback;
   const date =

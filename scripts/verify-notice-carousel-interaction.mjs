@@ -13,7 +13,7 @@ const evidence =
   process.env.NOTICE_CAROUSEL_EVIDENCE_DIR ||
   path.join(root, "output/notice-carousel-interaction");
 const mocks = {
-  state: `const params=new URLSearchParams(location.search);const count=params.get('mode')==='single'?1:params.get('mode')==='empty'?0:3;export const config={year:2026,semester:2};export const userData={grade:3,class:1};export const getNotices=()=>Array.from({length:count},(_,index)=>({id:'notice-'+index,category:['performance','exam','notice'][index],content:'알림 안내',imageUrl:'/notice-'+index+'.svg'+(params.get('mode')==='ratios'?'?ratios':''),developerLogPostId:params.get('mode')==='unlinked'?'':'notice-'+index+'-post',createdAt:null,noticeOrder:index}));`,
+  state: `const params=new URLSearchParams(location.search);const count=params.get('mode')==='single'?1:params.get('mode')==='empty'?0:3;export const config={year:2026,semester:2};export const userData={grade:3,class:1};export const getNotices=()=>Array.from({length:count},(_,index)=>({id:'notice-'+index,category:['special_event','event','notice'][index],content:'알림 안내',imageUrl:'/notice-'+index+'.svg'+(params.get('mode')==='ratios'?'?ratios':''),developerLogPostId:params.get('mode')==='unlinked'?'':'notice-'+index+'-post',createdAt:null,noticeOrder:index}));`,
   auth: `import {config,userData} from 'fixture:state';export const useAuth=()=>({config,userData});`,
   firebase: `export const db={};`,
   firestore: `import {getNotices} from 'fixture:state';export const collection=()=>({}),limit=()=>({}),orderBy=()=>({}),query=()=>({});export const onSnapshot=(_,next)=>{next({docs:getNotices().map(n=>({id:n.id,data:()=>n}))});return()=>{}};`,
@@ -359,6 +359,27 @@ async function check(portal, name, fn, mode = "linked", gate = false) {
 try {
   await fs.mkdir(evidence, { recursive: true });
   for (const portal of ["student", "teacher"]) {
+    await check(
+      portal,
+      "event category remains separate from school events",
+      async (f) => {
+        for (const width of [390, 768, 1280]) {
+          await f.page.setViewportSize({ width, height: 900 });
+          await f.page.getByText("이벤트", { exact: true }).waitFor();
+          assert.equal(
+            await f.page.evaluate(
+              () => document.documentElement.scrollWidth <= innerWidth,
+            ),
+            true,
+          );
+          await f.page.screenshot({
+            path: path.join(evidence, `${portal}-event-${width}.png`),
+          });
+        }
+        await f.advance(13000);
+        await f.page.getByText("학교 행사", { exact: true }).waitFor();
+      },
+    );
     await check(
       portal,
       "first image gets 12 seconds after loading",
