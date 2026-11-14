@@ -47,6 +47,8 @@ export const db={};
 export const getHttpsCallable=async()=>{throw Error('Unexpected callable')};
 export const getFirebaseStorage=async()=>{throw Error('Unexpected storage')};
 export const canManagePoints=()=>true,canReadPoints=()=>true;
+// Wallet scenarios use an ordinary teacher, without avatar settings privileges.
+export const canManageSettings=()=>false,isAdminUser=()=>false;
 export const ensureSensitiveOperation=async()=>{};
 export const POINT_POLICY_FALLBACK={manualAdjustEnabled:true,allowNegativeBalance:false,rankPolicy:{enabled:false},rewardPolicy:{},controlPolicy:{}};
 export const getPointPolicy=async()=>{qa.calls.push({kind:'policy'});return qa.enableRank?{...POINT_POLICY_FALLBACK,rankPolicy:{enabled:true}}:POINT_POLICY_FALLBACK};
