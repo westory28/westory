@@ -8236,6 +8236,10 @@ exports.saveWisStock = onCall(
   { region: 'us-central1', memory: '256MiB', maxInstances: 10 },
   wisStockHandlers.saveWisStock,
 );
+exports.saveWisStockMarketRules = onCall(
+  { region: 'us-central1', memory: '256MiB', maxInstances: 10 },
+  wisStockHandlers.saveWisStockMarketRules,
+);
 exports.advanceWisStockPrices = onSchedule(
   { schedule: 'every 60 minutes', region: 'us-central1', timeZone: 'Asia/Seoul', maxInstances: 1, memory: '256MiB' },
   wisStockHandlers.advanceWisStockPrices,
