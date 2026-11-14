@@ -31,9 +31,12 @@ const economyPath = `semester_wis_economies/${scope}`;
 const reason = (expected) => (error) => error.details?.reason === expected;
 
 class Transaction {
-  constructor(documents) { this.documents = structuredClone(documents); this.writing = false; }
+  constructor(documents, faults = {}) { this.documents = structuredClone(documents); this.writing = false;
+    this.faults = faults; this.readCount = 0; this.writeCount = 0; }
   async get(path) {
     assert.equal(this.writing, false, "all reads precede writes");
+    this.readCount++;
+    if (path === this.faults.failReadPath) throw new Error("Synthetic notification read failure");
     return { exists: this.documents.has(path), data: structuredClone(this.documents.get(path)), path };
   }
   getAll(paths) { return Promise.all(paths.map((path) => this.get(path))); }
@@ -45,9 +48,12 @@ class Transaction {
   }
   set(path, data, options) {
     this.writing = true;
+    this.writeCount++;
     this.documents.set(path, structuredClone(options?.merge ? { ...this.documents.get(path), ...data } : data));
   }
   create(path, data) {
+    if (this.faults.failNotificationWrite && path.includes("/notification_inboxes/") && path.includes("/items/"))
+      throw new Error("Synthetic notification write failure");
     assert.equal(this.documents.has(path), false, "create cannot overwrite an immutable receipt or ledger");
     this.set(path, data);
   }
@@ -57,10 +63,12 @@ class Store {
   get(path) { return new Transaction(this.documents).get(path); }
   runTransaction(callback) {
     const task = this.queue.then(async () => {
-      const transaction = new Transaction(this.documents);
-      const result = await callback(transaction);
-      this.documents = transaction.documents;
-      return result;
+      const transaction = new Transaction(this.documents, this);
+      try {
+        const result = await callback(transaction);
+        this.documents = transaction.documents;
+        return result;
+      } finally { this.lastTransaction = { reads: transaction.readCount, writes: transaction.writeCount }; }
     });
     this.queue = task.catch(() => {});
     return task;
@@ -270,4 +278,108 @@ test("explicit rebuild repairs only projections and rejects corrupt scoped ledge
   assert.equal(f.store.documents.get(accountPath).earnedTotal, 150);
   assert.equal(f.store.documents.get(accountPath).rankEarnedTotal, 0);
   assert.deepEqual(f.store.documents.get("semester_wis_ledger/opening"), ledger);
+});
+
+const inboxPath = "years/2026/semesters/2/notification_inboxes/student";
+const notifications = store => [...store.documents.entries()].filter(([path]) => path.startsWith(`${inboxPath}/items/`));
+
+test("manual grants atomically create one student notification and unread increment; replay never duplicates", async () => {
+  const f = fixture();
+  f.store.documents.set(inboxPath, { uid: "student", unreadCount: 3, lastReadAt: "kept" });
+  const input = request();
+  const result = await f.core.execute(input);
+  const [[path, item]] = notifications(f.store);
+  assert.equal(item.type, "wis_granted");
+  assert.equal(item.title, "위스가 지급되었습니다");
+  assert.equal(item.body, "수업 참여 · 50위스 지급");
+  assert.equal(item.entityId, result.result.ledgerEntryId);
+  assert.equal(item.recipientUid, "student");
+  assert.equal(item.actorUid, "teacher");
+  assert.equal(item.targetUrl, "/student/points");
+  assert.equal(item.readAt, null);
+  assert.equal(new Date(item.expiresAt).getTime() - Date.parse(item.createdAt), 30 * 86400_000);
+  assert.equal(f.store.documents.get(inboxPath).unreadCount, 4);
+  assert.equal(f.store.documents.get(inboxPath).lastReadAt, "kept");
+  assert.equal(f.store.lastTransaction.writes, 9, "five payment, two notification, receipt and audit writes");
+  const receipt = f.store.documents.get(`command_receipts/${gateway.buildReceiptId("teacher", "grantWis", input.data.commandId)}`);
+  assert.ok(receipt.target.refs.includes(path));
+  assert.equal((await f.core.execute(input)).replayed, true);
+  assert.equal(f.store.lastTransaction.writes, 0);
+  assert.equal(notifications(f.store).length, 1);
+  assert.equal(f.store.documents.get(inboxPath).unreadCount, 4);
+});
+
+test("each notification off switch suppresses only delivery and skips recipient reads/writes", async () => {
+  const enabled = fixture();
+  await enabled.core.execute(request());
+  const enabledReads = enabled.store.lastTransaction.reads;
+  for (const config of [{ enabled: false }, { studentNotificationsEnabled: false },
+    { eventPolicies: { wis_granted: { enabled: false } } }]) {
+    const f = fixture();
+    f.store.documents.set("site_settings/notification_config", config);
+    assert.equal((await f.core.execute(request())).result.balance, 1050);
+    assert.equal(notifications(f.store).length, 0);
+    assert.equal(f.store.lastTransaction.writes, 7);
+    assert.equal(f.store.lastTransaction.reads, enabledReads - 2);
+  }
+  const f = fixture();
+  f.store.documents.set("site_settings/notification_config", { teacherNotificationsEnabled: false });
+  await f.core.execute(request());
+  assert.equal(notifications(f.store).length, 1, "teacher notification switch does not suppress a student event");
+});
+
+test("notification policies preserve template fallback, formatted amounts, priority and a concrete wallet URL", async () => {
+  const f = fixture();
+  f.store.documents.set("site_settings/notification_config", { eventPolicies: { wis_granted: {
+    enabled: true, priority: "high", titleTemplate: "{amount}위스 지급", bodyTemplate: "{reason}: 잔액 {balance}위스",
+    targetUrl: "/student/points?amount={amount}",
+  } } });
+  await f.core.execute(request({ amount: 1500 }));
+  const item = notifications(f.store)[0][1];
+  assert.equal(item.title, "1,500위스 지급");
+  assert.equal(item.body, "수업 참여: 잔액 2,500위스");
+  assert.equal(item.priority, "high");
+  assert.equal(item.targetUrl, "/student/points?amount=1,500");
+  const unknown = fixture();
+  unknown.store.documents.set("site_settings/notification_config", { eventPolicies: { wis_granted: {
+    titleTemplate: "{missing}", bodyTemplate: "{unknown}", targetUrl: "/somewhere-else",
+  } } });
+  await unknown.core.execute(request());
+  assert.equal(notifications(unknown.store)[0][1].title, "위스가 지급되었습니다");
+  assert.equal(notifications(unknown.store)[0][1].body, "수업 참여 · 50위스 지급");
+  assert.equal(notifications(unknown.store)[0][1].targetUrl, "/student/points");
+});
+
+test("notification read/write failures roll back the payment and retry creates a single complete grant", async () => {
+  for (const fault of [{ failReadPath: "site_settings/notification_config" }, { failNotificationWrite: true }]) {
+    const f = fixture(), input = request();
+    const before = structuredClone(f.store.documents);
+    Object.assign(f.store, fault);
+    await assert.rejects(() => f.core.execute(input), /Synthetic notification/);
+    assert.deepEqual(f.store.documents, before, "no partial ledger, payment, notification or receipt survives");
+    delete f.store.failReadPath;
+    delete f.store.failNotificationWrite;
+    await f.core.execute(input);
+    assert.equal(notifications(f.store).length, 1);
+    assert.equal(f.store.documents.get(inboxPath).unreadCount, 1);
+    assert.equal(f.store.documents.get(accountPath).balance, 1050);
+  }
+});
+
+test("deduction, adjustment and initial opening do not create manual grant notifications", async () => {
+  for (const commandType of ["deductWis", "adjustWis", "grantInitialWis"]) {
+    const f = fixture();
+    const input = request({}, { commandType });
+    if (commandType === "adjustWis") {
+      delete input.data.payload.amount;
+      input.data.payload.delta = 50;
+    }
+    if (commandType === "grantInitialWis") {
+      f.store.documents.set(economyPath, { ...f.store.documents.get(economyPath), status: "ACTIVE_INITIALIZING", initialGrantAmount: 50 });
+      input.data.payload.expectedEconomyRevision = 30;
+    }
+    f.store.failReadPath = "site_settings/notification_config";
+    await f.core.execute(input);
+    assert.equal(notifications(f.store).length, 0);
+  }
 });

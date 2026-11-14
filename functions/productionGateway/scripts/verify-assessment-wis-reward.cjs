@@ -169,6 +169,8 @@ async function rejectsNoWrites(h, run, reason) {
       const result = (await h.submit(attempt)).result;
       assert.equal(result.score, 2); assert.equal(result.percent, 100); assert.equal(result.reward.bonusAmount, kind === "QUIZ" ? 7 : 9);
       assert.equal(h.ledgers().length, 2); assert.equal(h.store.documents.get(economyPath).ledgerEntryCount, 2);
+      assert.equal([...h.store.documents.values()].filter(row => row.type === "wis_granted").length, 0,
+        "automatic assessment base and bonus rewards must not emit manual-grant notifications");
       assert.equal(h.store.documents.get(result.resultRef).reward.totalAwarded, result.reward.totalAwarded);
       for (const projection of [wis.WIS_BALANCE_COLLECTION, wis.WIS_RANKING_COLLECTION])
         assert.equal(h.store.documents.get(`${projection}/${accountId}`).balance, h.account().balance);
