@@ -346,6 +346,36 @@ await test("Teacher lists follow cursors and preserve approval boundaries", asyn
   assert.equal(h.calls[1].payload.cursor, "cursor-2");
   assert.ok(h.calls.every((call) => call.payload.audience === "teacher"));
 });
+await test("Teacher overview requests only the selected cursor page and preserves filter scope", async () => {
+  const h = harness(async () => state({ nextCursor: "opaque-cursor" }));
+  h.auth.currentUser = makeUser("teacher");
+  const overview = {
+    grade: "3",
+    classNumber: "2",
+    studentNumber: "1",
+    namePrefix: "가",
+    sortField: "balance",
+    direction: "desc",
+  };
+  const page = await h.adapter.getCanonicalPointWalletPage(
+    config,
+    overview,
+    "previous-cursor",
+    20,
+  );
+  assert.equal(page.wallets.length, 1);
+  assert.equal(page.nextCursor, "opaque-cursor");
+  assert.equal(h.calls.length, 1);
+  assert.equal(h.calls[0].payload.audience, "teacher");
+  assert.equal(h.calls[0].payload.projection, "overview");
+  assert.equal(h.calls[0].payload.semesterId, "2026-2");
+  assert.equal(h.calls[0].payload.cursor, "previous-cursor");
+  assert.equal(h.calls[0].payload.limit, 20);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(h.calls[0].payload.overview)),
+    overview,
+  );
+});
 await test("Purchase uses revisions and remains idempotent after UI refresh failure", async () => {
   const h = harness(async (name) =>
     name === "getWisEconomyState"

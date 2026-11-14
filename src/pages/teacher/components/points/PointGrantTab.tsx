@@ -31,6 +31,11 @@ interface PointGrantTabProps {
   manualAdjustEnabled: boolean;
   allowNegativeBalance: boolean;
   loading: boolean;
+  currentPage?: number;
+  hasNextPage?: boolean;
+  onPageChange?: (page: number) => void;
+  readError?: string;
+  onRetry?: () => void;
   gradeFilter: string;
   classFilter: string;
   numberFilter: string;
@@ -62,6 +67,11 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
   manualAdjustEnabled,
   allowNegativeBalance,
   loading,
+  currentPage = 1,
+  hasNextPage = false,
+  onPageChange,
+  readError = "",
+  onRetry,
   gradeFilter,
   classFilter,
   numberFilter,
@@ -107,7 +117,9 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
                 지급 및 환수 대상 선택
               </h2>
             </div>
-            <div className="text-sm font-bold text-gray-500 whitespace-nowrap">{`검색 결과 ${students.length}명`}</div>
+            <div className="text-sm font-bold text-gray-500 whitespace-nowrap">
+              {loading ? "불러오는 중" : `현재 페이지 ${students.length}명`}
+            </div>
           </div>
           <div className="points-student-filters mt-4 grid gap-3 md:grid-cols-4">
             <select
@@ -127,41 +139,40 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
               value={classFilter}
               onChange={(event) => onClassFilterChange(event.target.value)}
               className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700"
-              disabled={isSubmitting}
+              disabled={isSubmitting || gradeFilter === "all"}
             >
               <option value="all">전체 반</option>
               {classOptions.map((option) => (
                 <option key={option} value={option}>{`${option}반`}</option>
               ))}
             </select>
-            <select
+            <input
               aria-label="번호 필터"
-              value={numberFilter}
-              onChange={(event) => onNumberFilterChange(event.target.value)}
+              inputMode="numeric"
+              maxLength={3}
+              value={numberFilter === "all" ? "" : numberFilter}
+              placeholder="전체 번호"
+              onChange={(event) =>
+                onNumberFilterChange(
+                  event.target.value.replace(/\D/g, "").replace(/^0+/, "") ||
+                    "all",
+                )
+              }
               className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700"
-              disabled={isSubmitting}
-            >
-              <option value="all">전체 번호</option>
-              {numberOptions.map((option) => (
-                <option key={option} value={option}>{`${option}번`}</option>
-              ))}
-            </select>
+              disabled={isSubmitting || classFilter === "all"}
+            />
             <input
               lang="ko"
               inputMode="text"
-              aria-label="학생 이름 검색"
+              aria-label="학생 이름 앞부분 검색"
+              maxLength={60}
               value={nameSearch}
               onChange={(event) => onNameSearchChange(event.target.value)}
-              placeholder="이름 또는 일부 검색"
+              placeholder="이름 앞부분 검색"
               className="rounded-lg border border-gray-300 px-4 py-2 text-sm"
               disabled={isSubmitting}
             />
           </div>
-          {isGlobalSearchActive && (
-            <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">
-              이름 검색 중에는 전 학년, 전 학급 학생 후보를 모두 확인합니다.
-            </div>
-          )}
         </div>
 
         <div
@@ -176,6 +187,18 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
             <div className="text-right">보유 위스</div>
           </div>
           <div className="divide-y divide-gray-100">
+            {readError && (
+              <div role="alert" className="p-4 text-sm text-red-700">
+                {readError}{" "}
+                <button
+                  type="button"
+                  className="min-h-11 px-3 underline"
+                  onClick={onRetry}
+                >
+                  다시 불러오기
+                </button>
+              </div>
+            )}
             {requiresClassSelection ? (
               <div className="px-5 py-12 text-center text-sm text-gray-400">
                 학년과 반을 먼저 선택하거나 이름으로 전역 검색해 주세요.
@@ -238,6 +261,29 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
               );
             })}
           </div>
+          {(currentPage > 1 || hasNextPage) && (
+            <div className="flex items-center justify-center gap-2 border-t border-gray-100 px-4 py-2">
+              <button
+                type="button"
+                disabled={loading || isSubmitting || currentPage <= 1}
+                className="min-h-11 px-3 text-sm font-bold text-blue-700 disabled:text-gray-400"
+                onClick={() => onPageChange?.(currentPage - 1)}
+              >
+                이전
+              </button>
+              <span className="text-sm" aria-current="page">
+                {currentPage}페이지
+              </span>
+              <button
+                type="button"
+                disabled={loading || isSubmitting || !hasNextPage}
+                className="min-h-11 px-3 text-sm font-bold text-blue-700 disabled:text-gray-400"
+                onClick={() => onPageChange?.(currentPage + 1)}
+              >
+                다음
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

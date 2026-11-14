@@ -6,6 +6,8 @@ import { latestWisWallet } from "../../lib/wisEconomyClient";
 import {
   getPendingCanonicalPointAdjustment,
   getCanonicalPointTransactionPage,
+  getCanonicalPointWalletPage,
+  getCanonicalPointWallet,
 } from "../../lib/pointEconomyAdapter";
 import { useSearchParams } from "react-router-dom";
 import { TEACHER_POINT_TAB_LABELS } from "../../constants/pointLabels";
@@ -19,11 +21,8 @@ import {
   getPointSchoolOptions,
   getPointPolicy,
   getPointRankManualAdjustEarnedPointsMap,
-  listPointStudentTargets,
   listPointOrders,
   listPointProducts,
-  listPointStudentTargetsByClass,
-  listPointWallets,
   POINT_POLICY_FALLBACK,
   reviewPointOrder,
   updatePointAdjustment,
@@ -32,7 +31,6 @@ import {
 } from "../../lib/points";
 import {
   getPointRankPolicyValidationError,
-  getPointWalletCumulativeEarned,
   needsPointRankLegacyFallback,
   resolvePointRankPolicyDraft,
 } from "../../lib/pointRanks";
@@ -68,6 +66,7 @@ import PointProductsTab from "./components/points/PointProductsTab";
 import PointRequestsTab from "./components/points/PointRequestsTab";
 import PointsOverviewTab from "./components/points/PointsOverviewTab";
 import HallOfFameManagementTab from "./components/points/HallOfFameManagementTab";
+import TeacherWisStocks from "./components/points/TeacherWisStocks";
 
 type TeacherPointTab = keyof typeof TEACHER_POINT_TAB_LABELS;
 type GrantMode = "grant" | "reclaim";
@@ -112,9 +111,15 @@ const createEmptyProductForm = (): ProductFormState => ({
 });
 
 const normalizeValue = (value: unknown) => String(value || "").trim();
-const normalizeSearchValue = (value: unknown) =>
-  normalizeValue(value).toLowerCase();
 const OVERVIEW_PAGE_SIZE = 20;
+const useDebouncedWisSearch = (value: string) => {
+  const [debounced, setDebounced] = useState(value.trim());
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebounced(value.trim()), 250);
+    return () => window.clearTimeout(timeout);
+  }, [value]);
+  return debounced;
+};
 const createLocalPointTimestamp = () => ({
   seconds: Math.floor(Date.now() / 1000),
   nanoseconds: 0,
@@ -171,64 +176,6 @@ const mergePointProductIntoList = (
       )
     : [...items, nextItem];
   return sortPointProducts(nextItems);
-};
-
-const sortOverviewWallets = (
-  wallets: PointWallet[],
-  sortKey: OverviewSortKey,
-  sortDirection: OverviewSortDirection,
-) => {
-  if (sortKey === "none") {
-    return wallets;
-  }
-
-  const direction = sortDirection === "asc" ? 1 : -1;
-
-  return wallets
-    .map((wallet, index) => ({ wallet, index }))
-    .sort((left, right) => {
-      let comparison = 0;
-
-      if (sortKey === "affiliation") {
-        comparison =
-          normalizeValue(left.wallet.grade).localeCompare(
-            normalizeValue(right.wallet.grade),
-            "ko-KR",
-            { numeric: true },
-          ) ||
-          normalizeValue(left.wallet.class).localeCompare(
-            normalizeValue(right.wallet.class),
-            "ko-KR",
-            { numeric: true },
-          ) ||
-          normalizeValue(left.wallet.number).localeCompare(
-            normalizeValue(right.wallet.number),
-            "ko-KR",
-            { numeric: true },
-          ) ||
-          normalizeValue(left.wallet.studentName).localeCompare(
-            normalizeValue(right.wallet.studentName),
-            "ko-KR",
-            { numeric: true },
-          );
-      } else if (sortKey === "balance") {
-        comparison = (left.wallet.balance || 0) - (right.wallet.balance || 0);
-      } else if (sortKey === "earnedTotal") {
-        comparison =
-          getPointWalletCumulativeEarned(left.wallet) -
-          getPointWalletCumulativeEarned(right.wallet);
-      } else if (sortKey === "spentTotal") {
-        comparison =
-          (left.wallet.spentTotal || 0) - (right.wallet.spentTotal || 0);
-      }
-
-      if (comparison !== 0) {
-        return comparison * direction;
-      }
-
-      return left.index - right.index;
-    })
-    .map(({ wallet }) => wallet);
 };
 
 const cloneRankTiers = (tiers: PointRankPolicyTier[] = []) =>
@@ -319,24 +266,32 @@ const ManagePoints: React.FC = () => {
       : "overview";
   const [pointLoading, setLoading] = useState(true);
   const [loadedScope, setLoadedScope] = useState<object | null>(null);
+  const [loadedView, setLoadedView] = useState("");
   const [hallRefresh, setHallRefresh] = useState(0);
-  const loadInFlightRef = useRef<object | null>(null);
+  const loadInFlightRef = useRef<{ scope: object; view: string } | null>(null);
+  const policyLoadedScopeRef = useRef<object | null>(null);
+  const schoolLoadedScopeRef = useRef<object | null>(null);
   const walletListRequestRef = useRef<object | null>(null);
   const scopeReady = Boolean(
     currentUser && configReady && config?.year && config?.semester,
   );
   const requestScope = useMemo(
     () => ({}),
-    [currentUser, authGeneration, configReady, config?.year, config?.semester],
+    [
+      currentUser,
+      authGeneration,
+      configReady,
+      config?.year,
+      config?.semester,
+      canRead,
+      canManage,
+    ],
   );
   const currentScopeRef = useRef(requestScope);
   const scopeGenerationRef = useRef(0);
   if (currentScopeRef.current !== requestScope) scopeGenerationRef.current++;
   currentScopeRef.current = requestScope;
   const isCurrentScope = () => currentScopeRef.current === requestScope;
-  const loading =
-    activeTab !== "hall-of-fame" &&
-    (pointLoading || loadedScope !== requestScope);
   const [wallets, setWallets] = useState<PointWallet[]>([]);
   const [students, setStudents] = useState<PointStudentTarget[]>([]);
   const [grantLoading, setGrantLoading] = useState(false);
@@ -350,7 +305,15 @@ const ManagePoints: React.FC = () => {
   selectedUidRef.current = selectedUid;
   const walletRefreshRef = useRef(new Map<string, object>());
   const walletRevisionsRef = useRef(new Map<string, number>());
+  const walletSnapshotsRef = useRef(new Map<string, PointWallet>());
   for (const wallet of wallets) {
+    walletSnapshotsRef.current.set(
+      wallet.uid,
+      latestWisWallet(
+        walletSnapshotsRef.current.get(wallet.uid) || null,
+        wallet,
+      )!,
+    );
     walletRevisionsRef.current.set(
       wallet.uid,
       Math.max(
@@ -396,11 +359,26 @@ const ManagePoints: React.FC = () => {
     useState<OverviewSortKey>("earnedTotal");
   const [overviewSortDirection, setOverviewSortDirection] =
     useState<OverviewSortDirection>("desc");
-  const [overviewPage, setOverviewPage] = useState(1);
+  const [overviewPages, setOverviewPages] = useState({
+    key: "",
+    cursors: [""],
+    page: 1,
+  });
+  const [overviewNextCursor, setOverviewNextCursor] = useState("");
   const [grantGradeFilter, setGrantGradeFilter] = useState("all");
   const [grantClassFilter, setGrantClassFilter] = useState("all");
   const [grantNumberFilter, setGrantNumberFilter] = useState("all");
   const [grantNameSearch, setGrantNameSearch] = useState("");
+  const debouncedNameSearch = useDebouncedWisSearch(nameSearch);
+  const debouncedGrantNameSearch = useDebouncedWisSearch(grantNameSearch);
+  const [grantPages, setGrantPages] = useState({
+    key: "",
+    cursors: [""],
+    page: 1,
+  });
+  const [grantNextCursor, setGrantNextCursor] = useState("");
+  const [grantReadError, setGrantReadError] = useState("");
+  const [grantReadRefresh, setGrantReadRefresh] = useState(0);
   const [grantSelectedUid, setGrantSelectedUid] = useState("");
   const [grantAmount, setGrantAmount] = useState("");
   const [grantReason, setGrantReason] = useState("");
@@ -441,6 +419,59 @@ const ManagePoints: React.FC = () => {
   const [adjustmentDraftValue, setAdjustmentDraftValue] = useState("");
   const [adjustmentFeedback, setAdjustmentFeedback] = useState("");
   const [adjustmentSaving, setAdjustmentSaving] = useState(false);
+  const overviewSelection = {
+    grade: gradeFilter === "all" ? "" : gradeFilter,
+    classNumber:
+      gradeFilter === "all" || classFilter === "all" ? "" : classFilter,
+    studentNumber:
+      classFilter === "all" || numberFilter === "all" ? "" : numberFilter,
+    namePrefix: debouncedNameSearch,
+    sortField:
+      overviewSortKey === "earnedTotal"
+        ? ("rankEarnedTotal" as const)
+        : overviewSortKey === "spentTotal"
+          ? ("spentTotal" as const)
+          : ("balance" as const),
+    direction: overviewSortDirection,
+  };
+  const overviewSelectionKey = JSON.stringify(overviewSelection);
+  const currentOverviewPage =
+    overviewPages.key === overviewSelectionKey ? overviewPages.page : 1;
+  const overviewCursor =
+    overviewPages.key === overviewSelectionKey
+      ? overviewPages.cursors[currentOverviewPage - 1]
+      : "";
+  const viewKey =
+    activeTab === "overview"
+      ? `${activeTab}:${overviewSelectionKey}:${overviewCursor}`
+      : activeTab;
+  const currentViewRef = useRef(viewKey);
+  currentViewRef.current = viewKey;
+  const loading =
+    activeTab !== "hall-of-fame" &&
+    activeTab !== "stocks" &&
+    (pointLoading || loadedScope !== requestScope || loadedView !== viewKey);
+  const grantSelection = {
+    grade: grantGradeFilter === "all" ? "" : grantGradeFilter,
+    classNumber:
+      grantGradeFilter === "all" || grantClassFilter === "all"
+        ? ""
+        : grantClassFilter,
+    studentNumber:
+      grantClassFilter === "all" || grantNumberFilter === "all"
+        ? ""
+        : grantNumberFilter,
+    namePrefix: debouncedGrantNameSearch,
+    sortField: "balance" as const,
+    direction: "desc" as const,
+  };
+  const grantSelectionKey = JSON.stringify(grantSelection);
+  const currentGrantPage =
+    grantPages.key === grantSelectionKey ? grantPages.page : 1;
+  const grantCursor =
+    grantPages.key === grantSelectionKey
+      ? grantPages.cursors[currentGrantPage - 1]
+      : "";
 
   const actor = useMemo(
     () => ({
@@ -508,94 +539,14 @@ const ManagePoints: React.FC = () => {
     );
   };
 
-  const gradeOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          wallets.map((wallet) => normalizeValue(wallet.grade)).filter(Boolean),
-        ),
-      ).sort((a, b) => Number(a) - Number(b)),
-    [wallets],
-  );
-
-  const classOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          wallets
-            .filter(
-              (wallet) =>
-                gradeFilter === "all" ||
-                normalizeValue(wallet.grade) === gradeFilter,
-            )
-            .map((wallet) => normalizeValue(wallet.class))
-            .filter(Boolean),
-        ),
-      ).sort((a, b) => Number(a) - Number(b)),
-    [gradeFilter, wallets],
-  );
-
-  const numberOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          wallets
-            .filter(
-              (wallet) =>
-                gradeFilter === "all" ||
-                normalizeValue(wallet.grade) === gradeFilter,
-            )
-            .filter(
-              (wallet) =>
-                classFilter === "all" ||
-                normalizeValue(wallet.class) === classFilter,
-            )
-            .map((wallet) => normalizeValue(wallet.number))
-            .filter(Boolean),
-        ),
-      ).sort((a, b) => Number(a) - Number(b)),
-    [classFilter, gradeFilter, wallets],
-  );
-
-  const filteredWallets = useMemo(
-    () =>
-      wallets.filter((wallet) => {
-        const matchesGrade =
-          gradeFilter === "all" || normalizeValue(wallet.grade) === gradeFilter;
-        const matchesClass =
-          classFilter === "all" || normalizeValue(wallet.class) === classFilter;
-        const matchesNumber =
-          numberFilter === "all" ||
-          normalizeValue(wallet.number) === numberFilter;
-        const keyword = nameSearch.trim();
-        const matchesName =
-          !keyword || normalizeValue(wallet.studentName).includes(keyword);
-        return matchesGrade && matchesClass && matchesNumber && matchesName;
-      }),
-    [classFilter, gradeFilter, nameSearch, numberFilter, wallets],
-  );
-
-  const sortedWallets = useMemo(
-    () =>
-      sortOverviewWallets(
-        filteredWallets,
-        overviewSortKey,
-        overviewSortDirection,
-      ),
-    [filteredWallets, overviewSortDirection, overviewSortKey],
-  );
-
-  const overviewTotalPages = useMemo(
-    () => Math.max(1, Math.ceil(sortedWallets.length / OVERVIEW_PAGE_SIZE)),
-    [sortedWallets.length],
-  );
-
-  const currentOverviewPage = Math.min(overviewPage, overviewTotalPages);
-
-  const paginatedWallets = useMemo(() => {
-    const startIndex = (currentOverviewPage - 1) * OVERVIEW_PAGE_SIZE;
-    return sortedWallets.slice(startIndex, startIndex + OVERVIEW_PAGE_SIZE);
-  }, [currentOverviewPage, sortedWallets]);
+  const gradeOptions = grantGradeOptions.map((option) => option.value);
+  const classOptions = grantClassOptions.map((option) => option.value);
+  const numberOptions: string[] = [];
+  // The server owns filtering and ordering. This array is exactly one page.
+  const filteredWallets = wallets;
+  const sortedWallets = wallets;
+  const paginatedWallets = wallets;
+  const overviewTotalPages = currentOverviewPage + (overviewNextCursor ? 1 : 0);
 
   const selectedWallet = useMemo(
     () => wallets.find((wallet) => wallet.uid === selectedUid) || null,
@@ -623,7 +574,7 @@ const ManagePoints: React.FC = () => {
       }),
     [orders, walletMap],
   );
-  const isGlobalGrantSearch = grantNameSearch.trim().length > 0;
+  const isGlobalGrantSearch = debouncedGrantNameSearch.length > 0;
 
   const grantNumberOptions = useMemo(
     () =>
@@ -649,35 +600,11 @@ const ManagePoints: React.FC = () => {
 
   const filteredGrantStudents = useMemo(
     () =>
-      students
-        .filter((student) => {
-          const matchesGrade =
-            grantGradeFilter === "all" ||
-            normalizeValue(student.grade) === grantGradeFilter;
-          const matchesClass =
-            grantClassFilter === "all" ||
-            normalizeValue(student.class) === grantClassFilter;
-          const matchesNumber =
-            grantNumberFilter === "all" ||
-            normalizeValue(student.number) === grantNumberFilter;
-          const keyword = normalizeSearchValue(grantNameSearch);
-          const matchesName =
-            !keyword ||
-            normalizeSearchValue(student.studentName).includes(keyword);
-          return matchesGrade && matchesClass && matchesNumber && matchesName;
-        })
-        .map((student) => ({
-          ...student,
-          wallet: walletMap.get(student.uid) || null,
-        })),
-    [
-      grantClassFilter,
-      grantGradeFilter,
-      grantNameSearch,
-      grantNumberFilter,
-      students,
-      walletMap,
-    ],
+      students.map((student) => ({
+        ...student,
+        wallet: walletMap.get(student.uid) || null,
+      })),
+    [students, walletMap],
   );
 
   const selectedGrantStudent = useMemo(() => {
@@ -810,25 +737,49 @@ const ManagePoints: React.FC = () => {
       );
       return nextWallets.map(
         (wallet) =>
-          latestWisWallet(currentByUid.get(wallet.uid) || null, wallet)!,
+          latestWisWallet(
+            currentByUid.get(wallet.uid) ||
+              walletSnapshotsRef.current.get(wallet.uid) ||
+              null,
+            wallet,
+          )!,
       );
     });
     return true;
   };
 
-  const loadAll = async () => {
+  const loadAll = async (force = true) => {
     if (!isCurrentScope()) return;
-    if (!canRead || !scopeReady || activeTab === "hall-of-fame") {
+    if (
+      !canRead ||
+      !scopeReady ||
+      activeTab === "hall-of-fame" ||
+      activeTab === "stocks"
+    ) {
       setLoading(false);
       return;
     }
-    if (loadInFlightRef.current === requestScope) return;
-    loadInFlightRef.current = requestScope;
+    if (
+      loadInFlightRef.current?.scope === requestScope &&
+      loadInFlightRef.current.view === viewKey
+    )
+      return;
+    const loadRequest = { scope: requestScope, view: viewKey };
+    loadInFlightRef.current = loadRequest;
+    const current = () =>
+      isCurrentScope() &&
+      currentViewRef.current === viewKey &&
+      loadInFlightRef.current === loadRequest;
     const walletListRequest = {};
     walletListRequestRef.current = walletListRequest;
 
     setLoading(true);
     setShopLoadError("");
+    if (activeTab === "overview") {
+      setWallets([]);
+      setSelectedUid("");
+      setOverviewNextCursor("");
+    }
     try {
       if (
         isSemesterArchive &&
@@ -836,58 +787,69 @@ const ManagePoints: React.FC = () => {
       ) {
         if (searchParams.get("tab") === "products") {
           const nextProducts = await readArchivedShopProducts();
-          if (isCurrentScope()) setProducts(nextProducts);
+          if (current()) setProducts(nextProducts);
         } else {
           const nextOrders = await readArchivedShopOrders();
-          if (isCurrentScope()) setOrders(nextOrders);
+          if (current()) setOrders(nextOrders);
         }
         return;
       }
+      const needsSchool = ["overview", "grant"].includes(activeTab);
+      const needsPolicy = ["overview", "grant", "policy", "ranks"].includes(
+        activeTab,
+      );
       const [
-        nextWallets,
+        walletPage,
         nextSchoolOptions,
         nextPolicy,
         nextProducts,
         nextOrders,
       ] = await Promise.all([
-        listPointWallets(config),
-        getPointSchoolOptions(),
-        getPointPolicy(config),
-        listPointProducts(config, false),
-        listPointOrders(config, { limitCount: 200 }),
+        activeTab === "overview"
+          ? getCanonicalPointWalletPage(
+              config,
+              overviewSelection,
+              overviewCursor,
+              OVERVIEW_PAGE_SIZE,
+            )
+          : null,
+        needsSchool && (force || schoolLoadedScopeRef.current !== requestScope)
+          ? getPointSchoolOptions()
+          : null,
+        needsPolicy && (force || policyLoadedScopeRef.current !== requestScope)
+          ? getPointPolicy(config)
+          : null,
+        activeTab === "products" ? listPointProducts(config, false) : null,
+        activeTab === "requests" ? listPointOrders(config) : null,
       ]);
-      if (!isCurrentScope()) return;
+      if (!current()) return;
+      const nextWallets = walletPage?.wallets || [];
       const nextRankManualAdjustEarnedPointsByUid = nextWallets.some((wallet) =>
         needsPointRankLegacyFallback(wallet),
       )
         ? await getPointRankManualAdjustEarnedPointsMap(config)
         : {};
 
-      if (!isCurrentScope()) return;
-      const walletListCommitted = commitWalletList(
-        nextWallets,
-        walletListRequest,
-      );
-      setGrantGradeOptions(nextSchoolOptions.grades);
-      setGrantClassOptions(nextSchoolOptions.classes);
-      setSavedPolicy(nextPolicy);
-      setPolicyDraft(nextPolicy);
-      setPolicyDirty(false);
-      setRankThemeDraft(createRankThemeDraft(nextPolicy.rankPolicy));
-      setRankThemeDirty(false);
-      setRankSettingsDraft(createRankSettingsDraft(nextPolicy.rankPolicy));
-      setRankSettingsDirty(false);
-      setRankSettingsFeedbackMessage("");
-      setRankSettingsFeedbackTone(null);
-      setRankEmojiDraft(createRankEmojiCollectionDraft(nextPolicy.rankPolicy));
-      setRankEmojiDirty(false);
-      setRankEmojiFeedbackMessage("");
-      setRankEmojiFeedbackTone(null);
-      setProducts(nextProducts);
-      setProductOrderDirty(false);
-      setProductOrderSaving(false);
-      setOrders(nextOrders);
+      if (!current()) return;
+      const walletListCommitted =
+        walletPage && commitWalletList(nextWallets, walletListRequest);
+      if (nextSchoolOptions) {
+        setGrantGradeOptions(nextSchoolOptions.grades);
+        setGrantClassOptions(nextSchoolOptions.classes);
+        schoolLoadedScopeRef.current = requestScope;
+      }
+      if (nextPolicy) {
+        applyConfirmedPolicy(nextPolicy);
+        policyLoadedScopeRef.current = requestScope;
+      }
+      if (nextProducts) {
+        setProducts(nextProducts);
+        setProductOrderDirty(false);
+        setProductOrderSaving(false);
+      }
+      if (nextOrders) setOrders(nextOrders);
       if (walletListCommitted) {
+        setOverviewNextCursor(walletPage.nextCursor);
         setRankManualAdjustEarnedPointsByUid(
           nextRankManualAdjustEarnedPointsByUid,
         );
@@ -898,18 +860,28 @@ const ManagePoints: React.FC = () => {
         );
       }
     } catch (error: any) {
-      if (isCurrentScope())
+      if (
+        current() &&
+        activeTab === "overview" &&
+        overviewCursor &&
+        error?.details?.reason === "WIS_OVERVIEW_PAGE_CHANGED"
+      ) {
+        setOverviewPages({ key: overviewSelectionKey, cursors: [""], page: 1 });
+        return;
+      }
+      if (current())
         setShopLoadError(
           error?.message ||
-            "상점 자료를 불러오지 못했습니다. 다시 시도해 주세요.",
+            "위스 자료를 불러오지 못했습니다. 다시 시도해 주세요.",
         );
     } finally {
-      if (loadInFlightRef.current === requestScope)
-        loadInFlightRef.current = null;
-      if (isCurrentScope()) {
+      if (current()) {
         setLoadedScope(requestScope);
+        setLoadedView(viewKey);
         setLoading(false);
       }
+      if (loadInFlightRef.current === loadRequest)
+        loadInFlightRef.current = null;
     }
   };
 
@@ -928,9 +900,12 @@ const ManagePoints: React.FC = () => {
     setTransactionsLoading(false);
     transactionRequestRef.current = null;
     loadInFlightRef.current = null;
+    policyLoadedScopeRef.current = null;
+    schoolLoadedScopeRef.current = null;
     walletListRequestRef.current = null;
     walletRefreshRef.current.clear();
     walletRevisionsRef.current.clear();
+    walletSnapshotsRef.current.clear();
     setProducts([]);
     setOrders([]);
     setSelectedUid("");
@@ -942,17 +917,25 @@ const ManagePoints: React.FC = () => {
     setRankEmojiDraft(createRankEmojiCollectionDraft(EMPTY_POLICY.rankPolicy));
     setRankManualAdjustEarnedPointsByUid({});
     setLoadedScope(null);
+    setLoadedView("");
+    setOverviewPages({ key: "", cursors: [""], page: 1 });
+    setOverviewNextCursor("");
+    setGrantPages({ key: "", cursors: [""], page: 1 });
+    setGrantNextCursor("");
+    setGrantReadError("");
     setShopLoadError("");
   }, [requestScope]);
 
   useEffect(() => {
-    if (activeTab === "hall-of-fame" || !scopeReady) return;
+    if (activeTab === "hall-of-fame" || activeTab === "stocks" || !scopeReady)
+      return;
     if (
       loadedScope !== requestScope ||
+      loadedView !== viewKey ||
       (isSemesterArchive && ["products", "requests"].includes(activeTab))
     )
-      void loadAll();
-  }, [canRead, requestScope, activeTab]);
+      void loadAll(false);
+  }, [canRead, requestScope, viewKey]);
 
   useEffect(() => {
     if (!scopeReady || !canRead || activeTab !== "hall-of-fame") return;
@@ -966,7 +949,10 @@ const ManagePoints: React.FC = () => {
       !scopeReady ||
       !canRead ||
       activeTab !== "overview" ||
-      loadedScope !== requestScope
+      loadedScope !== requestScope ||
+      loadedView !== viewKey ||
+      pointLoading ||
+      !!shopLoadError
     )
       return;
     if (!selectedUid) {
@@ -978,7 +964,16 @@ const ManagePoints: React.FC = () => {
     return () => {
       transactionRequestRef.current = null;
     };
-  }, [requestScope, selectedUid, activeTab, loadedScope, canRead]);
+  }, [
+    requestScope,
+    selectedUid,
+    activeTab,
+    loadedScope,
+    loadedView,
+    pointLoading,
+    shopLoadError,
+    canRead,
+  ]);
 
   useEffect(() => {
     if (!selectedEditableTransaction) {
@@ -1000,21 +995,7 @@ const ManagePoints: React.FC = () => {
   }, [classFilter, classOptions]);
 
   useEffect(() => {
-    if (numberFilter !== "all" && !numberOptions.includes(numberFilter))
-      setNumberFilter("all");
-  }, [numberFilter, numberOptions]);
-
-  useEffect(() => {
-    setOverviewPage(1);
-  }, [classFilter, gradeFilter, nameSearch, numberFilter]);
-
-  useEffect(() => {
-    if (overviewPage > overviewTotalPages) {
-      setOverviewPage(overviewTotalPages);
-    }
-  }, [overviewPage, overviewTotalPages]);
-
-  useEffect(() => {
+    if (activeTab !== "overview") return;
     if (sortedWallets.length === 0) {
       if (selectedUid) setSelectedUid("");
       return;
@@ -1033,7 +1014,13 @@ const ManagePoints: React.FC = () => {
     if (!paginatedWallets.some((wallet) => wallet.uid === selectedUid)) {
       setSelectedUid(paginatedWallets[0]?.uid || "");
     }
-  }, [filteredWallets, paginatedWallets, selectedUid, sortedWallets]);
+  }, [
+    activeTab,
+    filteredWallets,
+    paginatedWallets,
+    selectedUid,
+    sortedWallets,
+  ]);
 
   useEffect(() => {
     if (
@@ -1042,14 +1029,6 @@ const ManagePoints: React.FC = () => {
     )
       setGrantClassFilter("all");
   }, [grantClassFilter, grantClassOptions]);
-
-  useEffect(() => {
-    if (
-      grantNumberFilter !== "all" &&
-      !grantNumberOptions.includes(grantNumberFilter)
-    )
-      setGrantNumberFilter("all");
-  }, [grantNumberFilter, grantNumberOptions]);
 
   useEffect(() => {
     if (
@@ -1068,28 +1047,65 @@ const ManagePoints: React.FC = () => {
     ) {
       setStudents([]);
       setGrantSelectedUid("");
-      setGrantNumberFilter("all");
+      setGrantNextCursor("");
+      setGrantLoading(false);
       return;
     }
 
     let cancelled = false;
     const loadGrantStudents = async () => {
       setGrantLoading(true);
+      setGrantReadError("");
+      setStudents([]);
+      setGrantSelectedUid("");
+      setGrantNextCursor("");
       try {
-        const nextStudents = isGlobalGrantSearch
-          ? await listPointStudentTargets(config)
-          : await listPointStudentTargetsByClass(
-              grantGradeFilter,
-              grantClassFilter,
-              config,
-            );
-        if (cancelled) return;
+        const page = await getCanonicalPointWalletPage(
+          config,
+          grantSelection,
+          grantCursor,
+          OVERVIEW_PAGE_SIZE,
+        );
+        if (cancelled || !isCurrentScope()) return;
+        const nextStudents = page.wallets.map((wallet) => ({
+          uid: wallet.uid,
+          studentName: wallet.studentName,
+          grade: wallet.grade,
+          class: wallet.class,
+          number: wallet.number,
+          email: "",
+        }));
+        setWallets(
+          page.wallets.map(
+            (wallet) =>
+              latestWisWallet(
+                walletSnapshotsRef.current.get(wallet.uid) || null,
+                wallet,
+              )!,
+          ),
+        );
+        setGrantNextCursor(page.nextCursor);
         setStudents(nextStudents);
         setGrantSelectedUid((prev) =>
           prev && nextStudents.some((student) => student.uid === prev)
             ? prev
             : nextStudents[0]?.uid || "",
         );
+      } catch (error: any) {
+        if (
+          !cancelled &&
+          isCurrentScope() &&
+          grantCursor &&
+          error?.details?.reason === "WIS_OVERVIEW_PAGE_CHANGED"
+        ) {
+          setGrantPages({ key: grantSelectionKey, cursors: [""], page: 1 });
+          return;
+        }
+        if (!cancelled && isCurrentScope())
+          setGrantReadError(
+            error?.message ||
+              "학생 명단을 불러오지 못했습니다. 다시 시도해 주세요.",
+          );
       } finally {
         if (!cancelled) setGrantLoading(false);
       }
@@ -1103,11 +1119,9 @@ const ManagePoints: React.FC = () => {
     requestScope,
     activeTab,
     canRead,
-    grantClassFilter,
-    grantGradeFilter,
-    isGlobalGrantSearch,
-    config?.year,
-    config?.semester,
+    grantSelectionKey,
+    grantCursor,
+    grantReadRefresh,
   ]);
 
   useEffect(() => {
@@ -1134,27 +1148,38 @@ const ManagePoints: React.FC = () => {
         : sortKey === "affiliation"
           ? "asc"
           : "desc";
-    const nextSortedWallets = sortOverviewWallets(
-      filteredWallets,
-      sortKey,
-      nextSortDirection,
-    );
-    const selectedIndex = nextSortedWallets.findIndex(
-      (wallet) => wallet.uid === selectedUid,
-    );
-
     setOverviewSortKey(sortKey);
     setOverviewSortDirection(nextSortDirection);
-    setOverviewPage(
-      selectedIndex >= 0
-        ? Math.floor(selectedIndex / OVERVIEW_PAGE_SIZE) + 1
-        : 1,
-    );
   };
 
   const handleOverviewPageChange = (page: number) => {
-    const nextPage = Math.min(Math.max(page, 1), overviewTotalPages);
-    setOverviewPage(nextPage);
+    if (pointLoading || (page > currentOverviewPage && !overviewNextCursor))
+      return;
+    setOverviewPages((previous) => {
+      const cursors =
+        previous.key === overviewSelectionKey ? [...previous.cursors] : [""];
+      if (page === currentOverviewPage + 1)
+        cursors[currentOverviewPage] = overviewNextCursor;
+      return {
+        key: overviewSelectionKey,
+        cursors,
+        page: Math.max(1, Math.min(page, cursors.length)),
+      };
+    });
+  };
+  const handleGrantPageChange = (page: number) => {
+    if (grantLoading || (page > currentGrantPage && !grantNextCursor)) return;
+    setGrantPages((previous) => {
+      const cursors =
+        previous.key === grantSelectionKey ? [...previous.cursors] : [""];
+      if (page === currentGrantPage + 1)
+        cursors[currentGrantPage] = grantNextCursor;
+      return {
+        key: grantSelectionKey,
+        cursors,
+        page: Math.max(1, Math.min(page, cursors.length)),
+      };
+    });
   };
 
   const updatePolicyDraft = (updater: (prev: PointPolicy) => PointPolicy) => {
@@ -1411,34 +1436,30 @@ const ManagePoints: React.FC = () => {
       });
       const refreshToken = {};
       walletRefreshRef.current.set(grantedUid, refreshToken);
-      void getCanonicalPointTransactionPage(config, grantedUid)
-        .then((page) => {
+      void getCanonicalPointWallet(config, grantedUid)
+        .then((nextWallet) => {
           if (
             !isCurrentScope() ||
             walletRefreshRef.current.get(grantedUid) !== refreshToken
           )
             return;
           if (
-            Number(page.wallet?.revision || 0) <
+            Number(nextWallet?.revision || 0) <
             (walletRevisionsRef.current.get(grantedUid) || 0)
           )
             return;
           walletRevisionsRef.current.set(
             grantedUid,
-            Number(page.wallet?.revision || 0),
+            Number(nextWallet?.revision || 0),
           );
-          if (page.wallet)
+          if (nextWallet)
             setWallets((previous) =>
               previous.map((wallet) =>
                 wallet.uid === grantedUid
-                  ? latestWisWallet(wallet, page.wallet)!
+                  ? latestWisWallet(wallet, nextWallet)!
                   : wallet,
               ),
             );
-          if (selectedUidRef.current === grantedUid) {
-            setTransactions(page.transactions);
-            setTransactionCursor(page.nextCursor);
-          }
         })
         .catch(() => {
           if (
@@ -1932,13 +1953,11 @@ const ManagePoints: React.FC = () => {
         title: "주문 상태 변경",
         message: "구매 요청 상태를 반영했습니다.",
       });
-      void Promise.all([
-        listPointOrders(config, { limitCount: 200 }),
-        listPointProducts(config, false),
-      ])
-        .then(([nextOrders, nextProducts]) => {
+      void listPointOrders(config)
+        .then((nextOrders) => {
+          if (!isCurrentScope() || currentViewRef.current !== "requests")
+            return;
           setOrders(nextOrders);
-          setProducts(nextProducts);
         })
         .catch((error) => {
           console.warn("Failed to refresh point orders after review:", error);
@@ -1966,14 +1985,26 @@ const ManagePoints: React.FC = () => {
     if (!isCurrentScope()) return;
     const request = {};
     walletListRequestRef.current = request;
-    const nextWallets = await listPointWallets(config);
-    if (!isCurrentScope() || walletListRequestRef.current !== request) return;
+    const page = await getCanonicalPointWalletPage(
+      config,
+      overviewSelection,
+      overviewCursor,
+      OVERVIEW_PAGE_SIZE,
+    );
+    const nextWallets = page.wallets;
+    if (
+      !isCurrentScope() ||
+      currentViewRef.current !== viewKey ||
+      walletListRequestRef.current !== request
+    )
+      return;
     const nextRankManualAdjustEarnedPointsByUid = nextWallets.some((wallet) =>
       needsPointRankLegacyFallback(wallet),
     )
       ? await getPointRankManualAdjustEarnedPointsMap(config)
       : {};
     if (!commitWalletList(nextWallets, request)) return;
+    setOverviewNextCursor(page.nextCursor);
     setRankManualAdjustEarnedPointsByUid(nextRankManualAdjustEarnedPointsByUid);
     if (selectedUidRef.current) {
       await loadTransactionsForWallet(selectedUidRef.current);
@@ -2122,33 +2153,40 @@ const ManagePoints: React.FC = () => {
             />
           )}
 
-          {!loading && canManage && pendingAdjustment && (
-            <div
-              role="status"
-              className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900"
-            >
-              <span>
-                {adjustmentFeedback || "완료되지 않은 위스 조정이 있습니다."}
-              </span>
-              <button
-                type="button"
-                disabled={adjustmentSaving}
-                onClick={() => void resumePendingAdjustment()}
-                className="min-h-11 rounded-lg border border-amber-300 bg-white px-4 font-bold disabled:opacity-50"
+          {!loading &&
+            activeTab !== "stocks" &&
+            canManage &&
+            pendingAdjustment && (
+              <div
+                role="status"
+                className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900"
               >
-                {adjustmentSaving ? "확인 중..." : "이전 조정 이어서 처리"}
-              </button>
-            </div>
+                <span>
+                  {adjustmentFeedback || "완료되지 않은 위스 조정이 있습니다."}
+                </span>
+                <button
+                  type="button"
+                  disabled={adjustmentSaving}
+                  onClick={() => void resumePendingAdjustment()}
+                  className="min-h-11 rounded-lg border border-amber-300 bg-white px-4 font-bold disabled:opacity-50"
+                >
+                  {adjustmentSaving ? "확인 중..." : "이전 조정 이어서 처리"}
+                </button>
+              </div>
+            )}
+          {activeTab === "stocks" && scopeReady && (
+            <TeacherWisStocks config={config} canManage={canManage} />
           )}
-          {!loading && activeTab === "overview" && (
+          {activeTab === "overview" && (
             <PointsOverviewTab
-              wallets={paginatedWallets}
-              totalWalletCount={sortedWallets.length}
+              wallets={loading ? [] : paginatedWallets}
+              totalWalletCount={loading ? 0 : sortedWallets.length}
+              loading={loading}
               currentPage={currentOverviewPage}
               totalPages={overviewTotalPages}
               sortKey={overviewSortKey}
               sortDirection={overviewSortDirection}
-              selectedWallet={selectedWallet}
+              selectedWallet={loading ? null : selectedWallet}
               selectedUid={selectedUid}
               rankPolicy={savedPolicy.rankPolicy}
               rankManualAdjustEarnedPointsByUid={
@@ -2176,8 +2214,15 @@ const ManagePoints: React.FC = () => {
               adjustmentDraftValue={adjustmentDraftValue}
               adjustmentFeedback={adjustmentFeedback}
               adjustmentSaving={adjustmentSaving}
-              onGradeFilterChange={setGradeFilter}
-              onClassFilterChange={setClassFilter}
+              onGradeFilterChange={(value) => {
+                setGradeFilter(value);
+                setClassFilter("all");
+                setNumberFilter("all");
+              }}
+              onClassFilterChange={(value) => {
+                setClassFilter(value);
+                setNumberFilter("all");
+              }}
               onNumberFilterChange={setNumberFilter}
               onNameSearchChange={setNameSearch}
               onSortChange={handleOverviewSortChange}
@@ -2203,6 +2248,11 @@ const ManagePoints: React.FC = () => {
               manualAdjustEnabled={savedPolicy.manualAdjustEnabled}
               allowNegativeBalance={savedPolicy.allowNegativeBalance}
               loading={grantLoading}
+              currentPage={currentGrantPage}
+              hasNextPage={!!grantNextCursor}
+              onPageChange={handleGrantPageChange}
+              readError={grantReadError}
+              onRetry={() => setGrantReadRefresh((value) => value + 1)}
               gradeFilter={grantGradeFilter}
               classFilter={grantClassFilter}
               numberFilter={grantNumberFilter}
@@ -2214,8 +2264,15 @@ const ManagePoints: React.FC = () => {
               reason={grantReason}
               feedback={grantFeedback}
               submittingMode={grantSubmittingMode}
-              onGradeFilterChange={setGrantGradeFilter}
-              onClassFilterChange={setGrantClassFilter}
+              onGradeFilterChange={(value) => {
+                setGrantGradeFilter(value);
+                setGrantClassFilter("all");
+                setGrantNumberFilter("all");
+              }}
+              onClassFilterChange={(value) => {
+                setGrantClassFilter(value);
+                setGrantNumberFilter("all");
+              }}
               onNumberFilterChange={setGrantNumberFilter}
               onNameSearchChange={setGrantNameSearch}
               onSelectStudent={setGrantSelectedUid}
@@ -2225,7 +2282,7 @@ const ManagePoints: React.FC = () => {
             />
           )}
 
-          {!loading && (
+          {!loading && activeTab !== "stocks" && (
             <div hidden={activeTab !== "policy"}>
               <PointPolicyTab
                 config={config}
@@ -2286,7 +2343,7 @@ const ManagePoints: React.FC = () => {
 
           {!loading &&
             shopLoadError &&
-            ["products", "requests"].includes(activeTab) && (
+            !["stocks", "hall-of-fame"].includes(activeTab) && (
               <div role="alert" className="wis-shop-feedback">
                 {shopLoadError}{" "}
                 <button

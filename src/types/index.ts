@@ -620,7 +620,7 @@ export interface WisHallOfFameSnapshot {
   semester?: string;
   snapshotVersion: number;
   snapshotKey: string;
-  rankingMetric: "cumulativeEarned";
+  rankingMetric: "cumulativeEarned" | "currentBalance";
   primaryGradeKey?: string;
   gradeTop3ByGrade: Record<string, WisHallOfFameEntry[]>;
   classTop3ByClassKey: Record<string, WisHallOfFameEntry[]>;

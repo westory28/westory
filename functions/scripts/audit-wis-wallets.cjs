@@ -2,22 +2,29 @@
 const { initializeApp, deleteApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const { resolveCredential } = require('./rebuild-wis-ranking-index.cjs');
+const { inspectWisLedger } = require('../wisLedgerIntegrity');
+const { totalsFromLedgerEntries } = require('../productionGateway/wisEconomy');
 
 const reconcile = (account, entries, balance, ranking) => {
-  const issues = [];
-  if (!Number.isSafeInteger(account.balance) || account.balance < 0) issues.push('invalid_balance');
-  let total = 0;
-  for (const entry of entries) {
-    if (!Number.isSafeInteger(entry.delta) || !Number.isSafeInteger(entry.balanceBefore) ||
-      !Number.isSafeInteger(entry.balanceAfter) || entry.balanceBefore + entry.delta !== entry.balanceAfter)
-      issues.push('invalid_ledger_amount');
-    total += entry.delta;
+  const issues = inspectWisLedger(account, entries).issues;
+  const totalFields = ['earnedTotal', 'rankEarnedTotal', 'spentTotal', 'adjustedTotal'];
+  let totals;
+  try { totals = totalsFromLedgerEntries(entries); }
+  catch { issues.push('invalid_ledger_totals'); }
+  for (const field of totalFields) {
+    if (!Number.isSafeInteger(account[field]) || (field !== 'adjustedTotal' && account[field] < 0))
+      issues.push(`invalid_${field}`);
+    if (totals && (!Number.isSafeInteger(totals[field]) || totals[field] !== account[field]))
+      issues.push(`ledger_${field}_mismatch`);
   }
-  if (!Number.isSafeInteger(total) || total !== account.balance) issues.push('ledger_balance_mismatch');
   for (const [label, projection] of [['balance', balance], ['ranking', ranking]]) {
     if (!projection || projection.balance !== account.balance || projection.ledgerRevision !== account.revision)
       issues.push(`${label}_projection_mismatch`);
+    if (projection && (projection.accountId !== account.accountId || projection.semesterId !== account.semesterId
+      || projection.studentUid !== account.studentUid)) issues.push(`${label}_projection_scope_mismatch`);
   }
+  if (balance && totalFields.some(field => balance[field] !== account[field])) issues.push('balance_projection_totals_mismatch');
+  if (ranking && ranking.rankEarnedTotal !== account.rankEarnedTotal) issues.push('ranking_projection_totals_mismatch');
   const ids = new Set(entries.map(entry => entry.ledgerEntryId));
   if (ids.size !== entries.length) issues.push('duplicate_ledger_id');
   if ((account.recentLedgerEntries || []).some(entry => !ids.has(entry.ledgerEntryId)))
@@ -28,6 +35,10 @@ const reconcile = (account, entries, balance, ranking) => {
   const byId = new Map(entries.map(entry => [entry.ledgerEntryId, entry]));
   if ((account.recentLedgerEntries || []).some(entry => byId.get(entry.ledgerEntryId)?.delta !== entry.delta))
     issues.push('recent_cache_amount_mismatch');
+  if (new Set((account.recentLedgerEntries || []).map(entry => entry.ledgerEntryId)).size !== (account.recentLedgerEntries || []).length)
+    issues.push('recent_cache_duplicate');
+  if ((account.recentLedgerEntries || []).some(entry => ['accountId', 'semesterId', 'studentUid', 'type', 'balanceBefore', 'balanceAfter']
+    .some(field => byId.get(entry.ledgerEntryId)?.[field] !== entry[field]))) issues.push('recent_cache_entry_mismatch');
   return [...new Set(issues)];
 };
 

@@ -1,0 +1,48 @@
+.wis-stocks { min-width: 0; color: var(--ws-text, #1f2937); }
+.wis-stocks__toolbar, .wis-stocks__title, .wis-stocks__actions, .wis-stocks__summary, .wis-stocks__editor-title, .wis-stocks__quote, .wis-stock-chart__values { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.wis-stocks__toolbar, .wis-stocks__editor-title, .wis-stock-chart__values { justify-content: space-between; }
+.wis-stocks__title { gap: 8px; }
+.wis-stocks h2 { margin: 0; font-size: 24px; font-weight: 800; }
+.wis-stocks h3 { margin: 0; font-size: 20px; font-weight: 700; }
+.wis-stocks__closed { padding: 4px 8px; border-radius: 8px; color: var(--ws-text-muted, #6b7280); background: var(--ws-surface-muted, #f3f4f6); font-size: 12px; font-weight: 700; }
+.wis-stocks button { min-height: 44px; padding: 8px 16px; border: 1px solid var(--ws-border, #e5e7eb); border-radius: 8px; background: var(--ws-surface, #fff); color: var(--ws-text, #1f2937); font: inherit; cursor: pointer; }
+.wis-stocks button.wis-stocks__primary { background: var(--ws-primary, #2563eb); border-color: var(--ws-primary, #2563eb); color: #fff; font-weight: 700; }
+.wis-stocks button:disabled { opacity: .5; cursor: default; }
+.wis-stocks :is(button,input,select,textarea):focus-visible { outline: 2px solid var(--ws-ring, #3b82f6); outline-offset: 2px; }
+.wis-stocks__summary { margin: 16px 0; font-size: 14px; color: var(--ws-text-muted, #6b7280); }
+.wis-stocks__workspace { display: grid; gap: 24px; margin-top: 16px; min-width: 0; }
+.wis-stocks__workspace.is-editing { grid-template-columns: minmax(240px, 1fr) minmax(0, 2fr); align-items: start; }
+.wis-stocks__list { min-width: 0; }
+.wis-stocks button.wis-stocks__row { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 16px; border-radius: 0; padding: 16px; border-width: 0 0 1px; text-align: left; }
+.wis-stocks button.wis-stocks__row.is-selected { background: var(--ws-primary-soft, #eff6ff); box-shadow: inset 3px 0 var(--ws-primary, #2563eb); }
+.wis-stocks__row-name, .wis-stocks__row-price { display: grid; gap: 4px; min-width: 0; }
+.wis-stocks__row-name strong { overflow-wrap: anywhere; word-break: keep-all; }
+.wis-stocks__row-price { text-align: right; flex-shrink: 0; }
+.wis-stocks__row-name span, .wis-stocks__row-price span { font-size: 12px; color: var(--ws-text-muted, #6b7280); }
+.wis-stocks__editor { min-width: 0; padding: 24px; background: var(--ws-surface, #fff); border: 1px solid var(--ws-border, #e5e7eb); border-radius: 12px; }
+.wis-stocks__editor-title { margin-bottom: 16px; }
+.wis-stocks__editor-title h3 { min-width: 0; overflow-wrap: anywhere; }
+.wis-stocks__editor-title button { padding: 8px; border: 0; color: var(--ws-text-muted, #6b7280); }
+.wis-stocks__editor fieldset { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; border: 0; padding: 0; margin: 16px 0 0; min-width: 0; }
+.wis-stocks__editor label { display: flex; flex-direction: column; gap: 8px; font-size: 14px; font-weight: 500; min-width: 0; }
+.wis-stocks__editor label > span { display: flex; align-items: center; gap: 4px; }
+.wis-stocks__editor :is(input,textarea,select) { box-sizing: border-box; min-width: 0; width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--ws-border, #e5e7eb); border-radius: 8px; background: var(--ws-surface, #fff); color: inherit; font: inherit; font-size: 16px; }
+.wis-stocks__editor :is(input,textarea,select):disabled { background: var(--ws-surface-muted, #f3f4f6); color: var(--ws-text-muted, #6b7280); }
+.wis-stocks__editor textarea { resize: vertical; }
+.wis-stocks__wide { grid-column: 1/-1; }
+.wis-stocks__editor label.wis-stocks__automatic { flex-direction: row; align-items: center; min-height: 44px; }
+.wis-stocks__automatic input { width: 20px; min-height: 20px; height: 20px; accent-color: var(--ws-primary, #2563eb); }
+.wis-stocks__form-actions { margin-top: 24px; display: flex; justify-content: flex-end; }
+.wis-stocks__empty { margin: 0; padding: 32px 0; color: var(--ws-text-muted, #6b7280); }
+.wis-stocks__error { color: var(--ws-danger, #dc2626); font-size: 14px; margin: 16px 0; }
+.wis-stocks__quote { gap: 8px; margin: 16px 0; }
+.wis-stocks__quote > strong { font-size: 24px; font-variant-numeric: tabular-nums; }
+.wis-stocks__quote small { font-size: 14px; font-weight: 500; }
+.wis-stocks__quote > span { color: var(--ws-text-muted, #6b7280); font-size: 12px; }
+.wis-stock-chart { min-width: 0; }
+.wis-stock-chart svg { display: block; width: 100%; height: auto; max-height: 240px; overflow: visible; }
+.wis-stock-chart__plot { stroke: var(--ws-primary, #2563eb); stroke-width: 3; fill: var(--ws-primary, #2563eb); stroke-linejoin: round; stroke-linecap: round; }
+.wis-stock-chart__axis { stroke: var(--ws-border, #e5e7eb); }
+.wis-stock-chart__values { color: var(--ws-text-muted, #6b7280); font-size: 12px; }
+@media (max-width: 767px) { .wis-stocks__workspace.is-editing { grid-template-columns: minmax(0,1fr); } .wis-stocks__editor { padding: 16px; } .wis-stocks__editor { order: -1; } }
+@media (max-width: 359px) { .wis-stocks__editor fieldset { grid-template-columns: minmax(0,1fr); } .wis-stocks__actions { gap: 8px; } }

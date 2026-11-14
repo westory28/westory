@@ -170,6 +170,20 @@ await step('selected hall groups send one scoped request and isolate different g
   assert.equal(pendingCalls().length, 0, 'No trailing all-class fetch');
   hold = false;
 });
+await step('ranking mode and class isolate pending requests without extra directory calls', async () => {
+  hold = true;
+  const first = getWisRankingPreview(config, 'teacher', { metric: 'cumulative', classKey: '' });
+  const duplicate = getWisRankingPreview(config, 'teacher', { metric: 'cumulative', classKey: '' });
+  const current = getWisRankingPreview(config, 'teacher', { metric: 'current', classKey: '' });
+  const classroom = getWisRankingPreview(config, 'teacher', { metric: 'current', classKey: '3-2' });
+  await waitFor(() => pendingCalls().length === 3, 'distinct ranking selection flights');
+  assert.deepEqual(pendingCalls().map(call => [call.data.rankingMetric, call.data.rankingClassKey]),
+    [['cumulative', ''], ['current', ''], ['current', '3-2']]);
+  for (const call of pendingCalls()) call.resolve();
+  await Promise.all([first, duplicate, current, classroom]);
+  assert.equal(pendingCalls().length, 0);
+  hold = false;
+});
 await step('failed shared call clears its flight without polling and permits explicit retry', async () => {
   hold = true;
   const before = rankingCalls().length;

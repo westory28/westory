@@ -1,3 +1,72 @@
+.wis-ranking-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.wis-ranking-controls .wis-ranking-title {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.wis-ranking-metrics {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.wis-ranking-metric {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.wis-ranking-metric span {
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--ws-text-muted, #6b7280);
+}
+
+.wis-ranking-metric[aria-checked="true"] span {
+  background: var(--ws-primary-soft, #eff6ff);
+  color: var(--ws-primary-text, #1e3a8a);
+}
+
+.wis-ranking-class-select {
+  /* The user requested a compact selector matching the visible badge height. */
+  min-height: 28px;
+  height: 28px;
+  max-width: 160px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  padding: 2px 8px;
+  background: transparent;
+  color: var(--ws-text, #1f2937);
+  font: inherit;
+  font-size: 12px;
+}
+
+.wis-ranking-controls .wis-ranking-more-button {
+  margin-left: auto;
+}
+
+.wis-ranking-controls :is(button, select):focus-visible {
+  outline: 2px solid var(--ws-primary, #2563eb);
+  outline-offset: 2px;
+}
+
 .wis-ranking-with-avatar .wis-ranking-avatar-layout {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);

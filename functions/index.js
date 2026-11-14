@@ -8227,6 +8227,19 @@ exports.getWisEconomyStateFast = require('./studentWisQuery').getWisEconomyState
 exports.executeWisCommandFast = require('./productionGateway/productionSource').executeWisCommandFast;
 exports.getWisCommandStatusFast = require('./productionGateway/productionSource').getWisCommandStatusFast;
 exports.getWisRankingPreview = require('./wisRankingPreview').getWisRankingPreview;
+const wisStockHandlers = require('./wisStocks').createWisStockHandlers({ db });
+exports.getWisStockManagement = onCall(
+  { region: 'us-central1', memory: '256MiB', maxInstances: 10 },
+  wisStockHandlers.getWisStockManagement,
+);
+exports.saveWisStock = onCall(
+  { region: 'us-central1', memory: '256MiB', maxInstances: 10 },
+  wisStockHandlers.saveWisStock,
+);
+exports.advanceWisStockPrices = onSchedule(
+  { schedule: 'every 60 minutes', region: 'us-central1', timeZone: 'Asia/Seoul', maxInstances: 1, memory: '256MiB' },
+  wisStockHandlers.advanceWisStockPrices,
+);
 Object.assign(exports, require('./wisRankingIndex').createWisRankingIndexTriggers({ db }));
 // Use the reviewed scoped query, preserving the live teacher archive boundary.
 exports.listStudentHistoryDictionaryWordsForTeacher = onCall({ region: REGION },

@@ -89,6 +89,30 @@ export const listCanonicalPointWallets = async (config: WisConfig) =>
         b.balance - a.balance ||
         a.studentName.localeCompare(b.studentName, "ko"),
     );
+export type WisOverviewSelection = {
+  grade?: string;
+  classNumber?: string;
+  studentNumber?: string;
+  namePrefix?: string;
+  sortField?: "balance" | "rankEarnedTotal" | "spentTotal";
+  direction?: "asc" | "desc";
+};
+export const getCanonicalPointWalletPage = async (
+  config: WisConfig,
+  overview: WisOverviewSelection,
+  cursor = "",
+  limit = 20,
+) => {
+  const state = await queryWisState(config, "teacher", "overview", {
+    overview,
+    cursor,
+    limit,
+  });
+  return {
+    wallets: state.accounts.map(wisWallet),
+    nextCursor: state.nextCursor,
+  };
+};
 export const listCanonicalPointStudentTargets = async (config: WisConfig) =>
   (await listCanonicalPointWallets(config)).map((wallet) => ({
     uid: wallet.uid,
