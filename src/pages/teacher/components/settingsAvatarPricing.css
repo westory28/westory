@@ -1,19 +1,11 @@
 .avatar-pricing.ws-page {
   padding: 0;
 }
-.avatar-pricing-title,
 .avatar-pricing-value {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-}
-.avatar-pricing-title h2 {
-  margin: 0;
-  font-size: var(--ws-type-page-title, 1.75rem);
-}
-.avatar-pricing-title .ws-info-help {
-  flex: 0 0 auto;
 }
 .avatar-pricing-reload {
   display: inline-flex;
@@ -60,12 +52,6 @@
   color: #fff;
   font-weight: 700;
   white-space: nowrap;
-}
-.avatar-pricing .ws-info-help__button {
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
 }
 .avatar-pricing-filters {
   display: flex;
@@ -388,9 +374,6 @@
   border-color: var(--ws-danger-text, #b91c1c);
 }
 @media (max-width: 640px) {
-  .avatar-pricing-title {
-    align-items: center;
-  }
   .avatar-pricing-filters > label.avatar-pricing-search {
     flex-basis: 100%;
   }

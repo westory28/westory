@@ -22,6 +22,11 @@ export const DEVELOPER_LOG_CATEGORIES = [
     label: "공지",
     badgeClassName: "bg-slate-50 text-slate-700 border-slate-200",
   },
+  {
+    value: "event",
+    label: "이벤트",
+    badgeClassName: "bg-blue-50 text-blue-700 border-blue-200",
+  },
 ] as const;
 
 export type DeveloperLogCategory =

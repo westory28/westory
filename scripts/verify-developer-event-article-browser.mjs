@@ -84,8 +84,7 @@ const actualArticles = await Promise.all(
     const source =
       (await readOptionalArticle(
         `output/notice-20261025/article-v2/${name}.html`,
-      )) ??
-      (await readOptionalArticle(`output/notice-20261025/${name}.html`));
+      )) ?? (await readOptionalArticle(`output/notice-20261025/${name}.html`));
     return [
       name,
       source
@@ -113,14 +112,14 @@ import {sanitizeRichHtml} from './src/lib/sanitizeRichHtml';
 import React,{useEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import NoticeImageArticle,{hasNoticeImageArticleMarkup} from './src/components/common/NoticeImageArticle';
+import {DEVELOPER_LOG_CATEGORIES} from './src/lib/developerLogs';
 ${pieces.get("hasEventArticleMarkup")}
 ${pieces.get("EventArticleEditor")}
 const source='<article class="westory-event-article"><figure><img src="/banner.png" width="1200" height="675" alt="수행평가 안내 이미지"></figure><h2>반별 수행평가 일정</h2><p>핵심 범위 <strong>붕당 · 여씨향약</strong></p><div class="westory-event-table" role="region" aria-label="반별 수행평가 일정" tabindex="0"><table><thead><tr><th scope="col">학급</th><th scope="col">날짜</th><th scope="col">교시</th></tr></thead><tbody><tr><td>3학년 1반</td><td>10월 30일(금)</td><td>5교시</td></tr><tr><td>3학년 10반</td><td>10월 29일(목)</td><td>4교시</td></tr></tbody></table></div><h2>준비 사항</h2><ul><li>검정색 볼펜을 준비해 주세요.</li><li>위스토리 문제 많이 풀기</li></ul><blockquote><p><strong>꼭 확인해 주세요</strong></p><p>평가 일정과 핵심 범위를 확인합니다.</p></blockquote></article>';
 const base={id:'fixture',title:'역사 수행평가 안내',summary:'수행평가의 일정과 준비 사항입니다.',version:'',category:'notice',images:[],isPinned:false,viewCount:0,likeCount:0,createdByName:'검증 교사'};
-const activeCardImageIndex=0,liked=false,canManage=false,cardSwipeStartRef={current:null};
+const activeCardImageIndex=0,liked=false,canManage=false,pendingMutation=false,cardSwipeStartRef={current:null};
 const renderCategoryBadge=()=>null,getDisplayTitle=p=>p.title,formatDate=()=> '2026.10.25';
 const Link=({to,...props})=><a href={to} {...props}/>;
-const DEVELOPER_LOG_CATEGORIES=[{value:'notice',label:'공지사항'},{value:'update',label:'업데이트'},{value:'fix',label:'수정사항'}];
 const toggleLike=()=>{},navigate=()=>{},startEdit=()=>{},deletePost=()=>{},moveCardImage=()=>{},setActiveCardImageIndex=()=>{},handleCardSwipeStart=()=>{},handleCardSwipeEnd=()=>{};
 ${pieces.get("renderPostDetail")}
 function ListFixture(){const [categoryFilter,setCategoryFilter]=useState('all'),[searchText,setSearchText]=useState(''),[sortMode,setSortMode]=useState('latest');const listLoading=false;const filteredPosts=[{...base,id:'performance',isPinned:true,title:'관심사와 연결한 나만의 붕당 정치 전개도 만들기 — 반별 수행평가 일정과 준비 사항',summary:'붕당과 여씨향약, 학급별 일정을 확인해 주세요.'},{...base,id:'exam',title:'2026학년도 2학기 2차 정기시험 — 역사와 전 교과 시험범위',summary:'위스토리 문제 많이 풀기'},{...base,id:'reopen',title:'위스토리 재오픈 안내',summary:'새롭게 만나는 위스토리'}];return ${listMarkup};}
@@ -155,7 +154,9 @@ const server = http.createServer(async (req, res) => {
   const pathname = new URL(req.url || "/", "http://127.0.0.1").pathname;
   if (imageRoutes.has(pathname)) {
     try {
-      const image = await fs.readFile(path.join(root, imageRoutes.get(pathname)));
+      const image = await fs.readFile(
+        path.join(root, imageRoutes.get(pathname)),
+      );
       res.setHeader(
         "Content-Type",
         pathname.endsWith(".png") ? "image/png" : "image/webp",

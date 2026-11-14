@@ -364,8 +364,8 @@ const DeveloperLog: React.FC = () => {
     });
   }, [categoryFilter, posts, searchText, sortMode]);
 
-  const resetWriteForm = () => {
-    setForm(EMPTY_FORM);
+  const resetWriteForm = (category: DeveloperLogCategory = "feature") => {
+    setForm({ ...EMPTY_FORM, category });
     setNewImageFiles([]);
     setPreviewOpen(false);
     setExpandedImage(null);
@@ -373,7 +373,7 @@ const DeveloperLog: React.FC = () => {
 
   const startWrite = () => {
     if (!canManage) return;
-    resetWriteForm();
+    resetWriteForm(categoryFilter === "event" ? "event" : "feature");
     setMode("write");
     navigate("/developer-log");
   };
@@ -702,7 +702,8 @@ const DeveloperLog: React.FC = () => {
 
   const renderPostDetail = (post: DeveloperLogPost, preview = false) => {
     const eventArticle =
-      post.category === "notice" && hasEventArticleMarkup(post.bodyHtml);
+      post.category === "event" ||
+      (post.category === "notice" && hasEventArticleMarkup(post.bodyHtml));
     const imageArticle =
       eventArticle && hasNoticeImageArticleMarkup(post.bodyHtml);
     const imageCount = post.images.length;
@@ -712,7 +713,7 @@ const DeveloperLog: React.FC = () => {
 
     return (
       <article
-        className={`rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7 lg:p-8${imageArticle ? " developer-log-image-post" : ""}`}
+        className={`rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7 lg:p-8${imageArticle || (post.category === "event" && imageCount > 0) ? " developer-log-image-post" : ""}`}
       >
         {pendingMutation && <LoadingOverlay />}
         <div className="flex flex-col gap-4 border-b border-gray-200 pb-6 lg:flex-row lg:items-start lg:justify-between">
@@ -784,6 +785,36 @@ const DeveloperLog: React.FC = () => {
               : "grid gap-8 py-8 lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)]"
           }
         >
+          {post.category === "event" && !imageArticle && imageCount > 0 && (
+            <div
+              className="developer-log-event-images"
+              aria-label="이벤트 안내 이미지"
+            >
+              {post.images.map((image, index) => (
+                <button
+                  key={image.imageStoragePath || image.imageUrl}
+                  type="button"
+                  aria-label={`${index + 1}번째 이벤트 이미지 크게 보기`}
+                  onClick={() =>
+                    setExpandedImage({
+                      src: image.imageUrl,
+                      alt: image.alt || post.title,
+                      label: `${index + 1} / ${imageCount}`,
+                    })
+                  }
+                >
+                  <img
+                    src={image.imageUrl}
+                    alt={image.alt || post.title}
+                    width={image.imageWidth || undefined}
+                    height={image.imageHeight || undefined}
+                    loading={index === 0 ? "eager" : "lazy"}
+                    decoding="async"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
           {imageArticle ? (
             <div className="developer-log-rich-text min-w-0">
               <NoticeImageArticle
@@ -947,7 +978,8 @@ const DeveloperLog: React.FC = () => {
   const renderEditor = () => {
     const preserveEventMarkup =
       mode === "edit" &&
-      selectedPost?.category === "notice" &&
+      (selectedPost?.category === "notice" ||
+        selectedPost?.category === "event") &&
       hasEventArticleMarkup(selectedPost.bodyHtml);
     const draftPost = buildDraftPost(
       form,
@@ -1051,6 +1083,7 @@ const DeveloperLog: React.FC = () => {
                     <button
                       type="button"
                       key={category.value}
+                      aria-pressed={form.category === category.value}
                       onClick={() =>
                         setForm((prev) => ({
                           ...prev,

@@ -7,7 +7,6 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import InfoHelp from "../../../components/common/InfoHelp";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import WisIcon from "../../../components/common/WisIcon";
@@ -552,13 +551,6 @@ export function AvatarPricingManager({
   return (
     <section className="ws-page avatar-pricing" aria-label="아바타 아이템 관리">
       <div className="ws-page-header">
-        <div className="avatar-pricing-title">
-          <h2>아바타 아이템 관리</h2>
-          <InfoHelp label="아바타 아이템 설정 안내">
-            성별은 상점 분류이며 착용 가능한 체형을 제한하지 않습니다. 이미
-            보유한 아이템은 다시 구매하지 않습니다.
-          </InfoHelp>
-        </div>
         <div className="avatar-pricing-page-actions">
           <button
             type="button"

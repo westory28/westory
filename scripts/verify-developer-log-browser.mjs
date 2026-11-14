@@ -30,12 +30,17 @@ export const preloadStudentWeplay=()=>{};
 export const resolveStudentProfileEmoji=()=>({rank:null,allowedEmojiIds:['smile'],entry:{id:'smile',emoji:'😀'}});
 export const loadStudentRankPromotionSnapshot=async()=>({wallet:{balance:0},rank:null,policy:{rankPolicy:null}});export const getPointRankDefaultEmojiValue=()=>"😀";
 const toast={showToast(){}};export const useAppToast=()=>toast;
-export const db={};export const doc=(...args)=>({path:args.map(x=>x?.path||x).join('/')});export const collection=doc;export const query=(ref)=>ref;export const orderBy=()=>null;export const limit=()=>null;export const serverTimestamp=()=>null;
+export const db={};export const doc=(...args)=>({path:args.map(x=>x?.path||x).join('/')});export const collection=doc;export const query=(ref)=>ref;export const orderBy=()=>null;export const limit=()=>null;export const serverTimestamp=()=>null;export const increment=(value)=>({increment:value});
 const post={title:'개발자 일지 화면 개선',category:'feature',summary:'포털 탐색 유지',bodyHtml:'<p>교사와 학생 포털에서 개발자 일지를 확인합니다.</p>',publishedAt:new Date('2026-10-20T00:00:00Z'),viewCount:3,likeCount:2};
-export const onSnapshot=(ref,callback)=>{callback({docs:[{id:'fixture-post',data:()=>post}]});return()=>{}};
-export const getDoc=async(ref)=>({id:'fixture-post',exists:()=>ref.path.endsWith('/fixture-post'),data:()=>post});export const getDocFromServer=getDoc;
-window.developerLogQa={writes:[]};const forbidWrite=async()=>{window.developerLogQa.writes.push('blocked');throw Error('Fixture writes disabled')};
-export const setDoc=forbidWrite,updateDoc=forbidWrite,deleteDoc=forbidWrite,addDoc=forbidWrite,uploadDeveloperLogImage=forbidWrite,tryDeleteDeveloperLogImage=forbidWrite;
+const eventPost={...post,title:'아바타 콘테스트',category:'event',summary:'나의 아바타를 소개해 주세요.',bodyHtml:'<p>옷장에서 저장한 아바타와 소개를 보내세요. 계정당 1회, 교사가 확인한 뒤 100위스를 지급합니다.</p>',images:[{imageUrl:'/poster.svg',imageStoragePath:'fixture/poster.webp',imageWidth:1086,imageHeight:1448,imageByteSize:100,imageMimeType:'image/webp',alt:'아바타 콘테스트 포스터',order:0}]};
+window.developerLogQa={writes:[],reads:0};
+export const onSnapshot=(ref,callback)=>{window.developerLogQa.reads++;callback({docs:[{id:'fixture-post',data:()=>post},{id:'fixture-event',data:()=>eventPost}]});return()=>{}};
+export const getDoc=async(ref)=>{window.developerLogQa.reads++;const id=ref.path.split('/').at(-1);return{id,exists:()=>['fixture-post','fixture-event','fixture-created'].includes(id),data:()=>id==='fixture-event'?eventPost:id==='fixture-created'?window.developerLogQa.created:post}};export const getDocFromServer=getDoc;
+const forbidWrite=async()=>{window.developerLogQa.writes.push('blocked');throw Error('Fixture writes disabled')};
+export const setDoc=forbidWrite,deleteDoc=forbidWrite,tryDeleteDeveloperLogImage=forbidWrite;
+export const addDoc=async(ref,data)=>{if(!window.developerLogQa.allowWrites)return forbidWrite();window.developerLogQa.writes.push({op:'create',data});window.developerLogQa.created=data;return{id:'fixture-created',path:'site_settings/developer_logs/items/fixture-created'}};
+export const updateDoc=async(ref,data)=>{if(!window.developerLogQa.allowWrites)return forbidWrite();window.developerLogQa.writes.push({op:'update',data});Object.assign(window.developerLogQa.created,data)};
+export const uploadDeveloperLogImage=async()=>{if(!window.developerLogQa.allowWrites)return forbidWrite();window.developerLogQa.writes.push({op:'upload'});return eventPost.images[0]};
 export const runTransaction=async()=>{if(!window.developerLogQa.deferWrites)return forbidWrite();window.developerLogQa.writes.push('local-transaction');await new Promise((resolve,reject)=>Object.assign(window.developerLogQa,{resolve,reject}));};
 `;
 const entry = `
@@ -45,6 +50,8 @@ import MainLayout from './src/components/layout/MainLayout';import DeveloperLog 
 import {LoadingProvider} from './src/components/common/LoadingState';
 import './src/assets/index.css';import './src/components/common/portalPage.css';
 localStorage.setItem('developerLogViewed:fixture-post','1');
+localStorage.setItem('developerLogViewed:fixture-event','1');
+localStorage.setItem('developerLogViewed:fixture-created','1');
 createRoot(document.getElementById('root')).render(<LoadingProvider><HashRouter><MainLayout><Routes><Route path="/developer-log" element={<DeveloperLog/>}/><Route path="/developer-log/:postId" element={<DeveloperLog/>}/></Routes></MainLayout></HashRouter></LoadingProvider>);
 `;
 const built = await build({
@@ -79,11 +86,18 @@ const built = await build({
             filter:
               /(?:StudentHistoryDictionaryController|StudentRankPromotionController|TeacherPatchMemoController|NotificationBell|HeaderStudentWis|QuillEditor)$/,
           },
-          () => ({ path: "widget", namespace: "widget" }),
+          (args) => ({
+            path: args.path.endsWith("QuillEditor") ? "editor" : "widget",
+            namespace: "widget",
+          }),
         );
-        plugin.onLoad({ filter: /.*/, namespace: "widget" }, () => ({
-          contents: "export default function Widget(){return null}",
-          loader: "js",
+        plugin.onLoad({ filter: /.*/, namespace: "widget" }, (args) => ({
+          contents:
+            args.path === "editor"
+              ? 'import React from "react";export default function Editor({value,onChange}){return <textarea aria-label="본문" value={value} onChange={event=>onChange(event.target.value)}/>;}'
+              : "export default function Widget(){return null}",
+          loader: "jsx",
+          resolveDir: root,
         }));
       },
     },
@@ -108,6 +122,13 @@ const html =
   '<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><link rel="stylesheet" href="/fixture.css"><div id="root"></div><script type="module" src="/fixture.js"></script></html>';
 const server = http.createServer((request, response) => {
   const pathname = new URL(request.url, "http://localhost").pathname;
+  if (pathname === "/poster.svg") {
+    response.setHeader("Content-Type", "image/svg+xml");
+    response.end(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="1086" height="1448"><rect width="1086" height="1448" fill="#eff6ff"/><text x="80" y="180" font-size="70">아바타 콘테스트</text><text x="80" y="1340" font-size="45">교사 확인 후 100위스</text></svg>',
+    );
+    return;
+  }
   const [type, body] = {
     "/fixture.js": ["text/javascript", js],
     "/fixture.css": ["text/css", css],
@@ -202,6 +223,27 @@ try {
         );
         if (mode === "list") {
           assert.equal(await page.locator(".ws-page-tabs").count(), 1);
+          const before = await page.evaluate(() => window.developerLogQa.reads);
+          await page
+            .locator(".ws-page-tabs")
+            .getByRole("button", { name: "이벤트", exact: true })
+            .click();
+          await page.getByText("아바타 콘테스트", { exact: true }).waitFor();
+          assert.equal(
+            await page
+              .getByText("개발자 일지 화면 개선", { exact: true })
+              .count(),
+            0,
+          );
+          assert.equal(
+            await page.evaluate(() => window.developerLogQa.reads),
+            before,
+            "Existing loaded category tabs add no reads",
+          );
+          await page
+            .locator(".ws-page-tabs")
+            .getByRole("button", { name: "전체", exact: true })
+            .click();
           await page
             .getByLabel("개발자 일지 검색", { exact: true })
             .fill("없는 글");
@@ -232,10 +274,14 @@ try {
           await page
             .getByRole("status", { name: "처리 중", exact: true })
             .waitFor();
-          assert.equal(await page.locator(".ws-loading-screen").count(), 1);
+          assert.equal(
+            await page.locator(".ws-loading-container-overlay").count(),
+            1,
+          );
+          assert.equal(await page.locator(".ws-loading-screen").count(), 0);
           assert.equal(
             await page.locator("#root").evaluate((node) => node.inert),
-            true,
+            false,
           );
           assert.equal(
             await page.locator(".developer-log-page").count(),
@@ -244,17 +290,17 @@ try {
           );
           await page.evaluate(() => window.developerLogQa.resolve());
           await page
-            .locator(".ws-loading-screen")
+            .locator(".ws-loading-container-overlay")
             .waitFor({ state: "detached" });
           await page
             .getByRole("button", { name: "좋아요", exact: true })
             .click();
-          await page.locator(".ws-loading-screen").waitFor();
+          await page.locator(".ws-loading-container-overlay").waitFor();
           await page.evaluate(() =>
             window.developerLogQa.reject(new Error("synthetic-write-failure")),
           );
           await page
-            .locator(".ws-loading-screen")
+            .locator(".ws-loading-container-overlay")
             .waitFor({ state: "detached" });
           assert.equal(
             await page.locator("#root").evaluate((node) => node.inert),
@@ -285,6 +331,154 @@ try {
       await page.close();
     }
   }
+  for (const identity of ["student", "teacher"]) {
+    for (const width of [320, 390, 768, 1280]) {
+      const page = await browser.newPage({ viewport: { width, height: 900 } });
+      const errors = [];
+      page.on("pageerror", (error) => errors.push(error.message));
+      await page.route("**/*", (route) =>
+        route.request().url().startsWith(origin)
+          ? route.continue()
+          : route.abort(),
+      );
+      await page.goto(
+        `${origin}/?identity=${identity}#/developer-log/fixture-event`,
+      );
+      const image = page.locator(".developer-log-event-images img");
+      await image.waitFor();
+      await image.evaluate((img) => img.decode());
+      assert.equal(
+        await page.locator('[aria-label="카드뉴스 이미지 슬라이드"]').count(),
+        0,
+      );
+      assert.equal(
+        await page.locator(".developer-log-event-layout").count(),
+        1,
+      );
+      const dimensions = await image.evaluate((img) => {
+        const box = img.getBoundingClientRect();
+        return {
+          width: box.width,
+          ratio: box.width / box.height,
+          natural: img.naturalWidth / img.naturalHeight,
+          overflow: document.documentElement.scrollWidth > innerWidth + 1,
+        };
+      });
+      assert(dimensions.width <= 720 && dimensions.width > 200);
+      assert(Math.abs(dimensions.ratio - dimensions.natural) < 0.001);
+      assert.equal(dimensions.overflow, false);
+      await page
+        .getByText(/계정당 1회, 교사가 확인한 뒤 100위스를 지급합니다/)
+        .waitFor();
+      const before = await page.evaluate(() => window.developerLogQa.reads);
+      await page
+        .getByRole("button", {
+          name: "1번째 이벤트 이미지 크게 보기",
+          exact: true,
+        })
+        .click();
+      await page
+        .getByRole("dialog", { name: "1 / 1 크게 보기", exact: true })
+        .waitFor();
+      await page
+        .getByRole("button", { name: "확대 이미지 닫기", exact: true })
+        .click();
+      assert.equal(
+        await page.evaluate(() => window.developerLogQa.reads),
+        before,
+      );
+      assert.deepEqual(
+        await page.evaluate(() => window.developerLogQa.writes),
+        [],
+      );
+      await page.screenshot({
+        path: path.join(evidence, `${identity}-event-${width}.png`),
+        fullPage: true,
+      });
+      assert.deepEqual(errors, []);
+      checks.push({
+        identity,
+        width,
+        eventPoster: true,
+        originalRatio: true,
+        expanded: true,
+        extraReads: 0,
+        writes: 0,
+      });
+      await page.close();
+    }
+  }
+  const writer = await browser.newPage({
+    viewport: { width: 1280, height: 900 },
+  });
+  await writer.route("**/*", (route) =>
+    route.request().url().startsWith(origin) ? route.continue() : route.abort(),
+  );
+  await writer.goto(`${origin}/?identity=developer#/developer-log`);
+  await writer
+    .locator(".ws-page-tabs")
+    .getByRole("button", { name: "이벤트", exact: true })
+    .click();
+  await writer.getByRole("button", { name: "글쓰기", exact: true }).click();
+  assert.equal(
+    await writer
+      .getByRole("button", { name: "이벤트", exact: true })
+      .getAttribute("aria-pressed"),
+    "true",
+  );
+  await writer
+    .getByLabel("제목", { exact: true })
+    .fill("나만의 아바타 콘테스트 — 참여하고 100위스 받자!");
+  await writer
+    .getByLabel("요약", { exact: true })
+    .fill("1인 1회, 교사가 확인한 뒤 100위스를 지급합니다.");
+  const eventBody =
+    "옷장에서 내 아바타를 저장하고 소개를 보내 주세요. 계정당 1회 참여할 수 있으며, 교사가 확인한 뒤 100위스를 지급합니다.";
+  await writer.getByLabel("본문", { exact: true }).fill(eventBody);
+  await writer.locator('input[type="file"]').setInputFiles({
+    name: "event.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZSoYAAAAASUVORK5CYII=",
+      "base64",
+    ),
+  });
+  await writer.getByRole("button", { name: "미리보기", exact: true }).click();
+  await writer.locator(".developer-log-event-images img").waitFor();
+  await writer.getByText(eventBody, { exact: true }).waitFor();
+  assert.deepEqual(
+    await writer.evaluate(() => window.developerLogQa.writes),
+    [],
+  );
+  await writer.evaluate(() => {
+    window.developerLogQa.allowWrites = true;
+  });
+  await writer.getByRole("button", { name: "게시하기", exact: true }).click();
+  await writer.waitForURL(/fixture-created/);
+  await writer.locator(".developer-log-event-images img").waitFor();
+  const writes = await writer.evaluate(() => window.developerLogQa.writes);
+  assert.equal(writes.filter((x) => x.op === "create").length, 1);
+  assert.equal(writes.filter((x) => x.op === "upload").length, 1);
+  assert.equal(writes.filter((x) => x.op === "update").length, 1);
+  const saved = writes.find((x) => x.op === "update").data;
+  assert.equal(saved.category, "event");
+  assert.equal(saved.images.length, 1);
+  assert.equal(saved.title, "나만의 아바타 콘테스트 — 참여하고 100위스 받자!");
+  assert.equal(saved.bodyHtml, eventBody);
+  checks.push({
+    eventWriting: true,
+    categoryDefault: "event",
+    imageUpload: true,
+    preview: true,
+    bodyPreserved: true,
+    created: 1,
+    updated: 1,
+  });
+  await writer.screenshot({
+    path: path.join(evidence, "event-created-1280.png"),
+    fullPage: true,
+  });
+  await writer.close();
   await fs.writeFile(
     path.join(evidence, "checks.json"),
     JSON.stringify(checks, null, 2),
