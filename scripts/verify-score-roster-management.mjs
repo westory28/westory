@@ -8,6 +8,7 @@ import ts from "typescript";
 const definitions = new Map();
 let loadScoreRecordsClosure = "";
 let loadClassRecordsClosure = "";
+let loadStudentsClosure = "";
 for (const path of [
   "src/lib/studentRegistrationStatus.ts",
   "src/lib/studentRoster.ts",
@@ -22,6 +23,13 @@ for (const path of [
     path.endsWith("tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
   function findSave(node) {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === "loadStudents"
+    ) {
+      loadStudentsClosure = node.initializer.getText(source);
+    }
     if (
       ts.isVariableDeclaration(node) &&
       ts.isIdentifier(node.name) &&
@@ -94,6 +102,10 @@ const targets = [
   "getUploadMovementLookup",
   "uploadStudentLinksChanged",
   "markStudentIdentityConflicts",
+  "normalizeStudentProfile",
+  "isStudentRosterProfile",
+  "isStudentRegistrationPending",
+  "isActiveRosterStudent",
   "wasExcludedBeforeScoreSemester",
   "clearLegacyScoreEnrollmentForActiveStudent",
   "sortPerformanceScoreRecords",
@@ -142,6 +154,76 @@ const active = [
     email: "",
   },
 ];
+
+// A rejected registration is not a second student. Exercise the actual server
+// roster loader so those profiles cannot poison the approved student's match.
+let serverProfiles = [];
+let loadedProfiles = [];
+Object.assign(context, {
+  db: {},
+  year: "2026",
+  semester: "2",
+  isWrittenExamMode: true,
+  studentsLoaded: false,
+  students: [],
+  studentsLoadPromiseRef: { current: null },
+  beforeMovementProfilesRef: { current: [] },
+  setStudentsLoading: () => {},
+  setStudentLoadError: () => {},
+  setStudentsLoaded: () => {},
+  setStudents: (profiles) => { loadedProfiles = profiles; },
+  collection: () => "users",
+  getDocsFromServer: async () => ({
+    forEach: (visit) => serverProfiles.forEach(({ uid, ...profile }) => visit({ id: uid, data: () => profile })),
+  }),
+});
+vm.runInContext(
+  ts.transpileModule(`this.loadStudentsActual = ${loadStudentsClosure};`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None },
+  }).outputText,
+  context,
+);
+const registrationFixture = {
+  role: "student", grade: "3", class: "4", number: "20", name: "검증학생",
+  enrollmentStatus: "active",
+};
+serverProfiles = [
+  { ...registrationFixture, uid: "rejected-registration", registrationApprovalStatus: "REJECTED" },
+  { ...registrationFixture, uid: "pending-registration", registrationApprovalStatus: "PENDING" },
+  { ...registrationFixture, uid: "approved-student", registrationApprovalStatus: "APPROVED" },
+];
+await context.loadStudentsActual({ force: true, throwOnError: true });
+assert.equal(loadedProfiles.length, 1);
+assert.equal(loadedProfiles[0].uid, "approved-student");
+assert.equal(loadedProfiles[0].identityConflict, undefined);
+const registrationRow = {
+  grade: "3", class: "4", number: "20", studentName: "검증학생", uid: "",
+  items: [{ name: "논술형", score: 8, maxScore: 10, scoreEntered: true }],
+  totalScore: 8, totalMaxScore: 10, enteredScoreCount: 1,
+};
+assert.equal(subject.matchRowsToStudents([registrationRow], loadedProfiles)[0].uid, "approved-student");
+serverProfiles.push({ ...registrationFixture, uid: "duplicate-approved", registrationApprovalStatus: "APPROVED" });
+await context.loadStudentsActual({ force: true, throwOnError: true });
+assert.equal(loadedProfiles.length, 2);
+assert.ok(loadedProfiles.every((profile) => profile.identityConflict));
+assert.equal(subject.matchRowsToStudents([registrationRow], loadedProfiles)[0].uid, "");
+serverProfiles = [
+  { ...registrationFixture, uid: "legacy-approved" },
+  { ...registrationFixture, uid: "rejected-registration", registrationApprovalStatus: "REJECTED" },
+];
+await context.loadStudentsActual({ force: true, throwOnError: true });
+assert.equal(loadedProfiles[0].uid, "legacy-approved");
+assert.equal(loadedProfiles[0].identityConflict, undefined);
+serverProfiles.push({
+  ...registrationFixture, uid: "historical-approved", registrationApprovalStatus: "APPROVED",
+  enrollmentStatus: "transferred", enrollmentYear: "2026", enrollmentSemester: "2", enrollmentMovementTiming: "before",
+});
+await context.loadStudentsActual({ force: true, throwOnError: true });
+assert.equal(loadedProfiles.length, 1);
+assert.equal(loadedProfiles[0].identityConflict, true);
+context.isWrittenExamMode = false;
+console.log("PASS registration-aware roster matching: rejected/pending registrations do not block approved or legacy students; actual active duplicates and approved historical identity conflicts remain blocked.");
+
 const mkRow = (uid, number, name) => ({
   rowNumber: Number(number) + 6,
   uid,
@@ -928,17 +1010,21 @@ assert.equal(JSON.stringify(roster), before);
 console.log(
   "PASS class export read: current roster identity/class overrides old score snapshots without rewriting score or signature history.",
 );
-context.loadPerformanceScoreConfirmationsForRoster = async () => {
-  throw new Error("confirmation query denied");
-};
-context.loadPerformanceScoreConfirmation = async (_uid, _rosterId, options) => {
-  assert.equal(options?.throwOnError, true);
+let redundantConfirmationReads = 0;
+context.loadPerformanceScoreConfirmationsForRoster = async (rosterId, studentUids) => {
+  assert.equal(rosterId, roster.id);
+  assert.ok(studentUids.includes("moved-3"));
   throw new Error("confirmation read denied");
+};
+context.loadPerformanceScoreConfirmation = async () => {
+  redundantConfirmationReads += 1;
+  return null;
 };
 await assert.rejects(
   () => context.loadClassRecordsActual(roster, "2", "3"),
   /confirmation read denied/,
 );
+assert.equal(redundantConfirmationReads, 0);
 console.log(
   "PASS confirmation read failure: class export requires successful signature reads and never treats read errors as unsigned.",
 );

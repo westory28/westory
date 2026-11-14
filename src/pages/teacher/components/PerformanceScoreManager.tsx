@@ -88,7 +88,10 @@ import {
   type ParsedPerformanceScoreRow,
   type ParsedPerformanceScoreUpload,
 } from "../../../lib/performanceScoreWorkbook";
-import { parseWrittenExamEssayScoreWorkbook } from "../../../lib/writtenExamEssayScoreWorkbook";
+import {
+  parseWrittenExamEssayScoreWorkbook,
+  parseWrittenExamFeedbackByItemKey,
+} from "../../../lib/writtenExamEssayScoreWorkbook";
 import { getTeacherScoreRequestQuery } from "./teacherScoreRequestQuery";
 import {
   createManagedNotifications,
@@ -98,6 +101,7 @@ import {
   getPerformanceEnrollmentLabel,
   getStudentEnrollmentMovementTiming,
   isActiveRosterStudent,
+  isStudentRegistrationPending,
   isStudentRosterProfile,
 } from "../../../lib/studentRoster";
 
@@ -366,26 +370,6 @@ const toText = (value: unknown) =>
   String(value ?? "")
     .replace(/\s+/g, " ")
     .trim();
-
-const parseWrittenExamFeedbackByItemKey = (value: string) => {
-  const text = value.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
-  const byItemKey = new Map<string, string>();
-  if (!text || text === "-") return byItemKey;
-
-  const pattern = /(\d+)\s*-\s*[\(\[]?\s*(\d+)\s*[\)\]]?\s*[:：]/g;
-  const matches = Array.from(text.matchAll(pattern));
-  matches.forEach((match, index) => {
-    const key = `${match[1]}-(${match[2]})`;
-    const start = (match.index || 0) + match[0].length;
-    const end =
-      index + 1 < matches.length
-        ? matches[index + 1].index || text.length
-        : text.length;
-    const feedback = text.slice(start, end).trim();
-    if (feedback) byItemKey.set(key, feedback.slice(0, 1000));
-  });
-  return byItemKey;
-};
 
 const buildWrittenExamParsedUpload = (
   rows: unknown[][],
@@ -1095,8 +1079,8 @@ const studentIdentityKey = (
 ) =>
   `${buildStudentLookupKey(grade, classValue, number)}:${normalizeStudentName(name)}`;
 
-// Check all profiles before filtering them for the selected semester. Otherwise
-// an old unlinked score can be attributed to the next holder of the same number.
+// Check all approved/legacy profiles before filtering the selected semester so
+// an old unlinked score cannot move to the next holder of the same number.
 const markStudentIdentityConflicts = (profiles: StudentProfile[]) => {
   const firstByKey = new Map<string, StudentProfile>();
   for (const student of profiles) {
@@ -6194,10 +6178,22 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     Map<string, Promise<ScoreListRecord[]>>
   >(new Map());
   const confirmationsByRosterCacheRef = useRef<
-    Map<string, Map<string, PerformanceScoreConfirmation>>
+    Map<
+      string,
+      {
+        scopeKey: string;
+        confirmations: Map<string, PerformanceScoreConfirmation>;
+      }
+    >
   >(new Map());
   const confirmationPromisesByRosterRef = useRef<
-    Map<string, Promise<Map<string, PerformanceScoreConfirmation>>>
+    Map<
+      string,
+      {
+        scopeKey: string;
+        promise: Promise<Map<string, PerformanceScoreConfirmation>>;
+      }
+    >
   >(new Map());
   const [savingScoreEdits, setSavingScoreEdits] = useState(false);
   const [scoreStatsModalOpen, setScoreStatsModalOpen] = useState(false);
@@ -7786,9 +7782,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const classSheetModalTitle = isWrittenExamMode
     ? "정기시험 서명 현황"
     : "일람표 다운로드";
-  const classSheetModalDescription = isWrittenExamMode
-    ? "정기시험 점수 확인 서명 여부와 서명 이미지를 학급별로 확인합니다."
-    : "수행평가 강의실별 일람표 양식으로 학급별 점수와 서명을 확인합니다.";
   const classSheetFirstRosterLabel = isWrittenExamMode
     ? "서답형 점수표"
     : "1차 점수표";
@@ -7959,6 +7952,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       snap.forEach((item) => {
         const data = item.data() as Record<string, unknown>;
         if (!isStudentRosterProfile(data)) return;
+        if (isStudentRegistrationPending(data)) return;
         const profile: StudentProfile = normalizeStudentProfile(item.id, data);
         allProfiles.push(profile);
         const movementLabel = !isWrittenExamMode
@@ -8090,50 +8084,68 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
   const loadPerformanceScoreConfirmationsForRoster = async (
     rosterId: string,
+    studentUids: string[],
   ) => {
+    const uids = [
+      ...new Set(studentUids.map((uid) => uid.trim()).filter(Boolean)),
+    ].sort();
+    const scopeKey = JSON.stringify(uids);
     const cached = confirmationsByRosterCacheRef.current.get(rosterId);
-    if (cached) return clonePerformanceScoreConfirmationMap(cached);
+    if (cached?.scopeKey === scopeKey) {
+      return clonePerformanceScoreConfirmationMap(cached.confirmations);
+    }
 
     const cachedPromise = confirmationPromisesByRosterRef.current.get(rosterId);
-    if (cachedPromise) {
-      return clonePerformanceScoreConfirmationMap(await cachedPromise);
+    if (cachedPromise?.scopeKey === scopeKey) {
+      return clonePerformanceScoreConfirmationMap(await cachedPromise.promise);
     }
 
     const loadPromise = (async () => {
-      const snap = await getDocs(
-        query(
-          collectionGroup(db, PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION),
-          where("rosterId", "==", rosterId),
-        ),
-      );
       const confirmationsByUid = new Map<
         string,
         PerformanceScoreConfirmation
       >();
-      snap.docs.forEach((item) => {
-        const data = item.data() as PerformanceScoreConfirmation;
-        const uid = String(data.uid || item.id || "").trim();
-        if (!uid) return;
-        confirmationsByUid.set(uid, {
-          id: item.id,
-          ...data,
-          uid,
-          rosterId,
+      // Read only known roster members. A collection-group query requires a
+      // separate rules grant and can prevent an otherwise valid roster opening.
+      for (let index = 0; index < uids.length; index += 20) {
+        const chunk = uids.slice(index, index + 20);
+        const confirmations = await Promise.all(
+          chunk.map((uid) =>
+            loadPerformanceScoreConfirmation(uid, rosterId, {
+              throwOnError: true,
+              fromServer: true,
+            }),
+          ),
+        );
+        confirmations.forEach((confirmation, offset) => {
+          const uid = chunk[offset];
+          if (
+            confirmation &&
+            confirmation.uid === uid &&
+            confirmation.rosterId === rosterId
+          ) {
+            confirmationsByUid.set(uid, confirmation);
+          }
         });
-      });
+      }
       return confirmationsByUid;
     })();
 
-    confirmationPromisesByRosterRef.current.set(rosterId, loadPromise);
+    const pending = { scopeKey, promise: loadPromise };
+    confirmationPromisesByRosterRef.current.set(rosterId, pending);
     try {
       const loaded = await loadPromise;
-      confirmationsByRosterCacheRef.current.set(
-        rosterId,
-        clonePerformanceScoreConfirmationMap(loaded),
-      );
+      if (confirmationPromisesByRosterRef.current.get(rosterId) === pending) {
+        confirmationsByRosterCacheRef.current.set(rosterId, {
+          scopeKey,
+          confirmations: clonePerformanceScoreConfirmationMap(loaded),
+        });
+      }
       return clonePerformanceScoreConfirmationMap(loaded);
     } finally {
-      confirmationPromisesByRosterRef.current.delete(rosterId);
+      if (confirmationPromisesByRosterRef.current.get(rosterId) === pending) {
+        confirmationPromisesByRosterRef.current.delete(rosterId);
+      }
     }
   };
 
@@ -8547,6 +8559,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       });
     const confirmationsByUid = await loadPerformanceScoreConfirmationsForRoster(
       roster.id,
+      loaded.map((record) => record.uid),
     );
     return sortStudentIdentityRows(
       loaded.map((record) => ({
@@ -9675,34 +9688,10 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         loaded.push(projectClassSheetScoreDocumentForRosterRow(roster, row));
       });
 
-    let confirmationsByUid = new Map<string, PerformanceScoreConfirmation>();
-    try {
-      confirmationsByUid = await loadPerformanceScoreConfirmationsForRoster(
-        roster.id,
-      );
-    } catch (error) {
-      console.warn(
-        "Falling back to direct performance score confirmation reads:",
-        error,
-      );
-      const fallbackPairs = await Promise.all(
-        loaded.map(async (record) =>
-          record.uid
-            ? ([
-                record.uid,
-                await loadPerformanceScoreConfirmation(record.uid, roster.id, {
-                  throwOnError: true,
-                }),
-              ] as const)
-            : null,
-        ),
-      );
-      confirmationsByUid = new Map(
-        fallbackPairs.flatMap((pair) =>
-          pair && pair[1] ? [[pair[0], pair[1]]] : [],
-        ),
-      );
-    }
+    const confirmationsByUid = await loadPerformanceScoreConfirmationsForRoster(
+      roster.id,
+      loaded.map((record) => record.uid),
+    );
 
     const withConfirmations = loaded.map((record) =>
       record.uid
@@ -10344,7 +10333,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         );
       }
       const unresolved = freshRows.filter(
-        (row) => !row.uid || row.matchStatus !== "matched",
+        (row) =>
+          (!isWrittenExamMode || row.enteredScoreCount > 0) &&
+          (!row.uid || row.matchStatus !== "matched"),
       );
       setParsed({ ...parsed, rows: freshRows });
       if (unresolved.length) {
@@ -11121,10 +11112,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
   return (
     <div className="space-y-6" aria-busy={savingScoreEdits || undefined}>
-      {(scoreListLoading ||
-        (classSheetModalOpen && classSheetPreviewLoading)) && (
-        <LoadingOverlay />
-      )}
+      {scoreListLoading && <LoadingOverlay />}
       {savingScoreEdits && (
         <LoadingOverlay
           message={managerCopy.savingOverlayMessage}
@@ -13047,18 +13035,17 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       {signatureStatusModalEnabled && classSheetModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
           <section
-            className={`${!isWrittenExamMode ? "score-class-sheet--compact " : ""}flex max-h-[calc(100vh-2rem)] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl`}
+            role="dialog"
+            aria-modal="true"
+            aria-label={classSheetModalTitle}
+            className={`score-class-sheet--compact ${isWrittenExamMode ? "score-class-sheet--written " : ""}flex max-h-[calc(100vh-2rem)] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl`}
           >
+            {classSheetPreviewLoading && <LoadingOverlay />}
             <div className="score-class-sheet-header flex flex-col gap-3 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <h3 className="text-lg font-black text-slate-900">
                   {classSheetModalTitle}
                 </h3>
-                {isWrittenExamMode && (
-                  <p className="mt-1 text-sm font-semibold text-slate-500">
-                    {classSheetModalDescription}
-                  </p>
-                )}
               </div>
               <button
                 type="button"
@@ -13076,7 +13063,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 <div className="score-class-sheet-filter-fields">
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-black text-slate-500">
-                      {isWrittenExamMode ? classSheetFirstRosterLabel : "1차"}
+                      {isWrittenExamMode ? "서답형" : "1차"}
                     </span>
                     <select
                       aria-label={classSheetFirstRosterLabel}
@@ -13103,7 +13090,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                   </label>
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-black text-slate-500">
-                      {isWrittenExamMode ? classSheetSecondRosterLabel : "2차"}
+                      {isWrittenExamMode ? "논술형" : "2차"}
                     </span>
                     <select
                       aria-label={classSheetSecondRosterLabel}
@@ -13211,33 +13198,39 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                     {[
                       {
                         label: "학급 인원",
+                        compactLabel: "인원",
                         value: `${classSheetStatusSummary.totalCount}명`,
                         tone: "bg-slate-50 text-slate-700",
                       },
                       {
                         label: classSheetFirstScoreLabel,
+                        compactLabel: isWrittenExamMode ? "서답" : "1차",
                         value: `${classSheetStatusSummary.firstScoredCount}명`,
                         tone: "bg-blue-50 text-blue-700",
                       },
                       {
                         label: classSheetSecondScoreLabel,
+                        compactLabel: isWrittenExamMode ? "논술" : "2차",
                         value: `${classSheetStatusSummary.secondScoredCount}명`,
                         tone: "bg-blue-50 text-blue-700",
                       },
                       isWrittenExamMode
                         ? {
                             label: "논술형만 서명",
+                            compactLabel: "논술서명",
                             value: `${classSheetStatusSummary.secondOnlySignedCount}명`,
                             tone: "bg-amber-50 text-amber-700",
                           }
                         : null,
                       {
                         label: "서명 완료",
+                        compactLabel: "완료",
                         value: `${classSheetStatusSummary.signedCount}명`,
                         tone: "bg-emerald-50 text-emerald-700",
                       },
                       {
                         label: "서명 미완료",
+                        compactLabel: "미완료",
                         value: `${classSheetStatusSummary.unsignedCount}명`,
                         tone: "bg-rose-50 text-rose-700",
                       },
@@ -13247,6 +13240,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                           item,
                         ): item is {
                           label: string;
+                          compactLabel: string;
                           value: string;
                           tone: string;
                         } => Boolean(item),
@@ -13254,13 +13248,31 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                       .map((item) => (
                         <div
                           key={item.label}
+                          role="group"
+                          aria-label={`${item.label} ${item.value}`}
                           className={`rounded-lg px-3 py-3 ${item.tone}`}
                         >
-                          <div className="text-[11px] font-black">
-                            {item.label}
+                          <div
+                            className="text-[11px] font-black"
+                            aria-hidden="true"
+                          >
+                            <span className="score-class-sheet-label-full">
+                              {item.label}
+                            </span>
+                            <span className="score-class-sheet-label-compact">
+                              {item.compactLabel}
+                            </span>
                           </div>
-                          <div className="mt-1 text-lg font-black">
-                            {item.value}
+                          <div
+                            className="mt-1 text-lg font-black"
+                            aria-hidden="true"
+                          >
+                            <span className="score-class-sheet-label-full">
+                              {item.value}
+                            </span>
+                            <span className="score-class-sheet-label-compact">
+                              {item.value.replace(/명$/, "")}
+                            </span>
                           </div>
                         </div>
                       ))}
@@ -13268,10 +13280,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
                   <div
                     className="score-class-sheet-table max-h-[min(46vh,520px)] overflow-auto rounded-xl border border-slate-200"
-                    tabIndex={isWrittenExamMode ? undefined : 0}
-                    aria-label={
-                      isWrittenExamMode ? undefined : "학생별 점수와 서명 현황"
-                    }
+                    tabIndex={0}
+                    aria-label="학생별 점수와 서명 현황"
                   >
                     <table className="w-full table-fixed text-left text-sm">
                       <colgroup>
@@ -13610,7 +13620,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 </span>
                 {parsedSummary.blankScoreCount > 0 && (
                   <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600">
-                    점수 빈칸 {parsedSummary.blankScoreCount}명
+                    {isWrittenExamMode ? "점수 미입력" : "점수 빈칸"}{" "}
+                    {parsedSummary.blankScoreCount}명
+                    {isWrittenExamMode && " · 저장 제외"}
                   </span>
                 )}
                 {parsedSummary.warningCount > 0 && (
@@ -13636,6 +13648,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             </div>
 
             <div className="overflow-y-auto px-5 py-4">
+              {isWrittenExamMode && parsedSummary.blankScoreCount > 0 && (
+                <p className="mb-3 text-sm font-semibold leading-5 text-slate-600">
+                  점수가 입력되지 않은 {parsedSummary.blankScoreCount}명은
+                  저장에서 제외됩니다. 0점은 입력된 점수로 저장됩니다.
+                </p>
+              )}
               <div
                 className={`grid gap-3 ${isSinglePerformanceUpload ? "lg:grid-cols-[minmax(0,1fr)_100px_140px]" : "lg:grid-cols-[minmax(0,1fr)_180px]"}`}
               >
@@ -14054,11 +14072,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         </div>
       )}
 
-      <section
-        className={
-          isWrittenExamMode ? "min-w-0" : "score-performance-manager min-w-0"
-        }
-      >
+      <section className="score-performance-manager min-w-0">
         <div className="ws-page-header">
           <div>
             <h2 className="text-xl font-black text-slate-900">
@@ -14285,34 +14299,30 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                         className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
                       />
                     </label>
-                    {!isWrittenExamMode && (
-                      <button
-                        ref={scoreSearchToggleRef}
-                        type="button"
-                        className="score-manager-search-toggle"
-                        aria-controls={scoreSearchInputId}
-                        aria-expanded={scoreSearchExpanded}
-                        aria-label={
-                          scoreSearchExpanded
-                            ? "학생 이름 검색 닫기"
-                            : "학생 이름 검색 열기"
+                    <button
+                      ref={scoreSearchToggleRef}
+                      type="button"
+                      className="score-manager-search-toggle"
+                      aria-controls={scoreSearchInputId}
+                      aria-expanded={scoreSearchExpanded}
+                      aria-label={
+                        scoreSearchExpanded
+                          ? "학생 이름 검색 닫기"
+                          : "학생 이름 검색 열기"
+                      }
+                      onClick={() =>
+                        scoreSearchExpanded
+                          ? closeScoreSearch()
+                          : setScoreSearchOpen(true)
+                      }
+                    >
+                      <i
+                        aria-hidden="true"
+                        className={
+                          scoreSearchExpanded ? "fas fa-times" : "fas fa-search"
                         }
-                        onClick={() =>
-                          scoreSearchExpanded
-                            ? closeScoreSearch()
-                            : setScoreSearchOpen(true)
-                        }
-                      >
-                        <i
-                          aria-hidden="true"
-                          className={
-                            scoreSearchExpanded
-                              ? "fas fa-times"
-                              : "fas fa-search"
-                          }
-                        />
-                      </button>
-                    )}
+                      />
+                    </button>
                   </div>
                   <button
                     type="button"

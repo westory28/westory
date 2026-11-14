@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, writeBatch } from "firebase/firestore";
+import { collectionGroup, query, where, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp, writeBatch } from "firebase/firestore";
 
 if (!/^127\.0\.0\.1:\d+$/.test(process.env.FIRESTORE_EMULATOR_HOST || "")
   || !/^127\.0\.0\.1:\d+$/.test(process.env.FIREBASE_AUTH_EMULATOR_HOST || "")) {
@@ -179,6 +179,60 @@ try {
   await assert.rejects(functions.notifyPerformanceScoreAnswerSheetRequested.run(req(actor, { scoreIds: [scoreId], reason: '구 화면에서 답안을 확인하고 싶습니다.' })),
     (error) => error.code === 'failed-precondition' && error.details?.reason === 'ANSWER_SHEET_REQUEST_REQUIRES_OBJECTION');
   check("upload → own score read → signature → teacher retrieval; foreign read, score editing, stale signature and signature replacement denied");
+
+  const writtenScoreId = "written-exam-detailed-feedback";
+  const writtenScorePath = `users/${uid}/performance_scores/${writtenScoreId}`;
+  const writtenConfirmationPath = `${writtenScorePath}/confirmations/${uid}`;
+  const writtenFeedback = [
+    "(1) 임진왜란이라는 사건명을 정확하게 작성하였습니다.",
+    "(2) 명의 참전으로 전쟁이 확대되었음을 설명하였습니다. 조선·명·일본의 관계를 더 구체적으로 서술해 보세요.",
+    "(3) 전라도의 중요성을 식량 공급과 연결하여 설명하였습니다.",
+    "(4) 두 신하의 주장과 근거를 제시하였습니다. 제시한 근거가 주장과 어떻게 연결되는지 한 문장 더 보완해 보세요.",
+  ].join("\n\n");
+  const writtenItems = [1, 3, 1, 5].map((maxScore, index) => ({
+    questionNumber: 1, examSection: "essay", itemKey: `1-(${index + 1})`,
+    groupKey: "1", groupLabel: "1번", name: `1-(${index + 1})`,
+    shortName: `1-(${index + 1})`, maxScore, score: [1, 2, 1, 4][index],
+    scoreEntered: true, feedback: writtenFeedback.split("\n\n")[index],
+  }));
+  const writtenScore = {
+    ...score, rosterId: writtenScoreId, scoreKind: "written_exam_essay",
+    title: "하위 문항 검증용 정기시험", items: writtenItems, enteredScoreCount: 4,
+    totalScore: 8, totalMaxScore: 10, feedback: writtenFeedback, evidence: writtenFeedback,
+  };
+  const writtenSignature = (scoreUpdatedAt = version) => ({
+    ...signature(scoreUpdatedAt), rosterId: writtenScoreId,
+  });
+  await assertSucceeds(setDoc(doc(teacherDb, writtenScorePath), writtenScore));
+  const writtenRead = await assertSucceeds(getDoc(doc(studentDb, writtenScorePath)));
+  assert.deepEqual(writtenRead.data().items, writtenItems);
+  assert.equal(writtenRead.data().feedback, writtenFeedback);
+  assert.equal(writtenRead.data().totalScore, 8);
+  await assertFails(getDoc(doc(otherDb, writtenScorePath)));
+  await assertFails(updateDoc(doc(studentDb, writtenScorePath), { totalScore: 10 }));
+  const writtenConsentRef = admin.doc(`users/${uid}/performance_score_consents/current`);
+  const writtenSavedConsent = (await writtenConsentRef.get()).data();
+  await writtenConsentRef.delete();
+  await assertFails(setDoc(doc(studentDb, writtenConfirmationPath), writtenSignature()));
+  await writtenConsentRef.set(writtenSavedConsent);
+  await assertFails(setDoc(doc(studentDb, writtenConfirmationPath), writtenSignature(Timestamp.fromMillis(1))));
+  await assertFails(setDoc(doc(studentDb, writtenConfirmationPath), { ...writtenSignature(), signatureImage: "" }));
+  await assertFails(setDoc(doc(otherDb, writtenConfirmationPath), writtenSignature()));
+  await assertSucceeds(setDoc(doc(studentDb, writtenConfirmationPath), writtenSignature()));
+  const writtenTeacherRead = await assertSucceeds(getDoc(doc(teacherDb, writtenConfirmationPath)));
+  assert.equal(writtenTeacherRead.data().uid, uid);
+  assert.equal(writtenTeacherRead.data().rosterId, writtenScoreId);
+  assert.equal(writtenTeacherRead.data().signatureName, creation.name);
+  assert.equal(writtenTeacherRead.data().scoreUpdatedAt.toMillis(), version.toMillis());
+  assert.equal((await getDoc(doc(studentDb, writtenConfirmationPath))).data().signatureImage, writtenTeacherRead.data().signatureImage);
+  await assertFails(getDocs(query(collectionGroup(teacherDb, "confirmations"), where("rosterId", "==", writtenScoreId))));
+  await assertFails(setDoc(doc(studentDb, writtenConfirmationPath), writtenSignature()));
+  const changedWrittenVersion = Timestamp.fromMillis(version.toMillis() + 1);
+  await assertSucceeds(updateDoc(doc(teacherDb, writtenScorePath), { updatedAt: changedWrittenVersion }));
+  await assertFails(setDoc(doc(studentDb, writtenConfirmationPath), writtenSignature()));
+  await assertSucceeds(setDoc(doc(studentDb, writtenConfirmationPath), writtenSignature(changedWrittenVersion)));
+  assert.equal((await getDoc(doc(teacherDb, writtenConfirmationPath))).data().scoreUpdatedAt.toMillis(), changedWrittenVersion.toMillis());
+  check("written exam preserves all four scores and reasons; consent, own signature, current version and teacher direct-document receipt work; collection-group receipt is denied by existing rules");
 
   const nextVersion = Timestamp.fromMillis(Date.now());
   await assertSucceeds(updateDoc(doc(teacherDb, scorePath), { totalScore: 16, updatedAt: nextVersion }));

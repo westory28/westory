@@ -117,7 +117,7 @@ const findColumnIndex = (
 ) => headers.findIndex((header) => predicate(header));
 
 const isFeedbackHeader = (header: string) =>
-  /^(피드백|교사피드백|선생님피드백|교사의견|평가의견|코멘트|comment|feedback|비고)$/.test(
+  /^(피드백|교사피드백|선생님피드백|선생님작성피드백|교사작성피드백|교사의견|평가의견|코멘트|comment|feedback|비고)$/.test(
     header,
   );
 
@@ -140,6 +140,7 @@ const parseEssayFeedback = (value: unknown) => {
   const text = String(value ?? "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
+    .replace(/&#(?:x20|32);|&nbsp;/gi, " ")
     .trim();
   if (!text || text === "-") {
     return {
@@ -149,7 +150,10 @@ const parseEssayFeedback = (value: unknown) => {
     };
   }
 
-  const pattern = /(\d+)\s*-\s*[\(\[]?\s*(\d+)\s*[\)\]]?\s*[:：]/g;
+  // The rubric export uses one essay question with line-start (1), (2), ...
+  // sections. References to (1) inside a reason must stay in that reason.
+  const pattern =
+    /(\d+)\s*-\s*[\(\[]?\s*(\d+)\s*[\)\]]?\s*[:：]|(?:^|\n)[\t ]*[（(](\d+)[）)][\t ]*[:：]?[\t ]*/g;
   const matches = Array.from(text.matchAll(pattern));
   if (!matches.length) {
     return {
@@ -162,7 +166,7 @@ const parseEssayFeedback = (value: unknown) => {
   const byItemKey = new Map<string, string>();
   let generalFeedback = text.slice(0, matches[0].index || 0).trim();
   matches.forEach((match, index) => {
-    const key = `${match[1]}-(${match[2]})`;
+    const key = match[3] ? `1-(${match[3]})` : `${match[1]}-(${match[2]})`;
     const start = (match.index || 0) + match[0].length;
     const end =
       index + 1 < matches.length
@@ -179,6 +183,79 @@ const parseEssayFeedback = (value: unknown) => {
     generalFeedback,
     byItemKey,
   };
+};
+
+export const parseWrittenExamFeedbackByItemKey = (value: unknown) =>
+  parseEssayFeedback(value).byItemKey;
+
+// This grading export does not contain a separate maximum-score row. Its known
+// rubric is explicit: 1 + 3 + 1 + 5. Do not infer maxima from one class's best
+// scores, or apply these maxima to another exam with different rubric text.
+const HISTORY_WAR_RUBRIC_PROFILE = [
+  { required: ["임진왜란", "식별"], maxScore: 1 },
+  { required: ["명의참전", "삼국", "전쟁", "확대"], maxScore: 3 },
+  { required: ["행정구역", "전라도"], maxScore: 1 },
+  { required: ["신하1", "신하2", "도쿠가와이에야스", "덕천가강"], maxScore: 5 },
+] as const;
+
+const getTeacherRubricCriterionColumns = (
+  displayHeaders: string[],
+  indexes: EssayScoreColumnIndexes,
+): EssayCriterionColumn[] | null => {
+  const headers = displayHeaders.map(toHeaderKey);
+  const gradingLevelIndex = headers.findIndex(
+    (header) => header === "ai채점수준",
+  );
+  if (
+    indexes.gradeIndex < 0 ||
+    indexes.classIndex < 0 ||
+    indexes.totalIndex < 0 ||
+    gradingLevelIndex <= indexes.totalIndex + 1 ||
+    indexes.feedbackIndex <= gradingLevelIndex ||
+    !/^(선생님|교사)작성피드백$/.test(headers[indexes.feedbackIndex] || "")
+  ) {
+    return null;
+  }
+  const rubricHeaders = headers.slice(
+    indexes.totalIndex + 1,
+    gradingLevelIndex,
+  );
+  if (
+    rubricHeaders.length !== HISTORY_WAR_RUBRIC_PROFILE.length ||
+    !HISTORY_WAR_RUBRIC_PROFILE.every((criterion, index) =>
+      criterion.required.every((word) => rubricHeaders[index].includes(word)),
+    )
+  ) {
+    throw new Error(
+      "이 채점 결과 파일의 하위 문항 배점을 확인할 수 없습니다. 문항별 배점을 확인한 점수 양식으로 업로드해 주세요.",
+    );
+  }
+  return HISTORY_WAR_RUBRIC_PROFILE.map((criterion, index) => ({
+    header: `1-(${index + 1})`,
+    itemKey: `1-(${index + 1})`,
+    groupKey: "1",
+    groupLabel: "1번",
+    index: indexes.totalIndex + 1 + index,
+    maxScore: criterion.maxScore,
+  }));
+};
+
+const findWorkbookAssessmentTitle = (
+  rows: unknown[][],
+  headerRowIndex: number,
+) => {
+  for (const row of rows.slice(0, headerRowIndex)) {
+    for (let index = 0; index < row.length; index += 1) {
+      const value = toText(row[index]);
+      const inline = /^(?:평가|평가명)\s*[:：]\s*(.+)$/.exec(value);
+      if (inline) return inline[1].trim();
+      if (/^(?:평가|평가명)$/.test(value)) {
+        const next = toText(row[index + 1]);
+        if (next) return next;
+      }
+    }
+  }
+  return "";
 };
 
 const resolveEssayScoreColumns = (
@@ -722,11 +799,15 @@ export const parseWrittenExamEssayScoreWorkbook = (
     indexes.totalIndex,
     indexes.feedbackIndex,
   ]);
-  const criterionColumns = getEssayCriterionColumns(
+  const numberedCriterionColumns = getEssayCriterionColumns(
     displayHeaders,
     scoreRows,
     identityIndexes,
   );
+  const teacherRubricColumns = numberedCriterionColumns.length
+    ? null
+    : getTeacherRubricCriterionColumns(displayHeaders, indexes);
+  const criterionColumns = teacherRubricColumns || numberedCriterionColumns;
   if (!criterionColumns.length && indexes.totalIndex < 0) {
     throw new Error(
       "총점 또는 1-(1) 형식의 논술형 세부 점수 컬럼을 확인해 주세요.",
@@ -773,7 +854,9 @@ export const parseWrittenExamEssayScoreWorkbook = (
     return value === null ? max : Math.max(max, value);
   }, 0);
   const totalMaxScore = roundScore(
-    Math.max(observedTotalMax, criteriaMaxSum, legacyMaxScore),
+    teacherRubricColumns
+      ? criteriaMaxSum
+      : Math.max(observedTotalMax, criteriaMaxSum, legacyMaxScore),
   );
 
   const rowsWithScores: ParsedWrittenExamEssayScoreRow[] = scoreRows.map(
@@ -785,6 +868,46 @@ export const parseWrittenExamEssayScoreWorkbook = (
       const rowNumber = getCellText(row, indexes.numberIndex);
       const studentName = getCellText(row, indexes.nameIndex);
       const parsedTotal = toFiniteScore(getCell(row, indexes.totalIndex));
+      if (teacherRubricColumns) {
+        const scores = teacherRubricColumns.map((column) =>
+          toFiniteScore(getCell(row, column.index)),
+        );
+        const providedScoreCount = scores.filter(
+          (score) => score !== null,
+        ).length;
+        if (
+          scores.some(
+            (score, index) =>
+              score !== null &&
+              (score < 0 || score > teacherRubricColumns[index].maxScore),
+          )
+        ) {
+          throw new Error(
+            `${rowIndex + 1}행의 하위 문항 점수가 배점 범위를 벗어났습니다.`,
+          );
+        }
+        if (
+          (providedScoreCount > 0 && providedScoreCount !== scores.length) ||
+          (parsedTotal !== null &&
+            parsedTotal !== 0 &&
+            providedScoreCount !== scores.length)
+        ) {
+          throw new Error(
+            `${rowIndex + 1}행의 하위 문항 점수를 모두 확인해 주세요.`,
+          );
+        }
+        const calculatedTotal = roundScore(
+          scores.reduce<number>((sum, score) => sum + (score ?? 0), 0),
+        );
+        if (
+          parsedTotal !== null &&
+          roundScore(parsedTotal) !== calculatedTotal
+        ) {
+          throw new Error(
+            `${rowIndex + 1}행의 총점과 하위 문항 점수 합계가 다릅니다.`,
+          );
+        }
+      }
       const parsedFeedback = parseEssayFeedback(
         getCell(row, indexes.feedbackIndex),
       );
@@ -860,7 +983,10 @@ export const parseWrittenExamEssayScoreWorkbook = (
   return {
     sourceFileName: params.fileName,
     headerRowNumber: headerRowIndex + 1,
-    title: toText(params.title) || cleanExamTitle(params.fileName),
+    title:
+      toText(params.title) ||
+      findWorkbookAssessmentTitle(rows, headerRowIndex) ||
+      cleanExamTitle(params.fileName),
     subject: toText(params.subject) || "역사",
     itemName,
     items,
