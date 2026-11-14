@@ -208,20 +208,30 @@ test('save persists only validated public projection and immutable bounded reenc
   assert.equal(meta.format, 'webp'); assert.ok(meta.width <= 384 && meta.height <= 512); assert.ok(image.bytes.length <= 64 * 1024); assert.equal(meta.exif, undefined);
 });
 
-test('all skirts remain available to girls and cannot be saved on boys even when owned', async () => {
-  const skirts = catalog.items.filter(item => item.slot === 'bottom' && /^mm-skirt-/.test(item.value));
-  assert.equal(skirts.length, 1);
+test('existing navy skirt keeps its body restriction and new clothing follows explicit compatibility', async () => {
+  const skirt = catalog.items.find(item => item.id === 'minimi-bottom-skirt-navy');
+  assert.ok(skirt, 'Keep the existing navy skirt contract');
   const state = fixture();
-  for (const item of skirts) {
-    assert.deepEqual(item.characters, ['girl']);
-    assert.ok(validateLook({ ...defaultLook('girl'), bottom: item.value }, [item.id]));
-    assert.equal(validateLook({ ...defaultLook('boy'), bottom: item.value }, [item.id]), null);
-    await assert.rejects(state.api.saveStudentAvatar(await save({ look: { ...defaultLook('boy'), bottom: item.value } })), reason('AVATAR_INPUT_INVALID'));
-  }
+  assert.deepEqual(skirt.characters, ['girl']);
+  assert.ok(validateLook({ ...defaultLook('girl'), bottom: skirt.value }, [skirt.id]));
+  assert.equal(validateLook({ ...defaultLook('boy'), bottom: skirt.value }, [skirt.id]), null);
+  await assert.rejects(state.api.saveStudentAvatar(await save({ look: { ...defaultLook('boy'), bottom: skirt.value } })), reason('AVATAR_INPUT_INVALID'));
   assert.equal(state.writes.length, 0);
   assert.equal(state.bucket.objects.size, 0);
-  for (const item of catalog.items.filter(item => item.slot === 'bottom' && !/^mm-skirt-/.test(item.value))) {
-    assert.ok(validateLook({ ...defaultLook('boy'), bottom: item.value }, [item.id]), item.id);
+  for (const item of catalog.items.filter(item => ['top', 'bottom', 'shoes'].includes(item.slot))) {
+    for (const character of ['girl', 'boy']) {
+      const look = { ...defaultLook(character), [item.slot]: item.value };
+      assert.equal(Boolean(validateLook(look, [item.id])), item.characters.includes(character), `${item.id}:${character}`);
+    }
+  }
+  for (const item of catalog.items.filter(item => item.slot === 'bottom' && /^mm-skirt-/.test(item.value) && item.id !== skirt.id)) {
+    for (const character of item.characters) {
+      const compatible = fixture();
+      await compatible.api.purchaseStudentAvatarItem(purchase(item));
+      const result = await compatible.api.saveStudentAvatar(await save({ look: { ...defaultLook(character), bottom: item.value }, expectedRevision: 1 }));
+      assert.equal(result.look.character, character); assert.equal(result.look.bottom, item.value);
+      assert.ok(result.ownedItemIds.includes(item.id));
+    }
   }
 });
 

@@ -212,6 +212,13 @@ try {
       for (const item of candidates) {
         await itemButton(item.label).click();
         await ready();
+        await itemButton(item.label).locator("img").waitFor();
+        assert(
+          await itemButton(item.label)
+            .locator("img")
+            .evaluate((image) => image.complete && image.naturalWidth > 0),
+          `${character}/${item.id} has a generated preview`,
+        );
         assert.equal(
           await page.locator(".avatar-studio-stage [role=alert]").count(),
           0,
@@ -233,6 +240,94 @@ try {
     await page.evaluate(() => window.avatarQa.purchases.length),
     1,
     "Teacher does not buy",
+  );
+  // Shop edits are applied in the student view without extra calls on filtering.
+  await button("순위 화면").click();
+  await page.evaluate(() =>
+    window.avatarQa.setCatalogSettings({
+      revision: 7,
+      prices: { "minimi-top-knit-cream": 275 },
+      metadata: {
+        "minimi-character-girl": {
+          label:
+            "아주 긴 이름으로 설정해도 모바일에서 가로로 넘치지 않는 여자 캐릭터",
+          gender: "girl",
+          description: "",
+        },
+        "minimi-character-boy": {
+          label:
+            "아주 긴 이름으로 설정해도 모바일에서 가로로 넘치지 않는 남자 캐릭터",
+          gender: "boy",
+          description: "",
+        },
+        "minimi-top-knit-cream": {
+          label: "별빛 여행 니트",
+          gender: "boy",
+          description: "작은 별무늬와 부드러운 소매의 니트입니다.",
+        },
+      },
+    }),
+  );
+  await button("학생 문맥").click();
+  await button("꾸미기 화면").click();
+  await ready();
+  await button("상의").click();
+  await itemButton("별빛 여행 니트").click();
+  await page
+    .getByText("작은 별무늬와 부드러운 소매의 니트입니다.", { exact: true })
+    .waitFor();
+  const catalogReads = await page.evaluate(() => window.avatarQa.loadCalls);
+  await page
+    .getByRole("combobox", { name: "아이템 성별", exact: true })
+    .selectOption("girl");
+  assert.equal(await itemButton("별빛 여행 니트").count(), 0);
+  await page
+    .getByRole("combobox", { name: "아이템 성별", exact: true })
+    .selectOption("boy");
+  assert.equal(await itemButton("별빛 여행 니트").count(), 1);
+  await page
+    .getByRole("searchbox", { name: "아이템 검색", exact: true })
+    .fill("작은 별무늬");
+  assert.equal(await page.locator(".avatar-studio-item").count(), 1);
+  await page
+    .getByRole("searchbox", { name: "아이템 검색", exact: true })
+    .fill("없는 검색 결과");
+  assert.equal(await page.locator(".avatar-studio-item").count(), 0);
+  await page.locator(".avatar-studio-empty").waitFor();
+  await page
+    .getByRole("searchbox", { name: "아이템 검색", exact: true })
+    .fill("");
+  await page
+    .getByRole("combobox", { name: "아이템 성별", exact: true })
+    .selectOption("all");
+  assert.equal(
+    await page.evaluate(() => window.avatarQa.loadCalls),
+    catalogReads,
+    "Search and gender classification are local",
+  );
+  await page.setViewportSize({ width: 390, height: 1000 });
+  await button("폭 390").click();
+  const density = await page
+    .locator(".avatar-studio-items")
+    .evaluate((element) => ({
+      columns: getComputedStyle(element).gridTemplateColumns.split(" ").length,
+      width: element.clientWidth,
+    }));
+  assert(density.columns >= 3, "Three compact item columns at 390px");
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await button(`폭 ${width}`).click();
+    assert(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+      `Long editable character names fit at ${width}px`,
+    );
+  }
+  assert.equal(
+    await page.locator(".avatar-studio-item canvas").count(),
+    0,
+    "Catalog keeps static previews",
   );
   // A response retained by an old client must not restore ownership or thumbnails.
   await button("순위 화면").click();

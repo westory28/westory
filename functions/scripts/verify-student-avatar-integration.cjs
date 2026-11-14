@@ -105,6 +105,36 @@ let rules;
     assert.equal(result.charged, current.prices[fixture.paid[0].id]);
     assert.equal((await get(fixture.accountPath)).balance, 1000 - result.charged);
   });
+  await check('item metadata saves atomically, rejects students and recovers concurrent edits without extra writes', async () => {
+    await seed(); await seedTeacher();
+    const [first, second] = fixture.paid;
+    const metadataFor = item => ({ label: `수정 ${item.label}`, gender: 'unisex', description: '검증용 상품 설명' });
+    const requestFor = item => ({ expectedRevision: 0, prices: { [item.id]: 88 }, metadata: { [item.id]: metadataFor(item) } });
+    await assert.rejects(pricingApi.updateAvatarCatalogPricing(authenticated(fixture.req(requestFor(first)))),
+      error => error.details?.reason === 'AVATAR_TEACHER_REQUIRED');
+    assert.equal((await db.doc(PRICING_PATH).get()).exists, false);
+    const results = await Promise.allSettled([first, second].map(item => pricingApi.updateAvatarCatalogPricing(teacherRequest(requestFor(item)))));
+    assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
+    const conflict = results.find(result => result.status === 'rejected').reason;
+    assert.equal(conflict.details.reason, 'AVATAR_PRICING_REVISION_CONFLICT');
+    const failed = results[0].status === 'rejected' ? first : second;
+    await pricingApi.updateAvatarCatalogPricing(teacherRequest({ ...requestFor(failed), expectedRevision: conflict.details.pricing.revision }));
+    const beforeRetry = await db.doc(PRICING_PATH).get();
+    // Both original requests now match current fields; each replay must be a read-only no-op.
+    for (const item of [first, second]) await pricingApi.updateAvatarCatalogPricing(teacherRequest(requestFor(item)));
+    const afterRetry = await db.doc(PRICING_PATH).get();
+    assert.equal(afterRetry.updateTime.toMillis(), beforeRetry.updateTime.toMillis());
+    assert.equal(afterRetry.data().revision, 2);
+    const studio = await api.getAvatarStudioState(authenticated(fixture.req({ year: '2026', semester: '2' })));
+    for (const item of [first, second]) {
+      assert.deepEqual(studio.pricing.metadata[item.id], metadataFor(item));
+      assert.equal(studio.pricing.prices[item.id], 88);
+    }
+    assert.equal(studio.balance, 1000); assert.equal(studio.avatar.ownedItemIds.length, 0);
+    await assert.rejects(pricingApi.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 2, prices: {},
+      metadata: { [first.id]: { ...metadataFor(first), characters: ['boy'] } } })), error => error.details?.reason === 'AVATAR_PRICING_INPUT_INVALID');
+    assert.equal((await db.doc(PRICING_PATH).get()).updateTime.toMillis(), beforeRetry.updateTime.toMillis());
+  });
   await check('school uniforms stay free and retired choices cannot reconnect or grant new clothes', async () => {
     await seed(); await seedTeacher();
     await db.doc(PRICING_PATH).set({ schemaVersion: 1, revision: 1, prices: { 'minimi-top-knit-cream': 0, 'minimi-bottom-jeans': 0, 'minimi-top-school-hoodie': 999 } });
@@ -205,12 +235,14 @@ let rules;
     await assertFails(setDoc(doc(client, `${fixture.avatarPath}/requests/fake`), { result: 'owned' }));
     await assertFails(setDoc(doc(client, 'semester_wis_ledger/fake'), { delta: 999 }));
     await assertFails(setDoc(doc(client, PRICING_PATH), { prices: { [fixture.paid[0].id]: 0 } }));
+    await assertFails(setDoc(doc(client, PRICING_PATH), { metadata: { [fixture.paid[0].id]: { label: '변조', gender: 'unisex', description: '' } } }));
     await assertFails(getDoc(doc(client, PRICING_PATH)));
     await assertFails(setDoc(doc(client, `teacher_avatars/${fixture.uid}`), { ownedItemIds: ['top:expensive'] }));
     await assertFails(getDoc(doc(client, 'users/foreign-student')));
     await seedTeacher();
     const teacherClient = rules.authenticatedContext(teacherUid, { email: 'teacher@yongshin-ms.ms.kr', auth_time: authTime }).firestore();
     await assertFails(setDoc(doc(teacherClient, PRICING_PATH), { prices: { [fixture.paid[0].id]: 0 } }));
+    await assertFails(setDoc(doc(teacherClient, PRICING_PATH), { metadata: { [fixture.paid[0].id]: { label: '변조', gender: 'unisex', description: '' } } }));
     await assertFails(setDoc(doc(teacherClient, `teacher_avatars/${teacherUid}`), { ownedItemIds: ['top:expensive'] }));
   });
   await check('deletion pending prevents purchase; real recursive cleanup removes private descendants only and retries safely', async () => {

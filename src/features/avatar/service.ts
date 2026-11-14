@@ -7,6 +7,7 @@ import {
   AVATAR_PRICING_POLICY_VERSION,
   AVATAR_CATALOG_VERSION,
   type AvatarLook,
+  type AvatarItemMetadata,
   type AvatarState,
 } from "./catalog";
 import { notifyAvatarUpdated } from "./events";
@@ -15,6 +16,7 @@ type Scope = Pick<SystemConfig, "year" | "semester">;
 export interface AvatarCatalogPricingState {
   revision: number;
   prices: Record<string, number>;
+  metadata?: Record<string, AvatarItemMetadata>;
   catalogVersion?: number;
   policyVersion?: number;
 }
@@ -127,7 +129,13 @@ export const avatarErrorMessage = (error: unknown) => {
   };
   const reason = `${e.details?.reason || ""} ${e.code || ""}`;
   if (/AVATAR_PRICE_CHANGED/.test(reason))
-    return "아이템 가격이 변경되었습니다. 새 가격을 확인한 뒤 다시 구매해 주세요.";
+    return "아이템 정보가 변경되었습니다. 이름과 가격을 확인한 뒤 다시 구매해 주세요.";
+  if (/AVATAR_PRICING_INPUT_INVALID/.test(reason))
+    return "아이템 이름, 가격, 성별, 설명을 확인해 주세요.";
+  if (/AVATAR_PRICING_REVISION_CONFLICT/.test(reason))
+    return "다른 변경이 먼저 저장되었습니다. 최신 내용을 확인한 뒤 다시 저장해 주세요.";
+  if (/AVATAR_PRICING_INVALID/.test(reason))
+    return "상품 정보를 불러오지 못했습니다. 다시 불러와 주세요.";
   if (/INSUFFICIENT/.test(reason))
     return "위스가 부족합니다. 지갑 잔액을 확인해 주세요.";
   if (/REVISION|aborted/.test(reason))
@@ -154,7 +162,8 @@ export const avatarPricingFromError = (
     }
   )?.details;
   return (details?.reason === "AVATAR_PRICE_CHANGED" ||
-    details?.reason === "AVATAR_ITEM_NOT_OWNED") &&
+    details?.reason === "AVATAR_ITEM_NOT_OWNED" ||
+    details?.reason === "AVATAR_PRICING_REVISION_CONFLICT") &&
     details.pricing
     ? details.pricing
     : null;
@@ -207,6 +216,7 @@ export const getAvatarCatalogPricing = () =>
 export const updateAvatarCatalogPricing = (input: {
   expectedRevision: number;
   prices: Record<string, number>;
+  metadata?: Record<string, AvatarItemMetadata>;
 }) => service<AvatarCatalogPricingState>("updateAvatarCatalogPricing", input);
 export const getStudentAvatar = async (): Promise<AvatarState> => {
   const user = auth.currentUser;

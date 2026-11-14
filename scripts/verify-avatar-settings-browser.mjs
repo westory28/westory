@@ -1,4 +1,4 @@
-/** Local-only real Settings + price editor regression fixture. No Firebase calls. */
+/** Local-only real Settings + item editor regression fixture. No Firebase calls. */
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -15,7 +15,7 @@ const labelFor = (value) =>
   catalog.items.find((item) => item.value === value).label;
 const output = path.resolve(
   process.env.AVATAR_SETTINGS_EVIDENCE ||
-    path.join(root, "output/minimi-rebuild-20261111/settings"),
+    path.join(root, "output/avatar-shop-20261114/settings"),
 );
 await fs.mkdir(output, { recursive: true });
 const entry = `
@@ -25,13 +25,13 @@ import {MemoryRouter} from 'react-router-dom';
 import MainLayout from './src/components/layout/MainLayout';
 import Settings from './src/pages/teacher/Settings';
 import {AVATAR_ITEMS,defaultAvatarLook} from './src/features/avatar/catalog';
-const qa=window.avatarPricingQa={reads:0,saves:[],revision:4,failLoad:false,conflict:false,deferred:false,errors:[],prices:Object.fromEntries(AVATAR_ITEMS.map(i=>[i.id,i.price]))};
+const qa=window.avatarPricingQa={reads:0,saves:[],revision:4,failLoad:false,conflict:false,deferred:false,errors:[],toasts:[],metadata:{},prices:Object.fromEntries(AVATAR_ITEMS.map(i=>[i.id,i.price]))};
 qa.prices['minimi-top-knit-cream']=0;qa.prices['minimi-top-school-white']=999;qa.prices['minimi-top-school-hoodie']=999;
 qa.avatar={schemaVersion:1,catalogVersion:2,look:defaultAvatarLook('boy'),revision:1,lookHash:'fixture',ownedItemIds:[],thumbnailUrl:''};
 window.addEventListener('error',e=>qa.errors.push(e.message));
 window.addEventListener('unhandledrejection',e=>qa.errors.push(String(e.reason)));
-qa.load=async()=>{qa.reads++;if(qa.failLoad)throw Error('가격표를 불러오지 못했습니다. 다시 불러와 주세요.');return{revision:qa.revision,prices:{...qa.prices}}};
-qa.save=async input=>{qa.saves.push(structuredClone(input));if(qa.conflict||input.expectedRevision!==qa.revision)throw Error('다른 관리자가 가격을 변경했습니다. 저장된 가격을 다시 불러와 주세요.');if(qa.deferred)await new Promise(resolve=>qa.release=resolve);qa.prices={...input.prices};qa.revision++;return{revision:qa.revision,prices:{...qa.prices}}};
+qa.load=async()=>{qa.reads++;if(qa.failLoad)throw Error('가격표를 불러오지 못했습니다. 다시 불러와 주세요.');return{revision:qa.revision,prices:{...qa.prices},metadata:{...qa.metadata}}};
+qa.save=async input=>{qa.saves.push(structuredClone(input));if(qa.conflict){qa.conflict=false;qa.revision++;throw Object.assign(Error('다른 관리자가 변경했습니다. 입력 내용은 유지했습니다. 확인 후 다시 저장해 주세요.'),{details:{pricing:{revision:qa.revision,prices:{...qa.prices},metadata:{...qa.metadata}}}})}if(input.expectedRevision!==qa.revision)throw Error('revision mismatch');if(qa.deferred)await new Promise(resolve=>qa.release=resolve);qa.prices={...qa.prices,...input.prices};qa.metadata={...qa.metadata,...input.metadata};qa.revision++;return{revision:qa.revision,prices:{...qa.prices},metadata:{...qa.metadata}}};
 function App(){const[mode,setMode]=useState('normal');return <><div className="qa-controls"><button onClick={()=>{qa.conflict=!qa.conflict;setMode(qa.conflict?'conflict':'normal')}}>동시 수정 오류</button><button onClick={()=>{qa.failLoad=!qa.failLoad;setMode(qa.failLoad?'load-error':'normal')}}>조회 오류</button><button onClick={()=>{qa.deferred=!qa.deferred;setMode(qa.deferred?'delayed':'normal')}}>저장 지연</button><button onClick={()=>qa.release?.()}>저장 응답</button><output>{mode}</output></div><MainLayout><Settings/></MainLayout></>}
 createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/teacher/settings']}><App/></MemoryRouter>);
 `;
@@ -39,7 +39,7 @@ const mockSections =
   /\/(SettingsGeneral|SettingsSchool|SettingsInterface|SettingsPrivacy|SettingsAccess|SettingsNotifications|SettingsSemesterArchive)$/;
 const shellMocks = {
   Header: `import React from 'react';import TeacherSidebar from './src/components/layout/TeacherSidebar';const groups=[{id:'lesson',name:'학습 자료 관리',icon:'lesson',children:[{name:'수업 자료',resolvedUrl:'/teacher/lesson'}]},{id:'quiz',name:'평가 관리',icon:'quiz',children:[]},{id:'points',name:'위스 관리',icon:'wis',children:[]}];export default function Header({sidebarCollapsed,onToggleSidebar}){return <><TeacherSidebar groups={groups} home="/teacher/dashboard" semesterLabel="2026학년도 2학기" showDashboard showSettings collapsed={sidebarCollapsed} mobileOpen={false} onToggleCollapsed={onToggleSidebar} onCloseMobile={()=>{}} isChildActive={()=>false}/><header className="teacher-account-header"><div className="header-container">검증 교사</div></header></>}`,
-  AppToastProvider: `export const useAppToast=()=>({showToast:()=>{}});`,
+  AppToastProvider: `export const useAppToast=()=>({showToast:value=>{window.avatarPricingQa.toasts.push(value)}});`,
   safeStorage: `export const readStorage=()=>null;`,
   loginPerf: `export const markLoginPerf=()=>{},measureLoginPerf=()=>{};`,
   browserTasks: `export const runAfterNextPaint=callback=>{callback();return()=>{}};`,
@@ -110,7 +110,7 @@ const result = await build({
           }),
         );
         plugin.onLoad({ filter: /.*/, namespace: "pricing" }, () => ({
-          contents: `export const avatarErrorMessage=e=>e.message,avatarPricingFromError=()=>null;export const getAvatarCatalogPricing=()=>window.avatarPricingQa.load();export const updateAvatarCatalogPricing=x=>window.avatarPricingQa.save(x);export const getTeacherMyPage=async()=>({avatar:window.avatarPricingQa.avatar,profileEmojiId:'sun',profileIcon:'☀️',emojiRegistry:[{id:'sun',emoji:'☀️',label:'햇살'}],allAvailable:true});export const saveTeacherAvatar=async()=>{throw Error('Unexpected avatar write')},updateTeacherProfileIcon=async()=>{throw Error('Unexpected emoji write')},makeAvatarThumbnail=()=>'',getAvatarStudioState=async()=>{throw Error('Unexpected student read')},purchaseAvatarItem=async()=>{throw Error('Unexpected purchase')},saveStudentAvatar=async()=>{throw Error('Unexpected student write')};`,
+          contents: `export const avatarErrorMessage=e=>e.message,avatarPricingFromError=e=>e.details?.pricing||null;export const getAvatarCatalogPricing=()=>window.avatarPricingQa.load();export const updateAvatarCatalogPricing=x=>window.avatarPricingQa.save(x);export const getTeacherMyPage=async()=>({avatar:window.avatarPricingQa.avatar,profileEmojiId:'sun',profileIcon:'☀️',emojiRegistry:[{id:'sun',emoji:'☀️',label:'햇살'}],allAvailable:true});export const saveTeacherAvatar=async()=>{throw Error('Unexpected avatar write')},updateTeacherProfileIcon=async()=>{throw Error('Unexpected emoji write')},makeAvatarThumbnail=()=>'',getAvatarStudioState=async()=>{throw Error('Unexpected student read')},purchaseAvatarItem=async()=>{throw Error('Unexpected purchase')},saveStudentAvatar=async()=>{throw Error('Unexpected student write')};`,
           loader: "js",
         }));
         plugin.onResolve({ filter: /\/permissions$/ }, (args) => ({
@@ -247,7 +247,7 @@ try {
       assert.equal(await nav.isVisible(), true);
     }
     await nav
-      .getByRole("button", { name: "아바타 가격 관리", exact: true })
+      .getByRole("button", { name: "아바타 아이템 관리", exact: true })
       .click();
     await page.locator(".avatar-pricing-item").first().waitFor();
     if (width < 768) {
@@ -261,177 +261,213 @@ try {
       assert.equal(await nav.isVisible(), false);
     }
     const before = await page.evaluate(() => window.avatarPricingQa.reads);
-    for (const label of [
-      labelFor("mm-school-white"),
-      labelFor("mm-school-hoodie"),
-    ]) {
-      const mode = page.getByLabel(label + " 무료·유료", { exact: true });
-      assert.equal(await mode.inputValue(), "free");
-      assert.equal(await mode.isDisabled(), true);
-      assert.equal(
-        await page
-          .getByLabel(label + " 위스 가격", { exact: true })
-          .isDisabled(),
-        true,
-      );
-    }
+    const itemCard = (id) => page.locator(`[data-item-id="${id}"]`);
+    const knit = itemCard("minimi-top-knit-cream");
+    const school = itemCard("minimi-top-school-white");
     assert.equal(
       await page
         .getByRole("button", { name: "가격 저장", exact: true })
+        .count(),
+      0,
+    );
+    assert.equal(
+      await knit
+        .getByRole("button", { name: "저장", exact: true })
         .isDisabled(),
       true,
-      "Policy-normalized prices do not create an unsolicited settings write",
     );
-    await page
-      .getByLabel("유형", { exact: true })
-      .selectOption("용신중 동복 체육복");
-    assert.equal(await page.locator(".avatar-pricing-item").count(), 2);
-    await page.getByLabel("유형", { exact: true }).selectOption("all");
-    await page
-      .getByLabel("꾸미기 종류", { exact: true })
-      .selectOption("character");
-    await page.getByLabel("아바타", { exact: true }).selectOption("boy");
+    await school.locator(".avatar-pricing-edit").click();
     assert.equal(
-      await page.locator(".avatar-pricing-item").count(),
-      1,
-      "Character cards filter by their own gender, not purchase eligibility",
-    );
-    assert.equal(
-      await page.locator(".avatar-pricing-item h4").innerText(),
-      "남학생",
-    );
-    assert.match(
-      await page.locator(".avatar-pricing-labels").innerText(),
-      /남성형/,
-    );
-    await page.getByLabel("꾸미기 종류", { exact: true }).selectOption("top");
-    await page.getByLabel("유형", { exact: true }).selectOption("일상 상의");
-    assert.equal(await page.locator(".avatar-pricing-item").count(), 2);
-    await page.getByLabel("아바타", { exact: true }).selectOption("boy");
-    if (process.argv.includes("--require-previews"))
-      assert.equal(
-        await page
-          .locator(".avatar-pricing-preview img")
-          .first()
-          .getAttribute("src"),
-        "/avatar/minimi-v2/previews/boy/top-mm-knit-cream.webp",
-      );
-    await page.getByLabel("아이템 검색", { exact: true }).fill("크림");
-    assert.equal(await page.locator(".avatar-pricing-item").count(), 1);
-    const name = await page.locator(".avatar-pricing-item h4").innerText();
-    assert.equal(
-      await page.getByLabel(name + " 무료·유료", { exact: true }).inputValue(),
-      "paid",
-    );
-    assert.equal(
-      await page.getByLabel(name + " 무료·유료", { exact: true }).isDisabled(),
+      await school
+        .getByLabel(labelFor("mm-school-white") + " 무료·유료", { exact: true })
+        .isDisabled(),
       true,
     );
     assert.equal(
-      await page.locator(".avatar-pricing-current").innerText(),
-      "현재 160 위스",
+      await school
+        .getByLabel(labelFor("mm-school-white") + " 위스 가격", { exact: true })
+        .isDisabled(),
+      true,
     );
-    const price = page.getByLabel(name + " 위스 가격", { exact: true });
+    await school.locator(".avatar-pricing-edit").click();
+    await page.getByLabel("성별", { exact: true }).selectOption("boy");
+    await page.getByLabel("성별", { exact: true }).selectOption("girl");
+    await page.getByLabel("성별", { exact: true }).selectOption("unisex");
+    await page.getByLabel("성별", { exact: true }).selectOption("all");
+    await page.getByLabel("아이템 검색", { exact: true }).fill("없는상품검증");
+    assert.equal(await page.locator(".avatar-pricing-item").count(), 0);
+    await page.getByText("해당하는 아이템이 없습니다.").waitFor();
+    await page.getByLabel("아이템 검색", { exact: true }).fill("");
+    await knit.locator(".avatar-pricing-edit").click();
+    const originalName = labelFor("mm-knit-cream");
+    const price = knit.getByLabel(originalName + " 위스 가격", { exact: true });
     await price.fill("");
     assert.equal(await price.getAttribute("aria-invalid"), "true");
     assert.equal(
-      await page
-        .getByRole("button", { name: "가격 저장", exact: true })
-        .isEnabled(),
-      false,
+      await knit
+        .getByRole("button", { name: "저장", exact: true })
+        .isDisabled(),
+      true,
     );
     await price.fill("1000001");
     assert.equal(await price.getAttribute("aria-invalid"), "true");
     await price.fill("750");
-    assert.equal(await price.getAttribute("aria-invalid"), "false");
-    await page.getByLabel("변경한 항목만", { exact: true }).check();
-    assert.equal(await page.locator(".avatar-pricing-item").count(), 1);
+    await knit.getByLabel(originalName + " 이름", { exact: true }).fill("");
+    assert.equal(
+      await knit
+        .getByRole("button", { name: "저장", exact: true })
+        .isDisabled(),
+      true,
+    );
+    await knit
+      .getByLabel(originalName + " 이름", { exact: true })
+      .fill("구름 크림 니트");
+    await knit
+      .getByLabel(originalName + " 성별", { exact: true })
+      .selectOption("boy");
+    await knit
+      .getByLabel(originalName + " 설명", { exact: true })
+      .fill("포근한 짜임의 긴소매 니트입니다.");
+    // A second dirty card must survive saves, conflict responses and refreshes.
+    await school.locator(".avatar-pricing-edit").click();
+    await school
+      .getByLabel(labelFor("mm-school-white") + " 설명", { exact: true })
+      .fill("다른 아이템의 저장 전 설명");
     assert.equal(
       await page.evaluate(() => window.avatarPricingQa.reads),
       before,
-      "Filtering does not fetch",
+      "Filters and editing do not fetch",
+    );
+    const previewButton = knit.getByRole("button", {
+      name: "학생 미리보기",
+      exact: true,
+    });
+    await previewButton.click();
+    const dialog = page.getByRole("dialog", {
+      name: "학생 미리보기",
+      exact: true,
+    });
+    await dialog.waitFor();
+    assert.equal(await dialog.locator(".avatar-shop-item").count(), 1);
+    await dialog.getByText("저장 전 변경 사항", { exact: true }).waitFor();
+    await dialog
+      .getByText("포근한 짜임의 긴소매 니트입니다.", { exact: true })
+      .waitFor();
+    assert.equal(
+      await page.evaluate(() => window.avatarPricingQa.saves.length),
+      0,
+      "Preview never saves",
+    );
+    await page.screenshot({ path: path.join(output, `preview-${width}.png`) });
+    await page.keyboard.press("Escape");
+    await dialog.waitFor({ state: "hidden" });
+    assert.equal(
+      await previewButton.evaluate((el) => el === document.activeElement),
+      true,
+      "Preview restores focus",
     );
     await page
       .getByRole("button", { name: "동시 수정 오류", exact: true })
       .click();
-    await page.getByRole("button", { name: "가격 저장", exact: true }).click();
-    await page.getByRole("alert").filter({ hasText: "다른 관리자" }).waitFor();
-    assert.equal(await price.inputValue(), "750", "Conflict preserves draft");
-    await page
-      .getByRole("button", { name: "동시 수정 오류", exact: true })
-      .click();
-    await page.getByRole("button", { name: "가격 저장", exact: true }).click();
-    await page.getByText("저장했습니다.", { exact: true }).waitFor();
+    await knit.getByRole("button", { name: "저장", exact: true }).click();
+    await knit.getByRole("alert").filter({ hasText: "다른 관리자" }).waitFor();
+    assert.equal(await price.inputValue(), "750");
+    await knit.getByRole("button", { name: "저장", exact: true }).click();
+    await page.waitForFunction(
+      () => window.avatarPricingQa.toasts.length === 1,
+    );
     const requests = await page.evaluate(() => window.avatarPricingQa.saves);
     assert.equal(requests.length, 2);
     assert.equal(requests[0].expectedRevision, 4);
-    assert.deepEqual(requests[0], requests[1]);
-    await page.getByLabel("변경한 항목만", { exact: true }).uncheck();
     assert.equal(
-      await page.locator(".avatar-pricing-current").innerText(),
-      "현재 750 위스",
+      requests[1].expectedRevision,
+      5,
+      "Conflict updates revision and retains draft",
     );
+    assert.deepEqual(Object.keys(requests[1].prices), [
+      "minimi-top-knit-cream",
+    ]);
+    assert.deepEqual(Object.keys(requests[1].metadata), [
+      "minimi-top-knit-cream",
+    ]);
+    assert.deepEqual(requests[1].metadata["minimi-top-knit-cream"], {
+      label: "구름 크림 니트",
+      gender: "boy",
+      description: "포근한 짜임의 긴소매 니트입니다.",
+    });
+    assert.equal(
+      await school
+        .getByLabel(labelFor("mm-school-white") + " 설명", { exact: true })
+        .inputValue(),
+      "다른 아이템의 저장 전 설명",
+    );
+    assert.equal(
+      await knit
+        .getByRole("button", { name: "저장", exact: true })
+        .isDisabled(),
+      true,
+      "Unchanged item cannot submit",
+    );
+    await page.getByLabel("변경한 항목만", { exact: true }).check();
+    assert.equal(await page.locator(".avatar-pricing-item").count(), 1);
+    await page.getByLabel("변경한 항목만", { exact: true }).uncheck();
     if (width === 1280) {
-      await price.fill("800");
+      const newPrice = knit.getByLabel("구름 크림 니트 위스 가격", {
+        exact: true,
+      });
+      await newPrice.fill("800");
       await page
         .getByRole("button", { name: "저장 지연", exact: true })
         .click();
-      await page
-        .getByRole("button", { name: "가격 저장", exact: true })
-        .click();
+      await knit.getByRole("button", { name: "저장", exact: true }).click();
+      assert.equal(await newPrice.isDisabled(), true);
       assert.equal(
-        await price.isEnabled(),
-        false,
-        "Price controls lock while saving",
-      );
-      assert.equal(
-        await page
-          .getByRole("button", { name: "저장 중", exact: true })
-          .isEnabled(),
-        false,
-      );
-      assert.equal(
-        await page
-          .getByRole("button", {
-            name: "저장된 가격 다시 불러오기",
-            exact: true,
-          })
-          .isEnabled(),
-        false,
-      );
-      assert.equal(
-        await page.evaluate(() => window.avatarPricingQa.saves.length),
-        3,
-        "One request for an explicit save",
+        await school
+          .getByRole("button", { name: "저장", exact: true })
+          .isDisabled(),
+        true,
+        "Serial saves avoid stale revisions",
       );
       await page
         .getByRole("button", { name: "저장 응답", exact: true })
         .click();
-      await page.getByText("저장했습니다.", { exact: true }).waitFor();
+      await page.waitForFunction(
+        () => window.avatarPricingQa.toasts.length === 2,
+      );
       await page
         .getByRole("button", { name: "조회 오류", exact: true })
         .click();
       await page
-        .getByRole("button", { name: "저장된 가격 다시 불러오기", exact: true })
+        .getByRole("button", {
+          name: "저장된 아이템 다시 불러오기",
+          exact: true,
+        })
         .click();
       await page
         .getByRole("alert")
         .filter({ hasText: "불러오지 못했습니다" })
         .waitFor();
-      assert.equal(
-        await price.inputValue(),
-        "800",
-        "Failed reload preserves current state",
-      );
+      assert.equal(await newPrice.inputValue(), "800");
       await page
         .getByRole("button", { name: "조회 오류", exact: true })
         .click();
       await page
-        .getByRole("button", { name: "저장된 가격 다시 불러오기", exact: true })
+        .getByRole("button", {
+          name: "저장된 아이템 다시 불러오기",
+          exact: true,
+        })
         .click();
-      await page.getByText("현재 800 위스", { exact: true }).waitFor();
+      await page.waitForFunction(() => window.avatarPricingQa.reads === 3);
+      assert.equal(
+        await school
+          .getByLabel(labelFor("mm-school-white") + " 설명", { exact: true })
+          .inputValue(),
+        "다른 아이템의 저장 전 설명",
+        "Reload preserves dirty drafts",
+      );
     }
-    await page.getByLabel("아이템 검색", { exact: true }).fill("");
+    await knit.locator(".avatar-pricing-edit").click();
+    await school.locator(".avatar-pricing-edit").click();
     await page.addStyleTag({ content: ".qa-controls{display:none}" });
     await page.evaluate(() => window.scrollTo(0, 0));
     if (process.argv.includes("--require-previews")) {
@@ -450,6 +486,7 @@ try {
       canvas: document.querySelectorAll("canvas").length,
       errors: window.avatarPricingQa.errors,
       reads: window.avatarPricingQa.reads,
+      saves: window.avatarPricingQa.saves.length,
       sidebar: document
         .querySelector(".teacher-sidebar")
         ?.getBoundingClientRect()
@@ -462,31 +499,45 @@ try {
         .querySelector("#teacher-settings-content")
         ?.getBoundingClientRect()
         .toJSON(),
+      cards: [...document.querySelectorAll(".avatar-pricing-item")].map((el) =>
+        el.getBoundingClientRect().toJSON(),
+      ),
+      headerBackground: getComputedStyle(
+        document.querySelector(".avatar-pricing .ws-page-header"),
+      ).backgroundColor,
       previews: [
         ...document.querySelectorAll(".avatar-pricing-preview img"),
       ].map((i) => ({
         src: i.getAttribute("src"),
         loaded: i.complete && i.naturalWidth > 0,
+        contained:
+          i.getBoundingClientRect().height <=
+          i.parentElement.getBoundingClientRect().height + 1,
       })),
     }));
-    if (process.argv.includes("--require-previews")) {
-      assert.equal(report.previews.length, report.items);
-      assert(
-        report.previews.every((item) => item.loaded),
-        "Every rendered item has a real preview",
-      );
-    }
     assert(report.scrollWidth <= width, "No page overflow");
+    assert.equal(
+      report.headerBackground,
+      "rgba(0, 0, 0, 0)",
+      "Title has transparent background",
+    );
     assert.equal(report.canvas, 0);
     assert.deepEqual(report.errors, []);
-    if (width >= 1024) {
+    if (width < 640)
       assert(
-        Math.abs(report.sidebar.right - report.submenu.left) < 2,
-        "Settings submenu adjoins global sidebar",
+        Math.abs(report.cards[0].top - report.cards[1].top) < 2,
+        "Two compact cards per mobile row",
       );
+    if (width >= 1024) {
+      assert(Math.abs(report.sidebar.right - report.submenu.left) < 2);
+      assert(report.content.left >= report.submenu.right);
+    }
+    if (process.argv.includes("--require-previews")) {
+      assert.equal(report.previews.length, report.items);
+      assert(report.previews.every((i) => i.loaded));
       assert(
-        report.content.left >= report.submenu.right,
-        "Content does not overlap settings submenu",
+        report.previews.every((i) => i.contained),
+        "Preview image boxes fit the fixed-height item container without cropping",
       );
     }
     await page.screenshot({
@@ -581,7 +632,7 @@ try {
       );
       if (width < 768) await toggle.click();
       await nav
-        .getByRole("button", { name: "아바타 가격 관리", exact: true })
+        .getByRole("button", { name: "아바타 아이템 관리", exact: true })
         .click();
       await page.locator(".avatar-pricing-item").first().waitFor();
       assert.equal(
@@ -604,7 +655,7 @@ try {
     JSON.stringify({ passed: true, reports }, null, 2),
   );
   console.log(
-    `PASS settings navigation and avatar pricing: ${reports.length} widths, local filters, invalid/empty prices, explicit save, busy lock, failed reload, CAS draft preservation${process.argv.includes("--skip-studio") ? "" : ", hidden stage disposal"}${process.argv.includes("--require-previews") ? ", real static previews" : ""}.`,
+    `PASS settings navigation and avatar item management: ${reports.length} widths, local filters, metadata editing, item-only save, student preview and focus, unchanged save disabled, busy lock, failed reload, CAS draft preservation${process.argv.includes("--skip-studio") ? "" : ", hidden stage disposal"}${process.argv.includes("--require-previews") ? ", real static previews" : ""}.`,
   );
 } finally {
   await browser?.close();

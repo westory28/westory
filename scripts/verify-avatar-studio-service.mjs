@@ -176,7 +176,7 @@ assert.equal(calls[0].payload.expectedPricingRevision, 2);
 assert.equal(calls[0].payload.expectedPricingPolicyVersion, 3);
 const declinedRequestId = calls[0].payload.requestId;
 assert.equal(service.avatarPricingFromError(changed).prices["top:test"], 700);
-assert.match(service.avatarErrorMessage(changed), /가격이 변경/);
+assert.match(service.avatarErrorMessage(changed), /정보가 변경.*이름과 가격/);
 assert.equal(service.avatarPricingFromError(new Error("other failure")), null);
 assert.equal(
   service.avatarPricingFromError({
@@ -337,6 +337,30 @@ assert.equal(
 );
 assert.equal(calls.at(-1).payload.expectedRevision, 2);
 assert.equal(calls.at(-1).payload.prices["top:test"], 500);
+const editedMetadata = {
+  "top:test": {
+    label: "별빛 재킷",
+    gender: "unisex",
+    description: "별 자수가 있는 재킷",
+  },
+};
+await service.updateAvatarCatalogPricing({
+  expectedRevision: 3,
+  prices: { "top:test": 700 },
+  metadata: editedMetadata,
+});
+assert.equal(calls.at(-1).payload.metadata, editedMetadata);
+assert.deepEqual(Object.keys(calls.at(-1).payload.prices), ["top:test"]);
+const latestCatalog = { ...pricing, revision: 4, metadata: editedMetadata };
+assert.equal(
+  service.avatarPricingFromError({
+    details: {
+      reason: "AVATAR_PRICING_REVISION_CONFLICT",
+      pricing: latestCatalog,
+    },
+  }),
+  latestCatalog,
+);
 console.log(
   "Avatar studio service: one-read loads, teacher access, quoted purchases, idempotency, and session isolation passed.",
 );

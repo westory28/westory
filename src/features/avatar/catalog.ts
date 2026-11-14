@@ -1,6 +1,12 @@
 import catalog from "../../../functions/avatarCatalog.json";
 
 export type AvatarCharacter = "girl" | "boy";
+export type AvatarItemGender = AvatarCharacter | "unisex";
+export interface AvatarItemMetadata {
+  label: string;
+  gender: AvatarItemGender;
+  description: string;
+}
 export type AvatarLook = {
   character: AvatarCharacter;
   skinTone: string;
@@ -24,6 +30,9 @@ export interface AvatarItem {
   tier: "basic" | "premium";
   characters: AvatarCharacter[];
   color?: string;
+  /** Shop classification only; characters remains the rendering compatibility contract. */
+  gender?: AvatarItemGender;
+  description?: string;
 }
 export interface AvatarPublic {
   schemaVersion: number;
@@ -62,6 +71,26 @@ export const effectiveAvatarItemPrice = (
     ? override!
     : item.price;
 };
+export const avatarItemGender = (item: AvatarItem): AvatarItemGender =>
+  item.gender ?? (item.characters.length === 1 ? item.characters[0] : "unisex");
+export const avatarItemMetadata = (item: AvatarItem): AvatarItemMetadata => ({
+  label: item.label,
+  gender: avatarItemGender(item),
+  description: item.description ?? "",
+});
+/** Apply the server's shop fields without changing IDs, geometry or ownership. */
+export const applyAvatarCatalogSettings = (
+  item: AvatarItem,
+  settings: {
+    prices: Record<string, number>;
+    metadata?: Record<string, AvatarItemMetadata>;
+  },
+): AvatarItem => ({
+  ...item,
+  ...avatarItemMetadata(item),
+  ...settings.metadata?.[item.id],
+  price: effectiveAvatarItemPrice(item, settings.prices[item.id]),
+});
 export const AVATAR_SLOTS: { key: AvatarSlot; label: string; icon: string }[] =
   [
     { key: "character", label: "캐릭터", icon: "fa-user" },

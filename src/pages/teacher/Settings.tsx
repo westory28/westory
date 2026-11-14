@@ -30,7 +30,7 @@ const settingSections = [
   { id: "archive", label: "이전 학기 조회", icon: "history" },
   { id: "school", label: "학교/학년/학기", icon: "school" },
   { id: "interface", label: "인터페이스 설정", icon: "palette" },
-  { id: "avatar-pricing", label: "아바타 가격 관리", icon: "wis" },
+  { id: "avatar-pricing", label: "아바타 아이템 관리", icon: "wis" },
   { id: "access", label: "세부 권한 관리", icon: "access" },
   { id: "notifications", label: "알림 관리", icon: "bell" },
   { id: "privacy", label: "개인정보 동의 관리", icon: "privacy" },

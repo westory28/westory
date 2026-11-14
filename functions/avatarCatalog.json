@@ -164,7 +164,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "gender": "girl"
     },
     {
       "id": "minimi-hairStyle-long",
@@ -176,7 +177,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "gender": "girl"
     },
     {
       "id": "minimi-hairStyle-ponytail",
@@ -188,7 +190,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "gender": "girl"
     },
     {
       "id": "minimi-hairStyle-crop",
@@ -200,7 +203,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "gender": "boy"
     },
     {
       "id": "minimi-hairStyle-parted",
@@ -212,7 +216,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "gender": "boy"
     },
     {
       "id": "minimi-hairStyle-wave",
@@ -224,7 +229,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "gender": "girl"
     },
     {
       "id": "minimi-hairTone-ink",
@@ -516,6 +522,654 @@
         "girl",
         "boy"
       ]
+    },
+    {
+      "id": "minimi-hairStyle-cloud-crop",
+      "slot": "hairStyle",
+      "value": "mm-cloud-crop",
+      "label": "구름 숏 헤어",
+      "price": 220,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "동그란 컬을 겹쳐 풍성하게 만든 짧은 머리입니다."
+    },
+    {
+      "id": "minimi-hairStyle-side-sweep",
+      "slot": "hairStyle",
+      "value": "mm-side-sweep",
+      "label": "바람결 헤어",
+      "price": 220,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "옆으로 흐르는 긴 앞머리와 짧은 옆머리가 어우러진 스타일입니다."
+    },
+    {
+      "id": "minimi-hairStyle-soft-curtain",
+      "slot": "hairStyle",
+      "value": "mm-soft-curtain",
+      "label": "포근한 가르마 헤어",
+      "price": 240,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "양옆으로 부드럽게 갈라지는 앞머리가 특징입니다."
+    },
+    {
+      "id": "minimi-hairStyle-wolf-layer",
+      "slot": "hairStyle",
+      "value": "mm-wolf-layer",
+      "label": "별빛 레이어 헤어",
+      "price": 260,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "뾰족한 층과 목덜미까지 내려오는 뒷머리가 특징입니다."
+    },
+    {
+      "id": "minimi-hairStyle-wave-bob",
+      "slot": "hairStyle",
+      "value": "mm-wave-bob",
+      "label": "물결 단발",
+      "price": 240,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "볼 옆에서 둥글게 말리는 웨이브 단발입니다."
+    },
+    {
+      "id": "minimi-hairStyle-twin-ribbon",
+      "slot": "hairStyle",
+      "value": "mm-twin-ribbon",
+      "label": "리본 트윈 헤어",
+      "price": 280,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "리본으로 묶은 두 갈래 머리가 어깨 아래로 흐릅니다."
+    },
+    {
+      "id": "minimi-hairStyle-braided-twin",
+      "slot": "hairStyle",
+      "value": "mm-braided-twin",
+      "label": "숲길 땋은 머리",
+      "price": 280,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "양쪽으로 촘촘히 땋아 내린 긴 머리입니다."
+    },
+    {
+      "id": "minimi-hairStyle-high-bun",
+      "slot": "hairStyle",
+      "value": "mm-high-bun",
+      "label": "하늘 올림머리",
+      "price": 220,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "정수리 위로 둥글게 올려 묶은 머리입니다."
+    },
+    {
+      "id": "minimi-hairStyle-half-up",
+      "slot": "hairStyle",
+      "value": "mm-half-up",
+      "label": "이슬 반묶음 헤어",
+      "price": 280,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "긴 머리에 작은 묶음과 푸른 장식을 더했습니다."
+    },
+    {
+      "id": "minimi-hairStyle-long-curl",
+      "slot": "hairStyle",
+      "value": "mm-long-curl",
+      "label": "달무리 롱 웨이브",
+      "price": 300,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "어깨 아래로 풍성한 곡선이 이어지는 긴 머리입니다."
+    },
+    {
+      "id": "minimi-hairStyle-hime-long",
+      "slot": "hairStyle",
+      "value": "mm-hime-long",
+      "label": "반듯한 롱 헤어",
+      "price": 260,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "반듯한 앞머리와 짧은 옆머리를 함께 살렸습니다."
+    },
+    {
+      "id": "minimi-hairStyle-fluffy-curl",
+      "slot": "hairStyle",
+      "value": "mm-fluffy-curl",
+      "label": "솜사탕 컬 헤어",
+      "price": 260,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "작은 컬이 머리 전체를 폭신하게 감싸는 스타일입니다."
+    },
+    {
+      "id": "minimi-expression-sparkle",
+      "slot": "expression",
+      "value": "mm-sparkle",
+      "label": "반짝이는 눈",
+      "price": 140,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "큰 눈동자에 반짝이는 빛이 담긴 표정입니다."
+    },
+    {
+      "id": "minimi-expression-dreamy",
+      "slot": "expression",
+      "value": "mm-dreamy",
+      "label": "나른한 눈",
+      "price": 140,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "눈꺼풀이 살짝 내려온 차분한 표정입니다."
+    },
+    {
+      "id": "minimi-expression-cat",
+      "slot": "expression",
+      "value": "mm-cat",
+      "label": "고양이 눈",
+      "price": 160,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "눈꼬리와 작은 입매가 또렷한 표정입니다."
+    },
+    {
+      "id": "minimi-expression-determined",
+      "slot": "expression",
+      "value": "mm-determined",
+      "label": "당찬 눈",
+      "price": 140,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "굳게 다문 입과 힘 있는 눈썹이 특징입니다."
+    },
+    {
+      "id": "minimi-expression-surprised",
+      "slot": "expression",
+      "value": "mm-surprised",
+      "label": "동그란 놀람",
+      "price": 120,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "동그란 눈과 작은 입으로 놀란 표정을 짓습니다."
+    },
+    {
+      "id": "minimi-expression-shy",
+      "slot": "expression",
+      "value": "mm-shy",
+      "label": "수줍은 미소",
+      "price": 140,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "볼에 홍조를 띠고 살짝 미소 짓는 표정입니다."
+    },
+    {
+      "id": "minimi-hairTone-lavender",
+      "slot": "hairTone",
+      "value": "mm-lavender",
+      "label": "라벤더",
+      "price": 100,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "밝은 보랏빛이 도는 염색입니다.",
+      "color": "#c1acd9"
+    },
+    {
+      "id": "minimi-hairTone-silver",
+      "slot": "hairTone",
+      "value": "mm-silver",
+      "label": "달빛 은색",
+      "price": 100,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "시원한 은빛과 푸른 그림자가 어우러집니다.",
+      "color": "#d9deea"
+    },
+    {
+      "id": "minimi-hairTone-rose",
+      "slot": "hairTone",
+      "value": "mm-rose",
+      "label": "로즈 핑크",
+      "price": 100,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "부드러운 장밋빛 염색입니다.",
+      "color": "#e8b5c4"
+    },
+    {
+      "id": "minimi-hairTone-mint",
+      "slot": "hairTone",
+      "value": "mm-mint",
+      "label": "민트",
+      "price": 100,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "맑은 민트빛 염색입니다.",
+      "color": "#a6d9d3"
+    },
+    {
+      "id": "minimi-top-sailor-mint",
+      "slot": "top",
+      "value": "mm-sailor-mint",
+      "label": "민트 세일러",
+      "price": 220,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "짙은 세일러 깃과 작은 리본을 더한 반소매 상의입니다."
+    },
+    {
+      "id": "minimi-top-varsity-cherry",
+      "slot": "top",
+      "value": "mm-varsity-cherry",
+      "label": "체리 야구 점퍼",
+      "price": 240,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "밝은 여밈과 줄무늬 시보리가 있는 긴소매 점퍼입니다."
+    },
+    {
+      "id": "minimi-top-cardigan-rose",
+      "slot": "top",
+      "value": "mm-cardigan-rose",
+      "label": "로즈 가디건",
+      "price": 220,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "밝은 안감과 작은 주머니가 보이는 가디건입니다."
+    },
+    {
+      "id": "minimi-top-academy-navy",
+      "slot": "top",
+      "value": "mm-academy-navy",
+      "label": "네이비 아카데미",
+      "price": 260,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "넥타이와 접힌 깃을 갖춘 단정한 재킷입니다."
+    },
+    {
+      "id": "minimi-top-moon-cape",
+      "slot": "top",
+      "value": "mm-moon-cape",
+      "label": "달무리 케이프",
+      "price": 300,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "금빛 테두리의 짧은 망토가 달린 긴소매 상의입니다."
+    },
+    {
+      "id": "minimi-top-lace-blouse",
+      "slot": "top",
+      "value": "mm-lace-blouse",
+      "label": "크림 레이스 블라우스",
+      "price": 240,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "넓은 레이스 깃과 리본, 주름 밑단을 더했습니다."
+    },
+    {
+      "id": "minimi-top-stripe-tangerine",
+      "slot": "top",
+      "value": "mm-stripe-tangerine",
+      "label": "귤빛 스트라이프",
+      "price": 180,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "가로 줄무늬와 작은 가슴 주머니가 있는 반소매입니다."
+    },
+    {
+      "id": "minimi-top-star-hoodie",
+      "slot": "top",
+      "value": "mm-star-hoodie",
+      "label": "별사탕 후드",
+      "price": 260,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "커다란 별과 후드 끈이 돋보이는 긴소매 상의입니다."
+    },
+    {
+      "id": "minimi-top-royal-coat",
+      "slot": "top",
+      "value": "mm-royal-coat",
+      "label": "자줏빛 궁정 재킷",
+      "price": 320,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "금빛 단추와 깃 장식이 있는 자줏빛 재킷입니다."
+    },
+    {
+      "id": "minimi-top-hanbok-sky",
+      "slot": "top",
+      "value": "mm-hanbok-sky",
+      "label": "하늘빛 저고리",
+      "price": 260,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "밝은 동정과 분홍 고름이 어우러진 저고리입니다."
+    },
+    {
+      "id": "minimi-bottom-pleated-rose",
+      "slot": "bottom",
+      "value": "mm-pleated-rose",
+      "label": "로즈 주름치마",
+      "price": 160,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "세로 주름과 밝은 밑단이 있는 장밋빛 치마입니다."
+    },
+    {
+      "id": "minimi-bottom-tartan-gray",
+      "slot": "bottom",
+      "value": "mm-tartan-gray",
+      "label": "회색 체크 치마",
+      "price": 180,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "작은 격자무늬가 이어지는 회색 치마입니다."
+    },
+    {
+      "id": "minimi-bottom-culottes-cream",
+      "slot": "bottom",
+      "value": "mm-culottes-cream",
+      "label": "크림 큐롯",
+      "price": 160,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "넉넉한 폭과 짧은 길이의 크림색 바지입니다."
+    },
+    {
+      "id": "minimi-bottom-cargo-sage",
+      "slot": "bottom",
+      "value": "mm-cargo-sage",
+      "label": "세이지 카고 팬츠",
+      "price": 180,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "양쪽 덧주머니가 달린 초록빛 긴바지입니다."
+    },
+    {
+      "id": "minimi-bottom-shorts-denim",
+      "slot": "bottom",
+      "value": "mm-shorts-denim",
+      "label": "하늘 데님 반바지",
+      "price": 140,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "접힌 밑단이 있는 밝은 데님 반바지입니다."
+    },
+    {
+      "id": "minimi-bottom-trousers-cocoa",
+      "slot": "bottom",
+      "value": "mm-trousers-cocoa",
+      "label": "코코아 슬랙스",
+      "price": 160,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "따뜻한 갈색과 금빛 허리 장식의 긴바지입니다."
+    },
+    {
+      "id": "minimi-bottom-tulle-lilac",
+      "slot": "bottom",
+      "value": "mm-tulle-lilac",
+      "label": "라일락 튤 스커트",
+      "price": 200,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "여러 겹의 물결 주름을 표현한 보랏빛 치마입니다."
+    },
+    {
+      "id": "minimi-bottom-skirt-starlight",
+      "slot": "bottom",
+      "value": "mm-skirt-starlight",
+      "label": "밤하늘 별치마",
+      "price": 220,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "짙은 푸른색 위에 작은 별이 수놓인 치마입니다."
+    },
+    {
+      "id": "minimi-shoes-ribbon-flats",
+      "slot": "shoes",
+      "value": "mm-ribbon-flats",
+      "label": "분홍 리본 플랫",
+      "price": 100,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "발등의 작은 리본이 돋보이는 낮은 구두입니다."
+    },
+    {
+      "id": "minimi-shoes-ankle-boots",
+      "slot": "shoes",
+      "value": "mm-ankle-boots",
+      "label": "밤색 앵클 부츠",
+      "price": 140,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "발목을 감싸는 짧은 밤색 부츠입니다."
+    },
+    {
+      "id": "minimi-shoes-hightop-pink",
+      "slot": "shoes",
+      "value": "mm-hightop-pink",
+      "label": "딸기 하이탑",
+      "price": 120,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "발목까지 올라오는 분홍색 운동화입니다."
+    },
+    {
+      "id": "minimi-shoes-running-mint",
+      "slot": "shoes",
+      "value": "mm-running-mint",
+      "label": "민트 러닝화",
+      "price": 120,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "밝은 옆선과 민트색이 어우러진 운동화입니다."
+    },
+    {
+      "id": "minimi-shoes-royal-buckle",
+      "slot": "shoes",
+      "value": "mm-royal-buckle",
+      "label": "금장 버클 구두",
+      "price": 160,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "금빛 버클이 있는 자줏빛 구두입니다."
+    },
+    {
+      "id": "minimi-shoes-canvas-red",
+      "slot": "shoes",
+      "value": "mm-canvas-red",
+      "label": "체리 캔버스화",
+      "price": 100,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "밝은 앞코와 빨간 천으로 만든 캔버스화입니다."
     }
   ]
 }

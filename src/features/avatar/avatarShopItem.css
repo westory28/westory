@@ -1,0 +1,124 @@
+.avatar-shop-item,
+.avatar-studio button.avatar-shop-item {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  padding: 0 0 8px;
+  gap: 4px;
+  overflow: hidden;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--ws-surface, #fff);
+  color: var(--ws-text, #1f2937);
+  text-align: center;
+  font: inherit;
+  align-items: center;
+}
+button.avatar-shop-item {
+  cursor: pointer;
+}
+button.avatar-shop-item:focus-visible {
+  outline: 2px solid var(--ws-primary, #2563eb);
+  outline-offset: 2px;
+}
+button.avatar-shop-item:disabled {
+  cursor: not-allowed;
+}
+.avatar-shop-item[aria-pressed="true"] {
+  border-color: var(--ws-primary, #2563eb);
+  box-shadow: 0 0 0 1px var(--ws-primary, #2563eb);
+}
+.avatar-shop-item-image {
+  display: block;
+  position: relative;
+  width: 100%;
+}
+.avatar-shop-item-image .avatar-item-preview {
+  border-radius: 0;
+}
+.avatar-shop-item-gender {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--ws-surface, #fff);
+  color: var(--ws-muted, #64748b);
+  font-size: 12px;
+  line-height: 20px;
+}
+.avatar-shop-item-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  background: var(--ws-primary, #2563eb);
+  color: #fff;
+  border-radius: 50%;
+}
+.avatar-shop-item-check svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.avatar-shop-item-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  padding: 0 8px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.avatar-shop-item-price {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 20px;
+  color: var(--ws-primary, #2563eb);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+  margin-top: auto;
+}
+.avatar-shop-item-price .wis-icon {
+  width: 16px;
+  height: 16px;
+}
+.avatar-shop-item-details {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.avatar-shop-item-details > strong {
+  font-size: 16px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.avatar-shop-item-meta {
+  font-size: 12px;
+  color: var(--ws-muted, #64748b);
+}
+.avatar-shop-item-details > p {
+  margin: 4px 0;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}

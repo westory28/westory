@@ -4,6 +4,11 @@ const catalog = require('./avatarCatalog.json');
 const SLOTS = Object.freeze(['character', 'skinTone', 'faceShape', 'expression', 'hairStyle', 'hairTone', 'pose', 'top', 'bottom', 'shoes', 'accessory']);
 const items = new Map();
 const itemIdFor = (slot, value) => `minimi-${slot}-${String(value).replace(/^mm-/, '')}`;
+const itemMetadata = item => ({
+  label: item.label,
+  gender: item.gender ?? (item.characters.length === 1 ? item.characters[0] : 'unisex'),
+  description: item.description ?? '',
+});
 const freeClothingItemIds = new Set(catalog.freeClothingItemIds);
 const itemPricePolicy = item => ['top', 'bottom'].includes(item.slot)
   ? (freeClothingItemIds.has(item.id) ? 'free' : 'paid') : null;
@@ -62,4 +67,4 @@ const sanitizePublicAvatar = value => {
   return result;
 };
 
-module.exports = { SLOTS, catalog, items, itemIdFor, itemPricePolicy, effectiveAvatarPrice, defaultLook, validateLook, restoreStoredLook, lookHash, sanitizePublicAvatar };
+module.exports = { SLOTS, catalog, items, itemIdFor, itemMetadata, itemPricePolicy, effectiveAvatarPrice, defaultLook, validateLook, restoreStoredLook, lookHash, sanitizePublicAvatar };

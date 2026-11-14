@@ -11,7 +11,7 @@ import { build } from "esbuild";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
 const destination = path.join(root, "public/avatar/minimi-v2/previews");
-const evidence = path.join(root, "output/minimi-rebuild-20261111");
+const evidence = path.join(root, "output/avatar-wardrobe-20261114");
 const catalog = JSON.parse(
   await fs.readFile(path.join(root, "functions/avatarCatalog.json"), "utf8"),
 );
@@ -112,12 +112,14 @@ import {drawMinimi,MINIMI_WIDTH,MINIMI_HEIGHT} from './src/features/avatar/minim
 import {defaultAvatarLook} from './src/features/avatar/catalog';
 window.renderItem=(item,character)=>{
  const look={...defaultAvatarLook(character),[item.slot]:item.value};
- if(item.value==='mm-school-hoodie'||item.value==='mm-school-halfzip')look.bottom='mm-school-joggers';
- if(item.value==='mm-school-joggers')look.top='mm-school-hoodie';
  const sprite=document.createElement('canvas');sprite.width=MINIMI_WIDTH;sprite.height=MINIMI_HEIGHT;
- drawMinimi(sprite.getContext('2d'),look);
+ drawMinimi(sprite.getContext('2d'),look,{itemOnly:item.slot});
  const canvas=document.createElement('canvas');canvas.width=canvas.height=256;const ctx=canvas.getContext('2d');ctx.imageSmoothingEnabled=false;
- ctx.drawImage(sprite,(256-MINIMI_WIDTH*2)/2,(256-MINIMI_HEIGHT*2)/2,MINIMI_WIDTH*2,MINIMI_HEIGHT*2);
+ const pixels=sprite.getContext('2d').getImageData(0,0,MINIMI_WIDTH,MINIMI_HEIGHT).data;
+ let left=MINIMI_WIDTH,top=MINIMI_HEIGHT,right=0,bottom=0;
+ for(let y=0;y<MINIMI_HEIGHT;y++)for(let x=0;x<MINIMI_WIDTH;x++)if(pixels[(y*MINIMI_WIDTH+x)*4+3]){left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);}
+ const width=right-left+1,height=bottom-top+1,scale=Math.min(6,Math.floor(208/Math.max(width,height)));
+ ctx.drawImage(sprite,left,top,width,height,Math.floor((256-width*scale)/2),Math.floor((256-height*scale)/2),width*scale,height*scale);
  return canvas.toDataURL('image/png');
 };`,
     loader: "ts",
@@ -161,7 +163,7 @@ try {
     version: 2,
     width: 256,
     height: 256,
-    scale: 2,
+    scale: "integer-fit",
     format: "lossless-webp",
     sources,
     items: [],
@@ -191,7 +193,9 @@ try {
     JSON.stringify(manifest, null, 2) + "\n",
   );
   const samples = entries.filter((x) =>
-    ["top", "bottom", "hairStyle", "accessory"].includes(x.item.slot),
+    ["top", "bottom", "shoes", "hairStyle", "expression", "accessory"].includes(
+      x.item.slot,
+    ),
   );
   const tiles = [];
   for (let i = 0; i < samples.length; i++) {

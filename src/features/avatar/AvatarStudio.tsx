@@ -12,7 +12,8 @@ import {
   AVATAR_ITEMS,
   AVATAR_SLOTS,
   defaultAvatarLook,
-  effectiveAvatarItemPrice,
+  applyAvatarCatalogSettings,
+  avatarItemGender,
   ownsAvatarItem,
   restoreAvatarState,
   selectAvatarItem,
@@ -33,8 +34,8 @@ import {
 } from "./service";
 import AvatarStage from "./AvatarStage";
 import AvatarPlaceholder from "./AvatarPlaceholder";
-import AvatarItemPreview from "./AvatarItemPreview";
-import { getAvatarItemGroup } from "./itemPresentation";
+import AvatarShopItemCard from "./AvatarShopItemCard";
+import AvatarShopItemDetails from "./AvatarShopItemDetails";
 import "./avatarStudio.css";
 
 export interface AvatarStudioAdapter {
@@ -83,6 +84,10 @@ export function AvatarStudio({
   });
   const [slot, setSlot] = useState<AvatarSlot>("top");
   const [filter, setFilter] = useState<"all" | "owned" | "premium">("all");
+  const [gender, setGender] = useState<"all" | "boy" | "girl" | "unisex">(
+    "all",
+  );
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<"buy" | "save" | null>(null);
@@ -169,11 +174,7 @@ export function AvatarStudio({
   }, []);
   const owned = saved?.ownedItemIds || [];
   const pricedItems = useMemo(
-    () =>
-      AVATAR_ITEMS.map((item) => ({
-        ...item,
-        price: effectiveAvatarItemPrice(item, pricing.prices[item.id]),
-      })),
+    () => AVATAR_ITEMS.map((item) => applyAvatarCatalogSettings(item, pricing)),
     [pricing],
   );
   const available = (item: AvatarItem) =>
@@ -190,6 +191,11 @@ export function AvatarStudio({
     (item) =>
       item.slot === slot &&
       item.characters.includes(look.character) &&
+      (gender === "all" || avatarItemGender(item) === gender) &&
+      (!search.trim() ||
+        `${item.label} ${item.description || ""}`
+          .toLocaleLowerCase("ko-KR")
+          .includes(search.trim().toLocaleLowerCase("ko-KR"))) &&
       (filter !== "owned" || available(item)) &&
       (filter !== "premium" || item.price > 0),
   );
@@ -351,13 +357,16 @@ export function AvatarStudio({
                   }
                   disabled={Boolean(busy)}
                   onClick={() => choose(item)}
+                  title={`${item.label} 아바타`}
                 >
-                  {allAvailable
-                    ? item.value === "boy"
-                      ? "남성"
-                      : "여성"
-                    : item.label}{" "}
-                  아바타
+                  <span className="avatar-studio-character-name">
+                    {allAvailable
+                      ? item.value === "boy"
+                        ? "남성"
+                        : "여성"
+                      : item.label}{" "}
+                    아바타
+                  </span>
                   {!available(item) && (
                     <span className="avatar-studio-character-price">
                       {item.price.toLocaleString()} 위스
@@ -484,86 +493,63 @@ export function AvatarStudio({
               </button>
             ))}
           </div>
-          {!allAvailable && (
-            <div className="avatar-studio-filter" aria-label="아이템 필터">
-              {(
-                [
-                  ["all", "전체"],
-                  ["owned", "보유"],
-                  ["premium", "유료"],
-                ] as const
-              ).map(([key, label]) => (
-                <button
-                  type="button"
-                  key={key}
-                  aria-pressed={filter === key}
-                  onClick={() => setFilter(key)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
-          <div
-            className="avatar-studio-items"
-            aria-label={
-              AVATAR_SLOTS.find((category) => category.key === slot)?.label
-            }
-          >
-            {items.map((item) => (
-              <button
-                type="button"
-                key={item.id}
-                className={`avatar-studio-item ${item.price ? "is-premium" : "is-basic"}`}
-                aria-pressed={selected?.id === item.id}
-                disabled={!characterChosen || Boolean(busy)}
-                onClick={() => choose(item)}
+          <div className="avatar-studio-browse">
+            {!allAvailable && (
+              <div className="avatar-studio-filter" aria-label="아이템 필터">
+                {(
+                  [
+                    ["all", "전체"],
+                    ["owned", "보유"],
+                    ["premium", "유료"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <button
+                    type="button"
+                    key={key}
+                    aria-pressed={filter === key}
+                    onClick={() => setFilter(key)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            <label className="avatar-studio-gender-filter">
+              <span>성별</span>
+              <select
+                aria-label="아이템 성별"
+                value={gender}
+                onChange={(event) =>
+                  setGender(event.target.value as typeof gender)
+                }
               >
-                <AvatarItemPreview item={item} character={look.character} />
-                <span className="avatar-studio-item-type">
-                  {getAvatarItemGroup(item)}
-                </span>
-                <span className="avatar-studio-item-name">{item.label}</span>
-                {!allAvailable && (
-                  <span className="avatar-studio-item-price">
-                    {item.price === 0 ? (
-                      "무료"
-                    ) : available(item) ? (
-                      "보유"
-                    ) : (
-                      <>
-                        {item.price.toLocaleString()} <WisIcon />
-                      </>
-                    )}
-                  </span>
-                )}
-                {selected?.id === item.id && (
-                  <i
-                    className="fas fa-check avatar-studio-item-check"
-                    aria-label="선택됨"
-                  />
-                )}
-              </button>
-            ))}
+                <option value="all">전체</option>
+                <option value="boy">남자</option>
+                <option value="girl">여자</option>
+                <option value="unisex">공용</option>
+              </select>
+            </label>
+            <label className="avatar-studio-search">
+              <span className="sr-only">아이템 검색</span>
+              <input
+                type="search"
+                aria-label="아이템 검색"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="이름·설명 검색"
+              />
+            </label>
           </div>
-          {!items.length && (
-            <p className="avatar-studio-empty">
-              이 조건에 맞는 아이템이 없습니다.
-            </p>
-          )}
           {selected && (
             <div className="avatar-studio-selected">
-              <div>
-                <strong>{selected.label}</strong>
-                {!allAvailable && (
-                  <span>{selected.price ? "유료" : "무료"}</span>
-                )}
-              </div>
+              <AvatarShopItemDetails item={selected} hidePrice={allAvailable} />
               {!available(selected) ? (
                 <button
                   type="button"
                   className="avatar-primary"
-                  disabled={Boolean(busy) || balance === null}
+                  disabled={
+                    !characterChosen || Boolean(busy) || balance === null
+                  }
                   onClick={() => {
                     setConfirmError("");
                     setPurchase(selected);
@@ -575,6 +561,30 @@ export function AvatarStudio({
                 <span className="avatar-studio-owned">사용 가능</span>
               )}
             </div>
+          )}
+          <div
+            className="avatar-studio-items"
+            aria-label={
+              AVATAR_SLOTS.find((category) => category.key === slot)?.label
+            }
+          >
+            {items.map((item) => (
+              <AvatarShopItemCard
+                key={item.id}
+                item={item}
+                character={look.character}
+                selected={selected?.id === item.id}
+                owned={available(item)}
+                hidePrice={allAvailable}
+                disabled={!characterChosen || Boolean(busy)}
+                onSelect={() => choose(item)}
+              />
+            ))}
+          </div>
+          {!items.length && (
+            <p className="avatar-studio-empty">
+              이 조건에 맞는 아이템이 없습니다.
+            </p>
           )}
         </div>
       </div>

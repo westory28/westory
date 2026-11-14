@@ -223,7 +223,7 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
           schemaVersion: 1, policyVersion: 'w7-v1', ledgerEntryId, semesterId: wallet.semesterId,
           accountId: wallet.accountId, studentUid: uid, type: 'ORDER_DEBIT', activityType: 'avatar_purchase',
           delta: -price, balanceBefore: wallet.balance, balanceAfter: wallet.balance - price,
-          sourceId, reason: `아바타 구매: ${item.label}`, actorUid: uid, actorRole: 'student',
+          sourceId, reason: `아바타 구매: ${pricing.metadata[item.id].label}`, actorUid: uid, actorRole: 'student',
           commandId: `avatar_${key}`, receiptId: receiptRef.path, createdAt: timestamp,
           avatarItemId: item.id, catalogVersion: catalog.version, pricingRevision: pricing.revision,
         };

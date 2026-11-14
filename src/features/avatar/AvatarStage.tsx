@@ -152,7 +152,7 @@ export const AvatarStage = forwardRef<AvatarStageHandle, AvatarStageProps>(
           // A newer selection can cancel preparation before the stage is ready.
           return createAvatarStage(container, requestedLook, {
             signal: abort.signal,
-            maxPixelRatio: 1.5,
+            maxPixelRatio: 2,
             deferPreparation: true,
           });
         })

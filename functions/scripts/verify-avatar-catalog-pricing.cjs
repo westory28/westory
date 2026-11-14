@@ -2,9 +2,9 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { fixture, uid, req, purchase, save, paid, accountPath } = require('./verify-student-avatar.cjs');
-const { catalog, defaultLook, lookHash, sanitizePublicAvatar, itemIdFor } = require('../studentAvatarCatalog');
+const { catalog, defaultLook, lookHash, sanitizePublicAvatar, itemIdFor, itemMetadata, validateLook } = require('../studentAvatarCatalog');
 const { createStudentAvatarHandlers, createStudentAvatarDeletionHandler } = require('../studentAvatar');
-const { createAvatarCatalogPricingHandlers, PRICING_PATH, MAX_AVATAR_PRICE } = require('../avatarCatalogPricing');
+const { createAvatarCatalogPricingHandlers, PRICING_PATH, MAX_AVATAR_PRICE, MAX_AVATAR_LABEL_LENGTH, MAX_AVATAR_DESCRIPTION_LENGTH } = require('../avatarCatalogPricing');
 const reason = expected => error => error.details?.reason === expected;
 const teacherUid = 'avatar-teacher';
 const auth = async request => ({ uid: request.auth.uid, email: request.auth.token?.email });
@@ -49,6 +49,123 @@ test('pricing bounds, allowed IDs, compare-and-swap, sparse overrides and no-op 
   assert.equal(state.writes.length, writes);
   await state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 1, prices: { [id]: 0 } }));
   assert.deepEqual(state.documents.get(PRICING_PATH).prices, {});
+});
+
+test('legacy price documents supply item metadata without migration writes or extra reads', async () => {
+  const state = setup(); setPrices(state, { [paid[0].id]: 73 });
+  const result = await state.pricing.getAvatarCatalogPricing(teacherRequest({}));
+  assert.deepEqual(result.metadata, Object.fromEntries(catalog.items.map(item => [item.id, itemMetadata(item)])));
+  assert.deepEqual(state.reads, [`users/${teacherUid}`, PRICING_PATH]);
+  assert.equal(state.writes.length, 0);
+  assert.equal(state.documents.get(PRICING_PATH).metadata, undefined);
+});
+
+test('one product saves name, gender, description and price atomically with one settings write', async () => {
+  const state = setup(), item = paid[0], other = paid[1];
+  const request = teacherRequest({ expectedRevision: 0, prices: { [item.id]: 321 },
+    metadata: { [item.id]: { label: '  밤하늘 머리  ', gender: 'boy', description: '  별빛을 담은 머리\n짧은 앞머리  ' } } });
+  const result = await state.pricing.updateAvatarCatalogPricing(request);
+  assert.equal(result.revision, 1); assert.equal(result.prices[item.id], 321);
+  assert.deepEqual(result.metadata[item.id], { label: '밤하늘 머리', gender: 'boy', description: '별빛을 담은 머리\n짧은 앞머리' });
+  assert.deepEqual(result.metadata[other.id], itemMetadata(other));
+  assert.deepEqual(state.reads, [`users/${teacherUid}`, PRICING_PATH]);
+  assert.deepEqual(state.writes.map(write => write.path), [PRICING_PATH]);
+  const stored = state.documents.get(PRICING_PATH);
+  assert.equal(stored.updatedBy, teacherUid); assert.ok(stored.updatedAt);
+  assert.deepEqual(stored.prices, { [item.id]: 321 });
+  assert.deepEqual(stored.metadata, { [item.id]: result.metadata[item.id] });
+  const writes = state.writes.length;
+  // Lost response retry carries the original revision and must never create another write.
+  assert.deepEqual(await state.pricing.updateAvatarCatalogPricing(request), result);
+  assert.equal(state.writes.length, writes);
+  const student = await state.api.getAvatarStudioState(req({ year: '2026', semester: '2' }));
+  assert.deepEqual(student.pricing, result);
+  assert.equal(state.writes.length, writes);
+});
+
+test('metadata validation rejects malformed fields before document reads and writes', async () => {
+  const state = setup(), id = paid[0].id;
+  const valid = { label: '새 이름', gender: 'unisex', description: '짧은 설명' };
+  for (const metadata of [null, [], { unknown: valid }, { [id]: null },
+    { [id]: { ...valid, label: '' } }, { [id]: { ...valid, label: '  ' } },
+    { [id]: { ...valid, label: '가'.repeat(MAX_AVATAR_LABEL_LENGTH + 1) } },
+    { [id]: { ...valid, label: '두\n이름' } }, { [id]: { ...valid, gender: 'all' } },
+    { [id]: { ...valid, description: 1 } }, { [id]: { ...valid, description: '\u0000' } },
+    { [id]: { ...valid, description: '가'.repeat(MAX_AVATAR_DESCRIPTION_LENGTH + 1) } },
+    { [id]: { ...valid, characters: ['girl', 'boy'] } }, { [id]: { label: '누락', gender: 'girl' } }]) {
+    await assert.rejects(state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 0, prices: {}, metadata })),
+      reason('AVATAR_PRICING_INPUT_INVALID'));
+  }
+  assert.equal(state.reads.length, 0); assert.equal(state.writes.length, 0);
+  const boundary = { label: '가'.repeat(MAX_AVATAR_LABEL_LENGTH), gender: 'girl', description: '나'.repeat(MAX_AVATAR_DESCRIPTION_LENGTH) };
+  assert.deepEqual((await state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 0, prices: {}, metadata: { [id]: boundary } }))).metadata[id], boundary);
+});
+
+test('corrupt stored metadata fails closed for teacher and student without repair writes', async () => {
+  for (const metadata of [[], null, { [paid[0].id]: { label: '손상', gender: 'invalid', description: '' } }]) {
+    const state = setup();
+    state.documents.set(PRICING_PATH, { schemaVersion: 1, revision: 1, prices: {}, metadata });
+    await assert.rejects(state.pricing.getAvatarCatalogPricing(teacherRequest({})), reason('AVATAR_PRICING_INVALID'));
+    await assert.rejects(state.api.getAvatarStudioState(req({ year: '2026', semester: '2' })), reason('AVATAR_PRICING_INVALID'));
+    assert.equal(state.writes.length, 0);
+  }
+});
+
+test('price-only clients preserve metadata and reverting metadata removes only its override', async () => {
+  const state = setup(), item = paid[0];
+  const metadata = { ...itemMetadata(item), label: '수정 이름', gender: 'boy', description: '설명' };
+  await state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 0, prices: {}, metadata: { [item.id]: metadata } }));
+  const priced = await state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 1, prices: { [item.id]: 123 } }));
+  assert.deepEqual(priced.metadata[item.id], metadata);
+  const reverted = await state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 2, prices: {}, metadata: { [item.id]: itemMetadata(item) } }));
+  assert.deepEqual(reverted.metadata[item.id], itemMetadata(item));
+  assert.deepEqual(state.documents.get(PRICING_PATH).metadata, {});
+  assert.deepEqual(state.documents.get(PRICING_PATH).prices, { [item.id]: 123 });
+});
+
+test('competing item edits expose latest fields and recover with a new revision without losing the other item', async () => {
+  const state = setup(), [first, second] = paid;
+  const requestFor = item => teacherRequest({ expectedRevision: 0, prices: {}, metadata: { [item.id]: { ...itemMetadata(item), label: `수정 ${item.label}` } } });
+  const results = await Promise.allSettled([first, second].map(item => state.pricing.updateAvatarCatalogPricing(requestFor(item))));
+  assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
+  const conflict = results.find(result => result.status === 'rejected').reason;
+  assert.equal(conflict.details.reason, 'AVATAR_PRICING_REVISION_CONFLICT');
+  assert.equal(conflict.details.pricing.revision, 1);
+  assert.equal(state.writes.length, 1);
+  const failedItem = results[0].status === 'rejected' ? first : second;
+  const retry = requestFor(failedItem); retry.data.expectedRevision = conflict.details.pricing.revision;
+  const recovered = await state.pricing.updateAvatarCatalogPricing(retry);
+  for (const item of [first, second]) assert.equal(recovered.metadata[item.id].label, `수정 ${item.label}`);
+  assert.equal(state.writes.length, 2);
+});
+
+test('gender classification never grants a body shape or changes an existing saved look', async () => {
+  const state = setup(), skirt = catalog.items.find(item => item.id === 'minimi-bottom-skirt-navy');
+  const before = [...skirt.characters];
+  const saved = await state.api.saveStudentAvatar(await save());
+  const oldAvatar = structuredClone(state.documents.get(`student_avatars/${uid}`));
+  await state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 0, prices: {},
+    metadata: { [skirt.id]: { ...itemMetadata(skirt), gender: 'unisex' } } }));
+  assert.deepEqual(skirt.characters, before);
+  assert.equal(validateLook({ ...defaultLook('boy'), bottom: skirt.value }), null);
+  const current = await state.api.getStudentAvatar(req({}));
+  assert.deepEqual(current.look, saved.look); assert.deepEqual(current.ownedItemIds, saved.ownedItemIds);
+  assert.deepEqual(structuredClone(state.documents.get(`student_avatars/${uid}`)), oldAvatar);
+});
+
+test('metadata revision changes require a fresh purchase quote and ledger keeps the purchased name', async () => {
+  const state = setup(), item = paid[0];
+  const metadata = { ...itemMetadata(item), label: '별빛 머리', description: '반짝이는 머리' };
+  await state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 0, prices: {}, metadata: { [item.id]: metadata } }));
+  await assert.rejects(state.api.purchaseStudentAvatarItem(quotedPurchase(item)), error => reason('AVATAR_PRICE_CHANGED')(error)
+    && error.details.pricing.metadata[item.id].label === metadata.label);
+  assert.equal(state.writes.length, 1);
+  const result = await state.api.purchaseStudentAvatarItem(quotedPurchase(item, item.price, 1));
+  assert.equal(state.documents.get(`semester_wis_ledger/${result.ledgerEntryId}`).reason, `아바타 구매: ${metadata.label}`);
+  const writes = state.writes.length;
+  const duplicate = await state.api.purchaseStudentAvatarItem(quotedPurchase(item, item.price, 1));
+  assert.equal(duplicate.duplicate, true); assert.equal(state.writes.length, writes);
+  assert.equal(state.documents.get(accountPath).balance, 1000 - item.price);
 });
 
 test('student studio combines catalog, inventory and canonical balance without duplicate profile reads', async () => {
