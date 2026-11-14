@@ -274,6 +274,9 @@ check(
       "백지 상태는 아님. 근거만 빠졌습니다.",
       "백지로 제출하지 마세요. 지금 답안의 근거를 보완하세요.",
       "백지로 내지 마세요. 근거를 보완하세요.",
+      "미작성이 아님. 설명이 부족합니다.",
+      "미작성 답안이 아닙니다. 근거만 빠졌습니다.",
+      "다음에는 미작성하지 마세요. 지금 답안의 근거를 보완하세요.",
     ]) {
       const changed = structuredClone(rows);
       changed[0].items[0].feedback = feedback;
@@ -293,6 +296,8 @@ check(
       "다음에는 백지로 제출하지 마세요. 이번 답안은 백지입니다.",
       "백지\n다음에는 백지로 제출하지 마세요.",
       "백지 답안입니다! 다음에는 백지로 내지 마세요.",
+      "미작성하여 1점 감점함. 다음에는 미작성하지 마세요.",
+      "다음에는 미작성하지 마세요. 이번 답안은 미작성입니다.",
     ]) {
       const changed = structuredClone(rows);
       changed[0].items[0].feedback = feedback;
@@ -357,6 +362,54 @@ check(
       analyze([changed[0]], [definitions[0]]).students[0].blankCount,
       1,
     );
+  },
+);
+check(
+  "confirmed unwritten feedback marks all four items without treating zero alone as blank or duplicating popup feedback",
+  () => {
+    const localDefinitions = [1, 3, 1, 5].map((points, index) => ({
+      name: `1-(${index + 1})`,
+      itemKey: `1-(${index + 1})`,
+      examSection: "essay",
+      maxScore: points,
+    }));
+    const fullText = localDefinitions
+      .map(
+        (item, index) => `(${index + 1}) 미작성하여 ${item.maxScore}점 감점함.`,
+      )
+      .join("\n");
+    for (const directItemFeedback of [false, true]) {
+      const changed = structuredClone(rows[0]);
+      changed.feedback = fullText;
+      changed.items = localDefinitions.map((item) => ({
+        ...item,
+        score: 0,
+        scoreEntered: true,
+        ...(directItemFeedback
+          ? { feedback: `미작성하여 ${item.maxScore}점 감점함.` }
+          : {}),
+      }));
+      const data = analyze([changed], localDefinitions);
+      assert.equal(data.blankCount, 4);
+      assert.equal(data.blankStudentCount, 1);
+      assert.equal(data.classes[0].blankCount, 4);
+      assert.equal(data.students[0].blankItems.length, 4);
+      assert.ok(data.items.every((item) => item.blankCount === 1));
+      assert.equal(data.students[0].total, 0);
+      assert.equal(data.students[0].feedback, fullText);
+      // The popup only appends item feedback absent from the stored full text.
+      assert.equal(
+        data.students[0].itemFeedback.filter(
+          (item) => !data.students[0].feedback.includes(item.feedback),
+        ).length,
+        0,
+      );
+      changed.feedback = "";
+      changed.items.forEach((item) => {
+        delete item.feedback;
+      });
+      assert.equal(analyze([changed], localDefinitions).blankCount, 0);
+    }
   },
 );
 console.log(JSON.stringify({ unitChecks: checks, passed: checks }));

@@ -64,12 +64,12 @@ const markedBlank = (feedback: string) => {
     .some((sentence) => {
       const compact = sentence.replace(/\s/g, "");
       return (
-        compact.includes("백지") &&
-        !/백지(?:답안|상태)?(?:가|는|은|이)?(?:아니|아님|아닙|아닌)/.test(
+        /백지|미작성/.test(compact) &&
+        !/(?:백지|미작성)(?:답안|상태)?(?:가|는|은|이)?(?:아니|아님|아닙|아닌)/.test(
           compact,
         ) &&
-        !/백지(?:로|를)?(?:제출)?하지(?:않|마)/.test(compact) &&
-        !/백지(?:로|를)?(?:내|두|남기)지(?:않|마)/.test(compact)
+        !/(?:백지|미작성)(?:로|를)?(?:제출)?하지(?:않|마)/.test(compact) &&
+        !/(?:백지|미작성)(?:로|를)?(?:내|두|남기)지(?:않|마)/.test(compact)
       );
     });
 };
