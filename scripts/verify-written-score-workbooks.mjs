@@ -13,6 +13,7 @@ const load = async (file, dependencies) => {
   }).outputText;
   vm.runInNewContext(code, {
     exports,
+    Error,
     TextEncoder,
     require: (id) => {
       assert.ok(id in dependencies, `Unexpected dependency: ${id}`);
@@ -163,6 +164,97 @@ assert.equal(
   400,
   "Existing callers retain their default limit",
 );
+
+const neis = (
+  klass,
+  {
+    year = "2026",
+    semester = "2",
+    grade = "3",
+    order = "2",
+    subject = "역사",
+  } = {},
+) => [
+  ["정기시험교과목별 학생답 정오표"],
+  [
+    null,
+    `${year}학년도   ${semester}학기   주간 ${grade}학년   ${klass}반   ${grade}학년 ${order}차 정기시험   ${subject}`,
+  ],
+  ...objective(klass).map((row) => [null, ...row]),
+];
+const neisResult = merge(
+  [source("1.xlsx", "Sheet1", neis(1)), source("2.xlsx", "Sheet1", neis(2))],
+  options,
+);
+assert.equal(neisResult.title, "2026학년도 2학기 3학년 2차 정기시험 역사과");
+assert.equal(neisResult.subject, "역사");
+assert.equal(neisResult.academicYear, "2026");
+assert.equal(neisResult.semester, "2");
+assert.equal(neisResult.sourceAssessment.grade, "3");
+assert.equal(neisResult.sourceAssessment.examName, "2차 정기시험");
+assert.equal(neisResult.rows.length, 2);
+assert.equal(
+  merge([source("1.xlsx", "Sheet1", neis(1))], {
+    ...options,
+    title: "교사 지정 평가명",
+  }).title,
+  "교사 지정 평가명",
+);
+assert.equal(
+  merge([source("1.xlsx", "Sheet1", neis(1, { subject: "사회과" }))], options)
+    .title,
+  "2026학년도 2학기 3학년 2차 정기시험 사회과",
+);
+for (const change of [
+  { year: "2025" },
+  { semester: "1" },
+  { order: "1" },
+  { subject: "수학" },
+]) {
+  assert.throws(
+    () =>
+      merge(
+        [
+          source("1.xlsx", "Sheet1", neis(1)),
+          source("2.xlsx", "Sheet1", neis(2, change)),
+        ],
+        { ...options, title: "같은 수동 제목" },
+      ),
+    /학년도·학기·학년·시험명 또는 과목이 다릅니다/,
+  );
+}
+assert.throws(
+  () => merge([source("1.xlsx", "Sheet1", neis(1, { grade: "2" }))], options),
+  /상단의 학년이 선택한 대상 학년과 다릅니다/,
+);
+const conflictingGrades = neis(1);
+conflictingGrades[1][1] = conflictingGrades[1][1].replace(
+  "1반   3학년",
+  "1반   2학년",
+);
+assert.throws(
+  () => merge([source("1.xlsx", "Sheet1", conflictingGrades)], options),
+  /학년이 서로 다릅니다/,
+);
+const metadataAfterHeader = objective(1);
+metadataAfterHeader[3][2] = neis(1)[1][1];
+assert.equal(
+  merge([source("기존 제목.xlsx", "Sheet1", metadataAfterHeader)], options)
+    .title,
+  "기존 제목",
+);
+assert.equal(
+  merge(
+    [
+      source("기존 제목.xlsx", "Sheet1", [
+        ["참고: " + neis(1)[1][1]],
+        ...objective(1),
+      ]),
+    ],
+    options,
+  ).title,
+  "기존 제목",
+);
 console.log(
-  "PASS multi-file score workbooks: all sheets, identity conflicts, question/points conflicts, contextual errors, explicit titles, class fallback, zero/blank, 401 rows without truncation",
+  "PASS multi-file score workbooks: all sheets, identity conflicts, question/points conflicts, contextual errors, NEIS metadata/title/scope conflicts, explicit-title priority, filename fallback, class fallback, zero/blank, 401 rows without truncation",
 );

@@ -48,6 +48,7 @@ export function mergeWrittenExamScoreSheets(
   let merged: ParsedWrittenExamEssayScoreUpload | null = null;
   let signature = "";
   let explicitTitle = "";
+  let sourceAssessmentSignature = "";
   const identities = new Map<string, string>();
   const sourceNames: string[] = [];
   for (const source of sources) {
@@ -62,6 +63,17 @@ export function mergeWrittenExamScoreSheets(
           options.fallbackClass,
         rowLimit: Number.MAX_SAFE_INTEGER,
       });
+      if (parsed.sourceAssessment) {
+        const ownAssessmentSignature = JSON.stringify(parsed.sourceAssessment);
+        if (
+          sourceAssessmentSignature &&
+          sourceAssessmentSignature !== ownAssessmentSignature
+        )
+          throw new Error(
+            "다른 파일·시트와 학년도·학기·학년·시험명 또는 과목이 다릅니다. 같은 시험의 학급별 파일을 선택해 주세요.",
+          );
+        sourceAssessmentSignature = ownAssessmentSignature;
+      }
       if (merged && signature !== itemSignature(parsed))
         throw new Error(
           "다른 파일·시트와 문항번호·정답·배점 또는 논술형 평가 항목이 다릅니다.",

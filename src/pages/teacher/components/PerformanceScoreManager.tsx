@@ -99,6 +99,11 @@ import {
 } from "../../../lib/writtenExamEssayScoreWorkbook";
 import { getTeacherScoreRequestQuery } from "./teacherScoreRequestQuery";
 import {
+  assertWrittenExamScoreAssessmentCompatible,
+  getWrittenExamScoreContentKind,
+  isSameWrittenExamScoreAssessment,
+} from "../../../lib/writtenExamScoreIdentity";
+import {
   createManagedNotifications,
   reviewPerformanceScoreObjection,
 } from "../../../lib/notifications";
@@ -10361,11 +10366,16 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       setSubject(assessmentConfig.subject);
       if (parsedUpload.rows[0]?.grade)
         setTargetGrade(parsedUpload.rows[0].grade);
-      const existingAssessment = rosters.find(
-        (roster) =>
-          roster.title === assessmentConfig.title &&
-          roster.subject === assessmentConfig.subject &&
-          roster.targetGrade === parsedUpload.rows[0]?.grade,
+      const existingAssessment = rosters.find((roster) =>
+        isWrittenExamMode
+          ? isSameWrittenExamScoreAssessment(roster, {
+              ...parsedUpload,
+              ...assessmentConfig,
+              targetGrade: parsedUpload.rows[0]?.grade,
+            })
+          : roster.title === assessmentConfig.title &&
+            roster.subject === assessmentConfig.subject &&
+            roster.targetGrade === parsedUpload.rows[0]?.grade,
       );
       if (!isWrittenExamMode)
         parsedUpload = retainStoredPerformanceMaximums(
@@ -10596,18 +10606,22 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         const grade = uploadRows[0].grade;
         if (uploadRows.some((row) => row.grade !== grade))
           throw new Error("학년별로 파일을 나누어 업로드해 주세요.");
-        const sameAssessment = rosters.filter(
-          (roster) =>
-            roster.title === upload.title &&
-            roster.targetGrade === grade &&
-            roster.subject === upload.subject,
+        const writtenIdentity = { ...upload, targetGrade: grade };
+        if (isWrittenExamMode)
+          assertWrittenExamScoreAssessmentCompatible(rosters, writtenIdentity);
+        const sameAssessment = rosters.filter((roster) =>
+          isWrittenExamMode
+            ? isSameWrittenExamScoreAssessment(roster, writtenIdentity)
+            : roster.title === upload.title &&
+              roster.targetGrade === grade &&
+              roster.subject === upload.subject,
         );
         if (sameAssessment.length > 1)
           throw new Error(
             `${upload.title}: 같은 평가명의 업로드 기록이 여러 개입니다. 업로드 기록을 먼저 확인해 주세요.`,
           );
         const keyBytes = new TextEncoder().encode(
-          `${year}|${semester}|${activeScoreKind}|${grade}|${upload.subject}|${upload.title}`,
+          `${year}|${semester}|${activeScoreKind}|${grade}|${upload.subject}|${upload.title}${isWrittenExamMode ? `|${getWrittenExamScoreContentKind(upload)}` : ""}`,
         );
         const digest = await crypto.subtle.digest("SHA-256", keyBytes);
         const key = Array.from(new Uint8Array(digest))
@@ -10620,6 +10634,15 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           const previous = rosterSnapshot.exists()
             ? (rosterSnapshot.data() as PerformanceScoreRoster)
             : null;
+          if (
+            isWrittenExamMode &&
+            previous &&
+            !isSameWrittenExamScoreAssessment(previous, writtenIdentity)
+          ) {
+            throw new Error(
+              "기존 점수표의 평가명 또는 종류가 변경되었습니다. 업로드 기록을 새로고침한 뒤 다시 확인해 주세요.",
+            );
+          }
           // Re-read criteria in the transaction so another teacher's latest
           // maxima cannot be replaced by a stale inferred preview.
           const effectiveUpload = isSinglePerformanceUpload
@@ -14447,7 +14470,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                     <option value={SCORE_LIST_ALL_ROSTERS_VALUE}>전체</option>
                     {rosters.map((roster) => (
                       <option key={roster.id} value={roster.id}>
-                        {roster.title}
+                        {isWrittenExamMode
+                          ? `${roster.title} · ${getWrittenExamContentKindBadgeLabel(getWrittenExamScoreContentKind(roster))}`
+                          : roster.title}
                       </option>
                     ))}
                   </select>

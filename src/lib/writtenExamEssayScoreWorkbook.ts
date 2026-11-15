@@ -18,9 +18,20 @@ export interface ParsedWrittenExamEssayScoreRow extends PerformanceScoreRosterRo
   feedback: string;
 }
 
+export interface WrittenExamSourceAssessment {
+  academicYear: string;
+  semester: string;
+  grade: string;
+  examName: string;
+  subject: string;
+}
+
 export interface ParsedWrittenExamEssayScoreUpload {
   sourceFileName: string;
   headerRowNumber: number;
+  academicYear?: string;
+  semester?: string;
+  sourceAssessment?: WrittenExamSourceAssessment;
   title: string;
   subject: string;
   itemName: string;
@@ -209,6 +220,41 @@ const findWorkbookAssessmentTitle = (
   }
   return "";
 };
+
+// Read only the explicit NEIS metadata above the answer table, never the
+// generic report heading, filenames, or student rows. Class and day/night
+// labels identify each sheet, not a different assessment.
+const findNeisSourceAssessment = (
+  rows: unknown[][],
+  headerRowIndex: number,
+): WrittenExamSourceAssessment | undefined => {
+  let found: WrittenExamSourceAssessment | undefined;
+  for (const row of rows.slice(0, headerRowIndex)) {
+    for (const cell of row) {
+      const match =
+        /^(\d{4})\s*학년도\s+([12])\s*학기\s+(?:(?:주간|야간)\s+)?([1-3])\s*학년\s+\d{1,2}\s*반\s+(?:([1-3])\s*학년\s+)?([1-9]\d*)\s*차\s+정기\s*시험\s+(.+)$/.exec(
+          toText(cell),
+        );
+      if (!match) continue;
+      if (match[4] && match[3] !== match[4])
+        throw new Error("점수표 상단에 표시된 학년이 서로 다릅니다.");
+      const assessment: WrittenExamSourceAssessment = {
+        academicYear: match[1],
+        semester: match[2],
+        grade: match[3],
+        examName: `${Number(match[5])}차 정기시험`,
+        subject: match[6].trim(),
+      };
+      if (found && JSON.stringify(found) !== JSON.stringify(assessment))
+        throw new Error("점수표 상단의 시험 정보가 서로 다릅니다.");
+      found = assessment;
+    }
+  }
+  return found;
+};
+
+const sourceAssessmentTitle = (assessment: WrittenExamSourceAssessment) =>
+  `${assessment.academicYear}학년도 ${assessment.semester}학기 ${assessment.grade}학년 ${assessment.examName} ${assessment.subject}${assessment.subject.endsWith("과") ? "" : "과"}`;
 
 const resolveEssayScoreColumns = (
   headers: string[],
@@ -573,6 +619,15 @@ const parseWrittenExamObjectiveScoreWorkbook = (
 ): ParsedWrittenExamEssayScoreUpload | null => {
   const layout = findObjectiveScoreLayout(rows);
   if (!layout) return null;
+  const sourceAssessment = findNeisSourceAssessment(
+    rows,
+    layout.headerRowIndex,
+  );
+  if (
+    sourceAssessment &&
+    sourceAssessment.grade !== normalizeSchoolValue(params.targetGrade)
+  )
+    throw new Error("점수표 상단의 학년이 선택한 대상 학년과 다릅니다.");
 
   const items: ParsedWrittenExamEssayScoreUpload["items"] =
     layout.questionColumns.map((column) => ({
@@ -685,8 +740,18 @@ const parseWrittenExamObjectiveScoreWorkbook = (
   return {
     sourceFileName: params.fileName,
     headerRowNumber: layout.headerRowIndex + 1,
-    title: toText(params.title) || cleanExamTitle(params.fileName),
-    subject: toText(params.subject) || "역사",
+    ...(sourceAssessment
+      ? {
+          sourceAssessment,
+          academicYear: sourceAssessment.academicYear,
+          semester: sourceAssessment.semester,
+        }
+      : {}),
+    title:
+      toText(params.title) ||
+      (sourceAssessment && sourceAssessmentTitle(sourceAssessment)) ||
+      cleanExamTitle(params.fileName),
+    subject: sourceAssessment?.subject || toText(params.subject) || "역사",
     itemName: "서답형",
     items,
     rows: rowsWithScores,

@@ -13,6 +13,7 @@ import InfoHelp from "../../../components/common/InfoHelp";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { getAssessmentSemesterId } from "../../../lib/assessmentRelease";
 import { readWrittenExamInfoWorkbook } from "../../../lib/writtenExamAnalysisWorkbook";
+import { getWrittenExamScoreContentKind } from "../../../lib/writtenExamScoreIdentity";
 import {
   listWrittenExamScoreSources,
   loadWrittenExamScoreAnalysis,
@@ -66,6 +67,14 @@ const reports = [
   "학급별 결과·비교",
 ];
 const essayReports = ["전체 결과", "문항별 점수", "학급별 비교", "학생별 결과"];
+const scoreSourceLabel = (source: WrittenExamScoreSource) => {
+  const kind = getWrittenExamScoreContentKind(source);
+  return kind === "objective"
+    ? "서답형"
+    : kind === "essay"
+      ? "논술형"
+      : "서답형·논술형";
+};
 type LoadedExam = {
   metadata: WrittenExamAnalysisMetadata;
   students: WrittenExamImportedStudent[];
@@ -343,7 +352,7 @@ export default function WrittenExamAnalysis({
             <option value="">평가 선택</option>
             {catalog.map((exam) => (
               <option key={exam.id} value={exam.id}>
-                {exam.title} · {exam.targetGrade}학년
+                {exam.title} · {exam.targetGrade}학년 · {scoreSourceLabel(exam)}
               </option>
             ))}
           </select>
@@ -1125,7 +1134,8 @@ function WrittenExamMaterialEditor({
                 <option value="">점수표 선택</option>
                 {sources.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.title} · {item.targetGrade}학년
+                    {item.title} · {item.targetGrade}학년 ·{" "}
+                    {scoreSourceLabel(item)}
                   </option>
                 ))}
               </select>

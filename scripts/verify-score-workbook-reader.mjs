@@ -23,6 +23,7 @@ const load = async (file, dependencies) => {
   }).outputText;
   vm.runInNewContext(code, {
     exports,
+    Error,
     TextEncoder,
     Blob,
     Uint8Array,
@@ -201,6 +202,7 @@ const localPaths = process.argv.slice(2);
 if (localPaths.length) {
   const files = [];
   const fingerprints = [];
+  const assessmentKeys = new Set();
   let expectedStudents = 0;
   for (const filePath of localPaths) {
     const bytes = await readFile(filePath);
@@ -208,6 +210,17 @@ if (localPaths.length) {
     const file = asFile(bytes, path.basename(filePath));
     files.push(file);
     const parsed = await readWorkbooks([file], { ...options, maxScore: 100 });
+    assert.ok(
+      parsed.sourceAssessment,
+      "Actual NEIS header must provide structured exam metadata",
+    );
+    const assessment = parsed.sourceAssessment;
+    const expectedTitle = `${assessment.academicYear}학년도 ${assessment.semester}학기 ${assessment.grade}학년 ${assessment.examName} ${assessment.subject}${assessment.subject.endsWith("과") ? "" : "과"}`;
+    assert.ok(
+      parsed.title === expectedTitle,
+      "Actual NEIS title must come from the exam header, not the filename",
+    );
+    assessmentKeys.add(JSON.stringify(assessment));
     const independent = new ExcelJS.Workbook();
     await independent.xlsx.load(bytes);
     let sourceStudents = 0;
@@ -237,6 +250,14 @@ if (localPaths.length) {
   }
   const merged = await readWorkbooks(files, { ...options, maxScore: 100 });
   assert.ok(
+    assessmentKeys.size === 1,
+    "Actual uploaded files must describe one assessment",
+  );
+  assert.ok(
+    merged.title !== path.basename(localPaths[0], ".xlsx"),
+    "Combined title must not be a class filename",
+  );
+  assert.ok(
     merged.rows.length === expectedStudents,
     "All actual-file students must survive the combined upload (personal data omitted)",
   );
@@ -255,6 +276,7 @@ if (localPaths.length) {
       classes: merged.detectedClasses.length,
       items: merged.items.length,
       originalsUnchanged: true,
+      assessmentMetadataMatched: true,
     }),
   );
 }
