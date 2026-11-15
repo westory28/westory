@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import { readFileSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { createRequire } from "node:module";
+import { createHash } from "node:crypto";
 import { build } from "esbuild";
 import { createMockUserToken } from "@firebase/util";
 import {
@@ -24,7 +26,7 @@ import {
   Timestamp,
   updateDoc,
 } from "firebase/firestore";
-import { getMetadata, ref, uploadBytes } from "firebase/storage";
+import { deleteObject, getMetadata, ref, uploadBytes } from "firebase/storage";
 
 const projectId = "demo-westory-written-analysis";
 assert.equal(process.env.GCLOUD_PROJECT, projectId);
@@ -47,6 +49,80 @@ const env = await initializeTestEnvironment({
 const root = "years/2026/semesters/2/written_exam_analyses";
 const authTime = Math.floor(Date.now() / 1000) - 30;
 const bucket = `gs://${projectId}.firebasestorage.app`;
+const requireFunctions = createRequire(resolve("functions/package.json"));
+const { initializeApp, deleteApp } = requireFunctions("firebase-admin/app");
+const { getFirestore } = requireFunctions("firebase-admin/firestore");
+const { getStorage } = requireFunctions("firebase-admin/storage");
+const adminApp = initializeApp({
+  projectId,
+  storageBucket: `${projectId}.firebasestorage.app`,
+});
+const adminDb = getFirestore(adminApp),
+  adminBucket = getStorage(adminApp).bucket();
+const proof = {
+  authorityGeneration: "w1r2-2026-08-09",
+  protocolVersion: 2,
+  revision: "a".repeat(64),
+};
+const requestFor = (actor, data) => ({
+  auth:
+    actor === "anon"
+      ? undefined
+      : {
+          uid: actor,
+          token: {
+            auth_time: authTime,
+            email:
+              actor === "admin"
+                ? "westoria28@gmail.com"
+                : actor === "external"
+                  ? "someone@example.com"
+                  : `${actor}@yongshin-ms.ms.kr`,
+          },
+        },
+  data: { ...data, _session: proof },
+});
+// This demo project is deliberately outside the production session allowlist.
+// Keep the fixture guard strict and backed by actual emulator session records;
+// production session-authority behavior has its own independent regression suite.
+const assertFixtureSession = async (request) => {
+  const uid = request.auth?.uid,
+    email = request.auth?.token?.email;
+  assert.ok(uid, "Authentication required");
+  assert.ok(
+    email === "westoria28@gmail.com" || email.endsWith("@yongshin-ms.ms.kr"),
+    "School account required",
+  );
+  const snap = await adminDb
+    .doc(`application_sessions/${uid}/sessions/${request.auth.token.auth_time}`)
+    .get();
+  const session = snap.data();
+  assert.ok(
+    session &&
+      session.status === "active" &&
+      session.authTime === request.auth.token.auth_time,
+    "Active session required",
+  );
+  assert.ok(
+    session.generalExpiresAt.toMillis() > Date.now(),
+    "Session expired",
+  );
+  assert.equal(
+    session.authorityGeneration,
+    request.data._session?.authorityGeneration,
+  );
+  assert.equal(session.protocolVersion, request.data._session?.protocolVersion);
+  assert.equal(session.sessionRevision, request.data._session?.revision);
+  return { uid, email, authTime: request.auth.token.auth_time };
+};
+const { createWrittenExamAssetHandler } = requireFunctions(
+  resolve("functions/writtenExamAssets.js"),
+);
+const assetHandler = createWrittenExamAssetHandler({
+  db: adminDb,
+  bucket: adminBucket,
+  assertSession: assertFixtureSession,
+});
 const checks = [];
 const clients = {};
 const check = async (label, run) => {
@@ -90,6 +166,8 @@ const input = {
 const hooks = {
   calls: [],
   uploads: [],
+  assetCalls: [],
+  assetFailures: [],
   beforeTransaction: null,
   failClassCommit: false,
   failAfterCommit: false,
@@ -102,6 +180,17 @@ try {
   await privileged(async (context) => {
     await setDoc(doc(context.firestore(), "site_settings/semester_active"), {
       semesterId: "2026-2",
+      revision: 1,
+    });
+    await setDoc(doc(context.firestore(), "site_settings/config"), {
+      year: "2026",
+      semester: "2",
+    });
+    await setDoc(doc(context.firestore(), "semester_manifests/2026-2"), {
+      semesterId: "2026-2",
+      revision: 1,
+      status: "ACTIVE",
+      readOnly: false,
     });
     for (const [uid, role] of Object.entries({
       teacher: "teacher",
@@ -176,6 +265,36 @@ try {
     },
     storage: clients.teacher.storage,
     hooks,
+    call: async (name, data, user, options) => {
+      assert.equal(name, "manageWrittenExamAsset");
+      options?.beforeDispatch?.();
+      assert.equal(user, globalThis.__writtenExamStore.auth.currentUser);
+      hooks.assetCalls.push({
+        action: data.action,
+        storagePath: data.storagePath,
+        chunkIndex: data.chunkIndex,
+      });
+      let result;
+      try {
+        result = await assetHandler(requestFor(user.uid, data));
+      } catch (failure) {
+        hooks.assetFailures.push({
+          action: data.action,
+          storagePath: data.storagePath,
+          code: failure.code,
+          message: failure.message,
+        });
+        throw failure;
+      }
+      if (data.action === "upload" && result.complete) {
+        hooks.uploads.push(data.storagePath);
+        if (hooks.failAfterUpload) {
+          hooks.failAfterUpload = false;
+          throw new Error("injected lost upload acknowledgement");
+        }
+      }
+      return { data: result };
+    },
   };
   mkdirSync(tempDir, { recursive: true });
   const result = await build({
@@ -208,27 +327,28 @@ try {
             path: "archive",
             namespace: "synthetic",
           }));
-          builder.onResolve(
-            { filter: /^firebase\/(firestore|storage)$/ },
-            (args) =>
-              args.namespace === "instrument"
-                ? { path: args.path, external: true }
-                : { path: args.path, namespace: "instrument" },
+          builder.onResolve({ filter: /^\.\/applicationSession$/ }, () => ({
+            path: "session",
+            namespace: "synthetic",
+          }));
+          builder.onResolve({ filter: /^firebase\/firestore$/ }, (args) =>
+            args.namespace === "instrument"
+              ? { path: args.path, external: true }
+              : { path: args.path, namespace: "instrument" },
           );
           builder.onLoad(
             { filter: /.*/, namespace: "synthetic" },
             ({ path }) => ({
               contents:
-                path === "singleton"
-                  ? "export const db = globalThis.__writtenExamStore.db; export const auth = globalThis.__writtenExamStore.auth; export const getFirebaseStorage = async () => globalThis.__writtenExamStore.storage;"
-                  : "export const isSemesterArchive = false; export const archiveScope = null; export const assertArchiveWritable = () => {};",
+                path === "session"
+                  ? "export const callWithApplicationSession = (...args) => globalThis.__writtenExamStore.call(...args);"
+                  : path === "singleton"
+                    ? "export const db = globalThis.__writtenExamStore.db; export const auth = globalThis.__writtenExamStore.auth; export const readWrittenExamAssetChunk = () => { throw Error('Archive mode is covered by the asset client suite'); };"
+                    : "export const isSemesterArchive = false; export const archiveScope = null; export const assertArchiveWritable = () => {};",
             }),
           );
-          builder.onLoad(
-            { filter: /.*/, namespace: "instrument" },
-            ({ path }) => ({
-              contents: path.endsWith("firestore")
-                ? `
+          builder.onLoad({ filter: /.*/, namespace: "instrument" }, () => ({
+            contents: `
         export * from "firebase/firestore";
         import * as sdk from "firebase/firestore";
         const h = globalThis.__writtenExamStore.hooks;
@@ -237,17 +357,8 @@ try {
         export const getDocsFromServer = async value => { const result = await sdk.getDocsFromServer(value); h.calls.push({kind:"list",path:path(value),documents:result.size}); return result; };
         export const writeBatch = value => { const batch = sdk.writeBatch(value); const commit = batch.commit.bind(batch); batch.commit = async () => { if(h.failClassCommit) { h.failClassCommit=false; throw new Error("injected class write failure"); } return commit(); }; return batch; };
         export const runTransaction = async (...args) => { if(h.beforeTransaction) {const run=h.beforeTransaction;h.beforeTransaction=null;await run();} const result = await sdk.runTransaction(...args); if(h.failAfterCommit) { h.failAfterCommit=false; throw new Error("injected lost commit acknowledgement"); } return result; };
-      `
-                : `
-        export * from "firebase/storage";
-        import * as sdk from "firebase/storage";
-        export const uploadBytes = async (...args) => { globalThis.__writtenExamStore.hooks.uploads.push(args[0].fullPath); const result = await sdk.uploadBytes(...args); if(globalThis.__writtenExamStore.hooks.failAfterUpload) {globalThis.__writtenExamStore.hooks.failAfterUpload=false; throw new Error("injected lost upload acknowledgement");} return result; };
-        // Node uses the same authenticated Storage request via getStream.
-        // The browser-only Blob adapter is covered by the browser suite.
-        export const getBlob = async (...args) => { const chunks=[]; for await (const chunk of sdk.getStream(...args)) chunks.push(chunk); return new Blob(chunks); };
       `,
-            }),
-          );
+          }));
         },
       },
     ],
@@ -391,7 +502,9 @@ try {
         {
           fileName: "paper.pdf",
           kind: "pdf",
-          blob: new Blob([new Uint8Array(32)], { type: "application/pdf" }),
+          blob: new Blob(["%PDF-1.4\n% synthetic test\n%%EOF "], {
+            type: "application/pdf",
+          }),
         },
       ];
       hooks.failAfterUpload = true;
@@ -417,21 +530,75 @@ try {
         expectedRevision: saved.revision,
       });
       assert.equal(saved.files[0].fileName, "paper.pdf");
-      await assertSucceeds(
-        getMetadata(
-          ref(
-            clients.teacher.storage,
-            `${root}/${saved.id}/${saved.revision}/paper.pdf`,
-          ),
-        ),
+      assert.equal(
+        (
+          await store.loadWrittenExamAnalysisAsset(
+            config,
+            saved.id,
+            saved.revision,
+            "paper.pdf",
+          )
+        ).size,
+        32,
       );
     },
   );
   await check("asset loader never generates a public token URL", async () => {
     const source = readFileSync("src/lib/writtenExamAnalysisStore.ts", "utf8");
     assert.equal(source.includes("getDownloadURL"), false);
-    assert.match(source, /return getBlob\(/);
+    assert.match(source, /return readWrittenExamAsset\(/);
+    assert.equal(source.includes('from "firebase/storage"'), false);
   });
+  await check(
+    "multi-chunk PDF uses real server upload/read and preserves every byte without public tokens or leftover chunks",
+    async () => {
+      const bytes = Buffer.alloc(4 * 1024 * 1024 + 51, 32);
+      bytes.write("%PDF-1.4\n% synthetic multi-chunk fixture\n", 0);
+      bytes.write("%%EOF", bytes.length - 5);
+      const before = hooks.assetCalls.length;
+      const chunked = await store.saveWrittenExamAnalysis(config, {
+        ...input,
+        examId: "synthetic-chunked-transport",
+        files: [
+          {
+            fileName: "paper.pdf",
+            kind: "pdf",
+            blob: new Blob([bytes], { type: "application/pdf" }),
+          },
+        ],
+      });
+      const blob = await store.loadWrittenExamAnalysisAsset(
+        config,
+        chunked.id,
+        chunked.revision,
+        "paper.pdf",
+      );
+      assert.deepEqual(Buffer.from(await blob.arrayBuffer()), bytes);
+      assert.deepEqual(
+        hooks.assetCalls
+          .slice(before)
+          .map(({ action, chunkIndex }) => [action, chunkIndex]),
+        [
+          ["upload", 0],
+          ["upload", 1],
+          ["read", 0],
+          ["read", 1],
+        ],
+      );
+      const prefix = `${root}/${chunked.id}/${chunked.revision}/`;
+      const [stored] = await adminBucket.getFiles({ prefix });
+      assert.deepEqual(
+        stored.map((file) => file.name),
+        [`${prefix}paper.pdf`],
+      );
+      const [metadata] = await stored[0].getMetadata();
+      assert.equal(metadata.metadata?.firebaseStorageDownloadTokens, undefined);
+      assert.equal(
+        metadata.metadata.sha256,
+        createHash("sha256").update(bytes).digest("hex"),
+      );
+    },
+  );
 
   const manifestPath = `${root}/${saved.id}`;
   const classPath = `${manifestPath}/revisions/${saved.revision}/classes/3-1`;
@@ -479,6 +646,76 @@ try {
     },
   );
   await check(
+    "cleanup tombstone blocks publication, ready transition and class writes; only its owner can delete",
+    async () => {
+      const revision = "cleanup-race-fixture";
+      const revisionPath = `${manifestPath}/revisions/${revision}`;
+      const responsePath = `${revisionPath}/classes/3-1`;
+      const classData = {
+        schemaVersion: 1,
+        year: "2026",
+        semester: "2",
+        examId: saved.id,
+        revision,
+        classId: "3-1",
+        grade: "3",
+        students: [student("student-a", "1")],
+      };
+      await privileged(async (context) => {
+        await setDoc(doc(context.firestore(), revisionPath), {
+          schemaVersion: 1,
+          year: "2026",
+          semester: "2",
+          examId: saved.id,
+          revision,
+          state: "cleanup",
+          uploadedBy: "teacher",
+          classIds: ["3-1"],
+          studentCount: 1,
+          createdAt: serverTimestamp(),
+        });
+        await setDoc(doc(context.firestore(), responsePath), classData);
+      });
+      const before = (
+        await getDocFromServer(doc(clients.teacher.db, manifestPath))
+      ).data();
+      await assertFails(
+        setDoc(doc(clients.teacher.db, manifestPath), {
+          ...before,
+          revision,
+          updatedAt: serverTimestamp(),
+        }),
+      );
+      await assertFails(
+        updateDoc(doc(clients.teacher.db, revisionPath), { state: "ready" }),
+      );
+      await assertFails(
+        setDoc(doc(clients.teacher.db, responsePath), classData),
+      );
+      await assertFails(
+        runTransaction(clients.teacher.db, async (transaction) => {
+          transaction.update(doc(clients.teacher.db, revisionPath), {
+            state: "ready",
+          });
+          transaction.set(doc(clients.teacher.db, manifestPath), {
+            ...before,
+            revision,
+            updatedAt: serverTimestamp(),
+          });
+        }),
+      );
+      await assertFails(deleteDoc(doc(clients.admin.db, responsePath)));
+      await assertFails(deleteDoc(doc(clients.admin.db, revisionPath)));
+      await assertSucceeds(deleteDoc(doc(clients.teacher.db, responsePath)));
+      await assertSucceeds(deleteDoc(doc(clients.teacher.db, revisionPath)));
+      assert.equal(
+        (await getDocFromServer(doc(clients.teacher.db, manifestPath))).data()
+          .revision,
+        before.revision,
+      );
+    },
+  );
+  await check(
     "semester fence: old semester write denied and reads remain scoped",
     async () => {
       await assert.rejects(
@@ -515,7 +752,8 @@ try {
     },
   );
 
-  // Storage checks use real cross-service session/role/revision rules.
+  // Direct browser access is denied even for teachers/admins; authenticated
+  // callables enforce ownership, semester, staging and publication via Admin SDK.
   const stagePath = `${manifestPath}/revisions/asset-stage`;
   await setDoc(doc(clients.teacher.db, stagePath), {
     schemaVersion: 1,
@@ -530,101 +768,69 @@ try {
     createdAt: serverTimestamp(),
   });
   const objectPath = `${root}/${saved.id}/asset-stage/paper.pdf`;
-  const imagePath = `${root}/${saved.id}/asset-stage/page-1.webp`;
-  const objectMetadata = {
+  const stageBytes = Buffer.from(
+    "%PDF-1.4\n% synthetic protected bytes\n%%EOF",
+  );
+  const uploadInput = {
+    action: "upload",
+    storagePath: objectPath,
     contentType: "application/pdf",
-    customMetadata: {
-      ownerUid: "teacher",
-      year: "2026",
-      semester: "2",
-      examId: saved.id,
-      revision: "asset-stage",
-    },
+    totalSize: stageBytes.length,
+    sha256: createHash("sha256").update(stageBytes).digest("hex"),
+    chunkIndex: 0,
+    contentBase64: stageBytes.toString("base64"),
   };
   await check(
-    "teacher: stage PDF/page uploads allowed; unpublished read blocked",
+    "server teacher upload succeeds; staged read is denied",
     async () => {
-      await assertSucceeds(
-        uploadBytes(
-          ref(clients.teacher.storage, objectPath),
-          new Uint8Array(20),
-          objectMetadata,
+      assert.equal(
+        (await assetHandler(requestFor("teacher", uploadInput))).complete,
+        true,
+      );
+      await assert.rejects(
+        assetHandler(
+          requestFor("teacher", {
+            action: "read",
+            storagePath: objectPath,
+            chunkIndex: 0,
+          }),
         ),
       );
-      await assertSucceeds(
-        uploadBytes(
-          ref(clients.teacher.storage, imagePath),
-          new Uint8Array(20),
-          { ...objectMetadata, contentType: "image/webp" },
-        ),
-      );
-      await assertFails(getMetadata(ref(clients.teacher.storage, objectPath)));
     },
   );
-  await check(
-    "storage type, size, scope, unexpected metadata and ownership rejected",
-    async () => {
-      await assertFails(
-        uploadBytes(
-          ref(clients.teacher.storage, objectPath),
-          new Uint8Array(1),
-          { ...objectMetadata, contentType: "text/html" },
-        ),
-      );
-      await assertFails(
-        uploadBytes(
-          ref(clients.teacher.storage, objectPath),
-          new Uint8Array(30 * 1024 * 1024 + 1),
-          objectMetadata,
-        ),
-      );
-      await assertFails(
-        uploadBytes(
-          ref(clients.teacher.storage, imagePath),
-          new Uint8Array(12 * 1024 * 1024 + 1),
-          { ...objectMetadata, contentType: "image/webp" },
-        ),
-      );
-      await assertFails(
-        uploadBytes(
-          ref(clients.teacher.storage, objectPath),
-          new Uint8Array(1),
-          {
-            ...objectMetadata,
-            customMetadata: {
-              ...objectMetadata.customMetadata,
-              publicUrl: "https://invalid.example/asset",
-            },
-          },
-        ),
-      );
-      await assertFails(
-        uploadBytes(ref(clients.admin.storage, objectPath), new Uint8Array(1), {
-          ...objectMetadata,
-          customMetadata: {
-            ...objectMetadata.customMetadata,
-            ownerUid: "admin",
-          },
-        }),
-      );
-      await assertFails(
-        uploadBytes(
-          ref(
-            clients.teacher.storage,
-            objectPath.replace("semesters/2", "semesters/1"),
+  for (const actor of [
+    "teacher",
+    "admin",
+    "student-a",
+    "student-b",
+    "staff",
+    "anon",
+    "expired",
+    "revoked",
+    "pending",
+    "missing",
+    "external",
+  ])
+    await check(
+      `${actor}: direct Storage read, write, delete and internal chunk access all denied`,
+      async () => {
+        for (const storagePath of [
+          objectPath,
+          objectPath.replace(
+            "paper.pdf",
+            `_chunks/${createHash("sha256").update("paper.pdf").digest("hex")}-0`,
           ),
-          new Uint8Array(1),
-          objectMetadata,
-        ),
-      );
-    },
-  );
-  await privileged((context) =>
-    updateDoc(doc(context.firestore(), stagePath), { state: "ready" }),
-  );
-  for (const actor of ["teacher", "admin"])
-    await check(`${actor}: published protected asset read allowed`, () =>
-      assertSucceeds(getMetadata(ref(clients[actor].storage, objectPath))),
+        ]) {
+          const reference = ref(clients[actor].storage, storagePath);
+          await assertFails(getMetadata(reference));
+          await assertFails(
+            uploadBytes(reference, new Uint8Array(1), {
+              contentType: "application/pdf",
+            }),
+          );
+          await assertFails(deleteObject(reference));
+        }
+      },
     );
   for (const actor of [
     "student-a",
@@ -637,24 +843,82 @@ try {
     "missing",
     "external",
   ])
-    await check(`${actor}: protected asset read/write denied`, async () => {
-      await assertFails(getMetadata(ref(clients[actor].storage, objectPath)));
-      await assertFails(
-        uploadBytes(
-          ref(clients[actor].storage, objectPath),
-          new Uint8Array(1),
-          objectMetadata,
+    await check(
+      `${actor}: server asset read, upload and removal denied`,
+      async () => {
+        await assert.rejects(assetHandler(requestFor(actor, uploadInput)));
+        await assert.rejects(
+          assetHandler(
+            requestFor(actor, {
+              action: "read",
+              storagePath: objectPath,
+              chunkIndex: 0,
+            }),
+          ),
+        );
+        await assert.rejects(
+          assetHandler(
+            requestFor(actor, { action: "remove", storagePath: objectPath }),
+          ),
+        );
+      },
+    );
+  await check(
+    "server validates content type, declared size, semester and revision ownership",
+    async () => {
+      for (const change of [
+        { contentType: "text/html" },
+        { totalSize: 30 * 1024 * 1024 + 1 },
+        { storagePath: objectPath.replace("semesters/2", "semesters/1") },
+        { storagePath: objectPath.replace("asset-stage", "not-a-revision") },
+        { extra: "unexpected" },
+      ])
+        await assert.rejects(
+          assetHandler(requestFor("teacher", { ...uploadInput, ...change })),
+        );
+      await assert.rejects(assetHandler(requestFor("admin", uploadInput)));
+      await assert.rejects(
+        assetHandler({
+          ...requestFor("teacher", uploadInput),
+          data: {
+            ...uploadInput,
+            _session: { ...proof, revision: "b".repeat(64) },
+          },
+        }),
+      );
+    },
+  );
+  await check(
+    "server cleanup removes staging bytes; ready assets cannot be overwritten or removed",
+    async () => {
+      await assetHandler(
+        requestFor("teacher", { action: "remove", storagePath: objectPath }),
+      );
+      assert.equal((await adminBucket.file(objectPath).exists())[0], false);
+      await privileged((context) =>
+        updateDoc(doc(context.firestore(), stagePath), { state: "ready" }),
+      );
+      await assert.rejects(assetHandler(requestFor("teacher", uploadInput)));
+      await assert.rejects(
+        assetHandler(
+          requestFor("teacher", { action: "remove", storagePath: objectPath }),
         ),
       );
-    });
-  await check("published asset cannot be overwritten", () =>
-    assertFails(
-      uploadBytes(
-        ref(clients.teacher.storage, objectPath),
-        new Uint8Array(1),
-        objectMetadata,
-      ),
-    ),
+      const publishedPath = `${root}/${saved.id}/${saved.revision}/paper.pdf`;
+      for (const actor of ["teacher", "admin"]) {
+        const response = await assetHandler(
+          requestFor(actor, {
+            action: "read",
+            storagePath: publishedPath,
+            chunkIndex: 0,
+          }),
+        );
+        assert.equal(Buffer.from(response.contentBase64, "base64").length, 32);
+        await assertFails(
+          getMetadata(ref(clients[actor].storage, publishedPath)),
+        );
+      }
+    },
   );
   await check(
     "official score, signature and objection collections stay untouched",
@@ -991,6 +1255,7 @@ try {
             await assert.rejects(
               getMetadata(ref(context.storage(bucket), file)),
               { code: "storage/object-not-found" },
+              JSON.stringify(hooks.assetFailures),
             );
           const revisions = await getDocsFromServer(
             collection(context.firestore(), root, linkedId, "revisions"),
@@ -1179,6 +1444,7 @@ try {
   );
 } finally {
   await env.cleanup();
+  await deleteApp(adminApp);
   rmSync(tempFile, { force: true });
   delete globalThis.__writtenExamStore;
 }

@@ -12,8 +12,12 @@ import {
   writeBatch,
   type Transaction,
 } from "firebase/firestore";
-import { deleteObject, getBlob, ref, uploadBytes } from "firebase/storage";
-import { auth, db, getFirebaseStorage } from "./firebase";
+import { auth, db } from "./firebase";
+import {
+  uploadWrittenExamAsset,
+  readWrittenExamAsset,
+  removeWrittenExamAsset,
+} from "./writtenExamAssets";
 import { assertArchiveWritable } from "./semesterArchive";
 import { getSemesterCollectionPath, getYearSemester } from "./semesterScope";
 import type {
@@ -170,12 +174,8 @@ export async function loadWrittenExamAnalysisAsset(
   revision: string,
   fileName: string,
 ) {
-  const storage = await getFirebaseStorage();
   // Authenticated bytes only: never produce or persist a bearer download URL.
-  return getBlob(
-    ref(storage, assetPath(config, examId, revision, fileName)),
-    30 * 1024 * 1024,
-  );
+  return readWrittenExamAsset(assetPath(config, examId, revision, fileName));
 }
 
 /** Upload immutable revision data first, then atomically publish one manifest. */
@@ -383,15 +383,10 @@ export async function saveWrittenExamAnalysis(
     assertSaveOwner();
     for (const file of input.files) {
       const path = assetPath(config, examId, revision, file.fileName);
-      const storage = await getFirebaseStorage();
       assertSaveOwner();
       // Track before sending so an acknowledged-on-server / failed-on-client upload is cleaned up too.
       uploaded.push(path);
-      await uploadBytes(ref(storage, path), file.blob, {
-        contentType: file.blob.type,
-        cacheControl: "private, no-store",
-        customMetadata: { ownerUid: uid, year, semester, examId, revision },
-      });
+      await uploadWrittenExamAsset(path, file.blob);
       assertSaveOwner();
     }
     const batch = writeBatch(db);
@@ -416,7 +411,14 @@ export async function saveWrittenExamAnalysis(
     await runTransaction(db, async (transaction) => {
       assertSaveOwner();
       const current = await transaction.get(manifestRef);
+      const staged = await transaction.get(revisionRef);
       assertSaveOwner();
+      if (
+        !staged.exists() ||
+        staged.data().state !== "staging" ||
+        staged.data().uploadedBy !== uid
+      )
+        throw new Error("등록이 중단된 자료입니다. 파일을 다시 등록해 주세요.");
       const currentRevision = current.exists() ? current.data().revision : null;
       if (currentRevision !== input.expectedRevision)
         throw new Error(
@@ -455,9 +457,8 @@ export async function saveWrittenExamAnalysis(
       ) {
         const cleanup = await Promise.allSettled([
           ...uploaded.map(async (path) => {
-            const storage = await getFirebaseStorage();
             assertSaveOwner();
-            return deleteObject(ref(storage, path));
+            return removeWrittenExamAsset(path);
           }),
           ...writtenClasses.map((classId) =>
             deleteDoc(doc(revisionRef, "classes", classId)),

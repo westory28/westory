@@ -1770,6 +1770,10 @@ service cloud.firestore {
             let stage = get(revisionPath(revision)).data;
             return stage.state == 'staging' && stage.uploadedBy == request.auth.uid;
           }
+          function ownCleanupRevision() {
+            let stage = get(revisionPath(revision)).data;
+            return stage.state in ['staging', 'cleanup'] && stage.uploadedBy == request.auth.uid;
+          }
           allow read: if validScope() && canManagePerformanceScores();
           allow create: if writableScope() && canManagePerformanceScores()
             && request.resource.data.keys().hasOnly(['schemaVersion', 'year', 'semester', 'examId', 'revision', 'state', 'uploadedBy', 'classIds', 'studentCount', 'createdAt'])
@@ -1784,7 +1788,7 @@ service cloud.firestore {
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state'])
             && request.resource.data.state == 'ready'
             && getAfter(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/written_exam_analyses/$(examId)).data.revision == revision;
-          allow delete: if writableScope() && canManagePerformanceScores() && ownStagingRevision();
+          allow delete: if writableScope() && canManagePerformanceScores() && ownCleanupRevision();
 
           match /classes/{classId} {
             allow read: if validScope() && canManagePerformanceScores()
@@ -1799,7 +1803,7 @@ service cloud.firestore {
               && classId.matches('^' + request.resource.data.grade + '-[1-9][0-9]?$')
               && classId in get(revisionPath(revision)).data.classIds
               && request.resource.data.students is list && request.resource.data.students.size() > 0 && request.resource.data.students.size() <= 150;
-            allow delete: if writableScope() && canManagePerformanceScores() && ownStagingRevision();
+            allow delete: if writableScope() && canManagePerformanceScores() && ownCleanupRevision();
           }
         }
       }

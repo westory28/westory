@@ -158,6 +158,11 @@ try {
 }
 const getFirebaseFunctions = () => {
   assertArchiveWritable();
+  return getFunctionsClient();
+};
+
+// Internal connection only; public command factories retain the archive fence.
+const getFunctionsClient = () => {
   if (!functionsPromise) {
     functionsPromise = import("firebase/functions")
       .then(({ connectFunctionsEmulator, getFunctions }) => {
@@ -185,6 +190,32 @@ const getFirebaseFunctions = () => {
       });
   }
   return functionsPromise;
+};
+
+// A fixed read operation for the archive viewer. Callers cannot select a
+// function name or action, and localhost retains the existing emulator routing.
+export const readWrittenExamAssetChunk = async <ResponseData>(
+  input: {
+    storagePath: string;
+    chunkIndex: number;
+    _session: {
+      authorityGeneration: string;
+      protocolVersion: number;
+      revision: string;
+    };
+  },
+  beforeDispatch: () => void,
+) => {
+  const [functions, { httpsCallable }] = await Promise.all([
+    getFunctionsClient(),
+    import("firebase/functions"),
+  ]);
+  const read = httpsCallable<typeof input & { action: "read" }, ResponseData>(
+    functions,
+    "manageWrittenExamAsset",
+  );
+  beforeDispatch();
+  return read({ ...input, action: "read" });
 };
 
 const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(

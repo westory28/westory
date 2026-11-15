@@ -106,15 +106,19 @@ const firestore = {
     return result;
   },
 };
-const storage = {
-  ref: (_storage, path) => ({ path }),
-  uploadBytes: async (ref, blob) => {
+const assets = {
+  uploadWrittenExamAsset: async (path, blob) => {
     if (h.failUpload) throw new Error("injected upload failure");
-    h.blobs.set(ref.path, blob);
-    h.writes.push({ kind: "upload", path: ref.path });
+    h.blobs.set(path, blob);
+    h.writes.push({ kind: "upload", path });
   },
-  deleteObject: async (ref) => {
-    h.blobs.delete(ref.path);
+  readWrittenExamAsset: async (path) => {
+    const blob = h.blobs.get(path);
+    if (!blob) throw new Error("injected missing asset");
+    return blob;
+  },
+  removeWrittenExamAsset: async (path) => {
+    h.blobs.delete(path);
   },
 };
 const encode = (value) => {
@@ -182,13 +186,19 @@ const built = await build({
           path: "archive",
           namespace: "synthetic",
         }));
+        builder.onResolve({ filter: /^\.\/writtenExamAssets$/ }, () => ({
+          path: "assets",
+          namespace: "synthetic",
+        }));
         builder.onLoad(
           { filter: /.*/, namespace: "synthetic" },
           ({ path }) => ({
             contents:
-              path === "firebase"
-                ? "export const auth=globalThis.fixture.auth;export const db=globalThis.fixture.db;export const getFirebaseStorage=async()=>({});"
-                : "export const isSemesterArchive=false;export const archiveScope=null;export const assertArchiveWritable=()=>{};",
+              path === "assets"
+                ? "export const {uploadWrittenExamAsset,readWrittenExamAsset,removeWrittenExamAsset}=globalThis.fixture.assets;"
+                : path === "firebase"
+                  ? "export const auth=globalThis.fixture.auth;export const db=globalThis.fixture.db;export const getFirebaseStorage=async()=>({});"
+                  : "export const isSemesterArchive=false;export const archiveScope=null;export const assertArchiveWritable=()=>{};",
           }),
         );
       },
@@ -200,11 +210,10 @@ vm.runInNewContext(built.outputFiles[0].text, {
   module,
   exports: module.exports,
   console,
-  fixture: { auth, db },
+  fixture: { auth, db, assets },
   fetch: fetchMock,
   require: (name) => {
     if (name === "firebase/firestore") return firestore;
-    if (name === "firebase/storage") return storage;
     throw new Error(`Unexpected dependency: ${name}`);
   },
   AbortController,
@@ -1086,6 +1095,39 @@ await check(
     );
     assert.equal(h.writes.length, 1);
     assert.equal(h.docs.has(materialPath), false);
+  },
+);
+
+await check(
+  "cleanup tombstone arriving before publication cannot become a visible revision",
+  async () => {
+    h.beforeTransaction = () => {
+      const entry = [...h.docs.entries()].find(
+        ([path, data]) =>
+          path.startsWith(`${materialPath}/revisions/`) &&
+          data.state === "staging",
+      );
+      assert.ok(entry);
+      h.docs.set(entry[0], { ...entry[1], state: "cleanup" });
+    };
+    await assert.rejects(
+      api.saveWrittenExamScoreMaterials(config, {
+        examId,
+        expectedRevision: null,
+        examDate: "2026-11-14",
+        questions: api.questionsFromScoreSource(h.docs.get(rosterPath)),
+        crops: [],
+        files: [],
+      }),
+      /중단된 자료/,
+    );
+    assert.equal(h.docs.has(materialPath), false);
+    assert.equal(
+      h.writes.some(
+        (write) => write.kind === "update" && write.data?.state === "ready",
+      ),
+      false,
+    );
   },
 );
 

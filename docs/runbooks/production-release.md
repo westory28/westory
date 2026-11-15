@@ -1,5 +1,9 @@
 # 운영 배포 절차
 
+## 정기시험 원안지 저장 권한 복구 (2026-11-15 후속)
+
+Storage 규칙의 Firestore 두 문서 조회 한도를 넘던 업로드·읽기·실패 정리를 전용 서버 함수로 옮긴다. [복구 기록](../reviews/written-exam-storage-repair-20261115.md)에 권한·분할 전송·cleanup 게시 차단을 구분한다. 운영 보안 helper를 보존한 `prepare-written-exam-assets-release.mjs`의 신규 `manageWrittenExamAsset` 하나만 배포하고, `verify-written-exam-assets-release.mjs`로 전체 소스와 익명 차단을 확인한다. 실제 규칙 검사 후 Firestore cleanup 삭제 경계와 Storage 직접 차단을 반영한다. 같은 main의 Vercel 배포를 승격하고 실제 원안지 등록·문항 이미지 열람까지 확인한다. 학생 성적·서명·이의 상태는 검증 목적으로 변경하지 않는다.
+
 ## 정기시험 파일 업로드 복구 (2026-11-15)
 
 실제 학급별 XLSX의 잘못된 사용 범위와 B열 식별자를 읽고, 문항정보표의 인쇄 구조와 원안지의 공통 지문을 지원한다. 업로드 하위 탭·기록 필터·자료 등록의 오류/진행 상태를 함께 고친다. [검증 기록](../reviews/written-exam-upload-repair-20261115.md)에 실제 파일 및 합성 브라우저·Firestore/Storage 에뮬레이터 범위를 구분한다. 기본 빌드·포맷·기존 점수 요청 rules 검사를 통과한 main의 Vercel 배포를 승격한다. Functions와 rules는 바꾸지 않으며 운영 QA에서 기존 학생 성적·서명·이의 상태를 변경하지 않는다.

@@ -8211,6 +8211,7 @@ Object.assign(exports, require('./studentProfileEmojiReconciliation')
 // Notice images use the guarded server transport; direct Storage writes stay closed.
 exports.uploadNoticeImageContent = require('./noticeImages').uploadNoticeImageContent;
 exports.deleteNoticeImageContent = require('./noticeImages').deleteNoticeImageContent;
+exports.manageWrittenExamAsset = require('./writtenExamAssets').manageWrittenExamAsset;
 exports.uploadDeveloperLogImageContent = require('./developerLogImages').uploadDeveloperLogImageContent;
 exports.deleteDeveloperLogImageContent = require('./developerLogImages').deleteDeveloperLogImageContent;
 
