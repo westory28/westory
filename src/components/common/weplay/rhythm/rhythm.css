@@ -303,7 +303,8 @@
   transform: translateX(-4px);
   filter: drop-shadow(4px 0 0 var(--rh-red)) drop-shadow(0 3px 0 #352c2620);
 }
-.rhythm-song[aria-pressed="false"] {
+.rhythm-song[aria-pressed="false"],
+.rhythm-difficulty button[aria-pressed="false"] {
   color: #494949;
   filter: grayscale(1) brightness(0.95) drop-shadow(0 3px 0 #352c2620);
 }
