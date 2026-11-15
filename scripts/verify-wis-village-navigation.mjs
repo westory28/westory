@@ -575,7 +575,7 @@ try {
             .getByRole("button", { name: "학생 투자 현황", exact: true })
             .click();
           await page
-            .getByText("학생 투자 자료가 아직 연결되지 않았습니다.", {
+            .getByText("아직 집계된 투자 현황이 없습니다.", {
               exact: true,
             })
             .waitFor();

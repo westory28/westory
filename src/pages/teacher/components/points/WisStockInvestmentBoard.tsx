@@ -154,7 +154,7 @@ export default function WisStockInvestmentBoard({
           ? "연결 중"
           : ready
             ? "실시간 연결"
-            : "투자 자료 연결 전";
+            : "투자 현황 대기";
   const screen = async () => {
     setScreenError("");
     if (pageFullscreen) {
@@ -368,14 +368,8 @@ export default function WisStockInvestmentBoard({
                     ? "실시간 연결이 중지되었습니다."
                     : ready
                       ? "투자 내역이 없습니다."
-                      : "학생 투자 자료가 아직 연결되지 않았습니다."}
+                      : "아직 집계된 투자 현황이 없습니다."}
             </strong>
-            {!error && connection === "CONNECTED" && !ready && (
-              <p>
-                현재 학생 서비스는 비공개이며, 미리보기의 예시 계좌는 현황에
-                포함하지 않습니다.
-              </p>
-            )}
           </div>
         )}
       </div>
