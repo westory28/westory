@@ -1,3 +1,19 @@
+@font-face {
+  font-family: "Rhythm Yeon Sung";
+  src: url("../../../../assets/fonts/rhythm/YeonSung-Regular.woff2")
+    format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Rhythm Dokdo";
+  src: url("../../../../assets/fonts/rhythm/Dokdo-Regular.woff2")
+    format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
 .rhythm-entry {
   min-width: 0;
 }
@@ -45,7 +61,8 @@
   --rh-green: #164c35;
   --rh-gold: #e5b51e;
   color: var(--rh-ink);
-  font-family: "Noto Sans KR", sans-serif;
+  font-family: "Rhythm Yeon Sung", "Noto Serif KR", serif;
+  font-synthesis: none;
 }
 .rhythm-game {
   position: relative;
@@ -58,7 +75,7 @@
   border: 3px solid var(--rh-green);
   border-radius: 16px;
   background: var(--rh-paper);
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1.5;
   scroll-margin-top: 72px;
   box-shadow: 0 6px 0 #164c3522;
@@ -328,7 +345,7 @@
 .rhythm-difficulty {
   display: flex;
   gap: 8px;
-  margin-top: 20px !important;
+  margin-top: 16px !important;
 }
 .rhythm-difficulty legend {
   padding-bottom: 8px;
@@ -684,6 +701,7 @@
   z-index: 3;
   font-size: clamp(22px, 8cqh, 38px);
   font-weight: 900;
+  font-family: "Rhythm Dokdo", "Rhythm Yeon Sung", serif;
   white-space: nowrap;
   color: var(--rh-green);
   text-shadow:
@@ -862,7 +880,7 @@
   margin: 24px 0;
 }
 .rhythm-result dt {
-  font-size: 12px;
+  font-size: 16px;
 }
 .rhythm-result dd {
   font-size: 24px;
@@ -1030,7 +1048,7 @@
   }
   .rhythm-lobby {
     gap: 16px;
-    padding: 4px 24px 12px;
+    padding: 2px 24px 8px;
     grid-template-columns: 1fr 1.2fr;
   }
   .rhythm-brand {
@@ -1057,7 +1075,7 @@
     font-size: 10px;
   }
   .rhythm-song-panel {
-    padding: 2px 8px 8px;
+    padding: 0 8px 4px;
   }
   .rhythm-game legend {
     font-size: 13px;
@@ -1101,10 +1119,10 @@
   }
   .rhythm-difficulty button {
     min-height: 44px;
-    font-size: 13px;
+    font-size: 18px;
   }
   .rhythm-start-row {
-    margin-top: 8px;
+    margin-top: 4px;
   }
   .rhythm-primary {
     min-height: 48px;
@@ -1196,20 +1214,29 @@
     padding: 8px 24px;
   }
   .rhythm-result-paper {
-    padding: 8px 16px;
+    padding: 4px 16px;
+    line-height: 1.1;
   }
   .rhythm-result h2 {
     font-size: 26px;
+    margin: 2px 0;
+    line-height: 1.1;
   }
   .rhythm-result-score {
     font-size: 36px;
+    line-height: 1.15;
   }
   .rhythm-result dl {
-    margin: 8px 0;
+    margin: 6px 0;
     gap: 4px 12px;
   }
   .rhythm-result dd {
     font-size: 18px;
+  }
+  .rhythm-result-actions :is(.rhythm-tool, .rhythm-primary) {
+    min-height: 44px;
+    padding: 4px 18px;
+    font-size: 18px !important;
   }
 }
 @media (max-width: 1023px) and (orientation: portrait) {
@@ -1424,7 +1451,7 @@
   border-radius: 50%;
   background: #f5e8bce8;
   color: var(--rh-ink);
-  font-size: clamp(16px, 2.8cqh, 24px);
+  font-size: clamp(20px, 3.3cqh, 28px);
   line-height: 1;
   font-weight: 900;
   box-shadow: 0 1px 2px #352c2633;
@@ -1432,22 +1459,26 @@
 .rhythm-feedback small {
   display: block;
   text-align: center;
-  font-size: 16px;
+  font-size: 20px;
+  font-family: "Rhythm Yeon Sung", serif;
   line-height: 1.2;
 }
 .rhythm-feedback--perfect {
   color: #8d5200;
+  font-size: clamp(36px, 5cqw, 64px);
   filter: drop-shadow(0 0 6px #e5b51e88);
 }
 .rhythm-feedback--good {
   color: var(--rh-green);
+  font-size: clamp(28px, 4cqw, 48px);
 }
 .rhythm-feedback--ok {
   color: var(--rh-blue);
-  font-size: 24px;
+  font-size: clamp(24px, 3cqw, 36px);
 }
 .rhythm-feedback--miss {
-  color: var(--rh-ink);
+  color: var(--rh-red);
+  font-size: clamp(32px, 4.5cqw, 54px);
 }
 .rhythm-hit-effect--perfect {
   color: var(--rh-gold);
@@ -1460,6 +1491,13 @@
 }
 .rhythm-hit-effect--tap {
   opacity: 0.6;
+}
+.rhythm-hit-effect--miss {
+  color: var(--rh-red);
+}
+.rhythm-hit-effect--miss .rhythm-shockwave {
+  border-style: dashed;
+  box-shadow: none;
 }
 .rhythm-hit-effect--ok .rhythm-shockwave {
   width: 56px;
@@ -1614,5 +1652,95 @@
   }
   70% {
     transform: translateY(-32%) rotate(var(--mallet-aim));
+  }
+}
+
+/* The game uses local, open-license brush lettering; portal controls keep their type. */
+.rhythm-song-panel legend,
+.rhythm-result h2,
+.rhythm-pause h2,
+.rhythm-result dt[data-grade] {
+  font-family: "Rhythm Dokdo", "Rhythm Yeon Sung", serif;
+  font-weight: 400;
+}
+.rhythm-song-panel legend {
+  font-size: 24px;
+  line-height: 1.1;
+}
+.rhythm-scorebar span {
+  font-size: 18px;
+}
+.rhythm-result dl > div {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.rhythm-result dt[data-grade="perfect"] {
+  font-size: 30px;
+  color: #8d5200;
+}
+.rhythm-result dt[data-grade="good"] {
+  font-size: 26px;
+  color: var(--rh-green);
+}
+.rhythm-result dt[data-grade="ok"] {
+  font-size: 22px;
+  color: var(--rh-blue);
+}
+.rhythm-result dt[data-grade="miss"] {
+  font-size: 26px;
+  color: var(--rh-red);
+}
+@container rhythm-canvas (max-height: 540px) {
+  .rhythm-song-panel legend {
+    font-size: 20px;
+    line-height: 1;
+    padding-bottom: 0;
+  }
+  .rhythm-scorebar span {
+    font-size: 16px;
+  }
+  .rhythm-result dt {
+    font-size: 14px;
+  }
+  .rhythm-result dt[data-grade="perfect"] {
+    font-size: 24px;
+  }
+  .rhythm-result dt[data-grade="good"] {
+    font-size: 21px;
+  }
+  .rhythm-result dt[data-grade="ok"] {
+    font-size: 18px;
+  }
+  .rhythm-result dt[data-grade="miss"] {
+    font-size: 21px;
+  }
+}
+
+@container rhythm-canvas (max-height: 360px) {
+  .rhythm-song-panel {
+    align-self: start;
+  }
+  .rhythm-result-paper {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0 12px;
+    align-items: center;
+  }
+  .rhythm-result-paper > .rhythm-eyebrow {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .rhythm-result h2 {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .rhythm-result-score {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+  .rhythm-result dl,
+  .rhythm-result-actions {
+    grid-column: 1 / -1;
   }
 }

@@ -26,8 +26,7 @@ import {
   classifyDrumHit,
   createChart,
   createScore,
-  findHit,
-  getJudgement,
+  judgeInput,
   type DrumKind,
   type DrumHand,
   type RhythmDifficulty,
@@ -50,7 +49,7 @@ const JUDGEMENT_TEXT = {
   perfect: "지화자 좋다!",
   good: "얼씨구",
   ok: "좋다",
-  miss: "아쉬워요",
+  miss: "어이쿠",
 };
 const JUDGEMENT_POINTS = { perfect: 1000, good: 650, ok: 300, miss: 0 };
 const HIT_SPOTS = [
@@ -119,6 +118,7 @@ export default function RhythmGame({
   const [offset, setOffset] = useState(0);
   const audio = useRef<RhythmAudio | null>(null);
   const judged = useRef(new Set<string>());
+  const blockedUntil = useRef(0);
   const scoreRef = useRef(createScore());
   const generation = useRef(0);
   const gameRef = useRef<HTMLElement>(null);
@@ -173,9 +173,13 @@ export default function RhythmGame({
 
   const pause = useCallback(() => {
     if (phaseRef.current !== "playing") return;
+    const player = audio.current;
+    const token = generation.current;
     setGamePhase("paused");
-    void audio.current?.pause().catch(() => {
-      audio.current?.stop();
+    void player?.pause().catch(() => {
+      if (token !== generation.current || audio.current !== player) return;
+      player.dispose();
+      audio.current = null;
       setError("소리가 중단되었습니다. 곡을 다시 시작해 주세요.");
     });
   }, [setGamePhase]);
@@ -214,6 +218,7 @@ export default function RhythmGame({
     const player = new RhythmAudio();
     audio.current = player;
     judged.current = new Set();
+    blockedUntil.current = 0;
     scoreRef.current = createScore();
     setScore(scoreRef.current);
     setElapsed(0);
@@ -234,6 +239,7 @@ export default function RhythmGame({
       }
       if (document.hidden || !playableRef.current || portraitRef.current) {
         await player.pause();
+        if (token !== generation.current) return;
         setGamePhase("paused");
       } else setGamePhase("playing");
       gameRef.current?.focus({ preventScroll: true });
@@ -259,7 +265,8 @@ export default function RhythmGame({
       portraitRef.current
     )
       return;
-    const token = generation.current;
+    const token = ++generation.current;
+    const player = audio.current;
     setGamePhase("starting");
     try {
       if (token !== generation.current) return;
@@ -267,20 +274,26 @@ export default function RhythmGame({
         setGamePhase("paused");
         return;
       }
-      await audio.current.resume();
+      await player.resume();
       if (token !== generation.current) return;
       if (document.hidden || !playableRef.current || portraitRef.current) {
-        await audio.current?.pause();
+        await player.pause();
+        if (token !== generation.current) return;
         setGamePhase("paused");
         return;
       }
+      blockedUntil.current = 0;
       setGamePhase("playing");
       setError("");
       gameRef.current?.focus({ preventScroll: true });
     } catch {
       if (token === generation.current) {
+        player.dispose();
+        audio.current = null;
         setGamePhase("paused");
-        setError("소리를 다시 시작하지 못했습니다. 소리 설정을 확인해 주세요.");
+        setError(
+          "소리를 다시 시작하지 못했습니다. 곡 고르기로 돌아가 다시 시작해 주세요.",
+        );
       }
     }
   };
@@ -339,16 +352,17 @@ export default function RhythmGame({
       const id = ++strikeId.current;
       setLastStrike({ kind, at: now, id });
       setHandStrikes((previous) => ({ ...previous, [hand]: { id, kind } }));
-      const note = findHit(
+      const input = judgeInput(
         chart,
         judged.current,
         kind,
-        now - offset / 1000,
         hand,
+        now - offset / 1000,
+        blockedUntil.current,
       );
-      const grade = note
-        ? getJudgement(now - offset / 1000 - note.time)
-        : "tap";
+      blockedUntil.current = input.blockedUntil;
+      const { note, judgement } = input;
+      const grade = judgement === "ignored" ? "tap" : judgement;
       const spot = HIT_SPOTS.find(
         (item) => item.kind === kind && item.hand === hand,
       )!;
@@ -362,8 +376,13 @@ export default function RhythmGame({
           y: point?.y ?? spot.y,
         },
       ]);
-      if (!note) return;
-      const judgement = getJudgement(now - offset / 1000 - note.time);
+      if (judgement === "ignored") return;
+      scoreRef.current = applyJudgement(scoreRef.current, judgement);
+      setScore(scoreRef.current);
+      setFeedback(JUDGEMENT_TEXT[judgement]);
+      setFeedbackGrade(judgement);
+      setFeedbackId((value) => value + 1);
+      if (!note || judgement === "miss") return;
       const canvas = canvasRef.current;
       const source = canvas?.querySelector(`[data-note-id="${note.id}"]`);
       const target = scoreTargetRef.current;
@@ -398,11 +417,6 @@ export default function RhythmGame({
         ]);
       }
       judged.current.add(note.id);
-      scoreRef.current = applyJudgement(scoreRef.current, judgement);
-      setScore(scoreRef.current);
-      setFeedback(JUDGEMENT_TEXT[judgement]);
-      setFeedbackGrade(judgement);
-      setFeedbackId(id);
     },
     [chart, offset, stage.rotated],
   );
@@ -469,6 +483,7 @@ export default function RhythmGame({
     generation.current++;
     audio.current?.dispose();
     audio.current = null;
+    blockedUntil.current = 0;
     setGamePhase("ready");
     setElapsed(0);
     setError("");
@@ -485,9 +500,13 @@ export default function RhythmGame({
       note.time - chartTime >= -HIT_WINDOW_SECONDS &&
       note.time - chartTime <= 2.4,
   );
-  const accuracy = chart.length
+  const accuracyTotal = Math.max(
+    chart.length,
+    score.perfect + score.good + score.ok + score.miss,
+  );
+  const accuracy = accuracyTotal
     ? Math.round(
-        ((score.perfect + score.good * 0.65 + score.ok * 0.3) / chart.length) *
+        ((score.perfect + score.good * 0.65 + score.ok * 0.3) / accuracyTotal) *
           100,
       )
     : 0;
@@ -577,7 +596,7 @@ export default function RhythmGame({
                     },
                     {
                       title: "판정과 점수",
-                      text: "지화자 좋다! 1,000점 · 얼씨구 650점 · 좋다 300점. 연속으로 맞히면 콤보가 쌓입니다.",
+                      text: "지화자 좋다! 1,000점 · 얼씨구 650점 · 좋다 300점. 잘못 치거나 놓치면 어이쿠, 콤보가 끊깁니다. 연타를 멈추고 다음 박자에 맞춰 치세요.",
                     },
                   ]}
                 />
@@ -715,15 +734,15 @@ export default function RhythmGame({
                   </strong>
                   <dl>
                     {[
-                      ["정확도", `${accuracy}%`],
-                      ["최대 이어치기", score.maxCombo],
-                      ["지화자 좋다!", score.perfect],
-                      ["얼씨구", score.good],
-                      ["좋다", score.ok],
-                      ["놓친 박자", score.miss],
-                    ].map(([label, value]) => (
+                      ["정확도", `${accuracy}%`, ""],
+                      ["최대 이어치기", score.maxCombo, ""],
+                      ["지화자 좋다!", score.perfect, "perfect"],
+                      ["얼씨구", score.good, "good"],
+                      ["좋다", score.ok, "ok"],
+                      ["어이쿠", score.miss, "miss"],
+                    ].map(([label, value, grade]) => (
                       <div key={label}>
-                        <dt>{label}</dt>
+                        <dt data-grade={grade || undefined}>{label}</dt>
                         <dd>{value}</dd>
                       </div>
                     ))}
@@ -954,7 +973,13 @@ export default function RhythmGame({
                               {effect.grade === "perfect" && (
                                 <i className="rhythm-shockwave rhythm-shockwave--echo" />
                               )}
-                              <b>{effect.kind === "center" ? "쿵!" : "덕!"}</b>
+                              <b>
+                                {effect.grade === "miss"
+                                  ? "×"
+                                  : effect.kind === "center"
+                                    ? "쿵!"
+                                    : "덕!"}
+                              </b>
                               {Array.from(
                                 {
                                   length:
@@ -1031,7 +1056,7 @@ export default function RhythmGame({
                         <button
                           type="button"
                           className="rhythm-primary"
-                          disabled={!playable}
+                          disabled={!playable || !audio.current}
                           onClick={() => void resume()}
                         >
                           계속 연주

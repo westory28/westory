@@ -452,6 +452,288 @@ const start = async (page) => {
   await page.getByRole("button", { name: "연주 시작", exact: false }).click();
   await phase(page, "playing");
 };
+const resetToLobby = async (page) => {
+  if (await page.locator(".rhythm-game--playing").count()) {
+    await page.getByRole("button", { name: "일시정지", exact: true }).click();
+    await phase(page, "paused");
+  }
+  await page.getByRole("button", { name: "곡 고르기", exact: true }).click();
+  await phase(page, "ready");
+};
+const feedbackStyle = (page) =>
+  page.locator(".rhythm-feedback").evaluate((el) => {
+    const style = getComputedStyle(el);
+    return {
+      font: style.fontFamily,
+      size: parseFloat(style.fontSize),
+      color: style.color,
+    };
+  });
+const missCheck = async (page, label) => {
+  assert.equal(
+    await page.locator(".rhythm-feedback").textContent(),
+    "어이쿠",
+    label,
+  );
+  assert.equal(await combo(page), 0, `${label}: miss resets combo`);
+  assert.equal(
+    await page.locator(".rhythm-collected-note").count(),
+    0,
+    `${label}: miss creates no score flight`,
+  );
+  const style = await feedbackStyle(page);
+  assert.match(style.font, /Dokdo/, `${label}: Korean brush judgement font`);
+  const [red, green, blue] = style.color.match(/[\d.]+/g).map(Number);
+  assert(
+    red > green + 35 && red > blue + 35,
+    `${label}: red miss text ${style.color}`,
+  );
+};
+const localFontCheck = async (page, selector, family) => {
+  const info = await page
+    .locator(selector)
+    .first()
+    .evaluate(async (el) => {
+      const style = getComputedStyle(el);
+      const loaded = await document.fonts.load(
+        `${style.fontSize} ${style.fontFamily}`,
+        "장단 어이쿠 한 판 얼쑤",
+      );
+      return {
+        family: style.fontFamily,
+        loaded: loaded.map((face) => ({
+          family: face.family,
+          status: face.status,
+        })),
+      };
+    });
+  assert.match(info.family, family, `${selector}: intended Korean font`);
+  assert(
+    info.loaded.some(
+      (face) => family.test(face.family) && face.status === "loaded",
+    ),
+    `${selector}: bundled font actually loads: ${JSON.stringify(info)}`,
+  );
+  return info;
+};
+const resultActionsCheck = async (page, label) => {
+  const actions = await page
+    .locator(".rhythm-result-actions button")
+    .evaluateAll((buttons) =>
+      buttons.map((button) => {
+        const rect = button.getBoundingClientRect();
+        const hit = document.elementFromPoint(
+          rect.x + rect.width / 2,
+          rect.y + rect.height / 2,
+        );
+        return {
+          label: button.textContent.trim(),
+          rect: rect.toJSON(),
+          viewport: { width: innerWidth, height: innerHeight },
+          clickable: !!hit && button.contains(hit),
+        };
+      }),
+    );
+  assert.equal(actions.length, 2);
+  for (const action of actions)
+    assert(
+      action.clickable &&
+        action.rect.left >= -1 &&
+        action.rect.top >= -1 &&
+        action.rect.right <= action.viewport.width + 1 &&
+        action.rect.bottom <= action.viewport.height + 1,
+      `${label}: result actions fully visible after rotation: ${JSON.stringify(action)}`,
+    );
+};
+const physicalNoteKey = (note) => {
+  const code = noteKey(note);
+  return code === "KeyZ" ? "z" : code === "KeyX" ? "x" : code;
+};
+const antiSpamCheck = async () => {
+  const page = await pageFor();
+  await page.goto(`${base}/?open`);
+  await phase(page, "ready");
+  await start(page);
+  const notes = await page.evaluate(() => window.rhythmQA.chart());
+  await time(page, notes[0].time);
+  const wrongHand = {
+    ...notes[0],
+    hand: notes[0].hand === "left" ? "right" : "left",
+  };
+  await page.keyboard.press(physicalNoteKey(wrongHand));
+  await missCheck(page, "physical wrong hand starts lock");
+  await page.keyboard.press(physicalNoteKey(notes[0]));
+  assert.equal(
+    await score(page),
+    0,
+    "physical valid key during lock is blocked",
+  );
+  let spamEnd = notes[0].time;
+  for (let index = 1; spamEnd <= notes[1].time + 0.08; index++) {
+    spamEnd = notes[0].time + index * 0.08;
+    await time(page, spamEnd);
+    await page.keyboard.press(index % 2 ? "ArrowLeft" : "ArrowRight");
+    assert.equal(
+      await score(page),
+      0,
+      "80ms alternating physical spam never scores",
+    );
+    await missCheck(page, "80ms physical spam across next note");
+  }
+  const recoveryIndex = notes.findIndex((note) => note.time > spamEnd + 0.22);
+  assert(recoveryIndex > 1, "recovery follows the spammed note");
+  const recovery = notes[recoveryIndex];
+  await time(page, recovery.time);
+  const recoveryTarget = await targetCenter(page);
+  await page.keyboard.press(physicalNoteKey(recovery));
+  assert.equal(
+    await score(page),
+    1000,
+    "stopping for 220ms restores a valid hit",
+  );
+  assert.equal(await combo(page), 1);
+  await collectCheck(page, recoveryTarget, "perfect");
+  const resumeNote = notes[recoveryIndex + 1];
+  await time(page, resumeNote.time);
+  await page.keyboard.press(
+    physicalNoteKey({
+      ...resumeNote,
+      hand: resumeNote.hand === "left" ? "right" : "left",
+    }),
+  );
+  await missCheck(page, "penalty before pause");
+  await page.getByRole("button", { name: "일시정지", exact: true }).click();
+  await phase(page, "paused");
+  const pausedHits = await hitCount(page);
+  await page.keyboard.press(physicalNoteKey(resumeNote));
+  assert.equal(
+    await hitCount(page),
+    pausedHits,
+    "paused physical input stays ignored",
+  );
+  await page.getByRole("button", { name: "계속 연주", exact: true }).click();
+  await phase(page, "playing");
+  await page.keyboard.press(physicalNoteKey(resumeNote));
+  assert.equal(
+    await score(page),
+    2000,
+    "pause/resume clears the old penalty lock",
+  );
+  await resetToLobby(page);
+  await page.locator(".rhythm-difficulty button").nth(2).click();
+  await start(page);
+  const fastNotes = await page.evaluate(() => window.rhythmQA.chart(0, "hard"));
+  const fastCount = 12;
+  const minGap = Math.min(
+    ...fastNotes
+      .slice(1, fastCount)
+      .map((note, index) => note.time - fastNotes[index].time),
+  );
+  assert(
+    minGap < 0.22,
+    "real hard chart includes valid hits less than 220ms apart",
+  );
+  for (let index = 0; index < fastCount; index++) {
+    await time(page, fastNotes[index].time);
+    await page.keyboard.press(physicalNoteKey(fastNotes[index]));
+    assert.equal(
+      await score(page),
+      (index + 1) * 1000,
+      "valid fast notes retain full score",
+    );
+    assert.equal(await combo(page), index + 1, "valid fast notes retain combo");
+  }
+  const last = fastNotes[fastCount - 1];
+  for (let index = 0; index < fastNotes.length; index++)
+    await page.keyboard.press(physicalNoteKey(last));
+  assert.equal(
+    await score(page),
+    fastCount * 1000,
+    "duplicate physical taps add no points",
+  );
+  assert.equal(await combo(page), 0, "duplicate physical taps reset combo");
+  await time(page, fastNotes.at(-1).time + 0.17);
+  for (const code of ["ArrowLeft", "ArrowRight", "z", "x"])
+    await page.keyboard.press(code);
+  await time(
+    page,
+    await page.evaluate(() => window.rhythmQA.songs[0].duration + 0.1),
+  );
+  await phase(page, "result");
+  const result = await page
+    .locator(".rhythm-result dl > div")
+    .evaluateAll((rows) =>
+      Object.fromEntries(
+        rows.map((row) => [
+          row.querySelector("dt").textContent,
+          row.querySelector("dd").textContent,
+        ]),
+      ),
+    );
+  assert.equal(Number(result["지화자 좋다!"]), fastCount);
+  assert.equal(
+    Number(result["어이쿠"]),
+    fastNotes.length * 2 - fastCount,
+    "every invalid active tap counts once, expired notes count once, outro taps count zero",
+  );
+  const expectedAccuracy = Math.round(
+    (fastCount / (fastNotes.length * 2)) * 100,
+  );
+  assert.equal(
+    result["정확도"],
+    `${expectedAccuracy}%`,
+    "accuracy includes all invalid judgements",
+  );
+  assert.notEqual(
+    result["정확도"],
+    `${Math.round((fastCount / fastNotes.length) * 100)}%`,
+    "extra misses cannot keep the original chart-only accuracy",
+  );
+  await localFontCheck(page, ".rhythm-result", /Yeon Sung/);
+  await resultActionsCheck(page, "physical spam");
+  const gradeStyles = await page
+    .locator(".rhythm-result dt[data-grade]")
+    .evaluateAll((labels) =>
+      Object.fromEntries(
+        labels.map((label) => [
+          label.dataset.grade,
+          {
+            font: getComputedStyle(label).fontFamily,
+            size: parseFloat(getComputedStyle(label).fontSize),
+          },
+        ]),
+      ),
+    );
+  for (const grade of ["perfect", "good", "ok", "miss"])
+    assert.match(
+      gradeStyles[grade].font,
+      /Dokdo/,
+      `result ${grade} uses brush lettering`,
+    );
+  assert(
+    gradeStyles.perfect.size > gradeStyles.good.size &&
+      gradeStyles.good.size > gradeStyles.ok.size,
+    "result judgement labels preserve the brush size hierarchy",
+  );
+  await shot(page, "physical-spam-accuracy-result");
+  assert.equal(
+    await readCount(page),
+    1,
+    "spam/recovery/reset/fast chart adds zero reads",
+  );
+  assert.equal(await page.evaluate(() => window.rhythmQA.saves.length), 0);
+  checks.push({
+    antiSpam:
+      "physical keys at 80ms audio-clock intervals; 220ms recovery; wrong hand lock; pause/resume; reset; real sub-220ms chart; invalid accuracy; outro ignored",
+    minFastGap: minGap,
+    result,
+    entryReads: 1,
+    gameplayReads: 0,
+    gameplayWrites: 0,
+    passed: true,
+  });
+  await page.close();
+};
 const startVisible = (page) =>
   page
     .getByRole("button", { name: "연주 시작", exact: false })
@@ -459,14 +741,25 @@ const startVisible = (page) =>
       const r = el.getBoundingClientRect(),
         panel = el.closest(".rhythm-song-panel").getBoundingClientRect(),
         hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-      return (
-        !!hit &&
-        el.contains(hit) &&
-        r.left >= panel.left - 1 &&
-        r.right <= panel.right + 1 &&
-        r.top >= panel.top - 1 &&
-        r.bottom <= panel.bottom + 1
-      );
+      return {
+        visible:
+          !!hit &&
+          el.contains(hit) &&
+          r.left >= panel.left - 1 &&
+          r.right <= panel.right + 1 &&
+          r.top >= panel.top - 1 &&
+          r.bottom <= panel.bottom + 1 &&
+          r.left >= -1 &&
+          r.top >= -1 &&
+          r.right <= innerWidth + 1 &&
+          r.bottom <= innerHeight + 1,
+        button: r.toJSON(),
+        panel: panel.toJSON(),
+        viewport: { width: innerWidth, height: innerHeight },
+        scrollY,
+        canvas: el.closest(".rhythm-canvas").getBoundingClientRect().toJSON(),
+        hit: hit?.className,
+      };
     });
 const helpCheck = async (page, label) => {
   await page
@@ -556,6 +849,7 @@ const assertLayout = async (page, label) => {
   return result;
 };
 try {
+  await antiSpamCheck();
   for (const [width, height] of [
     [1440, 1000],
     [1280, 900],
@@ -608,6 +902,7 @@ try {
       );
     }
     await imageCheck(page);
+    await localFontCheck(page, ".rhythm-song-panel", /Yeon Sung/);
     await shot(page, `${label}-lobby`);
     await helpCheck(page, label);
     assert.equal(await page.locator(".rhythm-song").count(), 4);
@@ -621,6 +916,26 @@ try {
       await page.locator(".rhythm-difficulty button").allTextContents(),
       ["중모리 장단", "자진모리 장단", "휘모리 장단"],
     );
+    for (let difficulty = 0; difficulty < 3; difficulty++) {
+      await page.locator(".rhythm-difficulty button").nth(difficulty).click();
+      const styles = await page
+        .locator(".rhythm-difficulty button")
+        .evaluateAll((buttons) =>
+          buttons.map((button) => ({
+            selected: button.getAttribute("aria-pressed") === "true",
+            filter: getComputedStyle(button).filter,
+          })),
+        );
+      assert.equal(styles.filter((item) => item.selected).length, 1);
+      assert(styles[difficulty].selected, "clicked jangdan is selected");
+      for (const item of styles)
+        assert.equal(
+          item.filter.includes("grayscale(1)"),
+          !item.selected,
+          `${label}: all three jangdan use selected color and grey alternatives`,
+        );
+    }
+    await page.locator(".rhythm-difficulty button").nth(1).click();
     const lobbyStyles = await page
       .locator(".rhythm-song-panel")
       .evaluate((el) => {
@@ -680,11 +995,31 @@ try {
           "Color selection and grey alternatives",
         );
     }
-    await page.locator(".rhythm-song").first().click();
-    await shot(page, `${label}-lobby`);
+    const firstSong = page.locator(".rhythm-song").first();
+    const firstSongBox = await firstSong.boundingBox();
     assert(
-      await startVisible(page),
-      `${label} start button visible without scrolling`,
+      firstSongBox &&
+        firstSongBox.x >= 0 &&
+        firstSongBox.y >= 0 &&
+        firstSongBox.x + firstSongBox.width <= width &&
+        firstSongBox.y + firstSongBox.height <= height,
+      "first song is already visible before returning to it",
+    );
+    // A real pointer preserves the visible stage; locator.click may scroll this
+    // already-visible transformed button and move the whole short landscape page.
+    const firstSongPoint = {
+      x: firstSongBox.x + firstSongBox.width / 2,
+      y: firstSongBox.y + firstSongBox.height / 2,
+    };
+    if (page.rhythmHasTouch)
+      await page.touchscreen.tap(firstSongPoint.x, firstSongPoint.y);
+    else await page.mouse.click(firstSongPoint.x, firstSongPoint.y);
+    assert.equal(await firstSong.getAttribute("aria-pressed"), "true");
+    await shot(page, `${label}-lobby`);
+    const startPlacement = await startVisible(page);
+    assert(
+      startPlacement.visible,
+      `${label} start button visible without scrolling: ${JSON.stringify(startPlacement)}`,
     );
     const calibration = page.getByLabel("소리·판정 시차", { exact: true });
     await calibration.click();
@@ -853,6 +1188,13 @@ try {
         }
       }
     const notes = await page.evaluate(() => window.rhythmQA.chart());
+    assert.equal(await score(page), 0, "count-in practice hits add no score");
+    assert.equal(await combo(page), 0, "count-in practice hits add no combo");
+    assert.equal(
+      await page.locator('.rhythm-feedback[data-grade="miss"]').count(),
+      0,
+      "count-in practice hits add no miss",
+    );
     await page.waitForFunction(
       () => document.querySelectorAll(".rhythm-hit-effect").length === 0,
     );
@@ -884,16 +1226,25 @@ try {
     );
     const wrong = first.kind === "center" ? "rim" : "center";
     await tapSpot(page, wrong, first.hand);
-    assert.equal(await score(page), 0, "wrong surface does not consume note");
+    assert.equal(await score(page), 0, "wrong surface cannot score");
+    await missCheck(page, "wrong surface");
     await tapSpot(page, first.kind, first.hand === "left" ? "right" : "left");
     assert.equal(
       await score(page),
       0,
       "correct surface with wrong hand cannot score",
     );
-    await page.waitForFunction(
-      () => document.querySelectorAll(".rhythm-hit-effect").length === 0,
+    await missCheck(page, "wrong hand during lock");
+    await tapSpot(page, first.kind, first.hand);
+    assert.equal(
+      await score(page),
+      0,
+      "valid touch within penalty lock cannot score",
     );
+    await missCheck(page, "valid touch during lock");
+    await resetToLobby(page);
+    await start(page);
+    await time(page, first.time);
     const firstTarget = await targetCenter(page);
     const correctPoint = await tapSpot(page, first.kind, first.hand);
     assert.equal(
@@ -905,6 +1256,9 @@ try {
       await page.locator(".rhythm-feedback").textContent(),
       "지화자 좋다!+1,000",
     );
+    const perfectStyle = await feedbackStyle(page);
+    assert.match(perfectStyle.font, /Dokdo/);
+    await localFontCheck(page, ".rhythm-feedback", /Dokdo/);
     assert.equal(
       await page.locator(".rhythm-hit-effect--perfect .rhythm-spark").count(),
       12,
@@ -925,14 +1279,6 @@ try {
       animation.pause();
       animation.currentTime = 200;
     });
-    const firstHits = await hitCount(page);
-    await tapSpot(page, first.kind, first.hand);
-    assert.equal(await score(page), 1000, "same note never scores twice");
-    assert.equal(
-      await hitCount(page),
-      firstHits + 1,
-      "one touch emits one strike",
-    );
     const effects = await page.evaluate(() => ({
       effects: document.querySelectorAll(".rhythm-hit-effect").length,
       animation: getComputedStyle(document.querySelector(".rhythm-hit-effect"))
@@ -974,6 +1320,8 @@ try {
       await page.locator(".rhythm-feedback").textContent(),
       "얼씨구+650",
     );
+    const goodStyle = await feedbackStyle(page);
+    assert.match(goodStyle.font, /Dokdo/);
     assert.equal(
       await page.locator(".rhythm-hit-effect--good .rhythm-spark").count(),
       6,
@@ -988,18 +1336,33 @@ try {
       await page.locator(".rhythm-feedback").textContent(),
       "좋다+300",
     );
+    const okStyle = await feedbackStyle(page);
+    assert.match(okStyle.font, /Dokdo/);
+    assert(
+      perfectStyle.size > goodStyle.size && goodStyle.size > okStyle.size,
+      `${label}: perfect > good > ok brush size: ${JSON.stringify({ perfectStyle, goodStyle, okStyle })}`,
+    );
     assert.equal(
       await page.locator(".rhythm-hit-effect--ok .rhythm-spark").count(),
       3,
     );
     assert.equal(await combo(page), 3);
     await collectCheck(page, thirdTarget, "ok");
+    const thirdHits = await hitCount(page);
+    await tapSpot(page, third.kind, third.hand);
+    assert.equal(await score(page), 1950, "same note never scores twice");
+    assert.equal(
+      await hitCount(page),
+      thirdHits + 1,
+      "one touch emits one strike",
+    );
+    await missCheck(page, "duplicate touch");
     await time(page, notes[3].time + 0.161);
     assert.equal(await score(page), 1950, "miss adds zero points");
     assert.equal(await combo(page), 0, "miss resets combo");
     assert.equal(
       await page.locator(".rhythm-feedback").textContent(),
-      "아쉬워요",
+      "어이쿠",
     );
     await page.getByRole("button", { name: "일시정지", exact: true }).click();
     await phase(page, "paused");
@@ -1044,6 +1407,8 @@ try {
       "result focus",
     );
     await imageCheck(page);
+    await localFontCheck(page, ".rhythm-result", /Yeon Sung/);
+    await resultActionsCheck(page, label);
     await shot(page, `${label}-result`);
     await time(page, 0);
     await page.getByRole("button", { name: "한 번 더", exact: true }).click();
@@ -1088,7 +1453,13 @@ try {
       portraitFallback: portrait,
       introSeen: await page.evaluate(() => window.rhythmQA.intros || 0),
       handAndJudgementChecks:
-        "four spot centers/edges; strict hand/type; three grades; score flight and arrival; independent mallets",
+        "four spot centers/edges; wrong hand/type and lock miss; clean reset; three grades; success-only score flight and arrival; independent mallets",
+      typography:
+        "local Yeon Sung/Dokdo loaded; perfect > good > ok; red 어이쿠",
+      jangdan:
+        "all three actual choices show selected color and grey alternatives",
+      resultActions:
+        "both buttons fit inside the physical viewport after rotation",
       layout,
       pointer: { outside, lower, correctPoint },
       sound,

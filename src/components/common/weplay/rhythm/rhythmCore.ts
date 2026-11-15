@@ -14,6 +14,7 @@ export interface RhythmNote {
 
 export const COUNT_IN_SECONDS = 3;
 export const HIT_WINDOW_SECONDS = 0.16;
+export const INPUT_RECOVERY_SECONDS = 0.22;
 const TIMING_EPSILON = 1e-8;
 
 export function getJudgement(delta: number): RhythmJudgement {
@@ -25,7 +26,7 @@ export function getJudgement(delta: number): RhythmJudgement {
   return "miss";
 }
 
-/** Does not consume a note; the caller adds its ID after a successful hit. */
+/** Match the earliest eligible note in the ordered chart; the caller consumes it. */
 export function findHit(
   notes: readonly RhythmNote[],
   judged: ReadonlySet<string>,
@@ -34,8 +35,6 @@ export function findHit(
   hand?: DrumHand,
 ): RhythmNote | null {
   if (!Number.isFinite(elapsed)) return null;
-  let best: RhythmNote | null = null;
-  let distance = HIT_WINDOW_SECONDS + TIMING_EPSILON;
   for (const note of notes) {
     if (note.time > elapsed + HIT_WINDOW_SECONDS + TIMING_EPSILON) break;
     if (
@@ -45,14 +44,52 @@ export function findHit(
     )
       continue;
     const delta = Math.abs(note.time - elapsed);
-    if (delta <= distance) {
-      // Equal-distance hits prefer the earlier note, keeping ordered phrases intact.
-      if (best && Math.abs(delta - distance) <= TIMING_EPSILON) continue;
-      distance = delta;
-      best = note;
-    }
+    // A late valid strike belongs to this note, even if the next is nearer.
+    if (delta <= HIT_WINDOW_SECONDS + TIMING_EPSILON) return note;
   }
-  return best;
+  return null;
+}
+
+export interface RhythmInputResult {
+  note: RhythmNote | null;
+  judgement: RhythmJudgement | "ignored";
+  blockedUntil: number;
+}
+
+/** Wrong inputs extend recovery; successful fast phrases have no input cooldown. */
+export function judgeInput(
+  notes: readonly RhythmNote[],
+  judged: ReadonlySet<string>,
+  kind: DrumKind,
+  hand: DrumHand,
+  elapsed: number,
+  blockedUntil: number,
+): RhythmInputResult {
+  if (
+    !Number.isFinite(elapsed) ||
+    notes.length === 0 ||
+    elapsed < notes[0].time - HIT_WINDOW_SECONDS - TIMING_EPSILON ||
+    elapsed > notes[notes.length - 1].time + HIT_WINDOW_SECONDS + TIMING_EPSILON
+  )
+    return { note: null, judgement: "ignored", blockedUntil };
+
+  const note =
+    elapsed + TIMING_EPSILON < blockedUntil
+      ? null
+      : findHit(notes, judged, kind, elapsed, hand);
+  if (!note)
+    return {
+      note: null,
+      judgement: "miss",
+      blockedUntil: elapsed + INPUT_RECOVERY_SECONDS,
+    };
+
+  // The caller consumes successful notes; wrong inputs never consume future ones.
+  return {
+    note,
+    judgement: getJudgement(elapsed - note.time),
+    blockedUntil,
+  };
 }
 
 /** Normalized coordinates within the square drum surface (not the page). */

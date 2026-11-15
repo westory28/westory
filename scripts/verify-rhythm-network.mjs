@@ -87,6 +87,7 @@ const result = await build({
   platform: "browser",
   format: "esm",
   outfile: path.join(output, "fixture.js"),
+  loader: { ".woff2": "dataurl" },
   define: {
     "process.env.NODE_ENV": '"development"',
     "import.meta.env.BASE_URL": '"/"',

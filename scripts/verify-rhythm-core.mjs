@@ -184,12 +184,17 @@ assert.equal(
 assert.equal(
   core.findHit(simultaneous, judged, "center", 3.1, "right")?.id,
   "sim-right",
-  "Nearest wrong-hand note cannot hide an eligible matching-hand note",
+  "Earlier wrong-hand notes cannot hide an eligible matching-hand note",
 );
 assert.equal(
   core.findHit(simultaneous, judged, "center", 3.05, "left")?.id,
   "sim-left",
   "Equal-distance ties retain the earlier eligible note",
+);
+assert.equal(
+  core.findHit(simultaneous, judged, "center", 3.09, "left")?.id,
+  "sim-left",
+  "A late valid earlier note takes priority over a nearer future note",
 );
 assert.equal(
   core.findHit(notes, judged, "rim", 3),
@@ -208,6 +213,249 @@ assert.equal(
   "An already consumed note cannot score twice",
 );
 assert.equal(core.findHit(notes, judged, "center", 3.3)?.id, "c");
+
+// Actual input adjudication penalizes only mistakes during the playable phrase.
+assert.equal(core.INPUT_RECOVERY_SECONDS, 0.22);
+const phrase = [
+  { id: "phrase-first", time: 2, kind: "rim", hand: "right" },
+  { id: "phrase-middle", time: 4, kind: "center", hand: "left" },
+  { id: "phrase-last", time: 6, kind: "rim", hand: "right" },
+];
+for (const elapsed of [NaN, Infinity, -Infinity, 0, 1.8399, 6.1601, 100]) {
+  const result = core.judgeInput(
+    phrase,
+    new Set(),
+    "center",
+    "left",
+    elapsed,
+    9,
+  );
+  assert.equal(
+    result.judgement,
+    "ignored",
+    "Count-in, outro and non-finite times have no penalty",
+  );
+  assert.equal(result.note, null);
+  assert.equal(result.blockedUntil, 9, "Ignored input cannot extend recovery");
+}
+assert.equal(
+  core.judgeInput([], new Set(), "center", "left", 3, 0).judgement,
+  "ignored",
+);
+for (const elapsed of [1.84, 6.16])
+  assert.equal(
+    core.judgeInput(phrase, new Set(), "rim", "right", elapsed, 0).judgement,
+    "ok",
+    "Phrase boundaries include the exact 160ms window",
+  );
+for (const sign of [-1, 1]) {
+  for (const [delta, expected] of [
+    [0.065, "perfect"],
+    [0.0651, "good"],
+    [0.13, "good"],
+    [0.1301, "ok"],
+    [0.16, "ok"],
+    [0.1601, "miss"],
+  ]) {
+    const result = core.judgeInput(
+      phrase,
+      new Set(),
+      "center",
+      "left",
+      4 + sign * delta,
+      0,
+    );
+    assert.equal(
+      result.judgement,
+      expected,
+      "Input judgement retains existing timing grades",
+    );
+    assert.equal(
+      result.note?.id || null,
+      expected === "miss" ? null : "phrase-middle",
+    );
+  }
+}
+for (const [kind, hand, elapsed] of [
+  ["center", "right", 4],
+  ["rim", "left", 4],
+  ["center", "left", 3],
+]) {
+  const untouched = new Set();
+  const result = core.judgeInput(phrase, untouched, kind, hand, elapsed, 0);
+  assert.equal(
+    result.judgement,
+    "miss",
+    "Wrong hand, surface and empty beat all miss",
+  );
+  assert.equal(result.note, null);
+  assert(Math.abs(result.blockedUntil - elapsed - 0.22) < 1e-8);
+  assert.equal(
+    untouched.size,
+    0,
+    "A wrong input never consumes any future note",
+  );
+}
+const rapidConsumed = new Set();
+let rapidRecovery = 0;
+let rapidScore = core.createScore();
+for (const note of notes) {
+  const result = core.judgeInput(
+    notes,
+    rapidConsumed,
+    note.kind,
+    note.hand,
+    note.time,
+    rapidRecovery,
+  );
+  assert.equal(result.note?.id, note.id);
+  assert.equal(
+    result.judgement,
+    "perfect",
+    "Correct notes 200ms apart remain playable",
+  );
+  rapidRecovery = result.blockedUntil;
+  rapidConsumed.add(note.id);
+  rapidScore = core.applyJudgement(rapidScore, result.judgement);
+}
+assert.equal(rapidRecovery, 0, "Successful inputs introduce no cooldown");
+assert.equal(rapidScore.score, 3000);
+assert.equal(rapidScore.combo, 3);
+const duplicate = core.judgeInput(
+  notes,
+  new Set(["a"]),
+  "center",
+  "left",
+  3,
+  0,
+);
+assert.equal(
+  duplicate.judgement,
+  "miss",
+  "Repeating an already consumed note is a mistake",
+);
+const duplicateNext = core.judgeInput(
+  notes,
+  new Set(["a"]),
+  "rim",
+  "right",
+  3.2,
+  duplicate.blockedUntil,
+);
+assert.equal(
+  duplicateNext.judgement,
+  "miss",
+  "Duplicate input recovery blocks the next note until the player stops",
+);
+assert.equal(duplicateNext.note, null);
+assert(Math.abs(duplicateNext.blockedUntil - 3.42) < 1e-8);
+const mistake = core.judgeInput(notes, new Set(), "center", "right", 3.18, 0);
+assert.equal(mistake.judgement, "miss");
+const recovery = core.judgeInput(
+  notes,
+  new Set(),
+  "center",
+  "left",
+  3.4,
+  mistake.blockedUntil,
+);
+assert.equal(recovery.note?.id, "c");
+assert.equal(
+  recovery.judgement,
+  "perfect",
+  "Exactly 220ms without a new mistake restores normal input",
+);
+const tooSoon = core.judgeInput(
+  notes,
+  new Set(),
+  "center",
+  "left",
+  3.3999,
+  mistake.blockedUntil,
+);
+assert.equal(
+  tooSoon.judgement,
+  "miss",
+  "An early retry extends recovery even if a matching note exists",
+);
+assert(Math.abs(tooSoon.blockedUntil - 3.6199) < 1e-8);
+const mash = () => {
+  const consumed = new Set();
+  let blockedUntil = 0;
+  let score = core.createScore();
+  const results = [];
+  for (let index = 0; index <= 12; index++) {
+    const elapsed = 2.9 + index * 0.05;
+    const hand = index === 0 ? "right" : "left";
+    const result = core.judgeInput(
+      notes,
+      consumed,
+      "center",
+      hand,
+      elapsed,
+      blockedUntil,
+    );
+    assert.equal(
+      result.judgement,
+      "miss",
+      "Continuing to mash prevents scoring through following notes",
+    );
+    assert.equal(result.note, null);
+    blockedUntil = result.blockedUntil;
+    score = core.applyJudgement(score, result.judgement);
+    results.push(result);
+  }
+  assert.equal(
+    consumed.size,
+    0,
+    "Missed inputs leave note expiration to the normal game clock",
+  );
+  assert.equal(score.score, 0);
+  assert.equal(score.combo, 0);
+  assert.equal(score.miss, 13);
+  return results;
+};
+assert.deepEqual(
+  mash(),
+  mash(),
+  "The same mash timeline has deterministic outcomes",
+);
+for (const song of songs)
+  for (const difficulty of ["easy", "normal", "hard"]) {
+    const chart = core.createChart(song, difficulty);
+    for (const lateness of [0, 0.159, 0.16, "jitter"]) {
+      const consumed = new Set();
+      let blockedUntil = 0;
+      for (const [index, note] of chart.entries()) {
+        const delay =
+          lateness === "jitter"
+            ? [0.139, 0.159, 0.15, 0.16, 0.145][index % 5]
+            : lateness;
+        const result = core.judgeInput(
+          chart,
+          consumed,
+          note.kind,
+          note.hand,
+          note.time + delay,
+          blockedUntil,
+        );
+        assert.equal(
+          result.note?.id,
+          note.id,
+          `${song.id}/${difficulty}/${lateness}: late valid input must consume the current note, never a later one`,
+        );
+        assert.equal(result.judgement, lateness === 0 ? "perfect" : "ok");
+        assert.equal(
+          result.blockedUntil,
+          0,
+          "Valid late phrases never trigger mash blocking",
+        );
+        consumed.add(note.id);
+        blockedUntil = result.blockedUntil;
+      }
+      assert.equal(consumed.size, chart.length);
+    }
+  }
 assert.equal(core.classifyDrumHit(0.5, 0.5), "center");
 assert.equal(core.classifyDrumHit(0.86, 0.5), "center");
 assert.equal(core.classifyDrumHit(0.861, 0.5), "rim");
@@ -525,8 +773,159 @@ await assert.rejects(
 );
 assert.equal(contexts.at(-1).sources.length, 0);
 assert.equal(contexts.at(-1).state, "closed");
+
+// Drive the real resume deadline without waiting four seconds. This fake models
+// a browser resume that can settle late even after its old context was closed.
+const resumeDeadlines = new Map();
+class DelayedResumeContext extends Context {
+  holdResume = false;
+  resumeCompletion = null;
+  resume() {
+    if (!this.holdResume) return super.resume();
+    return new Promise((resolve, reject) => {
+      this.resumeCompletion = {
+        resolve: () => {
+          this.state = "running";
+          this.onstatechange?.();
+          resolve();
+        },
+        reject,
+      };
+    });
+  }
+}
+const delayedAudio = await load(`${base}rhythmAudio.ts`, {
+  window: { AudioContext: DelayedResumeContext },
+  setTimeout: (callback, delay) => {
+    if (delay !== 4000) return setTimeout(callback, delay);
+    const token = {};
+    resumeDeadlines.set(token, callback);
+    return token;
+  },
+  clearTimeout: (token) => {
+    if (!resumeDeadlines.delete(token)) clearTimeout(token);
+  },
+});
+const expireResume = () => {
+  assert.equal(
+    resumeDeadlines.size,
+    1,
+    "Only the pending resume owns a deadline",
+  );
+  [...resumeDeadlines.values()][0]();
+};
+const timedResume = new delayedAudio.RhythmAudio();
+await timedResume.start(songs[0]);
+await timedResume.pause();
+const timedContext = contexts.at(-1);
+timedContext.holdResume = true;
+const timedOperation = timedResume.resume();
+const timedRejection = assert.rejects(timedOperation, /지연/);
+expireResume();
+await timedRejection;
+assert.equal(
+  timedResume.state,
+  "idle",
+  "Resume timeout detaches the active player",
+);
+assert.equal(timedContext.state, "closed");
+assert(
+  timedContext.sources.every(
+    (source) => source.disconnected && source.stops.length >= 2,
+  ),
+  "Resume timeout stops and disconnects the scheduled music",
+);
+assert(
+  timedContext.gains[0].disconnected,
+  "Resume timeout disconnects master gain",
+);
+timedContext.resumeCompletion.resolve();
+await new Promise(setImmediate);
+assert.equal(
+  timedContext.state,
+  "closed",
+  "Late resume fulfillment cannot restart hidden audio",
+);
+assert.equal(timedResume.state, "idle");
+assert.equal(resumeDeadlines.size, 0);
+timedResume.dispose();
+
+const rejectedResume = new delayedAudio.RhythmAudio();
+await rejectedResume.start(songs[0]);
+await rejectedResume.pause();
+const rejectedContext = contexts.at(-1);
+rejectedContext.resume = async () => {
+  throw Error("active resume rejected");
+};
+await assert.rejects(rejectedResume.resume(), /active resume rejected/);
+assert.equal(rejectedResume.state, "idle");
+assert.equal(
+  rejectedContext.state,
+  "closed",
+  "Active resume rejection closes its music context",
+);
+rejectedResume.dispose();
+
+for (const staleOutcome of ["resolve", "timeout", "reject"]) {
+  const player = new delayedAudio.RhythmAudio();
+  await player.start(songs[0]);
+  await player.pause();
+  const oldContext = contexts.at(-1);
+  oldContext.holdResume = true;
+  const oldResume = player.resume();
+  const outcome =
+    staleOutcome === "resolve"
+      ? oldResume
+      : assert.rejects(
+          oldResume,
+          staleOutcome === "timeout" ? /지연/ : /stale resume/,
+        );
+  await player.start(songs[1]);
+  const replacement = contexts.at(-1);
+  assert.notEqual(oldContext, replacement);
+  assert.equal(oldContext.state, "closed");
+  if (staleOutcome === "timeout") expireResume();
+  else if (staleOutcome === "reject")
+    oldContext.resumeCompletion.reject(Error("stale resume"));
+  else oldContext.resumeCompletion.resolve();
+  await outcome;
+  if (staleOutcome === "timeout") {
+    oldContext.resumeCompletion.resolve();
+    await new Promise(setImmediate);
+  }
+  assert.equal(
+    oldContext.state,
+    "closed",
+    `${staleOutcome}: only old context is cleaned up`,
+  );
+  assert.equal(
+    replacement.state,
+    "running",
+    `${staleOutcome}: stale resume never stops replacement music`,
+  );
+  assert.equal(player.state, "running");
+  assert(replacement.sources.every((source) => !source.disconnected));
+  assert.equal(resumeDeadlines.size, 0);
+  player.dispose();
+}
+const disposedResume = new delayedAudio.RhythmAudio();
+await disposedResume.start(songs[0]);
+await disposedResume.pause();
+const disposedContext = contexts.at(-1);
+disposedContext.holdResume = true;
+const pendingDisposedResume = disposedResume.resume();
+disposedResume.dispose();
+disposedContext.resumeCompletion.resolve();
+await pendingDisposedResume;
+assert.equal(disposedContext.state, "closed");
+assert.equal(
+  disposedResume.state,
+  "closed",
+  "Late resume cannot resurrect a disposed player",
+);
+assert.equal(resumeDeadlines.size, 0);
 console.log(
-  "Rhythm checks passed: four scores, chart density/determinism, alternating hands in all difficulties and tied onsets, strict hand/surface/timing matching, touch boundaries, duplicate hits, unchanged scoring without combo multipliers, audio scheduling, pause/resume, mute, teardown, unsupported browser and server authorization (pending/allowed/denied/error/canceled/timeout).",
+  "Rhythm checks passed: four scores, chart density/determinism, alternating hands, earliest eligible note matching, all-chart 159/160ms late and jittered phrases, 220ms mistake recovery and extended mash blocking, count-in/outro exclusions, touch boundaries, unchanged scoring, audio scheduling/pause/mute/teardown, resume timeout/rejection/late fulfillment/disposal/replacement races, unsupported browser and server authorization (pending/allowed/denied/error/canceled/timeout).",
 );
 
 if (process.argv.includes("--audio-render")) {

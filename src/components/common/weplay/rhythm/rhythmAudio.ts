@@ -114,11 +114,34 @@ export class RhythmAudio {
     const context = this.context;
     if (!context || context.state === "closed")
       throw new Error("연주가 종료되었습니다. 다시 시작해 주세요.");
-    await this.withDeadline(context.resume());
-    if (this.context === context && context.state !== "running")
-      throw new Error(
-        "소리를 다시 켜지 못했습니다. 계속하기를 다시 눌러 주세요.",
-      );
+    const generation = this.generation;
+    try {
+      const resumed = context.resume().then(() => {
+        // A timed-out resume can settle after stop/dispose or a new song starts.
+        if (
+          this.disposed ||
+          this.context !== context ||
+          this.generation !== generation
+        ) {
+          context.onstatechange = null;
+          if (context.state !== "closed") void context.close().catch(() => {});
+        }
+      });
+      await this.withDeadline(resumed);
+      if (
+        this.disposed ||
+        this.context !== context ||
+        this.generation !== generation
+      )
+        return;
+      if (context.state !== "running")
+        throw new Error(
+          "소리를 다시 켜지 못했습니다. 계속하기를 다시 눌러 주세요.",
+        );
+    } catch (error) {
+      if (this.context === context) this.stop();
+      throw error;
+    }
   }
 
   setVolume(volume: number): void {
