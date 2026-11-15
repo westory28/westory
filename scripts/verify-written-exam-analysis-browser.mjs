@@ -1888,11 +1888,40 @@ try {
     "Failed mock lookups are retried instead of cached",
   );
   assert.equal(await cachePage.getByRole("alert").count(), 0);
+  const draftRefreshStart = (await cacheCalls()).length;
+  await cacheKind("논술형");
+  assert.equal((await cacheCalls()).length, draftRefreshStart);
+  await cachePage
+    .getByRole("button", { name: "정기시험 분석 새로고침" })
+    .click();
+  await cacheReady();
+  assert.deepEqual(
+    (await cacheCalls()).slice(draftRefreshStart),
+    ["list"],
+    "Refreshing an unsubmitted analysis kind only reads the catalog",
+  );
+  assert.equal(
+    await cachePage
+      .getByRole("tab", { name: "논술형", exact: true })
+      .getAttribute("aria-selected"),
+    "true",
+    "Catalog-only refresh preserves the draft analysis kind",
+  );
+  await cacheKind("선택형");
+  await cacheAnalyze();
+  await cacheReady();
+  const draftRefreshCalls = (await cacheCalls()).slice(draftRefreshStart);
+  assert.deepEqual(
+    draftRefreshCalls,
+    ["list", "load", "mock"],
+    "Catalog-only refresh invalidates the selected exam snapshot before returning to its prior condition",
+  );
   boundaryChecks.push({
     cacheBeforeReload,
     cacheAfterReload: await cacheCalls(),
     reloadReusedSnapshot: true,
     failedMockRetried: true,
+    draftRefreshCalls,
   });
   await cachePage.close();
   assert.deepEqual(errors, []);

@@ -378,7 +378,10 @@ export default function WrittenExamAnalysis({
         <RefreshButton
           loading={loading}
           label="정기시험 분석 새로고침"
-          onClick={() => load(current ? examId : "", classId, true)}
+          onClick={() => {
+            invalidateWrittenExamAnalysisCache(examId || undefined);
+            return load(current ? examId : "", classId, true);
+          }}
         />
       </div>
       <form
