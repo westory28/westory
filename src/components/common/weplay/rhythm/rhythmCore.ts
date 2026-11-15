@@ -52,7 +52,7 @@ export function classifyDrumHit(x: number, y: number): DrumKind | null {
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
   const radius = Math.hypot(x - 0.5, y - 0.5);
   if (radius > 0.5 + TIMING_EPSILON) return null;
-  return radius <= 0.31 + TIMING_EPSILON ? "center" : "rim";
+  return radius <= 0.36 + TIMING_EPSILON ? "center" : "rim";
 }
 
 export interface RhythmScore {

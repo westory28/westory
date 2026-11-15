@@ -1,6 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { InfoHelp } from "../../InfoHelp";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import RhythmHelp from "./RhythmHelp";
 import RhythmDrum from "./RhythmDrum";
+import {
+  RhythmBrand,
+  RhythmIcon,
+  RhythmMascot,
+  RhythmNoteArt,
+  RhythmOrientationGuide,
+  rhythmAsset,
+} from "./RhythmArt";
+import useRhythmStage, { rhythmPointerPosition } from "./useRhythmStage";
 import { RhythmAudio } from "./rhythmAudio";
 import { RHYTHM_SONGS } from "./rhythmSongs";
 import {
@@ -38,11 +54,9 @@ const JUDGEMENT_TEXT = {
 export default function RhythmGame({
   preview = false,
   playable = true,
-  beforePlay,
 }: {
   preview?: boolean;
   playable?: boolean;
-  beforePlay?: () => Promise<boolean>;
 }) {
   const [songId, setSongId] = useState(RHYTHM_SONGS[0].id);
   const [difficulty, setDifficulty] = useState<RhythmDifficulty>("normal");
@@ -56,7 +70,15 @@ export default function RhythmGame({
   const [lastStrike, setLastStrike] = useState<{
     kind: DrumKind;
     at: number;
+    id: number;
   } | null>(null);
+  const [effects, setEffects] = useState<
+    { id: number; kind: DrumKind; x: number; y: number }[]
+  >([]);
+  const strikeId = useRef(0);
+  const drumArtRef = useRef<HTMLDivElement>(null);
+  const mascotRef = useRef<HTMLDivElement>(null);
+  const [feedbackId, setFeedbackId] = useState(0);
   const [error, setError] = useState("");
   const [muted, setMuted] = useState(isWeplayAudioMuted);
   const [offset, setOffset] = useState(0);
@@ -66,6 +88,7 @@ export default function RhythmGame({
   const generation = useRef(0);
   const gameRef = useRef<HTMLElement>(null);
   const resultRef = useRef<HTMLHeadingElement>(null);
+  const calibrationRef = useRef<HTMLDetailsElement>(null);
   const song =
     RHYTHM_SONGS.find((item) => item.id === songId) || RHYTHM_SONGS[0];
   const chart = useMemo(
@@ -78,6 +101,27 @@ export default function RhythmGame({
   }, []);
 
   useEffect(() => onWeplayAudioMutedChange(setMuted), []);
+  useEffect(() => {
+    const outside = (event: PointerEvent) => {
+      const panel = calibrationRef.current;
+      if (panel?.open && !panel.contains(event.target as Node))
+        panel.open = false;
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && calibrationRef.current?.open) {
+        event.preventDefault();
+        event.stopPropagation();
+        calibrationRef.current.open = false;
+        calibrationRef.current.querySelector("summary")?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape, true);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape, true);
+    };
+  }, []);
   useEffect(() => {
     audio.current?.setVolume(muted ? 0 : 0.65);
   }, [muted]);
@@ -100,6 +144,9 @@ export default function RhythmGame({
       setError("소리가 중단되었습니다. 곡을 다시 시작해 주세요.");
     });
   }, [setGamePhase]);
+  const stage = useRhythmStage(gameRef, pause);
+  const portraitRef = useRef(stage.portrait);
+  portraitRef.current = stage.portrait;
   useEffect(() => {
     if (!playable) pause();
   }, [playable, pause]);
@@ -121,7 +168,12 @@ export default function RhythmGame({
   }, [pause]);
 
   const start = async () => {
-    if (phaseRef.current === "starting" || !playableRef.current) return;
+    if (
+      phaseRef.current === "starting" ||
+      !playableRef.current ||
+      portraitRef.current
+    )
+      return;
     const token = ++generation.current;
     audio.current?.dispose();
     const player = new RhythmAudio();
@@ -132,37 +184,45 @@ export default function RhythmGame({
     setElapsed(0);
     setFeedback("");
     setLastStrike(null);
+    setEffects([]);
     setError("");
     setGamePhase("starting");
     try {
-      await player.start(song, muted ? 0 : 0.65, beforePlay);
+      await player.start(song, muted ? 0 : 0.65);
       if (token !== generation.current) {
         player.dispose();
         return;
       }
-      if (document.hidden || !playableRef.current) {
+      if (document.hidden || !playableRef.current || portraitRef.current) {
         await player.pause();
         setGamePhase("paused");
       } else setGamePhase("playing");
       gameRef.current?.focus({ preventScroll: true });
-      gameRef.current?.scrollIntoView({ block: "start", behavior: "instant" });
+      if (!stage.fullscreen)
+        gameRef.current?.scrollIntoView({
+          block: "start",
+          behavior: "instant",
+        });
     } catch {
       if (token !== generation.current) return;
       player.dispose();
       setGamePhase("ready");
       setError(
-        "연주를 시작하지 못했습니다. 연결과 소리 설정을 확인한 뒤 다시 시작해 주세요.",
+        "소리를 시작하지 못했습니다. 소리 설정을 확인한 뒤 다시 시작해 주세요.",
       );
     }
   };
   const resume = async () => {
-    if (phaseRef.current !== "paused" || !audio.current || !playableRef.current)
+    if (
+      phaseRef.current !== "paused" ||
+      !audio.current ||
+      !playableRef.current ||
+      portraitRef.current
+    )
       return;
     const token = generation.current;
     setGamePhase("starting");
     try {
-      if (beforePlay && !(await beforePlay()))
-        throw new Error("게임을 다시 확인해 주세요.");
       if (token !== generation.current) return;
       if (!playableRef.current) {
         setGamePhase("paused");
@@ -170,7 +230,7 @@ export default function RhythmGame({
       }
       await audio.current.resume();
       if (token !== generation.current) return;
-      if (document.hidden || !playableRef.current) {
+      if (document.hidden || !playableRef.current || portraitRef.current) {
         await audio.current?.pause();
         setGamePhase("paused");
         return;
@@ -181,9 +241,7 @@ export default function RhythmGame({
     } catch {
       if (token === generation.current) {
         setGamePhase("paused");
-        setError(
-          "연주를 다시 시작하지 못했습니다. 연결과 소리 설정을 확인해 주세요.",
-        );
+        setError("소리를 다시 시작하지 못했습니다. 소리 설정을 확인해 주세요.");
       }
     }
   };
@@ -209,6 +267,7 @@ export default function RhythmGame({
         judged.current.add(note.id);
         next = applyJudgement(next, "miss");
         setFeedback(JUDGEMENT_TEXT.miss);
+        setFeedbackId((value) => value + 1);
       }
       if (next !== scoreRef.current) {
         scoreRef.current = next;
@@ -226,17 +285,28 @@ export default function RhythmGame({
   }, [phase, chart, song.duration, offset, finish, pause]);
 
   const strike = useCallback(
-    (kind: DrumKind) => {
+    (kind: DrumKind, point?: { x: number; y: number }) => {
       if (
         phaseRef.current !== "playing" ||
         !playableRef.current ||
+        portraitRef.current ||
         !audio.current ||
         audio.current.state !== "running"
       )
         return;
       const now = audio.current.currentTime;
       audio.current.hit(kind);
-      setLastStrike({ kind, at: now });
+      const id = ++strikeId.current;
+      setLastStrike({ kind, at: now, id });
+      setEffects((previous) => [
+        ...previous.slice(-7),
+        {
+          id,
+          kind,
+          x: point?.x ?? (kind === "center" ? 0.5 : 0.24),
+          y: point?.y ?? (kind === "center" ? 0.32 : 0.12),
+        },
+      ]);
       const note = findHit(chart, judged.current, kind, now - offset / 1000);
       if (!note) return;
       const judgement = getJudgement(now - offset / 1000 - note.time);
@@ -244,9 +314,37 @@ export default function RhythmGame({
       scoreRef.current = applyJudgement(scoreRef.current, judgement);
       setScore(scoreRef.current);
       setFeedback(JUDGEMENT_TEXT[judgement]);
+      setFeedbackId(id);
     },
     [chart, offset],
   );
+  useEffect(() => {
+    if (!lastStrike) return;
+    const drum = drumArtRef.current?.animate(
+      [
+        { transform: "scale(1)" },
+        { transform: "scale(1.035, .95)", offset: 0.25 },
+        { transform: "scale(.99, 1.025)", offset: 0.62 },
+        { transform: "scale(1)" },
+      ],
+      { duration: 220, easing: "ease-out" },
+    );
+    const mascot = mascotRef.current?.animate(
+      [
+        { transform: "translateY(0) rotate(0)" },
+        {
+          transform: `translateY(-14px) rotate(${lastStrike.kind === "center" ? -8 : 8}deg)`,
+          offset: 0.35,
+        },
+        { transform: "translateY(0) rotate(0)" },
+      ],
+      { duration: 320, easing: "ease-out" },
+    );
+    return () => {
+      drum?.cancel();
+      mascot?.cancel();
+    };
+  }, [lastStrike]);
 
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
@@ -260,9 +358,9 @@ export default function RhythmGame({
       )
         return;
       const kind =
-        event.code === "KeyF" || event.code === "KeyJ"
+        event.code === "ArrowLeft" || event.code === "ArrowRight"
           ? "center"
-          : event.code === "KeyD" || event.code === "KeyK"
+          : event.code === "KeyZ" || event.code === "KeyX"
             ? "rim"
             : null;
       if (kind && phaseRef.current === "playing") {
@@ -281,6 +379,7 @@ export default function RhythmGame({
     setGamePhase("ready");
     setElapsed(0);
     setError("");
+    setEffects([]);
   };
   const active =
     phase === "playing" || phase === "paused" || phase === "starting";
@@ -301,344 +400,491 @@ export default function RhythmGame({
   return (
     <section
       ref={gameRef}
-      className={`rhythm-game rhythm-game--${phase}`}
+      className={`rhythm-game rhythm-game--${phase}${stage.fullscreen ? " rhythm-game--fullscreen" : ""}${stage.rotated ? " rhythm-game--rotated" : ""}`}
+      style={
+        {
+          "--rh-canvas-width": `${stage.width}px`,
+          "--rh-canvas-height": `${stage.height}px`,
+          "--rh-background": `url("${rhythmAsset("bg-stage")}")`,
+          "--rh-plaque": `url("${rhythmAsset("button-plaque")}")`,
+        } as CSSProperties
+      }
       tabIndex={-1}
       aria-label="덩기덕 쿵더Rock 경기장"
     >
-      <div className="rhythm-stage-top">
-        <span className="rhythm-eyebrow">
-          {preview ? "교사 미리보기 · 기록 없음" : "우리의 장단, 나의 리듬"}
-        </span>
-        <div className="rhythm-stage-tools">
-          <InfoHelp
-            label="리듬 게임 조작 방법"
-            sections={[
-              {
-                title: "쿵 · 덕",
-                text: "채운 원은 북 가운데를, 빈 마름모는 북 가장자리를 누르세요. 노트가 아래 판정선에 닿을 때 맞춥니다.",
-              },
-              {
-                title: "키보드",
-                text: "가운데 F/J, 가장자리 D/K. Escape는 일시정지입니다. 북 버튼은 Enter와 Space로도 누를 수 있습니다.",
-              },
-              {
-                title: "소리와 판정",
-                text: "이어폰을 쓰면 박자를 듣기 쉽습니다. 블루투스 연결로 소리가 늦으면 시작 전 판정 시차를 조절하세요. 점수는 이번 연주에만 표시됩니다.",
-              },
-            ]}
-          />
-          <button
-            type="button"
-            className="rhythm-tool"
-            onClick={() => setWeplayAudioMuted(!muted)}
-            aria-pressed={muted}
-          >
-            {muted ? "소리 꺼짐" : "소리 켜짐"}
-          </button>
-          {phase === "playing" && (
-            <button type="button" className="rhythm-tool" onClick={pause}>
-              일시정지
-            </button>
-          )}
-        </div>
-      </div>
-      {error && (
-        <p className="rhythm-error" role="alert">
-          {error}
-        </p>
-      )}
-      {phase === "ready" ? (
-        <div className="rhythm-lobby">
-          <div className="rhythm-song-panel">
-            <h2 className="rhythm-brand">
-              덩기덕
-              <br />
-              <span>
-                쿵더<span className="rhythm-rock">Rock</span>
-              </span>
+      <div className="rhythm-canvas">
+        {stage.portrait ? (
+          <div className="rhythm-orientation-gate" role="status">
+            <RhythmMascot />
+            <h2>
+              <RhythmBrand />
             </h2>
-            <fieldset className="rhythm-songs">
-              <legend>연주할 곡</legend>
-              {RHYTHM_SONGS.map((item, index) => (
-                <button
-                  type="button"
-                  key={item.id}
-                  className="rhythm-song"
-                  aria-pressed={song.id === item.id}
-                  onClick={() => setSongId(item.id)}
-                >
-                  <span className="rhythm-song-number">0{index + 1}</span>
-                  <span>
-                    <strong>{item.title}</strong>
-                    <small>{item.subtitle}</small>
-                  </span>
-                  <span className="rhythm-tempo">
-                    {item.bpm}
-                    <small>BPM</small>
-                  </span>
-                </button>
-              ))}
-            </fieldset>
-            <fieldset className="rhythm-difficulty">
-              <legend>난이도</legend>
-              {DIFFICULTIES.map((item) => (
-                <button
-                  type="button"
-                  key={item.id}
-                  onClick={() => setDifficulty(item.id)}
-                  aria-pressed={difficulty === item.id}
-                >
-                  {item.name}
-                </button>
-              ))}
-            </fieldset>
-            <div className="rhythm-start-row">
-              <span>
-                {Math.round(song.duration - COUNT_IN_SECONDS)}초 ·{" "}
-                {chart.length}박
-              </span>
-              <button
-                type="button"
-                className="rhythm-primary"
-                disabled={!playable}
-                onClick={() => void start()}
-              >
-                연주 시작 <span aria-hidden="true">→</span>
-              </button>
-            </div>
-            <details className="rhythm-calibration">
-              <summary>소리·판정 시차</summary>
-              <label htmlFor="rhythm-offset">
-                판정 시차 {offset > 0 ? "+" : ""}
-                {offset}ms
-              </label>
-              <input
-                id="rhythm-offset"
-                type="range"
-                min={-250}
-                max={250}
-                step={10}
-                value={offset}
-                onChange={(event) => setOffset(Number(event.target.value))}
-              />
-              <p>
-                터치가 늦게 맞으면 + 방향, 일찍 맞으면 − 방향으로 조절하세요.
-              </p>
-            </details>
-          </div>
-          <div className="rhythm-lobby-drum">
-            <div className="rhythm-orbit" />
-            <RhythmDrum />
-            <div className="rhythm-drum-legend">
-              <span>
-                <b className="rhythm-symbol rhythm-symbol--center">●</b> 가운데
-                · 쿵
-              </span>
-              <span>
-                <b className="rhythm-symbol rhythm-symbol--rim">◇</b> 가장자리 ·
-                덕
-              </span>
-            </div>
-          </div>
-        </div>
-      ) : phase === "result" ? (
-        <div className="rhythm-result">
-          <span className="rhythm-eyebrow">{song.title}</span>
-          <h2 ref={resultRef} tabIndex={-1}>
-            한 판, 얼쑤!
-          </h2>
-          <strong className="rhythm-result-score">
-            {score.score.toLocaleString()}
-            <small>점</small>
-          </strong>
-          <dl>
-            <div>
-              <dt>정확도</dt>
-              <dd>{accuracy}%</dd>
-            </div>
-            <div>
-              <dt>최대 이어치기</dt>
-              <dd>{score.maxCombo}</dd>
-            </div>
-            <div>
-              <dt>얼쑤</dt>
-              <dd>{score.perfect}</dd>
-            </div>
-            <div>
-              <dt>좋아요</dt>
-              <dd>{score.good}</dd>
-            </div>
-            <div>
-              <dt>이어가요</dt>
-              <dd>{score.ok}</dd>
-            </div>
-            <div>
-              <dt>놓친 박자</dt>
-              <dd>{score.miss}</dd>
-            </div>
-          </dl>
-          <div className="rhythm-result-actions">
-            <button type="button" className="rhythm-tool" onClick={reset}>
-              곡 고르기
-            </button>
+            <RhythmOrientationGuide />
+            <p>가로로 돌리거나 전체 화면으로 시작하세요.</p>
             <button
-              type="button"
               className="rhythm-primary"
-              disabled={!playable}
-              onClick={() => void start()}
+              type="button"
+              onClick={() => void stage.enter()}
             >
-              한 번 더
+              전체 화면으로 열기
             </button>
           </div>
-        </div>
-      ) : (
-        <div className="rhythm-performance">
-          <div className="rhythm-scorebar">
-            <div>
-              <span>{song.title}</span>
-              <strong>
-                {score.score.toLocaleString()}
-                <small>점</small>
-              </strong>
-            </div>
-            <div>
-              <span>이어치기</span>
-              <strong>
-                {score.combo}
-                <small>콤보</small>
-              </strong>
-            </div>
-          </div>
-          <progress
-            className="rhythm-progress"
-            value={Math.max(0, elapsed - COUNT_IN_SECONDS)}
-            max={song.duration - COUNT_IN_SECONDS}
-            aria-label="연주 진행"
-          />
-          <div className="rhythm-play-field">
-            <div
-              className="rhythm-lanes"
-              role="img"
-              aria-label="가운데 쿵과 가장자리 덕 두 줄 악보"
-            >
-              <div className="rhythm-lane-labels">
-                <span>● 쿵</span>
-                <span>◇ 덕</span>
-              </div>
-              <div className="rhythm-lane-divider" />
-              <div className="rhythm-hit-line">
-                <i>●</i>
-                <i>◇</i>
-              </div>
-              {upcoming.map((note) => (
-                <div
-                  key={note.id}
-                  data-kind={note.kind}
-                  className={`rhythm-note rhythm-note--${note.kind}`}
-                  style={{
-                    top: `${86 - ((note.time - chartTime) / 2.4) * 80}%`,
-                  }}
-                >
-                  <span>{note.kind === "center" ? "쿵" : "덕"}</span>
-                </div>
-              ))}
-            </div>
-            <div className="rhythm-feedback" aria-hidden="true">
-              {elapsed < COUNT_IN_SECONDS
-                ? Math.max(1, Math.ceil(COUNT_IN_SECONDS - elapsed))
-                : feedback}
-            </div>
-            <div
-              className={`rhythm-play-drum ${lastStrike && elapsed - lastStrike.at < 0.12 ? `rhythm-struck--${lastStrike.kind}` : ""}`}
-            >
-              <RhythmDrum />
-              <div
-                className="rhythm-drum-touch"
-                onKeyDown={(event) => {
-                  if (
-                    event.repeat &&
-                    (event.code === "Enter" || event.code === "Space")
-                  )
-                    event.preventDefault();
-                }}
-                onPointerDown={(event) => {
-                  if (event.pointerType === "mouse" && event.button !== 0)
-                    return;
-                  const rect = event.currentTarget.getBoundingClientRect();
-                  const kind = classifyDrumHit(
-                    (event.clientX - rect.left) / rect.width,
-                    (event.clientY - rect.top) / rect.height,
-                  );
-                  if (kind) {
-                    event.preventDefault();
-                    strike(kind);
-                  }
-                }}
-              >
+        ) : (
+          <>
+            <div className="rhythm-stage-top">
+              <span className="rhythm-eyebrow">
+                {preview ? "교사 미리보기" : "덩기덕 쿵더Rock"}
+              </span>
+              <div className="rhythm-stage-tools">
+                {phase === "ready" && (
+                  <details className="rhythm-calibration" ref={calibrationRef}>
+                    <summary
+                      className="rhythm-tool rhythm-icon-button"
+                      aria-label="소리·판정 시차"
+                    >
+                      ±
+                    </summary>
+                    <div className="rhythm-calibration-popover">
+                      <label htmlFor="rhythm-offset">
+                        판정 시차 {offset > 0 ? "+" : ""}
+                        {offset}ms
+                      </label>
+                      <input
+                        id="rhythm-offset"
+                        type="range"
+                        min={-250}
+                        max={250}
+                        step={10}
+                        value={offset}
+                        onChange={(event) =>
+                          setOffset(Number(event.target.value))
+                        }
+                      />
+                      <p>늦게 맞으면 +, 일찍 맞으면 − 방향으로 조절하세요.</p>
+                    </div>
+                  </details>
+                )}
+                <RhythmHelp
+                  label="리듬 게임 조작 방법"
+                  sections={[
+                    {
+                      title: "쿵 · 덕",
+                      text: "주홍 동그라미는 북 가운데, 남색 마름모는 북 가장자리입니다. 오른쪽에서 오는 노트가 왼쪽 장단꽃에 닿을 때 치세요.",
+                    },
+                    {
+                      title: "키보드",
+                      text: "← / →는 가운데, Z / X는 가장자리입니다. Escape는 일시정지입니다. 북 버튼은 Enter와 Space로도 칠 수 있습니다.",
+                    },
+                    {
+                      title: "소리와 판정",
+                      text: "소리가 늦게 들리면 시작 전에 판정 시차를 조절하세요. 점수는 이번 연주에만 표시됩니다.",
+                    },
+                  ]}
+                />
                 <button
                   type="button"
-                  className="rhythm-rim-button"
-                  aria-label="북 가장자리 덕 (D 또는 K)"
-                  disabled={phase !== "playing" || !playable}
-                  onClick={(event) => {
-                    if (event.detail === 0) strike("rim");
-                  }}
+                  className="rhythm-tool rhythm-icon-button"
+                  onClick={() => setWeplayAudioMuted(!muted)}
+                  aria-label={muted ? "소리 켜기" : "소리 끄기"}
+                  aria-pressed={muted}
                 >
-                  <span>
-                    덕 <kbd>D · K</kbd>
-                  </span>
+                  <RhythmIcon name={muted ? "muted" : "sound"} />
                 </button>
-                <button
-                  type="button"
-                  className="rhythm-center-button"
-                  aria-label="북 가운데 쿵 (F 또는 J)"
-                  disabled={phase !== "playing" || !playable}
-                  onClick={(event) => {
-                    if (event.detail === 0) strike("center");
-                  }}
-                >
-                  <span>
-                    쿵 <kbd>F · J</kbd>
-                  </span>
-                </button>
-              </div>
-            </div>
-          </div>
-          {(phase === "paused" || phase === "starting") && (
-            <div className="rhythm-pause">
-              <h2>
-                {!playable
-                  ? "게임 연결 확인 중"
-                  : phase === "starting"
-                    ? "연주 준비 중"
-                    : "잠시 쉬어 가요"}
-              </h2>
-              {phase === "paused" && (
-                <div>
+                {phase === "playing" && (
                   <button
                     type="button"
-                    className="rhythm-primary"
-                    disabled={!playable}
-                    onClick={() => void resume()}
+                    className="rhythm-tool rhythm-icon-button"
+                    onClick={pause}
+                    aria-label="일시정지"
                   >
-                    계속 연주
+                    <RhythmIcon name="pause" />
                   </button>
-                  <button type="button" className="rhythm-tool" onClick={reset}>
-                    곡 고르기
-                  </button>
-                </div>
-              )}
+                )}
+                <button
+                  type="button"
+                  className="rhythm-tool rhythm-icon-button rhythm-fullscreen"
+                  onClick={() =>
+                    stage.fullscreen ? stage.exit() : void stage.enter()
+                  }
+                  aria-label={
+                    stage.fullscreen ? "전체 화면 나가기" : "전체 화면"
+                  }
+                >
+                  <RhythmIcon name={stage.fullscreen ? "collapse" : "expand"} />
+                </button>
+              </div>
             </div>
-          )}
-          <span className="rhythm-sr-only" aria-live="polite">
-            {active
-              ? phase === "paused"
-                ? "연주를 일시정지했습니다."
-                : "연주 중입니다."
-              : ""}
-          </span>
-        </div>
-      )}
+            {error && (
+              <p className="rhythm-error" role="alert">
+                {error}
+              </p>
+            )}
+            {phase === "ready" ? (
+              <div className="rhythm-lobby">
+                <div className="rhythm-entry-scene">
+                  <h2>
+                    <RhythmBrand />
+                  </h2>
+                  <RhythmMascot />
+                  <div className="rhythm-entry-notes" aria-hidden="true">
+                    <RhythmNoteArt kind="center" />
+                    <RhythmNoteArt kind="rim" />
+                  </div>
+                  <div className="rhythm-drum-legend">
+                    <span>
+                      <RhythmNoteArt kind="center" />
+                      <b>가운데</b>
+                      <kbd>← →</kbd>
+                    </span>
+                    <span>
+                      <RhythmNoteArt kind="rim" />
+                      <b>가장자리</b>
+                      <kbd>Z X</kbd>
+                    </span>
+                  </div>
+                </div>
+                <div className="rhythm-song-panel">
+                  <fieldset className="rhythm-songs">
+                    <legend>오늘의 장단</legend>
+                    {RHYTHM_SONGS.map((item, index) => (
+                      <button
+                        type="button"
+                        key={item.id}
+                        className="rhythm-song"
+                        aria-pressed={song.id === item.id}
+                        onClick={() => setSongId(item.id)}
+                      >
+                        <span className="rhythm-song-number">0{index + 1}</span>
+                        <span className="rhythm-song-name">
+                          <strong>{item.title}</strong>
+                          <small>{item.subtitle}</small>
+                        </span>
+                        <span className="rhythm-tempo">
+                          {item.bpm}
+                          <small>BPM</small>
+                        </span>
+                      </button>
+                    ))}
+                  </fieldset>
+                  <fieldset className="rhythm-difficulty">
+                    <legend>난이도</legend>
+                    {DIFFICULTIES.map((item) => (
+                      <button
+                        type="button"
+                        key={item.id}
+                        onClick={() => setDifficulty(item.id)}
+                        aria-pressed={difficulty === item.id}
+                      >
+                        {item.name}
+                      </button>
+                    ))}
+                  </fieldset>
+                  <div className="rhythm-start-row">
+                    <span>
+                      {Math.round(song.duration - COUNT_IN_SECONDS)}초 ·{" "}
+                      {chart.length}박
+                    </span>
+                    <button
+                      type="button"
+                      className="rhythm-primary"
+                      disabled={!playable}
+                      onClick={() => void start()}
+                    >
+                      연주 시작 <RhythmIcon name="play" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : phase === "result" ? (
+              <div className="rhythm-result">
+                <RhythmMascot />
+                <div className="rhythm-result-paper">
+                  <span className="rhythm-eyebrow">{song.title}</span>
+                  <h2 ref={resultRef} tabIndex={-1}>
+                    한 판, 얼쑤!
+                  </h2>
+                  <strong className="rhythm-result-score">
+                    {score.score.toLocaleString()}
+                    <small>점</small>
+                  </strong>
+                  <dl>
+                    {[
+                      ["정확도", `${accuracy}%`],
+                      ["최대 이어치기", score.maxCombo],
+                      ["얼쑤", score.perfect],
+                      ["좋아요", score.good],
+                      ["이어가요", score.ok],
+                      ["놓친 박자", score.miss],
+                    ].map(([label, value]) => (
+                      <div key={label}>
+                        <dt>{label}</dt>
+                        <dd>{value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <div className="rhythm-result-actions">
+                    <button
+                      type="button"
+                      className="rhythm-tool"
+                      onClick={reset}
+                    >
+                      곡 고르기
+                    </button>
+                    <button
+                      type="button"
+                      className="rhythm-primary"
+                      disabled={!playable}
+                      onClick={() => void start()}
+                    >
+                      한 번 더
+                    </button>
+                  </div>
+                </div>
+                <div className="rhythm-confetti" aria-hidden="true">
+                  {Array.from({ length: 12 }, (_, index) => (
+                    <i key={index} style={{ "--i": index } as CSSProperties} />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="rhythm-performance">
+                <div className="rhythm-scorebar">
+                  <div>
+                    <span>{song.title}</span>
+                    <strong>
+                      {score.score.toLocaleString()}
+                      <small>점</small>
+                    </strong>
+                  </div>
+                  <div className="rhythm-combo" data-hot={score.combo >= 10}>
+                    <span>이어치기</span>
+                    <strong key={score.combo}>
+                      {score.combo}
+                      <small>콤보</small>
+                    </strong>
+                  </div>
+                </div>
+                <progress
+                  className="rhythm-progress"
+                  value={Math.max(0, elapsed - COUNT_IN_SECONDS)}
+                  max={song.duration - COUNT_IN_SECONDS}
+                  aria-label="연주 진행"
+                />
+                <div className="rhythm-play-field">
+                  <div className="rhythm-lane-wrap">
+                    <div
+                      className="rhythm-lanes"
+                      role="img"
+                      aria-label="오른쪽에서 왼쪽으로 오는 한 줄 악보: 주홍 쿵, 남색 덕"
+                    >
+                      <div className="rhythm-lane-thread" />
+                      <div className="rhythm-hit-line">
+                        <svg viewBox="0 0 100 100" aria-hidden="true">
+                          <path d="M50 5Q63 18 70 12Q72 28 88 30Q82 42 95 50Q82 63 88 70Q72 72 70 88Q58 82 50 95Q37 82 30 88Q28 72 12 70Q18 58 5 50Q18 37 12 30Q28 28 30 12Q42 18 50 5Z" />
+                          <circle cx="50" cy="50" r="28" />
+                          <circle cx="50" cy="50" r="20" />
+                        </svg>
+                      </div>
+                      {upcoming.map((note) => (
+                        <div
+                          key={note.id}
+                          data-kind={note.kind}
+                          data-note-id={note.id}
+                          className={`rhythm-note rhythm-note--${note.kind}`}
+                          style={{
+                            left: `${14 + ((note.time - chartTime) / 2.4) * 78}%`,
+                          }}
+                        >
+                          <RhythmNoteArt kind={note.kind} />
+                          <span>{note.kind === "center" ? "쿵" : "덕"}</span>
+                        </div>
+                      ))}
+                      {lastStrike && (
+                        <div
+                          key={lastStrike.id}
+                          className={`rhythm-target-ripple rhythm-target-ripple--${lastStrike.kind}`}
+                        />
+                      )}
+                    </div>
+                    <div className="rhythm-lane-caption" aria-hidden="true">
+                      <span>장단꽃에 맞춰요</span>
+                      <span>← 장단이 와요</span>
+                    </div>
+                  </div>
+                  <div className="rhythm-drum-zone">
+                    <div className="rhythm-stage-mascot" ref={mascotRef}>
+                      <RhythmMascot />
+                    </div>
+                    <div
+                      key={feedbackId}
+                      className={`rhythm-feedback${feedback === "얼쑤!" ? " rhythm-feedback--perfect" : ""}`}
+                      aria-hidden="true"
+                    >
+                      {elapsed < COUNT_IN_SECONDS
+                        ? Math.max(1, Math.ceil(COUNT_IN_SECONDS - elapsed))
+                        : feedback}
+                    </div>
+                    {score.combo > 0 && score.combo % 10 === 0 && (
+                      <div
+                        key={score.combo}
+                        className="rhythm-combo-cheer"
+                        aria-hidden="true"
+                      >
+                        {score.combo}연속, 신명 난다!
+                      </div>
+                    )}
+                    <div className="rhythm-drum-crop">
+                      <div className="rhythm-play-drum">
+                        <div ref={drumArtRef} className="rhythm-drum-visual">
+                          <RhythmDrum />
+                        </div>
+                        <div
+                          className="rhythm-drum-touch"
+                          onKeyDown={(event) => {
+                            if (
+                              event.repeat &&
+                              (event.code === "Enter" || event.code === "Space")
+                            )
+                              event.preventDefault();
+                          }}
+                          onPointerDown={(event) => {
+                            if (
+                              event.pointerType === "mouse" &&
+                              event.button !== 0
+                            )
+                              return;
+                            const point = rhythmPointerPosition(
+                              event.currentTarget.getBoundingClientRect(),
+                              event.clientX,
+                              event.clientY,
+                              stage.rotated,
+                            );
+                            const kind = classifyDrumHit(point.x, point.y);
+                            if (kind) {
+                              event.preventDefault();
+                              strike(kind, point);
+                            }
+                          }}
+                        >
+                          <button
+                            type="button"
+                            className="rhythm-rim-button"
+                            aria-label="북 가장자리 덕 (Z 또는 X)"
+                            disabled={phase !== "playing" || !playable}
+                            onClick={(event) => {
+                              if (event.detail === 0) strike("rim");
+                            }}
+                          >
+                            <span>
+                              덕 <kbd>Z · X</kbd>
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            className="rhythm-center-button"
+                            aria-label="북 가운데 쿵 (왼쪽 또는 오른쪽 방향키)"
+                            disabled={phase !== "playing" || !playable}
+                            onClick={(event) => {
+                              if (event.detail === 0) strike("center");
+                            }}
+                          >
+                            <span>
+                              쿵 <kbd>← · →</kbd>
+                            </span>
+                          </button>
+                        </div>
+                        <div className="rhythm-hit-effects" aria-hidden="true">
+                          {effects.map((effect) => (
+                            <div
+                              key={effect.id}
+                              className={`rhythm-hit-effect rhythm-hit-effect--${effect.kind}`}
+                              style={{
+                                left: `${effect.x * 100}%`,
+                                top: `${effect.y * 100}%`,
+                              }}
+                              onAnimationEnd={(event) => {
+                                if (event.target === event.currentTarget)
+                                  setEffects((items) =>
+                                    items.filter(
+                                      (item) => item.id !== effect.id,
+                                    ),
+                                  );
+                              }}
+                            >
+                              <i className="rhythm-shockwave" />
+                              <b>{effect.kind === "center" ? "쿵!" : "덕!"}</b>
+                              {Array.from({ length: 7 }, (_, index) => (
+                                <i
+                                  key={index}
+                                  className="rhythm-spark"
+                                  style={
+                                    {
+                                      "--angle": `${index * (360 / 7)}deg`,
+                                      "--travel": `${36 + (index % 3) * 18}px`,
+                                    } as CSSProperties
+                                  }
+                                />
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rhythm-play-legend">
+                      <span>
+                        <RhythmNoteArt kind="center" />
+                        <b>가운데 쿵</b>
+                        <kbd>← →</kbd>
+                      </span>
+                      <span>
+                        <RhythmNoteArt kind="rim" />
+                        <b>가장자리 덕</b>
+                        <kbd>Z X</kbd>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                {(phase === "paused" || phase === "starting") && (
+                  <div className="rhythm-pause">
+                    <RhythmMascot />
+                    <h2>
+                      {phase === "starting"
+                        ? "장단을 준비하고 있어요"
+                        : "잠시 쉬어 가요"}
+                    </h2>
+                    {phase === "paused" && (
+                      <div>
+                        <button
+                          type="button"
+                          className="rhythm-primary"
+                          disabled={!playable}
+                          onClick={() => void resume()}
+                        >
+                          계속 연주
+                        </button>
+                        <button
+                          type="button"
+                          className="rhythm-tool"
+                          onClick={reset}
+                        >
+                          곡 고르기
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <span className="rhythm-sr-only" aria-live="polite">
+                  {active
+                    ? phase === "paused"
+                      ? "연주를 일시정지했습니다."
+                      : "연주 중입니다."
+                    : ""}
+                </span>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </section>
   );
 }

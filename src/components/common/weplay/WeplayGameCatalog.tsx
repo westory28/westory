@@ -8,7 +8,7 @@ import useYutPublication from "./useYutPublication";
 import { prepareWeplayIntroAudio } from "./weplayIntroAudio";
 import { InlineLoading } from "../LoadingState";
 import useRhythmPublication from "./rhythm/useRhythmPublication";
-import RhythmDrum from "./rhythm/RhythmDrum";
+import { RhythmCover } from "./rhythm/RhythmArt";
 import "./rhythm/rhythm.css";
 import "./weplay-catalog.css";
 
@@ -100,7 +100,8 @@ export default function WeplayGameCatalog({
               onClick={() => {
                 setRevision((value) => value + 1);
                 publication.retry();
-                rhythmPublication.retry();
+                if (rhythmPublication.status === "error")
+                  rhythmPublication.retry();
               }}
             >
               다시 확인
@@ -114,9 +115,7 @@ export default function WeplayGameCatalog({
           const content = (
             <>
               {game.id === "gungdeok-rock" ? (
-                <div className="rhythm-cover" aria-hidden="true">
-                  <RhythmDrum compact />
-                </div>
+                <RhythmCover />
               ) : game.id === "joseon-yut" ? (
                 <div className="weplay-yut-cover" aria-hidden="true">
                   <img

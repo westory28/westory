@@ -18,7 +18,6 @@ const {
   serverTimestamp,
   Timestamp,
   setLogLevel,
-  onSnapshot,
 } = firestore;
 const { build } = require("esbuild");
 const projectId = "demo-westory-rhythm";
@@ -263,33 +262,13 @@ try {
     "Maintenance closes student access; maximal bypass list stays in rules budget",
   );
 
-  const states = [];
-  let resolveClosed;
-  let rejectClosed;
-  const closed = new Promise((resolve, reject) => {
-    resolveClosed = resolve;
-    rejectClosed = reject;
-  });
-  const deadline = setTimeout(
-    () => rejectClosed(new Error("Realtime close timeout")),
-    10000,
-  );
-  const unsubscribe = onSnapshot(
-    doc(clients.student, publicationPath),
-    { includeMetadataChanges: true },
-    (snapshot) => {
-      if (snapshot.metadata.fromCache) return;
-      states.push(snapshot.data()?.enabled);
-      if (snapshot.data()?.enabled === false) resolveClosed();
-    },
-    rejectClosed,
-  );
   await publish(clients.teacher, false, 2);
-  await closed;
-  clearTimeout(deadline);
-  unsubscribe();
-  assert.equal(states.at(-1), false);
-  ok("An open student's live listener receives publication closure");
+  assert.equal(
+    (await getDocFromServer(doc(clients.student, publicationPath))).data()
+      .enabled,
+    false,
+  );
+  ok("A closed publication is observed by the next entry read");
 
   // Exercise the shipped adapter with real Firestore transactions, counting
   // document operations rather than claiming these include rules billing reads.
@@ -328,7 +307,7 @@ try {
               contents:
                 name === "firebase"
                   ? "export const auth=globalThis.__rhythmTest.auth;export let db=globalThis.__rhythmTest.db;globalThis.__rhythmTest.setDb=value=>{db=value};"
-                  : `const sdk=globalThis.__rhythmTest.firestore;export const {doc,onSnapshot,serverTimestamp}=sdk;
+                  : `const sdk=globalThis.__rhythmTest.firestore;export const {doc,serverTimestamp}=sdk;
            export const getDocFromServer=ref=>{globalThis.__rhythmTest.reads++;return sdk.getDocFromServer(ref)};
            export const runTransaction=(db,callback)=>sdk.runTransaction(db,tx=>callback({
              get:ref=>{globalThis.__rhythmTest.reads++;return tx.get(ref)},
@@ -406,19 +385,25 @@ try {
   ok("Malformed scope, revision and document fail closed");
   globalThis.__rhythmTest.setDb(clients.student);
   resetCounts();
-  assert.equal(await adapter.confirmRhythmPublication(scope), true);
+  assert.deepEqual(await adapter.getRhythmPublication(scope), {
+    enabled: true,
+    revision: 3,
+  });
   assert.deepEqual(counters(), { reads: 1, writes: 0 });
-  report.transactions.startOrResumeConfirmation = counters();
+  report.transactions.entryRead = counters();
   globalThis.__rhythmTest.setDb(clients.expired);
   resetCounts();
-  await denied(adapter.confirmRhythmPublication(scope));
+  await denied(adapter.getRhythmPublication(scope));
   assert.deepEqual(counters(), { reads: 1, writes: 0 });
   globalThis.__rhythmTest.setDb(clients.teacher);
   await adapter.saveRhythmPublication(scope, false, 3);
   globalThis.__rhythmTest.setDb(clients.student);
-  assert.equal(await adapter.confirmRhythmPublication(scope), false);
+  assert.deepEqual(await adapter.getRhythmPublication(scope), {
+    enabled: false,
+    revision: 4,
+  });
   ok(
-    "Start/resume uses one authoritative read; expired sessions reject and closed publication returns false",
+    "Entry uses one authoritative read; expired sessions reject and closed publication returns false",
   );
   const menuBundle = path.join(output, "menu-adapter.mjs");
   await build({

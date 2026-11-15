@@ -110,8 +110,8 @@ assert.equal(
 );
 assert.equal(core.findHit(notes, judged, "center", 3.3)?.id, "c");
 assert.equal(core.classifyDrumHit(0.5, 0.5), "center");
-assert.equal(core.classifyDrumHit(0.81, 0.5), "center");
-assert.equal(core.classifyDrumHit(0.811, 0.5), "rim");
+assert.equal(core.classifyDrumHit(0.86, 0.5), "center");
+assert.equal(core.classifyDrumHit(0.861, 0.5), "rim");
 assert.equal(core.classifyDrumHit(1, 0.5), "rim");
 for (const [x, y] of [
   [1.01, 0.5],

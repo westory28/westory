@@ -1,7 +1,6 @@
 import {
   doc,
   getDocFromServer,
-  onSnapshot,
   runTransaction,
   serverTimestamp,
   type DocumentData,
@@ -43,40 +42,10 @@ export function parseRhythmPublication(data?: DocumentData): RhythmPublication {
   return { enabled: data.enabled, revision: data.revision };
 }
 
-/** One exact document; no collection reads, polling or persistent cache. */
-export function subscribeRhythmPublication(
+/** One server read on entry. No subscription, polling or gameplay requests. */
+export async function getRhythmPublication(
   config: Scope,
-  onState: (state: RhythmPublicationSnapshot) => void,
-) {
-  return onSnapshot(
-    reference(config),
-    { includeMetadataChanges: true },
-    (snapshot) => {
-      if (snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) {
-        onState({ status: "checking", enabled: false, revision: 0 });
-        return;
-      }
-      try {
-        const data = parseRhythmPublication(snapshot.data());
-        onState({ ...data, status: data.enabled ? "open" : "closed" });
-      } catch {
-        onState({ status: "error", enabled: false, revision: 0 });
-      }
-    },
-    (error) => {
-      onState({
-        status: error.code === "permission-denied" ? "closed" : "error",
-        enabled: false,
-        revision: 0,
-      });
-    },
-  );
-}
-
-/** A fresh read rechecks time-based session expiry on each start/resume. */
-export async function confirmRhythmPublication(
-  config: Scope,
-): Promise<boolean> {
+): Promise<RhythmPublication> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     const snapshot = await Promise.race([
@@ -94,8 +63,10 @@ export async function confirmRhythmPublication(
       }),
     ]);
     if (snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites)
-      return false;
-    return parseRhythmPublication(snapshot.data()).enabled;
+      throw new Error(
+        "서버의 공개 상태를 확인하지 못했습니다. 다시 확인해 주세요.",
+      );
+    return parseRhythmPublication(snapshot.data());
   } finally {
     clearTimeout(timeout);
   }

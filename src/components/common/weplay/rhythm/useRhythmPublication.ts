@@ -3,7 +3,8 @@ import { useAuth } from "../../../../contexts/AuthContext";
 import { canReadLessonManagement } from "../../../../lib/permissions";
 import { getStudentRouteAccess } from "../../../../lib/studentMenuAccess";
 import {
-  subscribeRhythmPublication,
+  getRhythmPublication,
+  type RhythmPublication,
   type RhythmPublicationSnapshot,
 } from "../../../../lib/rhythmPublication";
 
@@ -13,6 +14,7 @@ const checking: RhythmPublicationSnapshot = {
   revision: 0,
 };
 
+/** Admission lasts for this mounted view and its account/semester/permission scope. */
 export default function useRhythmPublication(
   portal: "student" | "teacher",
   enabled = true,
@@ -25,88 +27,97 @@ export default function useRhythmPublication(
     configReady,
     menuConfigReady,
     authGeneration,
+    authPhase,
   } = useAuth();
   const allowed =
-    portal === "teacher"
+    authPhase === "ready" &&
+    (portal === "teacher"
       ? canReadLessonManagement(userData, currentUser?.email)
       : !!(configReady && menuConfigReady) &&
         getStudentRouteAccess(
           { pathname: "/student/weplay", search: "?game=gungdeok-rock" },
           config,
           menuConfig,
-        ).allowed;
-  const scope = `${portal}/${currentUser?.uid}/${authGeneration}/${config?.year}/${config?.semester}/${configReady}/${allowed}/${enabled}`;
+        ).allowed);
+  const permissionScope = JSON.stringify([
+    userData?.role,
+    userData?.teacherPortalEnabled,
+    userData?.staffPermissions,
+    userData?.registrationApprovalStatus,
+    userData?.enrollmentStatus,
+  ]);
+  const boundary = `${portal}/${currentUser?.uid}/${authGeneration}/${authPhase}/${config?.year}/${config?.semester}/${configReady}/${allowed}/${enabled}/${permissionScope}`;
+  const entry = useRef({ boundary, serial: 0 });
+  if (entry.current.boundary !== boundary) {
+    entry.current = { boundary, serial: entry.current.serial + 1 };
+  }
+  // A permission revoke/restore must not resurrect a previous admitted state.
+  const scope = `${boundary}/${entry.current.serial}`;
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
-  const [state, setState] = useState({ scope: "", ...checking });
   const [attempt, setAttempt] = useState(0);
+  const requestKey = `${scope}/${attempt}`;
+  const request = useRef<{
+    key: string;
+    promise: Promise<RhythmPublication>;
+  } | null>(null);
+  const [state, setState] = useState({ key: "", ...checking });
 
   useEffect(() => {
     if (!enabled || !allowed || !currentUser || !configReady || !config) return;
     let active = true;
-    let connection = 0;
-    let unsubscribe: (() => void) | undefined;
-    let deadline: ReturnType<typeof setTimeout> | undefined;
-    const publish = (next: RhythmPublicationSnapshot) => {
-      if (active && scopeRef.current === scope) setState({ scope, ...next });
-    };
-    const stop = () => {
-      connection++;
-      unsubscribe?.();
-      unsubscribe = undefined;
-      clearTimeout(deadline);
-      deadline = undefined;
-    };
-    const armDeadline = () => {
-      if (deadline !== undefined) return;
-      deadline = setTimeout(() => {
-        stop();
-        publish({ ...checking, status: "error" });
-      }, 10000);
-    };
-    const reconnect = () => {
-      stop();
-      const generation = connection;
-      publish(checking);
-      if (document.hidden) return;
-      if (navigator.onLine === false) {
-        publish({ ...checking, status: "error" });
-        return;
-      }
-      armDeadline();
-      try {
-        unsubscribe = subscribeRhythmPublication(config, (next) => {
-          if (connection !== generation) return;
-          if (next.status === "checking") armDeadline();
-          else {
-            clearTimeout(deadline);
-            deadline = undefined;
-          }
-          publish(next);
-        });
-      } catch {
-        stop();
-        publish({ ...checking, status: "error" });
-      }
-    };
-    reconnect();
-    document.addEventListener("visibilitychange", reconnect);
-    window.addEventListener("online", reconnect);
-    window.addEventListener("offline", reconnect);
+    if (request.current?.key !== requestKey) {
+      request.current = {
+        key: requestKey,
+        promise: getRhythmPublication(config),
+      };
+    }
+    // The same pending promise survives React StrictMode's effect replay. A
+    // real unmount/remount, explicit retry, or boundary change gets a new read.
+    void request.current.promise.then(
+      (result) => {
+        if (active && scopeRef.current === scope)
+          setState({
+            key: requestKey,
+            ...result,
+            status: result.enabled ? "open" : "closed",
+          });
+      },
+      (error) => {
+        if (active && scopeRef.current === scope)
+          setState({
+            key: requestKey,
+            ...checking,
+            status: error?.code === "permission-denied" ? "closed" : "error",
+          });
+      },
+    );
     return () => {
       active = false;
-      stop();
-      document.removeEventListener("visibilitychange", reconnect);
-      window.removeEventListener("online", reconnect);
-      window.removeEventListener("offline", reconnect);
     };
-  }, [scope, attempt, configReady]);
+  }, [requestKey, allowed, configReady]);
 
   const current =
     !enabled || !allowed || !currentUser
       ? { ...checking, status: "closed" as const }
-      : state.scope === scope
+      : state.key === requestKey
         ? state
         : checking;
-  return { ...current, scope, retry: () => setAttempt((value) => value + 1) };
+  return {
+    ...current,
+    scope,
+    retry: () => setAttempt((value) => value + 1),
+    acceptSaved: (result: RhythmPublication) => {
+      if (portal === "teacher" && scopeRef.current === scope)
+        setState({
+          key: requestKey,
+          ...result,
+          status: result.enabled ? "open" : "closed",
+        });
+    },
+    invalidate: () => {
+      if (scopeRef.current === scope)
+        setState({ key: requestKey, ...checking, status: "error" });
+    },
+  };
 }

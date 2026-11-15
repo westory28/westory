@@ -27,12 +27,12 @@ const modulePath = (value) =>
   JSON.stringify(path.join(root, value).replaceAll("\\", "/"));
 const fixture = `
 import {useSyncExternalStore} from 'react';
-const authListeners=new Set(),subscriptions=new Set();
-const teacher=new URLSearchParams(location.search).has('teacher');
+const authListeners=new Set();
+const query=new URLSearchParams(location.search),teacher=query.has('teacher');
 const qa=window.rhythmQA={
- hidden:false,online:true,hold:false,reads:[],saves:[],toasts:[],listeners:subscriptions,
- publication:{status:'closed',enabled:false,revision:0},audio:[],hits:[],time:null,saveFailure:false,saveHold:false,pendingSaves:[],confirms:[],confirmFailure:false,
- auth:{config:{year:'2026',semester:'2',showQuiz:true,showScore:true,showLesson:true},menuConfig:{student:[],teacher:[]},configReady:true,menuConfigReady:true,authGeneration:1,
+ hidden:false,online:true,hold:false,pending:[],failure:false,reads:[],saves:[],toasts:[],
+ publication:{enabled:query.has('open'),revision:query.has('open')?1:0},audio:[],hits:[],time:null,saveFailure:false,
+ auth:{config:{year:'2026',semester:'2',showQuiz:true,showScore:true,showLesson:true},menuConfig:{student:[],teacher:[]},configReady:true,menuConfigReady:true,authGeneration:1,authPhase:'ready',
  currentUser:{uid:teacher?'qa-teacher':'qa-student',email:teacher?'teacher@yongshin-ms.ms.kr':'2630001@yongshin-ms.ms.kr'},
  userData:{role:teacher?'teacher':'student',registrationApprovalStatus:'APPROVED'}}
 };
@@ -40,28 +40,23 @@ Object.defineProperty(document,'hidden',{configurable:true,get:()=>qa.hidden});
 Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>qa.online});
 qa.visibility=value=>{qa.hidden=!value;document.dispatchEvent(new Event('visibilitychange'))};
 qa.network=value=>{qa.online=value;window.dispatchEvent(new Event(value?'online':'offline'))};
-qa.emit=value=>{qa.publication={...qa.publication,...value};for(const item of subscriptions)item.callback({...qa.publication})};
+qa.publish=value=>{qa.publication={...qa.publication,...value}};
 qa.account=(uid,changes={})=>{qa.auth={...qa.auth,...changes,currentUser:{...qa.auth.currentUser,uid}};authListeners.forEach(fn=>fn())};
 qa.config=changes=>{qa.auth={...qa.auth,config:{...qa.auth.config,...changes}};authListeners.forEach(fn=>fn())};
 export const useAuth=()=>useSyncExternalStore(fn=>{authListeners.add(fn);return()=>authListeners.delete(fn)},()=>qa.auth);
-export function subscribeRhythmPublication(config,callback){
- const record={id:qa.reads.length,uid:qa.auth.currentUser.uid,config:{...config},callback};
- qa.reads.push({uid:record.uid,config:record.config});subscriptions.add(record);qa.lastCallback=callback;
- queueMicrotask(()=>{if(subscriptions.has(record)&&!qa.hold)callback({...qa.publication})});
- return()=>subscriptions.delete(record);
+export function getRhythmPublication(config){
+ qa.reads.push({uid:qa.auth.currentUser.uid,config:{...config}});
+ if(qa.failure)return Promise.reject(new Error('검증용 읽기 실패'));
+ const value={...qa.publication};
+ if(qa.hold)return new Promise(resolve=>qa.pending.push(()=>resolve(value)));
+ return Promise.resolve(value);
 }
 export async function saveRhythmPublication(config,enabled,expectedRevision){
  qa.saves.push({config:{...config},enabled,expectedRevision});
- if(qa.saveHold)await new Promise(resolve=>qa.pendingSaves.push(resolve));
  if(qa.saveFailure)throw new Error('검증용 저장 실패');
  if(expectedRevision!==qa.publication.revision)throw new Error('검증용 충돌');
- qa.emit({status:enabled?'open':'closed',enabled,revision:qa.publication.revision+1});
+ qa.publish({enabled,revision:qa.publication.revision+1});
  return {enabled,revision:qa.publication.revision};
-}
-export async function confirmRhythmPublication(config){
- qa.confirms.push({config:{...config},uid:qa.auth.currentUser.uid});
- if(qa.confirmFailure)throw new Error('검증용 만료 세션');
- return qa.publication.status==='open'&&qa.publication.enabled;
 }
 export const useAppToast=()=>({showToast:value=>qa.toasts.push(value)});
 `;
@@ -73,10 +68,6 @@ import {RHYTHM_SONGS} from ${modulePath("src/components/common/weplay/rhythm/rhy
 import {createChart} from ${modulePath("src/components/common/weplay/rhythm/rhythmCore.ts")};
 import ${modulePath("src/assets/index.css")};import ${modulePath("assets/css/style.css")};
 const qa=window.rhythmQA;
-const realSetTimeout=window.setTimeout.bind(window),realClearTimeout=window.clearTimeout.bind(window),deadlines=new Map();
-window.setTimeout=(callback,delay,...args)=>{const id=realSetTimeout(()=>{deadlines.delete(id);callback(...args)},delay);if(delay===10000)deadlines.set(id,()=>callback(...args));return id};
-window.clearTimeout=id=>{deadlines.delete(id);realClearTimeout(id)};
-qa.expireDeadlines=()=>{for(const [id,callback] of [...deadlines]){window.clearTimeout(id);callback()}};
 qa.songs=RHYTHM_SONGS;qa.chart=(song=0,difficulty='normal')=>createChart(RHYTHM_SONGS[song],difficulty);
 const originalTime=Object.getOwnPropertyDescriptor(RhythmAudio.prototype,'currentTime').get;
 Object.defineProperty(RhythmAudio.prototype,'currentTime',{get(){return qa.time??originalTime.call(this)}});
@@ -177,43 +168,268 @@ const browser = await playwright.chromium.launch({
 });
 const checks = [],
   errors = [],
-  external = [];
-const pageFor = async (width = 1280, height = 900) => {
+  external = [],
+  assets = new Set();
+let activePage;
+const pageFor = async (width = 1280, height = 900, fallback = true) => {
   const page = await browser.newPage({
     viewport: { width, height },
     hasTouch: width <= 844,
     reducedMotion: "reduce",
   });
+  activePage = page;
+  page.rhythmHasTouch = width <= 844;
+  page.setDefaultTimeout(6000);
   page.on("pageerror", (error) => errors.push(error.message));
+  page.on("response", (response) => {
+    if (response.url().includes("/assets/weplay/rhythm/")) {
+      assert.equal(response.status(), 200, `Asset ${response.url()}`);
+      assets.add(new URL(response.url()).pathname);
+    }
+  });
   await page.route("**/*", (route) => {
     if (route.request().url().startsWith(base)) return route.continue();
     external.push(route.request().url());
     return route.abort();
   });
+  await page.addInitScript(
+    ({ fallback }) => {
+      if (fallback)
+        Element.prototype.requestFullscreen = () =>
+          Promise.reject(new Error("QA page fallback"));
+      window.rhythmAnimations = [];
+      const animate = Element.prototype.animate;
+      Element.prototype.animate = function (...args) {
+        window.rhythmAnimations.push({
+          target: this.className,
+          duration: args[1]?.duration,
+        });
+        return animate.apply(this, args);
+      };
+      window.rhythmSound = {
+        contexts: 0,
+        oscillators: 0,
+        buffers: 0,
+        resumes: 0,
+      };
+      const NativeAudio = window.AudioContext;
+      window.AudioContext = class extends NativeAudio {
+        constructor(...args) {
+          super(...args);
+          window.rhythmSound.contexts++;
+        }
+        createOscillator(...args) {
+          window.rhythmSound.oscillators++;
+          return super.createOscillator(...args);
+        }
+        createBufferSource(...args) {
+          window.rhythmSound.buffers++;
+          return super.createBufferSource(...args);
+        }
+        resume(...args) {
+          window.rhythmSound.resumes++;
+          return super.resume(...args);
+        }
+      };
+    },
+    { fallback },
+  );
   return page;
 };
-const open = (page) =>
-  page.evaluate(() =>
-    window.rhythmQA.emit({ status: "open", enabled: true, revision: 1 }),
-  );
-const phase = (page, value) => page.locator(`.rhythm-game--${value}`).waitFor();
-const score = (page) =>
-  page
-    .locator(".rhythm-scorebar > div:first-child strong")
-    .evaluate((el) => Number(el.textContent.replace(/\D/g, "")));
-const tap = async (page, x, y) => {
-  const box = await page.locator(".rhythm-drum-touch").boundingBox();
-  assert(box);
-  await page.mouse.click(box.x + box.width * x, box.y + box.height * y);
-};
-const time = async (page, value) => {
-  await page.evaluate((v) => (window.rhythmQA.time = v), value);
-  await page.evaluate(
+const frames = (page) =>
+  page.evaluate(
     () =>
       new Promise((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(resolve)),
       ),
   );
+const phase = (page, value) => page.locator(`.rhythm-game--${value}`).waitFor();
+const readCount = (page) => page.evaluate(() => window.rhythmQA.reads.length);
+const hitCount = (page) => page.evaluate(() => window.rhythmQA.hits.length);
+const score = (page) =>
+  page
+    .locator(".rhythm-scorebar > div:first-child strong")
+    .evaluate((el) => Number(el.textContent.replace(/\D/g, "")));
+const time = async (page, value) => {
+  await page.evaluate((value) => (window.rhythmQA.time = value), value);
+  await frames(page);
+};
+const shot = async (page, name) => {
+  await page.screenshot({
+    path: path.join(evidence, `${name}.png`),
+    fullPage: true,
+  });
+};
+const imageCheck = async (page) => {
+  await page.waitForFunction(() =>
+    Array.from(document.querySelectorAll(".rhythm-game img")).every(
+      (img) => img.complete && img.naturalWidth > 0,
+    ),
+  );
+  return page
+    .locator(".rhythm-game img")
+    .evaluateAll((imgs) => [
+      ...new Set(imgs.map((img) => new URL(img.src).pathname)),
+    ]);
+};
+const overflowCheck = async (page, label) => {
+  const info = await page.evaluate(() => ({
+    width: innerWidth,
+    scroll: document.documentElement.scrollWidth,
+    header: (() => {
+      const s = getComputedStyle(
+        document.querySelector(".rhythm-entry-heading"),
+      );
+      return {
+        background: s.backgroundColor,
+        shadow: s.boxShadow,
+        position: s.position,
+      };
+    })(),
+  }));
+  assert(
+    info.scroll <= info.width + 1,
+    `${label} horizontal overflow: ${JSON.stringify(info)}`,
+  );
+  assert.equal(
+    info.header.background,
+    "rgba(0, 0, 0, 0)",
+    `${label} transparent header`,
+  );
+  assert.equal(info.header.shadow, "none");
+  assert.equal(info.header.position, "static");
+  return info;
+};
+const touchPoint = async (page, x, y) =>
+  page.locator(".rhythm-drum-touch").evaluate(
+    (el, { x, y }) => {
+      const rect = el.getBoundingClientRect(),
+        rotated = !!el.closest(".rhythm-game--rotated");
+      return rotated
+        ? { x: rect.left + (1 - y) * rect.width, y: rect.top + x * rect.height }
+        : { x: rect.left + x * rect.width, y: rect.top + y * rect.height };
+    },
+    { x, y },
+  );
+const tap = async (page, x, y) => {
+  const point = await touchPoint(page, x, y);
+  if (page.rhythmHasTouch) await page.touchscreen.tap(point.x, point.y);
+  else await page.mouse.click(point.x, point.y);
+  return point;
+};
+const key = async (page, code, repeat = false) =>
+  page.evaluate(
+    ({ code, repeat }) =>
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          code,
+          key: code,
+          repeat,
+          bubbles: true,
+          cancelable: true,
+        }),
+      ),
+    { code, repeat },
+  );
+const start = async (page) => {
+  await time(page, 0);
+  await page.getByRole("button", { name: "연주 시작", exact: false }).click();
+  await phase(page, "playing");
+};
+const startVisible = (page) =>
+  page
+    .getByRole("button", { name: "연주 시작", exact: false })
+    .evaluate((el) => {
+      const r = el.getBoundingClientRect(),
+        hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      return !!hit && el.contains(hit);
+    });
+const helpCheck = async (page, label) => {
+  await page
+    .getByRole("button", { name: "리듬 게임 조작 방법", exact: true })
+    .click();
+  const help = page.getByRole("tooltip");
+  await help.waitFor();
+  const placement = await help.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return {
+      inside: !!el.closest(".rhythm-canvas"),
+      x: r.x,
+      y: r.y,
+      right: r.right,
+      bottom: r.bottom,
+      width: innerWidth,
+      height: innerHeight,
+    };
+  });
+  assert(placement.inside, `${label} help stays inside fullscreen canvas`);
+  assert(
+    placement.x >= -1 &&
+      placement.y >= -1 &&
+      placement.right <= placement.width + 1 &&
+      placement.bottom <= placement.height + 1,
+    `${label} help clipped: ${JSON.stringify(placement)}`,
+  );
+  const fullscreen = await page.locator(".rhythm-game--fullscreen").count();
+  await page.keyboard.press("Escape");
+  await help.waitFor({ state: "detached" });
+  assert.equal(
+    await page.locator(".rhythm-game--fullscreen").count(),
+    fullscreen,
+    "help Escape does not exit fullscreen",
+  );
+  return placement;
+};
+const assertLayout = async (page, label) => {
+  const result = await page.evaluate(() => {
+    const rect = (selector) => {
+      const r = document.querySelector(selector).getBoundingClientRect();
+      return {
+        x: r.x,
+        y: r.y,
+        width: r.width,
+        height: r.height,
+        right: r.right,
+        bottom: r.bottom,
+      };
+    };
+    return {
+      viewport: { width: innerWidth, height: innerHeight },
+      canvas: rect(".rhythm-canvas"),
+      lane: rect(".rhythm-lanes"),
+      crop: rect(".rhythm-drum-crop"),
+      drum: rect(".rhythm-drum-touch"),
+      rotated: !!document.querySelector(".rhythm-game--rotated"),
+      matrix: getComputedStyle(document.querySelector(".rhythm-canvas"))
+        .transform,
+    };
+  });
+  for (const target of ["lane", "crop"]) {
+    const r = result[target];
+    assert(
+      r.x >= -1 &&
+        r.y >= -1 &&
+        r.right <= result.viewport.width + 1 &&
+        r.bottom <= result.viewport.height + 1,
+      `${label} ${target} clipped: ${JSON.stringify(result)}`,
+    );
+  }
+  assert.equal(
+    await page.locator(".rhythm-lanes").count(),
+    1,
+    "single score lane",
+  );
+  assert(
+    Math.abs(
+      (result.rotated
+        ? result.crop.width / result.drum.width
+        : result.crop.height / result.drum.height) - 0.5,
+    ) < 0.01,
+    `exact upper half drum: ${JSON.stringify(result)}`,
+  );
+  if (result.rotated)
+    assert.match(result.matrix, /matrix\(0, 1, -1, 0,/, "clockwise canvas");
+  return result;
 };
 try {
   for (const [width, height] of [
@@ -224,466 +440,494 @@ try {
     [320, 760],
     [844, 390],
   ]) {
-    const page = await pageFor(width, height);
-    await page.goto(base);
-    await page.getByText("지금은 이용할 수 없는 게임입니다.").waitFor();
-    assert.equal(await page.locator(".rhythm-game").count(), 0);
-    assert.equal(await page.evaluate(() => window.rhythmQA.reads.length), 1);
-    await open(page);
+    const page = await pageFor(width, height),
+      label = `${width}x${height}`;
+    await page.goto(`${base}/?open`);
     await phase(page, "ready");
-    const header = await page
-      .locator(".rhythm-entry-heading")
-      .evaluate((el) => {
-        const s = getComputedStyle(el);
-        return {
-          background: s.backgroundColor,
-          shadow: s.boxShadow,
-          position: s.position,
-        };
-      });
-    assert.equal(header.background, "rgba(0, 0, 0, 0)");
-    assert.equal(header.shadow, "none");
-    assert.notEqual(header.position, "sticky");
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth > innerWidth + 1,
-    );
-    assert.equal(overflow, false, `Lobby overflow ${width}`);
-    await page.screenshot({
-      path: path.join(evidence, `lobby-${width}x${height}.png`),
-      fullPage: true,
-    });
-    await page.getByRole("button", { name: /연주 시작/ }).click();
-    await phase(page, "playing");
     assert.equal(
-      await page.evaluate(() => window.rhythmQA.audio.at(-1).state),
-      "running",
+      await readCount(page),
+      1,
+      "entry gets exactly one publication read",
     );
-    await time(page, 2.75);
-    assert.equal(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth > innerWidth + 1,
-      ),
-      false,
-      `Play overflow ${width}`,
-    );
-    await page.screenshot({
-      path: path.join(evidence, `play-${width}x${height}.png`),
-      fullPage: true,
-    });
-    const drum = await page.locator(".rhythm-drum-touch").boundingBox();
-    assert(
-      drum.width >= (height < 500 ? 100 : 160),
-      `Drum touch width ${width}: ${drum.width}`,
-    );
-    if (height < 500) {
-      for (const selector of [".rhythm-center-button", ".rhythm-rim-button"]) {
-        const target = await page.locator(selector).boundingBox();
-        assert(
-          target.width >= 44 && target.height >= 44,
-          "Landscape touch controls retain 44px targets",
-        );
-      }
-      const line = await page.locator(".rhythm-hit-line").boundingBox();
-      assert(
-        line.y >= 0 && line.y + line.height <= height,
-        "Landscape judgement line stays in viewport",
+    await overflowCheck(page, label);
+    const portrait = height > width;
+    if (portrait) {
+      await page.locator(".rhythm-orientation-gate").waitFor();
+      assert.equal(
+        await page
+          .getByRole("button", { name: "연주 시작", exact: false })
+          .count(),
+        0,
+        "portrait blocks starting",
       );
+      const animations = await page
+        .locator(".rhythm-orientation-phone")
+        .evaluate((el) => ({
+          name: getComputedStyle(el).animationName,
+          duration: parseFloat(getComputedStyle(el).animationDuration),
+        }));
+      assert.equal(animations.name, "rhythm-phone");
       assert(
-        drum.y >= 0 && drum.y + drum.height <= height,
-        "Landscape drum stays in viewport with the judgement line",
+        animations.duration >= 3,
+        "rotation guide remains animated in reduced motion",
+      );
+      await imageCheck(page);
+      await shot(page, `${label}-portrait`);
+      await page
+        .getByRole("button", { name: "전체 화면으로 열기", exact: true })
+        .click();
+      await page.locator(".rhythm-game--rotated").waitFor();
+      assert.equal(
+        await page.evaluate(() => document.fullscreenElement),
+        null,
+        "forced page fallback",
       );
     }
-    if (width <= 844) {
-      await time(
-        page,
-        await page.evaluate(() => window.rhythmQA.chart()[0].time),
+    await imageCheck(page);
+    await shot(page, `${label}-lobby`);
+    await helpCheck(page, label);
+    assert.equal(await page.locator(".rhythm-song").count(), 4);
+    assert(
+      await startVisible(page),
+      `${label} start button visible without scrolling`,
+    );
+    const calibration = page.getByLabel("소리·판정 시차", { exact: true });
+    await calibration.click();
+    const offsetPanel = page.locator(".rhythm-calibration-popover");
+    await offsetPanel.waitFor();
+    const offsetBox = await offsetPanel.boundingBox();
+    assert(
+      offsetBox &&
+        offsetBox.x >= 0 &&
+        offsetBox.y >= 0 &&
+        offsetBox.x + offsetBox.width <= width + 1 &&
+        offsetBox.y + offsetBox.height <= height + 1,
+      `${label} calibration visible`,
+    );
+    await page.locator("#rhythm-offset").focus();
+    await page.keyboard.press("ArrowRight");
+    assert.equal(await page.locator("#rhythm-offset").inputValue(), "10");
+    await page.keyboard.press("ArrowLeft");
+    const fullscreenBeforeEscape = await page
+      .locator(".rhythm-game--fullscreen")
+      .count();
+    await page.keyboard.press("Escape");
+    assert.equal(
+      await page.locator(".rhythm-calibration").evaluate((el) => el.open),
+      false,
+    );
+    assert.equal(
+      await page.locator(".rhythm-game--fullscreen").count(),
+      fullscreenBeforeEscape,
+    );
+    await calibration.click();
+    await page.locator(".rhythm-eyebrow").first().click();
+    assert.equal(
+      await page.locator(".rhythm-calibration").evaluate((el) => el.open),
+      false,
+      "outside pointer closes calibration",
+    );
+    await start(page);
+    const layout = await assertLayout(page, label);
+    await imageCheck(page);
+    const focusGeometry = () =>
+      page.locator(".rhythm-drum-crop").evaluate((el) => ({
+        scroll: el.scrollTop,
+        rect: el.getBoundingClientRect().toJSON(),
+        drum: el
+          .querySelector(".rhythm-drum-touch")
+          .getBoundingClientRect()
+          .toJSON(),
+      }));
+    const beforeFocus = await focusGeometry();
+    await page.locator(".rhythm-rim-button").focus();
+    await page.keyboard.press("Tab");
+    assert.equal(
+      await page
+        .locator(".rhythm-center-button")
+        .evaluate((el) => el === document.activeElement),
+      true,
+      "Tab reaches center button",
+    );
+    assert.deepEqual(
+      await focusGeometry(),
+      beforeFocus,
+      "drum geometry remains fixed after keyboard focus",
+    );
+    const activationStart = await hitCount(page);
+    await page.keyboard.down("Enter");
+    await page.keyboard.down("Enter");
+    await page.keyboard.up("Enter");
+    assert.equal(
+      await hitCount(page),
+      activationStart + 1,
+      "Enter repeat causes one accessible center hit",
+    );
+    await page.keyboard.down("Space");
+    await page.keyboard.down("Space");
+    await page.keyboard.up("Space");
+    assert.equal(
+      await hitCount(page),
+      activationStart + 2,
+      "Space repeat causes one accessible center hit",
+    );
+    await page.locator(".rhythm-game").focus();
+    const keyStart = await hitCount(page);
+    for (const code of ["ArrowLeft", "ArrowRight", "KeyZ", "KeyX"])
+      await key(page, code);
+    assert.deepEqual(
+      await page.evaluate(
+        (start) => window.rhythmQA.hits.slice(start),
+        keyStart,
+      ),
+      ["center", "center", "rim", "rim"],
+      "all four physical keys",
+    );
+    const notes = await page.evaluate(() => window.rhythmQA.chart());
+    // Physical pointer positions are transformed by the actual DOM and game inverse.
+    const first = notes[0];
+    await time(page, first.time);
+    const alignment = await page.evaluate((id) => {
+      const note = document
+          .querySelector(`[data-note-id="${id}"]`)
+          .getBoundingClientRect(),
+        target = document
+          .querySelector(".rhythm-hit-line")
+          .getBoundingClientRect();
+      return Math.hypot(
+        note.x + note.width / 2 - target.x - target.width / 2,
+        note.y + note.height / 2 - target.y - target.height / 2,
       );
-      const touch = await page.locator(".rhythm-drum-touch").boundingBox();
-      await page.touchscreen.tap(
-        touch.x + touch.width / 2,
-        touch.y + touch.height / 2,
-      );
+    }, first.id);
+    assert(alignment < 1, "chart time and visible judgement flower align");
+    const before = await hitCount(page);
+    const outside = await tap(page, 0.02, 0.02);
+    assert.equal(await hitCount(page), before, "outside circular drum ignored");
+    const lower = await touchPoint(page, 0.5, 0.56);
+    await page.mouse.click(lower.x, lower.y);
+    assert.equal(
+      await hitCount(page),
+      before,
+      "cropped lower half is not touchable",
+    );
+    const wrong = first.kind === "center" ? "rim" : "center";
+    await tap(page, 0.5, wrong === "center" ? 0.3 : 0.06);
+    assert.equal(await score(page), 0, "wrong type does not consume note");
+    const correctPoint = await tap(
+      page,
+      0.5,
+      first.kind === "center" ? 0.3 : 0.06,
+    );
+    assert.equal(await score(page), 1000, "perfect transformed touch");
+    const firstHits = await hitCount(page);
+    await tap(page, 0.5, first.kind === "center" ? 0.3 : 0.06);
+    assert.equal(await score(page), 1000, "same note never scores twice");
+    assert.equal(
+      await hitCount(page),
+      firstHits + 1,
+      "one touch emits one strike",
+    );
+    const effects = await page.evaluate(() => ({
+      effects: document.querySelectorAll(".rhythm-hit-effect").length,
+      animation: getComputedStyle(document.querySelector(".rhythm-hit-effect"))
+        .animationDuration,
+      wa: window.rhythmAnimations,
+      reduce: matchMedia("(prefers-reduced-motion: reduce)").matches,
+    }));
+    assert(
+      effects.reduce &&
+        effects.effects > 0 &&
+        parseFloat(effects.animation) >= 0.4,
+      "hit effects survive reduced motion",
+    );
+    assert(
+      effects.wa.some(
+        (item) => item.target === "rhythm-drum-visual" && item.duration === 220,
+      ),
+    );
+    assert(
+      effects.wa.some(
+        (item) =>
+          item.target === "rhythm-stage-mascot" && item.duration === 320,
+      ),
+    );
+    await shot(page, `${label}-play`);
+    await page.screenshot({
+      path: path.join(evidence, `${label}-play-viewport.png`),
+    });
+    const second = notes.find((note) => note.time > first.time + 0.2);
+    await time(page, second.time);
+    const repeatBefore = await hitCount(page);
+    await key(page, second.kind === "center" ? "ArrowLeft" : "KeyZ", true);
+    assert.equal(await hitCount(page), repeatBefore, "repeat key suppressed");
+    await key(page, second.kind === "center" ? "ArrowRight" : "KeyX");
+    assert.equal(await score(page), 2000, "arrow/Z/X mapped to second note");
+    await page.getByRole("button", { name: "일시정지", exact: true }).click();
+    await phase(page, "paused");
+    await page.waitForFunction(
+      () => window.rhythmQA.audioStates().at(-1) === "suspended",
+    );
+    const paused = await hitCount(page);
+    await key(page, "ArrowLeft");
+    assert.equal(await hitCount(page), paused, "paused hits ignored");
+    await page.getByRole("button", { name: "계속 연주", exact: true }).click();
+    await phase(page, "playing");
+    await page.evaluate(() => {
+      window.rhythmQA.publish({ enabled: false, revision: 2 });
+      window.rhythmQA.network(false);
+      window.rhythmQA.network(true);
+    });
+    await frames(page);
+    await phase(page, "playing");
+    await page.evaluate(() => window.rhythmQA.visibility(false));
+    await phase(page, "paused");
+    await page.evaluate(() => window.rhythmQA.visibility(true));
+    await frames(page);
+    await phase(page, "paused");
+    await page.getByRole("button", { name: "계속 연주", exact: true }).click();
+    await phase(page, "playing");
+    await time(
+      page,
+      await page.evaluate(() => window.rhythmQA.songs[0].duration + 0.1),
+    );
+    await phase(page, "result");
+    assert.equal(
+      await page
+        .locator(".rhythm-result-score")
+        .evaluate((el) => Number(el.textContent.replace(/\D/g, ""))),
+      2000,
+    );
+    assert.equal(
+      await page
+        .locator(".rhythm-result h2")
+        .evaluate((el) => el === document.activeElement),
+      true,
+      "result focus",
+    );
+    await imageCheck(page);
+    await shot(page, `${label}-result`);
+    await time(page, 0);
+    await page.getByRole("button", { name: "한 번 더", exact: true }).click();
+    await phase(page, "playing");
+    assert.equal(await score(page), 0, "retry resets score");
+    assert.equal(
+      await readCount(page),
+      1,
+      "play/touch/pause/resume/retry/visibility/online all add zero reads",
+    );
+    assert.equal(
+      await page.evaluate(() => window.rhythmQA.saves.length),
+      0,
+      "student gameplay writes zero",
+    );
+    const sound = await page.evaluate(() => window.rhythmSound);
+    assert(
+      sound.contexts >= 2 &&
+        sound.oscillators > 0 &&
+        sound.buffers > 0 &&
+        sound.resumes >= 2,
+      "actual Web Audio produced local oscillators and buffers",
+    );
+    if (portrait) {
+      await page
+        .getByRole("button", { name: "전체 화면 나가기", exact: true })
+        .click();
+      const gateButton = page.getByRole("button", {
+        name: "전체 화면으로 열기",
+        exact: true,
+      });
+      await gateButton.waitFor();
       assert.equal(
-        await score(page),
-        1000,
-        `Touchscreen center scores ${width}`,
+        await gateButton.evaluate((el) => el === document.activeElement),
+        true,
+        "fullscreen exit restores portrait gate focus",
       );
+      assert.equal(await readCount(page), 1);
     }
     checks.push({
-      viewport: [width, height],
-      header,
-      lobbyOverflow: overflow,
-      drumWidth: drum.width,
+      viewport: label,
+      portraitFallback: portrait,
+      layout,
+      pointer: { outside, lower, correctPoint },
+      sound,
+      entryReads: 1,
+      gameplayReads: 0,
+      gameplayWrites: 0,
+      passed: true,
     });
     await page.close();
   }
-  const page = await pageFor();
-  await page.goto(base);
-  await page.getByText("지금은 이용할 수 없는 게임입니다.").waitFor();
-  await open(page);
-  await phase(page, "ready");
-  await page.getByRole("button", { name: /연주 시작/ }).click();
-  await phase(page, "playing");
-  const chart = await page.evaluate(() => window.rhythmQA.chart());
-  assert(chart.length > 10);
-  await time(page, chart[0].time);
-  const first = chart[0];
-  await tap(page, ...(first.kind === "center" ? [0.5, 0.08] : [0.5, 0.5]));
-  assert.equal(await score(page), 0, "Wrong zone does not score");
-  const hitsBefore = await page.evaluate(() => window.rhythmQA.hits.length);
-  await tap(page, 0.01, 0.01);
-  assert.equal(
-    await page.evaluate(() => window.rhythmQA.hits.length),
-    hitsBefore,
-    "Outside circle does not strike",
-  );
-  await tap(page, ...(first.kind === "center" ? [0.5, 0.5] : [0.5, 0.08]));
-  assert.equal(
-    await score(page),
-    1000,
-    "Correct pointer zone scores a perfect note",
-  );
-  await tap(page, ...(first.kind === "center" ? [0.5, 0.5] : [0.5, 0.08]));
-  assert.equal(await score(page), 1000, "Duplicate note cannot score twice");
-  const next = chart[1];
-  await time(page, next.time);
-  await page.evaluate(
-    (code) =>
-      window.dispatchEvent(
-        new KeyboardEvent("keydown", { code, repeat: true, bubbles: true }),
-      ),
-    next.kind === "center" ? "KeyF" : "KeyD",
-  );
-  assert.equal(await score(page), 1000, "Held key repeats are ignored");
-  await page.keyboard.press(next.kind === "center" ? "f" : "d");
-  assert.equal(await score(page), 2000, "Keyboard scores matched note");
-  const rim = chart.find(
-    (note) => note.kind === "rim" && note.time > next.time,
-  );
-  assert(rim);
-  await time(page, rim.time);
-  await tap(page, 0.5, 0.08);
-  assert.equal(await score(page), 3000, "Rim touch scores");
-  await page.keyboard.press("Escape");
-  await phase(page, "paused");
-  await page.waitForFunction(
-    () => window.rhythmQA.audio.at(-1).state === "suspended",
-  );
-  const pausedScore = await score(page);
-  await page.keyboard.press("f");
-  assert.equal(await score(page), pausedScore);
-  await page.getByRole("button", { name: "계속 연주", exact: true }).click();
-  await phase(page, "playing");
-  await page.evaluate(() =>
-    window.rhythmQA.emit({ status: "checking", enabled: false }),
-  );
-  await phase(page, "paused");
-  await page.waitForFunction(
-    () => window.rhythmQA.audio.at(-1).state === "suspended",
-  );
-  assert.equal(
-    await page
-      .getByRole("button", { name: "계속 연주", exact: true })
-      .isDisabled(),
-    true,
-  );
-  await phase(page, "paused");
-  await page.evaluate(() => window.rhythmQA.expireDeadlines());
-  await page
-    .getByRole("alert")
-    .filter({ hasText: "게임을 확인하지 못했습니다." })
-    .waitFor();
-  assert.equal(
-    await page.evaluate(() => window.rhythmQA.listeners.size),
-    0,
-    "Cache downgrade timeout releases listener",
-  );
-  await page.evaluate(
-    () =>
-      (window.rhythmQA.publication = {
-        status: "open",
-        enabled: true,
-        revision: 1,
-      }),
-  );
-  await page.getByRole("button", { name: "다시 확인", exact: true }).click();
-  await page.evaluate(() =>
-    window.rhythmQA.emit({ status: "open", enabled: true }),
-  );
-  await page.getByRole("button", { name: "계속 연주", exact: true }).click();
-  await phase(page, "playing");
-  await page.evaluate(() => window.rhythmQA.network(false));
-  await phase(page, "paused");
-  assert.equal(await page.evaluate(() => window.rhythmQA.listeners.size), 0);
-  await page
-    .getByRole("alert")
-    .filter({ hasText: "게임을 확인하지 못했습니다." })
-    .waitFor();
-  await page.evaluate(() => window.rhythmQA.network(true));
-  await page.getByRole("button", { name: "계속 연주", exact: true }).click();
-  await phase(page, "playing");
-  await page.evaluate(() => window.rhythmQA.visibility(false));
-  await phase(page, "paused");
-  assert.equal(await page.evaluate(() => window.rhythmQA.listeners.size), 0);
-  const reads = await page.evaluate(() => window.rhythmQA.reads.length);
-  await page.waitForTimeout(200);
-  assert.equal(
-    await page.evaluate(() => window.rhythmQA.reads.length),
-    reads,
-    "Hidden tabs do not poll",
-  );
-  await page.evaluate(() => window.rhythmQA.visibility(true));
-  await page.getByRole("button", { name: "계속 연주", exact: true }).click();
-  await phase(page, "playing");
-  await time(
-    page,
-    await page.evaluate(() => window.rhythmQA.songs[0].duration + 1),
-  );
-  await phase(page, "result");
-  assert.equal(
-    await page
-      .getByRole("heading", { name: "한 판, 얼쑤!" })
-      .evaluate((el) => el === document.activeElement),
-    true,
-  );
-  assert.equal(
-    await page.evaluate(() => window.rhythmQA.audio.at(-1).state),
-    "idle",
-  );
-  await page.screenshot({
-    path: path.join(evidence, "result-1280.png"),
-    fullPage: true,
+  // Default absent, failed reads, and account/semester remounts use the actual Entry/hook.
+  const boundary = await pageFor();
+  await boundary.goto(base);
+  await boundary.getByText("지금은 이용할 수 없는 게임입니다.").waitFor();
+  assert.equal(await boundary.locator(".rhythm-game").count(), 0);
+  assert.equal(await readCount(boundary), 1);
+  await boundary.evaluate(() => {
+    window.rhythmQA.publish({ enabled: true, revision: 1 });
+    window.rhythmQA.account("student-2");
   });
-  await page.evaluate(() => (window.rhythmQA.time = 0));
-  await page.getByRole("button", { name: "한 번 더", exact: true }).click();
-  await phase(page, "playing");
-  await page.evaluate(() =>
-    window.rhythmQA.emit({ status: "closed", enabled: false, revision: 2 }),
-  );
-  await page.getByText("지금은 이용할 수 없는 게임입니다.").waitFor();
-  assert.equal(await page.locator(".rhythm-game").count(), 0);
-  assert.equal(
-    await page.evaluate(() => window.rhythmQA.audio.at(-1).state),
-    "closed",
-  );
-  await open(page);
-  await phase(page, "ready");
-  await page.evaluate(() => {
-    window.rhythmQA.confirmFailure = true;
-    window.rhythmQA.time = 0;
-  });
-  await page.getByRole("button", { name: /연주 시작/ }).click();
-  await page
-    .getByRole("alert")
-    .filter({ hasText: "연주를 시작하지 못했습니다." })
-    .waitFor();
-  await phase(page, "ready");
-  assert.equal(
-    await page.evaluate(() => window.rhythmQA.audio.at(-1).state),
-    "closed",
-    "Expired start closes audio",
-  );
-  await page.evaluate(() => (window.rhythmQA.confirmFailure = false));
-  await page.getByRole("button", { name: /연주 시작/ }).click();
-  await phase(page, "playing");
-  const centerNotes = chart.filter((note) => note.kind === "center");
-  await time(page, centerNotes[0].time);
-  await page
-    .getByRole("button", { name: "북 가운데 쿵 (F 또는 J)", exact: true })
-    .focus();
-  await page.keyboard.down("Enter");
-  assert.equal(await score(page), 1000);
-  await time(page, centerNotes[1].time);
-  await page.keyboard.down("Enter");
-  assert.equal(
-    await score(page),
-    1000,
-    "Native Enter repeat does not auto-hit",
-  );
-  await page.keyboard.up("Enter");
-  await page.keyboard.press("Escape");
-  await phase(page, "paused");
-  await page.evaluate(() => (window.rhythmQA.confirmFailure = true));
-  await page.getByRole("button", { name: "계속 연주", exact: true }).click();
-  await phase(page, "paused");
-  assert.equal(
-    await page.evaluate(() => window.rhythmQA.audio.at(-1).state),
-    "suspended",
-    "Expired resume remains suspended",
-  );
-  assert(
-    (await page.evaluate(() => window.rhythmQA.confirms.length)) >= 7,
-    "Student starts and resumes recheck server authorization",
-  );
-  await page.evaluate(() => (window.rhythmQA.confirmFailure = false));
-  await page.getByRole("button", { name: "곡 고르기", exact: true }).click();
-  await phase(page, "ready");
-  await page.getByText("소리·판정 시차", { exact: true }).click();
-  await page.locator("#rhythm-offset").focus();
-  for (let step = 0; step < 10; step++) await page.keyboard.press("ArrowRight");
-  assert.equal(await page.locator("#rhythm-offset").inputValue(), "100");
-  await page.evaluate(() => (window.rhythmQA.time = 0));
-  await page.getByRole("button", { name: /연주 시작/ }).click();
-  await phase(page, "playing");
-  await time(page, chart[0].time + 0.1);
-  const calibrated = await page
-    .locator(".rhythm-note--center")
-    .first()
-    .evaluate((el) => Number.parseFloat(el.style.top));
-  assert(
-    Math.abs(calibrated - 86) < 0.01,
-    "Offset moves the visible note to the same judgement line",
-  );
-  await tap(page, 0.5, 0.5);
-  assert.equal(
-    await score(page),
-    1000,
-    "Calibrated visible note receives a perfect hit",
-  );
-  await page.evaluate(() => {
-    window.rhythmQA.stale = window.rhythmQA.lastCallback;
+  await phase(boundary, "ready");
+  assert.equal(await readCount(boundary), 2);
+  await start(boundary);
+  await boundary.evaluate(() => {
     window.rhythmQA.hold = true;
-    window.rhythmQA.account("qa-other-student");
+    window.rhythmQA.config({ semester: "1" });
   });
-  await page.waitForFunction(
-    () => window.rhythmQA.reads.at(-1).uid === "qa-other-student",
+  await boundary.locator(".rhythm-game").waitFor({ state: "detached" });
+  assert.equal(await readCount(boundary), 3);
+  assert(
+    await boundary.evaluate(() =>
+      window.rhythmQA.audioStates().every((state) => state === "closed"),
+    ),
+    "semester exits and disposes audio immediately",
   );
-  assert.equal(await page.locator(".rhythm-game").count(), 0);
-  await page.evaluate(() =>
-    window.rhythmQA.stale({ status: "open", enabled: true, revision: 99 }),
-  );
-  assert.equal(
-    await page.locator(".rhythm-game").count(),
-    0,
-    "Old account callback cannot reopen game",
-  );
-  await page.evaluate(() => {
+  await boundary.evaluate(() => {
     window.rhythmQA.hold = false;
-    window.rhythmQA.emit({ status: "closed", enabled: false, revision: 0 });
+    window.rhythmQA.pending.splice(0).forEach((resolve) => resolve());
   });
-  await page.getByText("지금은 이용할 수 없는 게임입니다.").waitFor();
+  await phase(boundary, "ready");
+  await start(boundary);
+  await boundary.evaluate(() => {
+    window.rhythmQA.failure = true;
+    window.rhythmQA.account("student-3");
+  });
+  await boundary.getByRole("button", { name: "다시 확인" }).waitFor();
+  assert(
+    await boundary.evaluate(() =>
+      window.rhythmQA.audioStates().every((state) => state === "closed"),
+    ),
+    "account exits and disposes audio",
+  );
+  const failedCount = await readCount(boundary);
+  await boundary.evaluate(() => {
+    window.rhythmQA.network(false);
+    window.rhythmQA.network(true);
+    window.rhythmQA.visibility(false);
+    window.rhythmQA.visibility(true);
+  });
+  await frames(boundary);
+  assert.equal(
+    await readCount(boundary),
+    failedCount,
+    "failure requires explicit retry",
+  );
+  await boundary.evaluate(() => (window.rhythmQA.failure = false));
+  await boundary.getByRole("button", { name: "다시 확인" }).click();
+  await phase(boundary, "ready");
+  assert.equal(await readCount(boundary), failedCount + 1);
   checks.push({
-    interaction:
-      "pointer/touch/keyboard-repeat/offset/pause/cache-timeout/offline/hidden/result/live-close/session-start-resume/account-boundary",
+    boundary: "absent, semester/account stop, failed read, explicit retry",
     passed: true,
   });
-  await page.close();
-
+  await boundary.close();
   const teacher = await pageFor();
-  await teacher.goto(base + "/?teacher");
-  await teacher.getByText("학생 비공개", { exact: true }).waitFor();
-  assert.equal(await teacher.locator(".rhythm-game").count(), 0);
+  await teacher.goto(`${base}/?teacher`);
+  await teacher
+    .getByRole("button", { name: "학생에게 공개", exact: true })
+    .waitFor();
+  assert.equal(await readCount(teacher), 1);
   await teacher.getByRole("button", { name: "미리보기", exact: true }).click();
   await phase(teacher, "ready");
+  await start(teacher);
   assert.equal(
     await teacher.evaluate(() => window.rhythmQA.saves.length),
     0,
-    "Preview must not publish",
+    "preview does not publish",
   );
-  await teacher.getByRole("button", { name: /연주 시작/ }).click();
-  await phase(teacher, "playing");
-  assert.equal(
-    await teacher.evaluate(() => window.rhythmQA.confirms.length),
-    0,
-    "Teacher preview does not make student admission reads",
-  );
-  await teacher
-    .getByRole("button", { name: "미리보기 닫기", exact: true })
-    .click();
-  assert.equal(
-    await teacher.evaluate(() => window.rhythmQA.audio.at(-1).state),
-    "closed",
-  );
-  await teacher.evaluate(() => (window.rhythmQA.saveHold = true));
   await teacher
     .getByRole("button", { name: "학생에게 공개", exact: true })
     .click();
   await teacher
-    .getByRole("button", { name: "저장 중…", exact: true })
+    .getByRole("button", { name: "학생 공개 닫기", exact: true })
     .waitFor();
   assert.equal(
-    await teacher
-      .getByRole("button", { name: "저장 중…", exact: true })
-      .isDisabled(),
-    true,
+    await readCount(teacher),
+    1,
+    "save accepts local transaction result",
   );
-  assert.equal(await teacher.evaluate(() => window.rhythmQA.saves.length), 1);
-  await teacher.evaluate(() => {
-    window.rhythmQA.saveHold = false;
-    window.rhythmQA.pendingSaves.shift()();
-  });
-  await teacher.getByText("학생 공개 중", { exact: true }).waitFor();
   await teacher
     .getByRole("button", { name: "학생 공개 닫기", exact: true })
     .click();
-  await teacher.getByText("학생 비공개", { exact: true }).waitFor();
-  assert.deepEqual(
-    await teacher.evaluate(() =>
-      window.rhythmQA.saves.map((x) => [x.enabled, x.expectedRevision]),
-    ),
-    [
-      [true, 0],
-      [false, 1],
-    ],
-  );
-  await teacher.evaluate(() => (window.rhythmQA.saveFailure = true));
   await teacher
     .getByRole("button", { name: "학생에게 공개", exact: true })
-    .click();
-  await teacher
-    .getByRole("alert")
-    .filter({ hasText: "공개 설정을 저장하지 못했습니다." })
     .waitFor();
-  await teacher.getByText("학생 비공개", { exact: true }).waitFor();
-  await teacher.evaluate(() =>
-    window.rhythmQA.account("qa-staff", {
-      userData: {
-        role: "staff",
-        teacherPortalEnabled: true,
-        staffPermissions: ["lesson_read"],
-      },
-    }),
-  );
-  assert.equal(
-    await teacher
-      .getByRole("button", { name: "학생에게 공개", exact: true })
-      .count(),
-    0,
-  );
-  await teacher.getByRole("button", { name: "미리보기", exact: true }).click();
-  await phase(teacher, "ready");
-  await teacher.evaluate(() =>
-    window.rhythmQA.account("qa-unprivileged", {
-      userData: {
-        role: "staff",
-        teacherPortalEnabled: true,
-        staffPermissions: [],
-      },
-    }),
-  );
-  await teacher
-    .getByRole("alert")
-    .filter({ hasText: "위플레이 관리 화면을 볼 권한이 없습니다." })
-    .waitFor();
+  await phase(teacher, "playing");
+  assert.equal(await teacher.evaluate(() => window.rhythmQA.saves.length), 2);
   checks.push({
-    management:
-      "preview without publication, one save, close, failed-save recovery, staff read-only, denied role",
+    teacher:
+      "preview remains separate; publish/close use transaction result without re-read",
     passed: true,
   });
   await teacher.close();
+  const native = await pageFor(1280, 900, false);
+  await native.goto(`${base}/?open`);
+  await phase(native, "ready");
+  await native.getByRole("button", { name: "전체 화면", exact: true }).click();
+  await native.waitForFunction(() =>
+    document.fullscreenElement?.classList.contains("rhythm-game"),
+  );
+  await helpCheck(native, "native fullscreen");
+  await start(native);
+  await assertLayout(native, "native fullscreen");
+  await shot(native, "1280x900-native-fullscreen");
+  await native
+    .getByRole("button", { name: "전체 화면 나가기", exact: true })
+    .click();
+  await native.waitForFunction(() => !document.fullscreenElement);
+  await phase(native, "paused");
+  assert.equal(await readCount(native), 1, "native fullscreen adds zero reads");
+  checks.push({
+    nativeFullscreen: "enter, help, play, exit pauses",
+    passed: true,
+  });
+  await native.close();
+  for (const name of [
+    "bg-stage",
+    "button-plaque",
+    "mascot",
+    "note-center",
+    "note-rim",
+    "drum",
+  ])
+    assert(
+      assets.has(`/assets/weplay/rhythm/v2/${name}.webp`),
+      `loaded artwork ${name}`,
+    );
   assert.deepEqual(errors, []);
   assert.deepEqual(external, []);
   await fs.writeFile(
     path.join(evidence, "report.json"),
-    JSON.stringify({ checks, errors, external }, null, 2),
+    JSON.stringify({ checks, assets: [...assets], errors, external }, null, 2),
   );
   console.log(
     JSON.stringify(
-      { passed: checks.length, checks, errors, external },
+      {
+        passed: checks.length,
+        viewports: checks
+          .filter((check) => check.viewport)
+          .map((check) => check.viewport),
+        assets: assets.size,
+        errors,
+        external,
+        report: path.join(evidence, "report.json"),
+      },
       null,
       2,
     ),
   );
+} catch (error) {
+  if (activePage && !activePage.isClosed())
+    await shot(activePage, "FAILURE").catch(() => {});
+  await fs.writeFile(
+    path.join(evidence, "failure.json"),
+    JSON.stringify(
+      { error: String(error), stack: error.stack, checks, errors, external },
+      null,
+      2,
+    ),
+  );
+  throw error;
 } finally {
   await browser.close();
   await new Promise((resolve) => server.close(resolve));
