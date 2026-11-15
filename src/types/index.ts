@@ -11,6 +11,7 @@ export interface SystemConfig {
       | "weplay"
       | "naval"
       | "yut"
+      | "rhythm"
       | "mypage"
       | "avatar"
       | "avatar_shop"

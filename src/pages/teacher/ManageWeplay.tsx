@@ -43,6 +43,7 @@ import WeplayTitleEditor from "./components/WeplayTitleEditor";
 import { getWeplayGameTitle } from "../../lib/weplayTitle";
 
 import YutManagement from "./components/YutManagement";
+import RhythmGameEntry from "../../components/common/weplay/rhythm/RhythmGameEntry";
 import WeplayStudioIntro from "../../components/common/weplay/WeplayStudioIntro";
 import { prepareWeplayIntroAudio } from "../../components/common/weplay/weplayIntroAudio";
 import WeplayGameFrame from "../../components/common/weplay/WeplayGameFrame";
@@ -51,6 +52,8 @@ import { withWeplayRequestTimeout } from "../../components/common/weplay/request
 export default function ManageWeplay() {
   const [params] = useSearchParams();
   const { userData, currentUser } = useAuth();
+  if (params.get("game") === "gungdeok-rock")
+    return <RhythmGameEntry portal="teacher" />;
   if (params.get("game") === "joseon-yut") {
     if (!canReadLessonManagement(userData, currentUser?.email)) {
       return <p role="alert">위플레이 관리 화면을 볼 권한이 없습니다.</p>;

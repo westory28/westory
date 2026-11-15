@@ -41,6 +41,7 @@ export const buildStudentMenuVisibility = (menuConfig: MenuConfig) => {
       childVisible("/student/weplay") &&
       childVisible("/student/weplay?game=history-rain"),
     yut: weplay && childVisible("/student/weplay?game=joseon-yut"),
+    rhythm: weplay && childVisible("/student/weplay?game=gungdeok-rock"),
     mypage,
     profile:
       mypage &&
@@ -325,6 +326,10 @@ export const getStudentVisibleMenuItems = (
           child.url === "/student/weplay?game=joseon-yut" &&
           visibility?.yut === false
         ) &&
+        !(
+          child.url === "/student/weplay?game=gungdeok-rock" &&
+          visibility?.rhythm === false
+        ) &&
         !(child.url === "/student/mypage" && visibility?.profile === false) &&
         !(
           child.url === "/student/mypage?menu=avatar" &&
@@ -457,10 +462,12 @@ export const getStudentRouteAccess = (
       allowed =
         visible("weplay") &&
         (!game
-          ? visible("naval") || visible("yut")
+          ? visible("naval") || visible("yut") || visible("rhythm")
           : game === "history-rain"
             ? visible("naval")
-            : game === "joseon-yut" && visible("yut"));
+            : game === "joseon-yut"
+              ? visible("yut")
+              : game === "gungdeok-rock" && visible("rhythm"));
     }
     return allowed
       ? { allowed: true }

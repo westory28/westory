@@ -5,6 +5,7 @@
   },
   "firestore": {
     "predeploy": [
+      "npm run test:rhythm-publication",
       "npm run test:score-request-rules",
       "npm run test:developer-log-likes-rules"
     ],

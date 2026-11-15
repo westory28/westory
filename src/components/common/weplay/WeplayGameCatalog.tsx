@@ -7,6 +7,9 @@ import { getStudentRouteAccess } from "../../../lib/studentMenuAccess";
 import useYutPublication from "./useYutPublication";
 import { prepareWeplayIntroAudio } from "./weplayIntroAudio";
 import { InlineLoading } from "../LoadingState";
+import useRhythmPublication from "./rhythm/useRhythmPublication";
+import RhythmDrum from "./rhythm/RhythmDrum";
+import "./rhythm/rhythm.css";
 import "./weplay-catalog.css";
 
 export default function WeplayGameCatalog({
@@ -19,6 +22,7 @@ export default function WeplayGameCatalog({
   portal: "student" | "teacher";
 }) {
   const publication = useYutPublication(portal);
+  const rhythmPublication = useRhythmPublication(portal, portal === "student");
   const { currentUser, config, menuConfig, configReady, menuConfigReady } =
     useAuth();
   const navalAllowed =
@@ -64,7 +68,9 @@ export default function WeplayGameCatalog({
         ).allowed &&
         (game.id === "joseon-yut"
           ? publication.status === "open"
-          : navalStatus === "open")),
+          : game.id === "gungdeok-rock"
+            ? rhythmPublication.status === "open"
+            : navalStatus === "open")),
   );
   return (
     <section
@@ -80,10 +86,12 @@ export default function WeplayGameCatalog({
       </div>
       {portal === "student" &&
         ((navalAllowed && navalStatus === "checking") ||
-          publication.status === "checking") && <InlineLoading />}
+          publication.status === "checking" ||
+          rhythmPublication.status === "checking") && <InlineLoading />}
       {portal === "student" &&
         ((navalAllowed && navalStatus === "error") ||
-          publication.status === "error") && (
+          publication.status === "error" ||
+          rhythmPublication.status === "error") && (
           <div role="alert">
             게임을 확인하지 못했습니다.{" "}
             <button
@@ -92,6 +100,7 @@ export default function WeplayGameCatalog({
               onClick={() => {
                 setRevision((value) => value + 1);
                 publication.retry();
+                rhythmPublication.retry();
               }}
             >
               다시 확인
@@ -104,7 +113,11 @@ export default function WeplayGameCatalog({
             game.id !== "joseon-yut" || publication.status === "open";
           const content = (
             <>
-              {game.id === "joseon-yut" ? (
+              {game.id === "gungdeok-rock" ? (
+                <div className="rhythm-cover" aria-hidden="true">
+                  <RhythmDrum compact />
+                </div>
+              ) : game.id === "joseon-yut" ? (
                 <div className="weplay-yut-cover" aria-hidden="true">
                   <img
                     src={`${import.meta.env.BASE_URL}assets/weplay/yut/catalog-toss.webp`}
@@ -126,7 +139,9 @@ export default function WeplayGameCatalog({
                 <span className="weplay-game-card-kind">
                   {game.id === "joseon-yut"
                     ? "전통 · 전략 · 1~4인"
-                    : "역사 · 타자 · 1인"}
+                    : game.id === "gungdeok-rock"
+                      ? "국악 · 터치 리듬 · 1인"
+                      : "역사 · 타자 · 1인"}
                 </span>
                 <span className="weplay-game-card-action">
                   {available
@@ -152,6 +167,7 @@ export default function WeplayGameCatalog({
                   onClick={(event) => {
                     if (
                       portal === "student" &&
+                      game.id !== "gungdeok-rock" &&
                       !event.ctrlKey &&
                       !event.metaKey &&
                       !event.shiftKey &&

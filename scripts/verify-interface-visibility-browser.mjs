@@ -54,6 +54,14 @@ const allowed = (url, menus, config = system) => {
 };
 const hidden = (url, parent = false) => {
   const menus = policy.cloneDefaultMenus();
+  // Rhythm is catalogue-only by default. An explicitly saved menu entry must
+  // still honor its hidden flag, so create that independent fixture here.
+  if (!parent && url === "/student/weplay?game=gungdeok-rock") {
+    const weplay = menus.student.find((item) => item.url === "/student/weplay");
+    weplay.children ??= [];
+    if (!weplay.children.some((child) => child.url === url))
+      weplay.children.push({ name: "덩기덕 쿵더Rock", url });
+  }
   for (const item of menus.student) {
     if (parent && item.url === url) item.hidden = true;
     for (const child of item.children || [])
@@ -62,6 +70,16 @@ const hidden = (url, parent = false) => {
   return menus;
 };
 const defaults = policy.cloneDefaultMenus();
+check(
+  !defaults.student.some((item) =>
+    item.children?.some((child) => child.url.includes("gungdeok-rock")),
+  ),
+  "default student navigation does not expose the private rhythm title",
+);
+check(
+  allowed("/student/weplay?game=gungdeok-rock", defaults),
+  "catalogue-only rhythm route remains eligible through its visible parent",
+);
 for (const key of ["profile", "avatar", "score", "wrong_note"]) {
   const url =
     key === "profile" ? "/student/mypage" : `/student/mypage?menu=${key}`;
@@ -122,7 +140,32 @@ check(
   ),
   "yut direct link hidden",
 );
-for (const suffix of ["", "?game=history-rain", "?game=joseon-yut"])
+check(
+  !allowed(
+    "/student/weplay?game=gungdeok-rock",
+    hidden("/student/weplay?game=gungdeok-rock"),
+  ),
+  "rhythm direct link hidden",
+);
+check(
+  !policy.buildStudentMenuVisibility(
+    hidden("/student/weplay?game=gungdeok-rock"),
+  ).rhythm,
+  "explicit rhythm hiding is included in the server projection",
+);
+check(
+  !allowed("/student/weplay?game=gungdeok-rock", defaults, {
+    ...system,
+    studentMenuVisibility: { rhythm: false },
+  }),
+  "server projection closes rhythm before menu snapshot arrives",
+);
+for (const suffix of [
+  "",
+  "?game=history-rain",
+  "?game=joseon-yut",
+  "?game=gungdeok-rock",
+])
   check(
     !allowed(`/student/weplay${suffix}`, hidden("/student/weplay", true)),
     "Weplay parent closes every route",
@@ -158,6 +201,12 @@ check(
     .children.some((child) => child.url.includes("joseon-yut")),
   "saved menus gain yut control",
 );
+check(
+  !legacy.student
+    .find((item) => item.url === "/student/weplay")
+    .children.some((child) => child.url.includes("gungdeok-rock")),
+  "legacy menu normalization does not expose a new private rhythm title",
+);
 
 const service = `
 import React from 'react';
@@ -167,7 +216,7 @@ const fixtureUser={uid:'visibility-fixture',email:'fixture@example.invalid'};
 export const auth={currentUser:fixtureUser}; export const db={}; export const authPersistenceReady=Promise.resolve();
 export const baseConfig=${JSON.stringify(system)};
 const values={config:baseConfig,menu_config:cloneDefaultMenus(),interface_config:{dashboard:{notice:true,calendar:true,ranking:true}}};
-window.visibilityQa={mounts:[],toasts:[],reads:[],publication:'open',navalReads:0,
+window.visibilityQa={mounts:[],toasts:[],reads:[],publication:'open',rhythmPublication:'closed',navalReads:0,
   deferNaval:new URLSearchParams(location.search).get('fixture')==='weplay',
   resolveNaval(value){this.navalReply=value;navalPending.splice(0).forEach(resolve=>resolve(value));},
   resolve(id,data){if(data!==undefined)values[id]=data;const requests=pending.get(id)||[];pending.delete(id);requests.forEach(x=>x.resolve(values[id]));},
@@ -189,7 +238,7 @@ export const subscribeMenuConfigUpdated=()=>()=>{},subscribeSystemConfigUpdated=
 export const archiveScope=null,isSemesterArchive=false;
 export const markLoginPerf=()=>{},measureLoginPerf=()=>{};
 const toast={showToast(value){window.visibilityQa.toasts.push(value);}};export const useAppToast=()=>toast;
-export const WEPLAY_GAMES=[{id:'history-rain',name:'충무공'},{id:'joseon-yut',name:'마우저구 윷놀이'}];
+export const WEPLAY_GAMES=[{id:'history-rain',name:'충무공'},{id:'joseon-yut',name:'마우저구 윷놀이'},{id:'gungdeok-rock',name:'덩기덕 쿵더Rock'}];
 export const getWeplayLobby=async()=>{window.visibilityQa.navalReads++;return window.visibilityQa.navalReply??(window.visibilityQa.deferNaval?new Promise(resolve=>navalPending.push(resolve)):{gameEnabled:true});};
 export const prepareWeplayIntroAudio=()=>{},preloadWeplayAssets=()=>{};
 export const startWeplayGame=()=>{throw Error('Fixture forbids paid game starts')};
@@ -204,7 +253,7 @@ import MainLayout from ${imp("src/components/layout/MainLayout.tsx")};
 import WeplayGameCatalog from ${imp("src/components/common/weplay/WeplayGameCatalog.tsx")};
 import Weplay from ${imp("src/pages/student/Weplay.tsx")};
 import ${imp("src/assets/index.css")};
-function Body(){const location=useLocation();const marker=location.pathname+location.search;React.useLayoutEffect(()=>{window.visibilityQa.mounts.push(marker)},[marker]);return <div data-testid="body" data-route={marker}>{new URLSearchParams(window.location.search).get('fixture')==='weplay'?<Weplay/>:marker==='/student/weplay'?<WeplayGameCatalog portal="student" gameTitle="내가 충무공이라고?!"/>:<h1>{marker}</h1>}</div>}
+function Body(){const location=useLocation();const marker=location.pathname+location.search;React.useLayoutEffect(()=>{window.visibilityQa.mounts.push(marker)},[marker]);return <div data-testid="body" data-route={marker}>{new URLSearchParams(window.location.search).get('fixture')==='weplay'&&location.pathname==='/student/weplay'?<Weplay/>:marker==='/student/weplay'?<WeplayGameCatalog portal="student" gameTitle="내가 충무공이라고?!"/>:<h1>{marker}</h1>}</div>}
 function App(){return <AuthProvider><HashRouter><MainLayout><Body/></MainLayout></HashRouter></AuthProvider>};
 createRoot(document.getElementById('root')).render(<App/>);
 `;
@@ -255,10 +304,14 @@ const output = await build({
           path: "publication",
           namespace: "fixture",
         }));
+        plugin.onResolve({ filter: /useRhythmPublication$/ }, () => ({
+          path: "rhythm-publication",
+          namespace: "fixture",
+        }));
         plugin.onResolve(
           {
             filter:
-              /(?:HistoryRainGame|WeplayStudioIntro|WeplayGameFrame|WeplayLaunchPanel|NavalBattleResult|WeplayGuide|useWeplayGuide|useWeplayMusic|WeplayMusicButton|WeplayRecordsDialog|YutGameEntry)$/,
+              /(?:HistoryRainGame|WeplayStudioIntro|WeplayGameFrame|WeplayLaunchPanel|NavalBattleResult|WeplayGuide|useWeplayGuide|useWeplayMusic|WeplayMusicButton|WeplayRecordsDialog|YutGameEntry|RhythmGameEntry)$/,
           },
           (args) => ({
             path: args.path.split("/").pop(),
@@ -281,7 +334,9 @@ const output = await build({
                       ? `export default function Guide(){return {open:false,openGuide(){},finishGuide(){},closeForNow(){}}}`
                       : args.path === "useWeplayMusic"
                         ? `export default function Music(){return {}}`
-                        : `export default function Unused(){return null}`,
+                        : args.path === "RhythmGameEntry"
+                          ? `import React from 'react';export default function RhythmEntry(){React.useLayoutEffect(()=>{window.visibilityQa.mounts.push('rhythm-entry')},[]);return <div data-testid="rhythm-entry">리듬 게임 진입</div>}`
+                          : `export default function Unused(){return null}`,
           }),
         );
         plugin.onLoad({ filter: /.*/, namespace: "fixture" }, (args) => ({
@@ -298,7 +353,9 @@ const output = await build({
                     ? "export const PortalWorkspaceFooterProvider=({children})=>children;export const PortalFallbackFooter=()=>null;"
                     : args.path === "publication"
                       ? `export default function useYutPublication(){return {status:window.visibilityQa.publication,retry(){}}}`
-                      : "export default function Empty(){return null}",
+                      : args.path === "rhythm-publication"
+                        ? `export default function useRhythmPublication(){return {status:window.visibilityQa.rhythmPublication,enabled:window.visibilityQa.rhythmPublication==='open',revision:0,scope:'fixture',retry(){}}}`
+                        : "export default function Empty(){return null}",
         }));
       },
     },
@@ -401,6 +458,13 @@ try {
     await zeroProtected(page, "slow interface settings");
     await settle(page);
     await page.getByTestId("body").waitFor();
+    check(
+      (await page
+        .getByTestId("portal-header")
+        .getByRole("link", { name: "덩기덕 쿵더Rock", exact: true })
+        .count()) === 0,
+      "default rendered student navigation omits the private rhythm title",
+    );
     checks.push(`${width}: dashboard waits for every server setting`);
 
     await open(page, "/student/mypage?menu=avatar");
@@ -438,6 +502,39 @@ try {
       "hidden yut never mounted",
     );
     checks.push(`${width}: hidden yut direct entry blocked`);
+
+    await open(page, "/student/weplay?game=gungdeok-rock", "weplay");
+    await page.evaluate((menus) => {
+      window.visibilityQa.rhythmPublication = "open";
+      window.visibilityQa.resolve("menu_config", menus);
+    }, hidden("/student/weplay?game=gungdeok-rock"));
+    await settle(page);
+    await page.waitForURL(/#\/student\/dashboard$/);
+    check(
+      !(await page.evaluate(() => window.visibilityQa.mounts)).includes(
+        "rhythm-entry",
+      ),
+      "hidden rhythm never mounts even if publication is open",
+    );
+    check(
+      (await page.evaluate(() => window.visibilityQa.navalReads)) === 0,
+      "hidden rhythm route does not fall back to naval reads",
+    );
+    checks.push(
+      `${width}: hidden rhythm direct entry blocked before game mount`,
+    );
+
+    await open(page, "/student/weplay?game=gungdeok-rock", "weplay");
+    await page.evaluate(() => {
+      window.visibilityQa.rhythmPublication = "open";
+    });
+    await settle(page);
+    await page.getByTestId("rhythm-entry").waitFor();
+    check(
+      (await page.evaluate(() => window.visibilityQa.navalReads)) === 0,
+      "rhythm direct route selects its entry without naval lobby queries",
+    );
+    checks.push(`${width}: permitted rhythm route selects its own entry`);
 
     await open(page, "/student/mypage?menu=avatar");
     await page.evaluate(() => {
@@ -535,6 +632,12 @@ try {
       (await page.locator('.weplay-game-card[href*="joseon-yut"]').count()) ===
         0,
       "hidden yut has no catalogue link",
+    );
+    check(
+      (await page
+        .locator('.weplay-game-card[href*="gungdeok-rock"]')
+        .count()) === 0,
+      "unpublished rhythm has no catalogue link even when its menu is visible",
     );
     await page.screenshot({
       path: path.join(evidence, `catalogue-${width}.png`),

@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "verify:rhythm": "node scripts/verify-rhythm-core.mjs",
+    "verify:rhythm-browser": "node scripts/verify-rhythm-browser.mjs",
+    "test:rhythm-publication": "node scripts/run-rhythm-publication-rules.mjs",
     "prebuild": "npm run verify:wis-investments && npm run security:check-supply-chain && node scripts/verify-security-config.mjs && npm run typecheck && npm run verify:auth-recovery && npm run verify:device-session && node scripts/verify-student-developer-log-layout.mjs && node scripts/verify-student-profile-emoji.mjs && node scripts/verify-semester-archive.mjs && node scripts/verify-neis-performance-import.mjs && node scripts/verify-grading-performance-import.mjs && npm run verify:score-requests && npm run verify:lesson-text-selection && npm run verify:entry-map-motion && npm run verify:history-dictionary && npm run verify:history-atlas && npm run verify:avatar-previews && npm run verify:achievement-analysis && npm run verify:communication && npm run verify:written-exam-analysis",
     "verify:auth-recovery": "node scripts/verify-auth-deadline.mjs && node scripts/verify-auth-startup-session-integration.mjs",
     "verify:device-session": "node scripts/verify-device-session.mjs && node scripts/verify-device-session-storage.mjs",

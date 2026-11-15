@@ -33,6 +33,7 @@ import "./weplay/weplay.css";
 import "./weplay/lobby.css";
 
 import YutGameEntry from "../../components/common/weplay/YutGameEntry";
+import RhythmGameEntry from "../../components/common/weplay/rhythm/RhythmGameEntry";
 import WeplayStudioIntro from "../../components/common/weplay/WeplayStudioIntro";
 import WeplayGameFrame from "../../components/common/weplay/WeplayGameFrame";
 import { withWeplayRequestTimeout } from "../../components/common/weplay/requestTimeout";
@@ -71,6 +72,8 @@ export default function Weplay() {
     ).allowed
   )
     return null;
+  if (params.get("game") === "gungdeok-rock")
+    return <RhythmGameEntry portal="student" />;
   return params.get("game") === "joseon-yut" ? (
     <YutGameEntry portal="student" groupTitle={groupTitle} />
   ) : (

@@ -1361,6 +1361,72 @@ service cloud.firestore {
           == [year, semester, scope, 'ACTIVE', false, manifest.revision]
           && manifest.revision is int && manifest.revision >= 1;
       }
+      // This solo game has no student score, reward or room writes. Only the
+      // current semester's exact publication document is exposed to players.
+      function rhythmActiveProfile() {
+        let profile = userProfile();
+        return (request.auth.token.email == 'westoria28@gmail.com' || approvedRegistrationProfile(profile))
+          && profile.get('disabled', false) == false
+          && profile.get('isDeleted', false) == false && profile.get('deletedAt', null) == null
+          && profile.get('weplayDeletionPending', false) == false;
+      }
+      function rhythmManager(write) {
+        let profile = userProfile();
+        return request.auth.token.email == 'westoria28@gmail.com' || profile.role == 'teacher'
+          || (!write && profile.role == 'staff' && profile.get('teacherPortalEnabled', false) == true
+            && profile.get('staffPermissions', []) is list && 'lesson_read' in profile.staffPermissions);
+      }
+      function rhythmStudentReader() {
+        let profile = userProfile();
+        let visibility = get(/databases/$(database)/documents/site_settings/config).data.get('studentMenuVisibility', {});
+        return profile.role == 'student' && profile.get('enrollmentStatus', 'active') == 'active'
+          && visibility is map && visibility.get('weplay', true) == true && visibility.get('rhythm', true) == true;
+      }
+      function rhythmFence() {
+        return hasWestoryIdentity() && hasActiveApplicationSession()
+          && currentYutMaintenance() && currentYutScope() && rhythmActiveProfile();
+      }
+      function rhythmPublicationValid(data) {
+        return data.keys().hasAll(['schemaVersion', 'enabled', 'revision', 'updatedAt'])
+          && data.keys().hasOnly(['schemaVersion', 'enabled', 'revision', 'updatedAt'])
+          && data.schemaVersion == 1 && data.enabled is bool
+          && data.revision is int && data.revision >= 1 && data.revision <= 9007199254740991
+          && data.updatedAt == request.time;
+      }
+      function rhythmAuditMatches(data) {
+        let audit = getAfter(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/rhythm_publication_audit/gungdeok-rock).data;
+        return audit.keys().hasAll(['schemaVersion', 'enabled', 'revision', 'updatedAt', 'updatedBy'])
+          && audit.keys().hasOnly(['schemaVersion', 'enabled', 'revision', 'updatedAt', 'updatedBy'])
+          && [audit.schemaVersion, audit.enabled, audit.revision, audit.updatedAt, audit.updatedBy]
+            == [1, data.enabled, data.revision, request.time, request.auth.uid];
+      }
+      match /rhythm_publication/{gameId} {
+        allow get: if gameId == 'gungdeok-rock' && rhythmFence()
+          && (rhythmManager(false) || rhythmStudentReader());
+        allow create: if gameId == 'gungdeok-rock' && rhythmFence() && rhythmManager(true)
+          && rhythmPublicationValid(request.resource.data) && request.resource.data.revision == 1
+          && rhythmAuditMatches(request.resource.data);
+        allow update: if gameId == 'gungdeok-rock' && rhythmFence() && rhythmManager(true)
+          && rhythmPublicationValid(request.resource.data)
+          && request.resource.data.revision == resource.data.revision + 1
+          && request.resource.data.enabled != resource.data.enabled
+          && rhythmAuditMatches(request.resource.data);
+        allow list, delete: if false;
+      }
+      match /rhythm_publication_audit/{gameId} {
+        function rhythmAuditAdvance() {
+          let path = /databases/$(database)/documents/years/$(year)/semesters/$(semester)/rhythm_publication/gungdeok-rock;
+          let next = getAfter(path).data;
+          return rhythmPublicationValid(next) && rhythmAuditMatches(next)
+            && ((!exists(path) && next.revision == 1)
+              || (exists(path) && next.revision == get(path).data.revision + 1
+                && next.enabled != get(path).data.enabled));
+        }
+        allow get: if gameId == 'gungdeok-rock' && rhythmFence() && rhythmManager(false);
+        allow create, update: if gameId == 'gungdeok-rock' && rhythmFence() && rhythmManager(true)
+          && rhythmAuditAdvance();
+        allow list, delete: if false;
+      }
       // A data-free change signal invalidates the authorized callable result.
       // The signal may not exist yet; never condition its first get on resource.
       match /yut_management/{documentId} {
