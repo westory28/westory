@@ -687,7 +687,12 @@ try {
   );
   for (const state of ["loading", "error"]) {
     const page = await open(320, "stocks", `&${state}=1`);
-    await page.getByRole(state === "loading" ? "status" : "alert").waitFor();
+    await (state === "loading"
+      ? page.getByRole("status").filter({
+          hasText: "주식 자료를 불러오는 중입니다.",
+        })
+      : page.getByRole("alert")
+    ).waitFor();
     assert.equal(await secondary(page).locator("a").count(), 3);
     const before = await contentTitle(page).boundingBox();
     if (state === "loading")
