@@ -27,13 +27,14 @@ export function RhythmNoteArt({ kind }: { kind: DrumKind }) {
 }
 export function RhythmBrand() {
   return (
-    <span className="rhythm-brand">
-      덩기덕
-      <span>
-        쿵더<b>Rock</b>
-        <i aria-hidden="true">!</i>
-      </span>
-    </span>
+    <img
+      className="rhythm-brand"
+      src={rhythmAsset("title-logo")}
+      alt="덩기덕 쿵더락"
+      width={960}
+      height={480}
+      draggable={false}
+    />
   );
 }
 export function RhythmCover() {

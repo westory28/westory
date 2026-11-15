@@ -341,8 +341,16 @@ const startVisible = (page) =>
     .getByRole("button", { name: "연주 시작", exact: false })
     .evaluate((el) => {
       const r = el.getBoundingClientRect(),
+        panel = el.closest(".rhythm-song-panel").getBoundingClientRect(),
         hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-      return !!hit && el.contains(hit);
+      return (
+        !!hit &&
+        el.contains(hit) &&
+        r.left >= panel.left - 1 &&
+        r.right <= panel.right + 1 &&
+        r.top >= panel.top - 1 &&
+        r.bottom <= panel.bottom + 1
+      );
     });
 const helpCheck = async (page, label) => {
   await page
@@ -487,6 +495,77 @@ try {
     await shot(page, `${label}-lobby`);
     await helpCheck(page, label);
     assert.equal(await page.locator(".rhythm-song").count(), 4);
+    assert.deepEqual(await page.locator(".rhythm-song").allTextContents(), [
+      "아리랑",
+      "얼쑤, 달려라",
+      "풍년 마당",
+      "우리의 산하",
+    ]);
+    assert.deepEqual(
+      await page.locator(".rhythm-difficulty button").allTextContents(),
+      ["중모리 장단", "자진모리 장단", "휘모리 장단"],
+    );
+    const lobbyStyles = await page
+      .locator(".rhythm-song-panel")
+      .evaluate((el) => {
+        const button = el.querySelector(".rhythm-start-button");
+        const short =
+          document.querySelector(".rhythm-canvas").clientHeight <= 540;
+        return {
+          short,
+          titleSize: parseFloat(
+            getComputedStyle(el.querySelector(".rhythm-song-name strong"))
+              .fontSize,
+          ),
+          startHeight: button.offsetHeight,
+          startWidth: button.offsetWidth,
+          rowWidth: el.querySelector(".rhythm-start-row").clientWidth,
+        };
+      });
+    assert(
+      lobbyStyles.titleSize >= (lobbyStyles.short ? 18 : 26),
+      `${label} enlarged song titles`,
+    );
+    assert(
+      lobbyStyles.startHeight >= (lobbyStyles.short ? 64 : 92),
+      `${label} prominent start height`,
+    );
+    assert(
+      Math.abs(lobbyStyles.startWidth - lobbyStyles.rowWidth) < 2,
+      `${label} full width start`,
+    );
+    assert.equal(
+      await page.locator(".rhythm-brand").getAttribute("alt"),
+      "덩기덕 쿵더락",
+    );
+    for (let songIndex = 0; songIndex < 4; songIndex++) {
+      const choice = page.locator(".rhythm-song").nth(songIndex);
+      assert(await choice.isEnabled(), "Grey song remains selectable");
+      await choice.click();
+      assert.equal(await choice.getAttribute("aria-pressed"), "true");
+      assert.equal(
+        await page
+          .locator('.rhythm-song[aria-pressed="true"] .rhythm-song-check')
+          .count(),
+        1,
+      );
+      const filters = await page
+        .locator(".rhythm-song")
+        .evaluateAll((elements) =>
+          elements.map((el) => ({
+            selected: el.getAttribute("aria-pressed") === "true",
+            filter: getComputedStyle(el).filter,
+          })),
+        );
+      for (const item of filters)
+        assert.equal(
+          item.filter.includes("grayscale(1)"),
+          !item.selected,
+          "Color selection and grey alternatives",
+        );
+    }
+    await page.locator(".rhythm-song").first().click();
+    await shot(page, `${label}-lobby`);
     assert(
       await startVisible(page),
       `${label} start button visible without scrolling`,
@@ -889,6 +968,8 @@ try {
     "note-center",
     "note-rim",
     "drum",
+    "title-logo",
+    "start-plaque",
   ])
     assert(
       assets.has(`/assets/weplay/rhythm/v2/${name}.webp`),

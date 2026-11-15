@@ -167,31 +167,12 @@
 }
 .rhythm-brand {
   display: block;
-  position: relative;
-  font-size: clamp(36px, 4.8cqw, 64px);
-  line-height: 1.1;
-  font-weight: 900;
-  letter-spacing: -0.065em;
-  color: var(--rh-green);
-  text-shadow:
-    2px 3px 0 var(--rh-paper),
-    -2px -1px 0 var(--rh-paper),
-    4px 5px 0 #352c2620;
-  transform: rotate(-4deg);
-}
-.rhythm-brand > span {
-  display: block;
-  margin-top: 5px;
-  color: var(--rh-red);
-}
-.rhythm-brand b {
-  color: var(--rh-blue);
-  font-weight: 900;
-  letter-spacing: -0.065em;
-}
-.rhythm-brand i {
-  color: var(--rh-gold);
-  font-style: normal;
+  width: 100%;
+  height: auto;
+  max-height: 26cqh;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
 }
 .rhythm-lobby {
   flex: 1;
@@ -212,6 +193,8 @@
 }
 .rhythm-entry-scene h2 {
   z-index: 1;
+  width: 100%;
+  max-width: 440px;
   margin: 0 0 -8px;
   text-align: center;
 }
@@ -296,18 +279,19 @@
 }
 .rhythm-songs {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 .rhythm-song {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 78px;
+  min-height: 70px;
   padding: 8px 12%;
   border: 0;
-  text-align: left;
-  color: var(--rh-ink);
+  text-align: center;
+  color: var(--rh-green);
   background: transparent var(--rh-plaque) center / 100% 100% no-repeat;
   filter: drop-shadow(0 3px 0 #352c2620);
   transition: transform 140ms;
@@ -319,38 +303,26 @@
   transform: translateX(-4px);
   filter: drop-shadow(4px 0 0 var(--rh-red)) drop-shadow(0 3px 0 #352c2620);
 }
-.rhythm-song[aria-pressed="true"] .rhythm-song-number {
-  color: var(--rh-red);
-}
-.rhythm-song-number {
-  font-size: 22px;
-  font-weight: 900;
-  color: var(--rh-green);
+.rhythm-song[aria-pressed="false"] {
+  color: #494949;
+  filter: grayscale(1) brightness(0.95) drop-shadow(0 3px 0 #352c2620);
 }
 .rhythm-song-name {
-  display: flex;
   flex: 1;
   min-width: 0;
-  flex-direction: column;
-  gap: 2px;
 }
 .rhythm-song-name strong {
-  font-size: 18px;
+  font-size: 26px;
+  font-weight: 900;
 }
-.rhythm-song-name small {
-  font-size: 12px;
-  opacity: 0.8;
-}
-.rhythm-tempo {
-  display: flex;
-  flex-direction: column;
-  font-size: 18px;
-  font-weight: 800;
-  text-align: center;
-  color: var(--rh-green);
-}
-.rhythm-tempo small {
-  font-size: 10px;
+.rhythm-song-check {
+  position: absolute;
+  right: 12%;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--rh-red);
+  border-radius: 50%;
+  background: var(--rh-paper);
 }
 .rhythm-difficulty {
   display: flex;
@@ -377,10 +349,22 @@
   gap: 8px;
   margin-top: 16px;
 }
-.rhythm-start-row > span {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--rh-green);
+.rhythm-game .rhythm-start-button {
+  width: 100%;
+  min-height: 92px;
+  padding: 12px 16%;
+  font-size: 28px !important;
+  color: #fff6d9;
+  text-shadow: 0 2px 0 #64231d;
+  background-image: var(--rh-start-plaque);
+  filter: drop-shadow(0 6px 0 #352c2640);
+}
+.rhythm-start-button svg {
+  width: 28px;
+  height: 28px;
+}
+.rhythm-game .rhythm-start-button:hover {
+  filter: drop-shadow(0 8px 0 #352c2640) brightness(1.08);
 }
 .rhythm-calibration {
   position: relative;
@@ -948,10 +932,9 @@
 }
 .rhythm-orientation-gate h2 {
   margin: 0;
+  width: min(100%, 280px);
 }
-.rhythm-orientation-gate .rhythm-brand {
-  font-size: 36px;
-}
+
 .rhythm-orientation-gate p {
   margin: 0;
   font-size: 14px;
@@ -1015,9 +998,10 @@
 .rhythm-cover .rhythm-brand {
   position: absolute;
   z-index: 2;
-  left: 8%;
-  top: 10%;
-  font-size: clamp(24px, 2.5vw, 40px);
+  left: 4%;
+  top: 6%;
+  width: 62%;
+  max-height: none;
 }
 .rhythm-cover > .rhythm-mascot {
   width: 64%;
@@ -1054,10 +1038,10 @@
     grid-template-columns: 1fr 1.2fr;
   }
   .rhythm-brand {
-    font-size: clamp(28px, 5.8cqw, 44px);
+    max-height: 28cqh;
   }
   .rhythm-entry-scene > .rhythm-mascot {
-    max-height: 47cqh;
+    max-height: 39cqh;
     width: auto;
     max-width: 90%;
   }
@@ -1088,22 +1072,26 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .rhythm-song {
-    min-height: 52px;
+    min-height: 48px;
     padding: 4px 12%;
     gap: 6px;
   }
   .rhythm-song-name strong {
-    font-size: 13px;
+    font-size: 18px;
   }
-  .rhythm-song-name small {
-    display: none;
+  .rhythm-song-check {
+    width: 18px;
+    height: 18px;
+    right: auto;
+    left: 4%;
   }
-  .rhythm-song-number,
-  .rhythm-tempo {
-    font-size: 12px;
+  .rhythm-game .rhythm-start-button {
+    min-height: 64px;
+    font-size: 22px !important;
   }
-  .rhythm-song-number {
-    display: none;
+  .rhythm-start-button svg {
+    width: 24px;
+    height: 24px;
   }
   .rhythm-difficulty legend {
     position: absolute;

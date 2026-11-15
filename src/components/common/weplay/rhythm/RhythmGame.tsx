@@ -40,9 +40,9 @@ import "./rhythm.css";
 
 type Phase = "ready" | "starting" | "playing" | "paused" | "result";
 const DIFFICULTIES: { id: RhythmDifficulty; name: string }[] = [
-  { id: "easy", name: "가볍게" },
-  { id: "normal", name: "신나게" },
-  { id: "hard", name: "얼쑤!" },
+  { id: "easy", name: "중모리 장단" },
+  { id: "normal", name: "자진모리 장단" },
+  { id: "hard", name: "휘모리 장단" },
 ];
 const JUDGEMENT_TEXT = {
   perfect: "얼쑤!",
@@ -407,6 +407,7 @@ export default function RhythmGame({
           "--rh-canvas-height": `${stage.height}px`,
           "--rh-background": `url("${rhythmAsset("bg-stage")}")`,
           "--rh-plaque": `url("${rhythmAsset("button-plaque")}")`,
+          "--rh-start-plaque": `url("${rhythmAsset("start-plaque")}")`,
         } as CSSProperties
       }
       tabIndex={-1}
@@ -546,7 +547,7 @@ export default function RhythmGame({
                 <div className="rhythm-song-panel">
                   <fieldset className="rhythm-songs">
                     <legend>오늘의 장단</legend>
-                    {RHYTHM_SONGS.map((item, index) => (
+                    {RHYTHM_SONGS.map((item) => (
                       <button
                         type="button"
                         key={item.id}
@@ -554,20 +555,30 @@ export default function RhythmGame({
                         aria-pressed={song.id === item.id}
                         onClick={() => setSongId(item.id)}
                       >
-                        <span className="rhythm-song-number">0{index + 1}</span>
                         <span className="rhythm-song-name">
                           <strong>{item.title}</strong>
-                          <small>{item.subtitle}</small>
                         </span>
-                        <span className="rhythm-tempo">
-                          {item.bpm}
-                          <small>BPM</small>
-                        </span>
+                        {song.id === item.id && (
+                          <svg
+                            className="rhythm-song-check"
+                            width="26"
+                            height="26"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                          >
+                            <path d="m5 12 4 4L19 6" />
+                          </svg>
+                        )}
                       </button>
                     ))}
                   </fieldset>
                   <fieldset className="rhythm-difficulty">
-                    <legend>난이도</legend>
+                    <legend>장단</legend>
                     {DIFFICULTIES.map((item) => (
                       <button
                         type="button"
@@ -580,13 +591,9 @@ export default function RhythmGame({
                     ))}
                   </fieldset>
                   <div className="rhythm-start-row">
-                    <span>
-                      {Math.round(song.duration - COUNT_IN_SECONDS)}초 ·{" "}
-                      {chart.length}박
-                    </span>
                     <button
                       type="button"
-                      className="rhythm-primary"
+                      className="rhythm-primary rhythm-start-button"
                       disabled={!playable}
                       onClick={() => void start()}
                     >
