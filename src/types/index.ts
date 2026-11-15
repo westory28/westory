@@ -15,6 +15,7 @@ export interface SystemConfig {
       | "mypage"
       | "avatar"
       | "avatar_shop"
+      | "wispi"
       | "profile"
       | "score"
       | "wrong_note",
@@ -160,6 +161,8 @@ export type PointTransactionType =
   | "weplay_cost"
   | "weplay_reward"
   | "weplay_rank_reward"
+  | "wis_stock_deposit"
+  | "wis_stock_withdrawal"
   | "purchase_hold"
   | "purchase_confirm"
   | "purchase_cancel";

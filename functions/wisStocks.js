@@ -5,7 +5,7 @@ const { nextWisStockModelPrice, wisStockPriceModelAnchor } = require('./wisStock
 const { normalizeWisStockMarketRules, normalizeWisStockTradingSettings,
   isWisStockTradingSession, wisStockKstSession, wisStockDailyBounds } = require('./wisStockMarketRules');
 
-// A teacher-only simulation. There are deliberately no student order handlers.
+// Teacher market administration. Student orders remain separate server commands.
 const MAX_STOCKS = 100;
 const HISTORY_LIMIT = 120;
 const MAX_PRICE = 1_000_000;
@@ -23,8 +23,11 @@ const scopeInput = input => {
   return { year: input.year, semester: input.semester, semesterId: `${input.year}-${input.semester}` };
 };
 const marketPath = ({ year, semester }) => `years/${year}/semesters/${semester}/wis_stock_markets/current`;
+const publicStockPath = ({ year, semester }, documentId) => `years/${year}/semesters/${semester}/wis_stock_public/${documentId}`;
 const receiptPath = (scope, uid, requestId) => `years/${scope.year}/semesters/${scope.semester}/wis_stock_receipts/${hash(`${uid}\n${requestId}`)}`;
-const blankMarket = scope => ({ schemaVersion: 1, semesterId: scope.semesterId, revision: 0, studentOpen: false, rules: normalizeWisStockMarketRules(), stocks: [], updatedAtMs: 0 });
+const blankMarket = scope => ({ schemaVersion: 1, semesterId: scope.semesterId, revision: 0, studentOpen: false,
+  tradingEpoch: 0, publicationRevision: 0, publicationUpdatedAtMs: 0,
+  rules: normalizeWisStockMarketRules(), stocks: [], updatedAtMs: 0 });
 // Firestore's documented storage calculation, not JSON/wire byte length. Maps
 // include 32 bytes; UTF-8 strings and field names include one terminator byte.
 // Reserve a full history now so later price ticks never outgrow the document.
@@ -88,8 +91,11 @@ function readMarket(snapshot, scope) {
   };
   let rules;
   try { rules = normalizeWisStockMarketRules(value.rules); } catch { rules = null; }
-  if (value.schemaVersion !== 1 || value.semesterId !== scope.semesterId || value.studentOpen !== false
+  if (value.schemaVersion !== 1 || value.semesterId !== scope.semesterId || typeof value.studentOpen !== 'boolean'
     || !rules || (value.priceSeed !== undefined && !/^[a-f0-9]{64}$/.test(value.priceSeed))
+    || !safeInt(value.tradingEpoch ?? 0, 0, Number.MAX_SAFE_INTEGER - 1)
+    || !safeInt(value.publicationRevision ?? 0, 0, Number.MAX_SAFE_INTEGER - 1)
+    || !safeInt(value.publicationUpdatedAtMs ?? 0, 0, Number.MAX_SAFE_INTEGER)
     || !safeInt(value.revision, 1, Number.MAX_SAFE_INTEGER - 1) || !Array.isArray(value.stocks)
     || value.stocks.length > MAX_STOCKS || !value.stocks.every(validStock)
     || new Set(value.stocks.map(stock => stock.id)).size !== value.stocks.length) {
@@ -107,12 +113,38 @@ function readMarket(snapshot, scope) {
     }
     return normalized;
   });
-  return { ...value, rules, stocks };
+  return { ...value, rules, stocks, tradingEpoch: value.tradingEpoch ?? 0,
+    publicationRevision: value.publicationRevision ?? 0, publicationUpdatedAtMs: value.publicationUpdatedAtMs ?? 0 };
 }
-const state = market => ({ semesterId: market.semesterId, revision: market.revision, studentOpen: false,
+const state = market => ({ semesterId: market.semesterId, revision: market.revision, studentOpen: market.studentOpen,
+  tradingEpoch: market.tradingEpoch ?? 0,
   rules: market.rules,
   maxStocks: MAX_STOCKS, historyLimit: HISTORY_LIMIT, updatedAtMs: market.updatedAtMs,
   stocks: market.stocks.map(({ id, settings, price, updatedAtMs, nextTickAtMs, history, dayKey, dayOpenPrice, haltedUntilMs, priceModel }) => ({ id, settings, price, updatedAtMs, nextTickAtMs, history, dayKey, dayOpenPrice, haltedUntilMs, ...(priceModel ? { priceModel } : {}) })) });
+const publicStockStatus = market => ({ schemaVersion: 1, semesterId: market.semesterId,
+  studentOpen: market.studentOpen, halted: !market.studentOpen || market.rules.halted,
+  tradingEpoch: market.tradingEpoch ?? 0, revision: market.publicationRevision ?? 0,
+  updatedAtMs: market.publicationUpdatedAtMs ?? 0 });
+const publicStockSettings = settings => {
+  const normalized = normalizeSettings(settings);
+  return Object.fromEntries(['name', 'description', 'period', 'issuedShares', 'lotSize', 'tradingStatus']
+    .map(key => [key, normalized[key]]));
+};
+const publicStockMarket = market => ({ schemaVersion: 1, semesterId: market.semesterId,
+  studentOpen: true, tradingEpoch: market.tradingEpoch ?? 0, revision: market.revision,
+  updatedAtMs: market.updatedAtMs, rules: market.rules,
+  stocks: market.stocks.map(({ id, settings, price, updatedAtMs, nextTickAtMs, history, dayKey, dayOpenPrice, haltedUntilMs }) =>
+    ({ id, settings: publicStockSettings(settings), price, updatedAtMs, nextTickAtMs,
+      history: history.map(({ atMs, price: observedPrice }) => ({ atMs, price: observedPrice })),
+      dayKey: dayKey || '', dayOpenPrice: dayOpenPrice ?? price, haltedUntilMs: haltedUntilMs ?? 0 })) });
+function publishStudentMarket(tx, db, scope, previous, updated) {
+  // No synthetic first publication, extra reads, or menu wakeups on price ticks.
+  // A first open installs both safe documents in the same canonical transaction.
+  if (!updated.studentOpen) return;
+  tx.set(db.doc(publicStockPath(scope, 'market')), publicStockMarket(updated));
+  if (!previous.studentOpen || previous.publicationRevision !== updated.publicationRevision)
+    tx.set(db.doc(publicStockPath(scope, 'current')), publicStockStatus(updated));
+}
 const nextTick = (atMs, hours) => (Math.floor(atMs / (hours * HOUR)) + 1) * hours * HOUR;
 function nextPrice(stock, semesterId, slot, priceSeed = '') {
   // The private seed never enters callable responses. A missing legacy seed is
@@ -231,6 +263,10 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
         || previous.price < settings.minimumPrice || previous.price > settings.maximumPrice)) {
         fail('invalid-argument', '기준가는 등록 후 바꿀 수 없으며, 가격 범위에는 현재가가 포함되어야 합니다.', 'WIS_STOCK_PRICE_RANGE_INVALID');
       }
+      if (previous && market.studentOpen && (settings.issuedShares !== previous.settings.issuedShares
+        || settings.lotSize !== previous.settings.lotSize)) {
+        fail('failed-precondition', '처음 개장한 뒤에는 발행 수량과 거래 단위를 변경할 수 없습니다.', 'WIS_STOCK_SUPPLY_LOCKED');
+      }
       if (previous && JSON.stringify(previous.settings) === JSON.stringify(settings)) {
         return { ...state(market), savedStockId: previous.id, duplicate: false, changed: false };
       }
@@ -251,6 +287,7 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
         revision: market.revision + 1, updatedAtMs: atMs };
       assertMarketCapacity(updated, scope);
       tx.set(marketRef, updated);
+      publishStudentMarket(tx, db, scope, market, updated);
       tx.create(receiptRef, { schemaVersion: 1, semesterId: scope.semesterId, actorUid: actor.uid, stockId: id,
         payloadHash, revision: updated.revision, previousSettings: previous?.settings || null, settings, createdAtMs: atMs });
       return { ...state(updated), savedStockId: id, duplicate: false, changed: true };
@@ -282,6 +319,7 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       const updated = { ...market, rules: effectiveRules, priceSeed: market.priceSeed || newPriceSeed,
         revision: market.revision + 1, updatedAtMs: atMs };
       tx.set(marketRef, updated);
+      publishStudentMarket(tx, db, scope, market, updated);
       tx.create(receiptRef, { schemaVersion: 1, commandType: 'saveWisStockMarketRules', semesterId: scope.semesterId,
         actorUid: actor.uid, payloadHash, revision: updated.revision, previousRules: market.rules, rules: effectiveRules, createdAtMs: atMs });
       return { ...state(updated), duplicate: false, changed: true };
@@ -312,13 +350,20 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       // A NEW stop is also a fence against any resume that observed the old
       // revision, even when trading was already stopped. Only the receipt
       // replay above is a zero-write stop; an unchanged resume remains a no-op.
-      if (!input.halted && !market.rules.halted) return { ...state(market), duplicate: false, changed: false };
-      const updated = { ...market, rules: { ...market.rules, halted: input.halted }, revision: market.revision + 1, updatedAtMs: atMs };
-      if (snapshot.exists) tx.update(marketRef, { 'rules.halted': input.halted, revision: updated.revision, updatedAtMs: atMs });
+      if (!input.halted && market.studentOpen && !market.rules.halted) return { ...state(market), duplicate: false, changed: false };
+      const updated = { ...market, studentOpen: market.studentOpen || !input.halted,
+        rules: { ...market.rules, halted: input.halted }, revision: market.revision + 1, updatedAtMs: atMs,
+        tradingEpoch: market.tradingEpoch + (input.halted ? 1 : 0),
+        publicationRevision: market.publicationRevision + 1, publicationUpdatedAtMs: atMs,
+        ...(!input.halted && !market.priceSeed ? { priceSeed: randomBytes(32).toString('hex') } : {}) };
+      if (snapshot.exists) tx.update(marketRef, { 'rules.halted': input.halted, studentOpen: updated.studentOpen,
+        tradingEpoch: updated.tradingEpoch, publicationRevision: updated.publicationRevision, publicationUpdatedAtMs: atMs,
+        ...(updated.priceSeed ? { priceSeed: updated.priceSeed } : {}), revision: updated.revision, updatedAtMs: atMs });
       else tx.set(marketRef, updated);
+      publishStudentMarket(tx, db, scope, market, updated);
       tx.create(receiptRef, { schemaVersion: 1, commandType: 'setWisStockMarketHalted', semesterId: scope.semesterId,
         actorUid: actor.uid, payloadHash, revision: updated.revision, previousHalted: market.rules.halted,
-        halted: input.halted, createdAtMs: atMs });
+        halted: input.halted, studentOpen: updated.studentOpen, tradingEpoch: updated.tradingEpoch, createdAtMs: atMs });
       return { ...state(updated), duplicate: false, changed: true };
     });
   };
@@ -335,9 +380,11 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
     const current = readMarket(snapshot, scope), updated = advanceMarket(current, now());
     if (updated === current) return { changed: false };
     tx.set(db.doc(marketPath(scope)), updated);
+    publishStudentMarket(tx, db, scope, current, updated);
     return { changed: true, revision: updated.revision };
   });
   return { getWisStockManagement, saveWisStock, saveWisStockMarketRules, setWisStockMarketHalted, advanceWisStockPrices };
 }
 module.exports = { createWisStockHandlers, MAX_STOCKS, HISTORY_LIMIT, MAX_PRICE, marketPath, receiptPath,
+  publicStockPath, publicStockStatus, publicStockMarket, publicStockSettings, readMarket,
   MAX_MARKET_BYTES, reservedMarketBytes, normalizeSettings, nextPrice, advanceMarket, blankMarket };

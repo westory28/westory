@@ -22,4 +22,12 @@ const readStudentMenuAccess = async (reader, db, keys) => {
   assertStudentMenuVisible(snapshot.data(), keys);
 };
 
-module.exports = { studentMenuVisible, assertStudentMenuVisible, readStudentMenuAccess };
+// /student/wispi is an independently controlled interface menu. A market
+// halt never changes this setting; personal account/history reads deliberately
+// do not call this guard. New transfers/orders must still check market launch
+// and halt state in their authoritative transaction.
+const STUDENT_WISPI_MENU_KEYS = Object.freeze(['wispi']);
+const assertStudentWispiMenuVisible = config => assertStudentMenuVisible(config, STUDENT_WISPI_MENU_KEYS);
+
+module.exports = { studentMenuVisible, assertStudentMenuVisible, readStudentMenuAccess,
+  STUDENT_WISPI_MENU_KEYS, assertStudentWispiMenuVisible };

@@ -36,3 +36,23 @@ assert.ok(reconcile(account, [...entries, { ...identity, ledgerEntryId: 'orphan-
   sourceId: 'missing', delta: -20, reversedDelta: 20, reversedType: 'GRANT', balanceBefore: 510, balanceAfter: 490 }],
 projection, projection).includes('invalid_ledger_reversal'));
 console.log('PASS read-only wallet audit: signed costs/rewards, complete balance trails, cumulative totals, account scope, projections and cache integrity');
+
+// Moving principal between separate accounts cannot create cumulative Wis.
+const stockEntries = [
+  { ledgerEntryId: 'stock-opening', type: 'INITIAL_GRANT', delta: 1000, balanceBefore: 0, balanceAfter: 1000 },
+  { ledgerEntryId: 'stock-out', type: 'STOCK_TRANSFER_OUT', delta: -500, balanceBefore: 1000, balanceAfter: 500,
+    stockTransferId: 'deposit_1', sourceId: 'wis_stock_transfer:deposit_1', principalReturned: 0, withdrawnProfit: 0 },
+  { ledgerEntryId: 'stock-in', type: 'STOCK_TRANSFER_IN', delta: 600, balanceBefore: 500, balanceAfter: 1100,
+    stockTransferId: 'withdrawal_1', sourceId: 'wis_stock_transfer:withdrawal_1', principalReturned: 500, withdrawnProfit: 100 },
+].map(entry => ({ ...identity, ...entry }));
+const stockTotals = { earnedTotal: 1100, rankEarnedTotal: 0, spentTotal: 0, adjustedTotal: 100 };
+const stockAccount = { ...identity, ...stockTotals, balance: 1100, revision: 3, recentLedgerEntries: [...stockEntries].reverse() };
+const stockProjection = { ...identity, ...stockTotals, balance: 1100, ledgerRevision: 3 };
+assert.deepEqual(reconcile(stockAccount, stockEntries, stockProjection, stockProjection), []);
+assert.ok(reconcile(stockAccount, stockEntries.map(entry => entry.type === 'STOCK_TRANSFER_IN'
+  ? { ...entry, withdrawnProfit: 600 } : entry), stockProjection, stockProjection).includes('invalid_stock_transfer'));
+assert.ok(reconcile(stockAccount, stockEntries.map(entry => entry.type === 'STOCK_TRANSFER_OUT'
+  ? { ...entry, withdrawnProfit: 500 } : entry), stockProjection, stockProjection).includes('invalid_stock_transfer'));
+assert.doesNotThrow(() => reconcile(stockAccount, stockEntries.map(entry => entry.type === 'STOCK_TRANSFER_IN'
+  ? { ...entry, delta: NaN } : entry), stockProjection, stockProjection));
+console.log('PASS stock transfer audit: principal exclusion, withdrawn profit only, zero activity-rank gain and malformed receipt rejection');

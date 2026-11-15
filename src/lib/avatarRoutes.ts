@@ -14,6 +14,7 @@ export const getWisShopMenuKey = (
   portal: "student" | "teacher",
 ): "products" | "avatar" | "orders" | "requests" | "stocks" | "" => {
   const [pathname, query = ""] = url.split("?");
+  if (portal === "student" && pathname === "/student/wispi") return "stocks";
   if (pathname !== `/${portal}/points`) return "";
   const params = new URLSearchParams(query);
   if (portal === "student") {

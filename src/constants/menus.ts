@@ -74,6 +74,7 @@ export const MENUS: MenuConfig = {
         { name: "명예의 전당", url: "/student/points?tab=hall-of-fame" },
         { name: "위스 상점", url: "/student/points?tab=shop" },
         { name: "아바타 상점", url: STUDENT_AVATAR_SHOP_URL },
+        { name: "위스피(WsPI)", url: "/student/wispi" },
         { name: "구매 내역", url: "/student/points?tab=orders" },
       ],
     },

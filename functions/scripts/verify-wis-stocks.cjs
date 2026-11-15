@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { createHash } = require('node:crypto');
-const { createWisStockHandlers, marketPath, HISTORY_LIMIT, MAX_STOCKS, MAX_MARKET_BYTES, reservedMarketBytes, normalizeSettings, advanceMarket, blankMarket } = require('../wisStocks');
+const { createWisStockHandlers, marketPath, publicStockPath, publicStockMarket, publicStockStatus, HISTORY_LIMIT, MAX_STOCKS, MAX_MARKET_BYTES, reservedMarketBytes, normalizeSettings, advanceMarket, blankMarket } = require('../wisStocks');
 const { normalizeWisStockMarketRules } = require('../wisStockMarketRules');
 const scope = { year: '2026', semester: '2', semesterId: '2026-2' };
 const initial = () => ({ name: '합성 역사 종목', description: '시험용 배경', period: '시험 시대', initialPrice: 100, minimumPrice: 1,
@@ -233,7 +233,7 @@ test('rule and issuance failures are closed and cannot open student trading or a
   assert.equal(typeof f.api.placeOrder, 'undefined');
 });
 
-test('emergency stop ignores stale revisions and changes only the halt flag, revision and audit metadata', async () => {
+test('emergency stop ignores stale revisions and advances the halt epoch without changing prices or wallet data', async () => {
   const f = fixture(); await f.api.saveWisStock(saveInput());
   const before = structuredClone(f.documents.get(marketPath(scope)));
   f.reads.length = 0; f.writes.length = 0;
@@ -243,7 +243,8 @@ test('emergency stop ignores stale revisions and changes only the halt flag, rev
   assert.equal(f.reads.length, 6); assert.equal(f.writes.length, 2);
   assert.deepEqual(f.sessions.at(-1), { highRisk: true, recentAuth: true });
   const after = f.documents.get(marketPath(scope));
-  assert.deepEqual(after, { ...before, rules: { ...before.rules, halted: true }, revision: 2, updatedAtMs: after.updatedAtMs });
+  assert.deepEqual(after, { ...before, rules: { ...before.rules, halted: true }, revision: 2, updatedAtMs: after.updatedAtMs,
+    tradingEpoch: 1, publicationRevision: 1, publicationUpdatedAtMs: after.updatedAtMs });
   assert.equal((await f.api.setWisStockMarketHalted(input)).duplicate, true);
   const newStop = await f.api.setWisStockMarketHalted(req({ halted: true, expectedRevision: 0, requestId: 'market-emergency-fence' }));
   assert.equal(newStop.changed, true); assert.equal(newStop.revision, 3);
@@ -273,12 +274,12 @@ test('resume requires the observed revision and receipt replay cannot undo a sub
   assert.equal((await f.api.setWisStockMarketHalted(resume)).rules.halted, false);
   await f.api.setWisStockMarketHalted(req({ halted: true, expectedRevision: 0, requestId: 'market-emergency-0002' }));
   const replay = await f.api.setWisStockMarketHalted(resume);
-  assert.equal(replay.duplicate, true); assert.equal(replay.rules.halted, true); assert.equal(f.writes.length, 6);
+  assert.equal(replay.duplicate, true); assert.equal(replay.rules.halted, true); assert.equal(f.writes.length, 10);
   await assert.rejects(f.api.setWisStockMarketHalted(req({ halted: false, expectedRevision: 1, requestId: 'market-resume-stale02' })), reason('WIS_STOCK_REVISION_CONFLICT'));
   const fresh = req({ halted: false, expectedRevision: 3, requestId: 'market-resume-0000002' });
   assert.equal((await f.api.setWisStockMarketHalted(fresh)).rules.halted, false);
   assert.equal((await f.api.setWisStockMarketHalted(req({ halted: false, expectedRevision: 4, requestId: 'market-resume-noop001' }))).changed, false);
-  assert.equal(f.writes.length, 8);
+  assert.equal(f.writes.length, 14);
 });
 
 test('a new stop fences an old resume even if the market was already halted', async () => {
@@ -449,4 +450,96 @@ test('disjoint daily/instrument bounds and malformed model anchors never write a
     await assert.rejects(f.api.advanceWisStockPrices(), reason('WIS_STOCK_MARKET_INVALID'));
   }
   assert.equal(f.writes.length, 2);
+});
+
+test('first opening atomically publishes safe prices and a permanent launch latch; closing fences orders without hiding the menu', async () => {
+  const f = fixture(), currentPath = publicStockPath(scope, 'current'), pricesPath = publicStockPath(scope, 'market');
+  assert.equal(publicStockStatus(blankMarket(scope)).halted, true);
+  await f.api.saveWisStock(saveInput());
+  assert(!f.documents.has(currentPath)); assert(!f.documents.has(pricesPath));
+  const open = req({ halted: false, expectedRevision: 1, requestId: 'first-public-open-001' });
+  f.reads.length = 0; f.writes.length = 0;
+  const opened = await f.api.setWisStockMarketHalted(open);
+  assert.equal(opened.studentOpen, true); assert.equal(opened.rules.halted, false); assert.equal(opened.tradingEpoch, 0);
+  assert.equal(f.reads.length, 6); assert.equal(f.writes.length, 4);
+  assert.deepEqual(f.documents.get(currentPath), { schemaVersion: 1, semesterId: '2026-2', studentOpen: true,
+    halted: false, tradingEpoch: 0, revision: 1, updatedAtMs: opened.updatedAtMs });
+  assert.equal(f.documents.get(pricesPath).revision, opened.revision);
+  assert(!JSON.stringify(f.documents.get(pricesPath)).includes('priceSeed'));
+  assert(!JSON.stringify(f.documents.get(pricesPath)).includes('priceModel'));
+  assert.equal((await f.api.setWisStockMarketHalted(open)).duplicate, true); assert.equal(f.writes.length, 4);
+  const close = req({ halted: true, expectedRevision: 0, requestId: 'first-public-close01' });
+  const closed = await f.api.setWisStockMarketHalted(close);
+  assert.equal(closed.studentOpen, true); assert.equal(closed.rules.halted, true); assert.equal(closed.tradingEpoch, 1);
+  assert.equal(f.documents.get(currentPath).studentOpen, true); assert.equal(f.documents.get(currentPath).halted, true);
+  const reopened = await f.api.setWisStockMarketHalted(req({ halted: false, expectedRevision: closed.revision, requestId: 'public-market-reopen1' }));
+  assert.equal(reopened.tradingEpoch, 1, 'Opening never resurrects an order accepted in an earlier epoch');
+  assert.equal(f.documents.get(currentPath).revision, 3);
+  const writes = f.writes.length;
+  assert.equal((await f.api.setWisStockMarketHalted(close)).duplicate, true);
+  assert.equal(f.documents.get(currentPath).halted, false); assert.equal(f.writes.length, writes);
+});
+
+test('opened market saves and ticks publish only page prices; the menu signal does not change or incur extra reads', async () => {
+  const f = fixture();
+  const created = await f.api.saveWisStock(saveInput({ ...initial(), automatic: true, volatilityBps: 0, trendBps: 300 }));
+  const opened = await f.api.setWisStockMarketHalted(req({ halted: false, expectedRevision: created.revision, requestId: 'public-prices-open01' }));
+  const signal = structuredClone(f.documents.get(publicStockPath(scope, 'current')));
+  f.reads.length = 0; f.writes.length = 0; f.advance();
+  assert.equal((await f.api.advanceWisStockPrices()).changed, true);
+  assert.equal(f.reads.length, 4); assert.equal(f.writes.length, 2);
+  assert.equal(f.documents.get(publicStockPath(scope, 'market')).stocks[0].price, 103);
+  assert.deepEqual(f.documents.get(publicStockPath(scope, 'current')), signal);
+  assert(!f.writes.some(write => write.path === publicStockPath(scope, 'current')));
+  const before = f.writes.length;
+  assert.equal((await f.api.advanceWisStockPrices()).changed, false); assert.equal(f.writes.length, before);
+  const market = f.documents.get(marketPath(scope));
+  f.reads.length = 0; f.writes.length = 0;
+  const saved = await f.api.saveWisStock(saveInput({ ...opened.stocks[0].settings, name: '공개 이름 변경' }, market.revision, market.stocks[0].id, 'public-prices-edit01'));
+  assert.equal(f.reads.length, 6); assert.equal(f.writes.length, 3); assert.equal(saved.studentOpen, true);
+  assert.equal(f.documents.get(publicStockPath(scope, 'market')).stocks[0].settings.name, '공개 이름 변경');
+  assert.deepEqual(f.documents.get(publicStockPath(scope, 'current')), signal);
+  f.reads.length = 0; f.writes.length = 0;
+  const rules = await f.api.saveWisStockMarketRules(req({ rules: { ...saved.rules, buyFeeBps: 200, halted: true }, expectedRevision: saved.revision, requestId: 'public-rules-edit001' }));
+  assert.equal(rules.studentOpen, true); assert.equal(rules.rules.halted, false);
+  assert.equal(f.reads.length, 6); assert.equal(f.writes.length, 3);
+  assert.equal(f.documents.get(publicStockPath(scope, 'market')).rules.buyFeeBps, 200);
+  assert.deepEqual(f.documents.get(publicStockPath(scope, 'current')), signal);
+});
+
+test('first open creates a private seed for a seedless market and strict public projection strips nested private fields', async () => {
+  const f = fixture(); const created = await f.api.saveWisStock(saveInput());
+  const raw = f.documents.get(marketPath(scope)); delete raw.priceSeed;
+  raw.stocks[0].privateNote = 'never-publish'; raw.stocks[0].history[0].privateNote = 'never-publish';
+  const opened = await f.api.setWisStockMarketHalted(req({ halted: false, expectedRevision: created.revision, requestId: 'seedless-first-open01' }));
+  assert.match(f.documents.get(marketPath(scope)).priceSeed, /^[a-f0-9]{64}$/);
+  const published = f.documents.get(publicStockPath(scope, 'market'));
+  assert(!JSON.stringify(published).includes('never-publish')); assert(!JSON.stringify(published).includes('priceSeed'));
+  assert.deepEqual(Object.keys(published.stocks[0].settings).sort(), ['name', 'description', 'period', 'issuedShares', 'lotSize', 'tradingStatus'].sort());
+  for (const field of ['growthProfile', 'volatilityBps', 'trendBps', 'automatic', 'intervalHours', 'initialPrice', 'minimumPrice', 'maximumPrice'])
+    assert.equal(published.stocks[0].settings[field], undefined);
+  assert.deepEqual(Object.keys(published).sort(), ['schemaVersion', 'semesterId', 'studentOpen', 'tradingEpoch', 'revision', 'updatedAtMs', 'rules', 'stocks'].sort());
+  assert.equal(opened.studentOpen, true);
+});
+
+test('issuance and lot size are immutable after first opening, including while stopped; unrelated edits remain possible', async () => {
+  const f = fixture(); const created = await f.api.saveWisStock(saveInput());
+  const opened = await f.api.setWisStockMarketHalted(req({ halted: false, expectedRevision: created.revision, requestId: 'issuance-first-open01' }));
+  for (const patch of [{ issuedShares: 200000 }, { lotSize: 2 }]) {
+    const writes = f.writes.length;
+    await assert.rejects(f.api.saveWisStock(saveInput({ ...opened.stocks[0].settings, ...patch }, opened.revision, opened.stocks[0].id, 'issuance-invalid-0001')), reason('WIS_STOCK_SUPPLY_LOCKED'));
+    assert.equal(f.writes.length, writes);
+  }
+  const stopped = await f.api.setWisStockMarketHalted(req({ halted: true, expectedRevision: 0, requestId: 'issuance-market-stop1' }));
+  await assert.rejects(f.api.saveWisStock(saveInput({ ...opened.stocks[0].settings, issuedShares: 200000 }, stopped.revision, opened.stocks[0].id, 'issuance-invalid-0002')), reason('WIS_STOCK_SUPPLY_LOCKED'));
+  const saved = await f.api.saveWisStock(saveInput({ ...opened.stocks[0].settings, description: '설명만 변경' }, stopped.revision, opened.stocks[0].id, 'issuance-safe-edit01'));
+  assert.equal(saved.studentOpen, true); assert.equal(saved.rules.halted, true);
+});
+
+test('dedicated WisPI interface guard is independent of other menus and never implies market opening', () => {
+  const { assertStudentWispiMenuVisible } = require('../studentMenuVisibility');
+  assert.doesNotThrow(() => assertStudentWispiMenuVisible({ studentMenuVisibility: { wispi: true, mypage: false, avatar_shop: false } }));
+  assert.doesNotThrow(() => assertStudentWispiMenuVisible({}));
+  for (const value of [false, 1, 'true', null]) assert.throws(() => assertStudentWispiMenuVisible({ studentMenuVisibility: { wispi: value } }), reason('STUDENT_MENU_HIDDEN'));
+  for (const studentMenuVisibility of [null, [], false]) assert.throws(() => assertStudentWispiMenuVisible({ studentMenuVisibility }), reason('STUDENT_MENU_HIDDEN'));
 });

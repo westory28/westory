@@ -11,6 +11,7 @@ import ts from "typescript";
 let auth;
 let location;
 let mobile = false;
+let marketPublished = false;
 const cache = new Map();
 const router = {
   Link: ({ to, children, ...props }) => React.createElement("a", { ...props, href: `#${to}` }, children),
@@ -18,6 +19,7 @@ const router = {
   useNavigate: () => () => {},
 };
 const stubs = {
+  useStudentWisStocks: { useStudentWisStockStatus: () => ({ status: 'ready', data: { studentOpen: marketPublished, halted: true }, error: '', retry() {} }) },
   "AuthContext": { useAuth: () => auth },
   "firebase": { auth: { currentUser: null } },
   "AppToastProvider": { useAppToast: () => ({ showToast() {} }) },
@@ -171,5 +173,10 @@ for (const small of [false, true]) {
   assert(studentVillage.includes("위스 상점") && studentVillage.includes("아바타 상점"));
   assert(!html.includes("tab=stocks") && !html.includes("위스피"), "Renaming never publishes student WsPI");
   assert.match(studentVillage, /<a(?=[^>]*href="#\/student\/points\?tab=shop")(?=[^>]*aria-current="page")[^>]*>/, "Order history bookmark selects the shop parent");
+  marketPublished = true;
+  assert(urls(render('student')).includes('/student/wispi'), 'Published WsPI remains in the menu while trading is halted');
+  auth.config.studentMenuVisibility = { wispi: false };
+  assert(!urls(render('student')).includes('/student/wispi'), 'Only interface visibility hides an already published market');
+  marketPublished = false;
 }
 console.log("PASS: student/teacher route separation, configured labels, village destinations, preserved bookmarks, point/avatar permissions, closed student WsPI, mobile/desktop/collapsed navigation; no backend calls.");

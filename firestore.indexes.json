@@ -1,6 +1,22 @@
 {
   "indexes": [
     {
+      "collectionGroup": "wis_stock_orders",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "dueAtMs", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "wis_stock_history",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "accountId", "order": "ASCENDING"},
+        {"fieldPath": "sequence", "order": "DESCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "semester_wis_accounts",
       "queryScope": "COLLECTION",
       "fields": [

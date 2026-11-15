@@ -97,7 +97,6 @@ export default function TeacherWisStocks({
   const haltFlight = useRef(false);
   const [haltError, setHaltError] = useState("");
   const [haltConflict, setHaltConflict] = useState(false);
-  const [confirmResume, setConfirmResume] = useState(false);
   const haltIntent = useRef(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [templateId, setTemplateId] = useState("");
@@ -151,7 +150,6 @@ export default function TeacherWisStocks({
     haltFlight.current = false;
     setHaltError("");
     setHaltConflict(false);
-    setConfirmResume(false);
     setTab("stocks");
     let started = false;
     const start = () => {
@@ -236,7 +234,6 @@ export default function TeacherWisStocks({
     setHalting(true);
     setHaltError("");
     setHaltConflict(false);
-    setConfirmResume(false);
     try {
       const result = await setWisStockMarketHalted(
         { year, semester },
@@ -248,8 +245,8 @@ export default function TeacherWisStocks({
       if (!accepted) return;
       showToast({
         title: accepted.rules.halted
-          ? "시장 거래를 정지했습니다."
-          : "시장 거래를 재개했습니다.",
+          ? "주식 시장을 닫았습니다."
+          : "주식 시장을 열었습니다.",
         tone: "success",
       });
     } catch (failure) {
@@ -272,6 +269,7 @@ export default function TeacherWisStocks({
     }),
     [market],
   );
+  const marketOpen = market?.studentOpen === true && !market.rules.halted;
   return (
     <section className="wis-stocks" aria-label="위스피(WsPI) 관리">
       <PortalSubNavigation
@@ -287,11 +285,14 @@ export default function TeacherWisStocks({
         variant="tabs"
         actions={
           <>
-            <span className="wis-stocks__closed">학생 비공개</span>
+            <span className="wis-stocks__closed" role="status">
+              {marketOpen ? "거래 중" : "거래 중지"}
+            </span>
             <InfoHelp label="주식 운영 기준">
               <p>
-                교사 준비용 모의 시장입니다. 종목과 규칙을 저장해도 학생에게
-                공개되지 않습니다. 종목은 학기당 {market?.maxStocks || 100}
+                시장을 열면 학생이 거래할 수 있습니다. 닫으면 거래만 중지하며,
+                학생 메뉴 숨김은 설정의 인터페이스에서 변경합니다. 종목은 학기당{" "}
+                {market?.maxStocks || 100}
                 개까지, 가격 기록은 종목별 최근 {market?.historyLimit || 120}
                 건까지 보관합니다. 설명과 가격 기록을 포함한 저장 용량을 넘으면
                 등록을 중단합니다.
@@ -320,30 +321,18 @@ export default function TeacherWisStocks({
           </button>
         ))}
         <div className="wis-stock-emergency" aria-label="시장 거래 제어">
-          {market?.rules.halted && <span role="status">거래 정지 중</span>}
           <button
             type="button"
-            className="wis-stock-emergency__button"
-            disabled={!canManage || halting}
-            onClick={() => {
-              if (!market?.rules.halted) void changeHalted(true);
-              else if (confirmResume) void changeHalted(false);
-              else setConfirmResume(true);
-            }}
+            className={`wis-stock-emergency__button${marketOpen ? "" : " wis-stock-emergency__button--open"}`}
+            disabled={!canManage || halting || !market}
+            onClick={() => void changeHalted(marketOpen)}
           >
             {halting
               ? "처리 중…"
-              : market?.rules.halted
-                ? confirmResume
-                  ? "거래 재개 확인"
-                  : "시장 거래 재개"
-                : "시장 거래 정지"}
+              : marketOpen
+                ? "주식 시장 닫기"
+                : "주식 시장 열기"}
           </button>
-          {confirmResume && !halting && (
-            <button type="button" onClick={() => setConfirmResume(false)}>
-              재개 취소
-            </button>
-          )}
         </div>
       </PortalSubNavigation>
       {haltError && (

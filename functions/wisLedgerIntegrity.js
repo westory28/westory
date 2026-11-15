@@ -1,7 +1,8 @@
 // Pure validation shared by the read-only audit and explicit projection rebuild.
 // No Firestore reads, writes, identity details, or automatic balance repairs.
 const LEDGER_TYPES = new Set(['INITIAL_GRANT', 'GRANT', 'DEDUCT', 'ADJUST',
-  'REVERSAL', 'ORDER_DEBIT', 'ORDER_REFUND', 'LEGACY_OPENING', 'LEGACY_RECLAIM']);
+  'REVERSAL', 'ORDER_DEBIT', 'ORDER_REFUND', 'LEGACY_OPENING', 'LEGACY_RECLAIM',
+  'STOCK_TRANSFER_OUT', 'STOCK_TRANSFER_IN']);
 const inspectWisLedger = (account, entries) => {
   const issues = new Set(), ids = new Set(), degree = new Map(), edges = new Map();
   const byId = new Map(entries.map(entry => [entry?.ledgerEntryId, entry]));
@@ -21,10 +22,18 @@ const inspectWisLedger = (account, entries) => {
       || ids.has(entry.ledgerEntryId)) issues.add('duplicate_or_invalid_ledger_id');
     ids.add(entry?.ledgerEntryId);
     if (!LEDGER_TYPES.has(entry?.type)) issues.add('invalid_ledger_type');
-    if ((['INITIAL_GRANT', 'GRANT', 'ORDER_REFUND'].includes(entry?.type) && !(entry.delta > 0))
-      || (['DEDUCT', 'ORDER_DEBIT', 'LEGACY_RECLAIM'].includes(entry?.type) && !(entry.delta < 0))
+    if ((['INITIAL_GRANT', 'GRANT', 'ORDER_REFUND', 'STOCK_TRANSFER_IN'].includes(entry?.type) && !(entry.delta > 0))
+      || (['DEDUCT', 'ORDER_DEBIT', 'LEGACY_RECLAIM', 'STOCK_TRANSFER_OUT'].includes(entry?.type) && !(entry.delta < 0))
       || (['ADJUST', 'REVERSAL'].includes(entry?.type) && entry.delta === 0)
       || (entry?.type === 'LEGACY_OPENING' && !(entry.delta >= 0))) issues.add('invalid_ledger_sign');
+    if (['STOCK_TRANSFER_OUT', 'STOCK_TRANSFER_IN'].includes(entry?.type)
+      && (!Number.isSafeInteger(entry.delta) || !validAmount(entry.principalReturned) || !validAmount(entry.withdrawnProfit)
+        || typeof entry.stockTransferId !== 'string' || !entry.stockTransferId
+        || entry.sourceId !== `wis_stock_transfer:${entry.stockTransferId}`
+        || (entry.type === 'STOCK_TRANSFER_OUT'
+          ? entry.principalReturned !== 0 || entry.withdrawnProfit !== 0
+          : BigInt(entry.principalReturned) + BigInt(entry.withdrawnProfit) !== BigInt(entry.delta))))
+      issues.add('invalid_stock_transfer');
     if (entry?.type === 'REVERSAL') {
       const original = byId.get(entry.sourceId);
       if (!original || !['GRANT', 'DEDUCT', 'ADJUST'].includes(original.type)

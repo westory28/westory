@@ -13,6 +13,7 @@
     "executeThinkCloudResponseFast"
   ],
   "notes": [
+    "2026-11-15: Stock transfers have dedicated ledger types; cumulative Wis recognizes withdrawn profit only, never returned principal or internal trades. Update the read-only audit and explicit ledger rebuild through the captured executeCommand source; preserve all other live files and runtime resources. Fast transaction endpoint cannot execute rebuild and is not redeployed.",
     "2026-11-14: Total-earned Wis includes initial grants in dashboard, opt-in hall and teacher overview; grade eligibility remains rankEarnedTotal. Deploy only the four live ranking/query endpoints from captured archives with wisOverviewQuery.js. No ledger, balance, policy, trigger or account migration.",
     "2026-11-14: Wis wallet integrity, canonical cumulative/current ranking, scoped teacher queries and ACTIVE enrollment metadata synchronization. Transplant reviewed files into each captured live archive, include ../wisLedgerIntegrity.js for executeCommand and ../wisOverviewQuery.js for query endpoints, and preserve deployed runtime resources. No account or ledger repair; isolated stock endpoints remain teacher-only.",
     "2026-11-14: Think Cloud only: preserve live executeCommand/getThinkCloudState archives; overlay reviewed w8Domains/submit queue/wiring/query. Add executeThinkCloudResponseFast and getThinkCloudStateFast beside nam5, with minInstances 0. Keep receipts, authority, other commands and Seoul compatibility.",
@@ -467,7 +468,7 @@
       "sourceFile": "wisEconomy.js",
       "file": "wisEconomy.js",
       "originalSha256": "f6267e1d62b1e977b86cbac8de07b310b9ec4d220a46537550343978631986b4",
-      "sha256": "fca25eebc1fecf2a67450b38daf59adda35b57a43e3548660a3c1356bc98d2e5",
+      "sha256": "35eea6b7ed505b896cf9f8a4510e4e765f618701933d7bba964bd14b5d322c2d",
       "changes": [
         "2026-10-18: Wis shop preserves stock=available+reserved+sold, receipt-safe student/teacher cancellation with original-payment refund, READY/fulfilled timestamps, current-semester write guard, HTTPS original/preview images and semester product snapshots.",
         "2026-10-18: Return sold inventory count and preserve optional product display order in commands, student projection and semester snapshots.",

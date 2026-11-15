@@ -3,6 +3,8 @@ import { useAuth } from "../../contexts/AuthContext";
 import { getStudentMenuLabel } from "../../constants/menus";
 import { canManageSettings, canReadPoints } from "../../lib/permissions";
 import { getStudentRouteAccess } from "../../lib/studentMenuAccess";
+import { useStudentWisStockStatus } from "../../hooks/useStudentWisStocks";
+import { STUDENT_WISPI_URL } from "../../lib/studentWisStockTypes";
 import {
   STUDENT_AVATAR_SHOP_URL,
   TEACHER_AVATAR_SHOP_URL,
@@ -44,6 +46,7 @@ export default function WisShopNavigation({
   onNavigate?: () => void;
 }) {
   const { currentUser, userData, config, menuConfig } = useAuth();
+  const stockStatus = useStudentWisStockStatus(portal === "student");
   const items = portal === "teacher" && variant === "items";
   const itemClass = (key: typeof active) =>
     items
@@ -119,6 +122,14 @@ export default function WisShopNavigation({
           onClick={onNavigate}
         >
           {label("stocks", "위스피(WsPI)")}
+        </Link>
+      )}
+      {portal === "student" && stockStatus.data?.studentOpen === true && (
+        <Link
+          to={STUDENT_WISPI_URL}
+          aria-current={active === "stocks" ? "page" : undefined}
+        >
+          {getStudentMenuLabel(menuConfig, STUDENT_WISPI_URL, "위스피(WsPI)")}
         </Link>
       )}
     </>

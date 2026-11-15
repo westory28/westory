@@ -1,0 +1,359 @@
+.student-wispi,
+.student-wispi-account {
+  min-width: 0;
+  color: var(--ws-text, #1f2937);
+}
+.student-wispi :is(button, input),
+.student-wispi-account :is(button, input) {
+  font: inherit;
+}
+.student-wispi button:where(:not(.ws-info-help__button)),
+.student-wispi-account button:where(:not(.ws-info-help__button)) {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  background: var(--ws-surface, #fff);
+  color: inherit;
+  cursor: pointer;
+}
+.student-wispi :is(button, input):focus-visible,
+.student-wispi-account :is(button, input):focus-visible {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: 2px;
+}
+.student-wispi button:disabled,
+.student-wispi-account button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.student-wispi .ws-page-tabs > :is(button, a) {
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+}
+.student-wispi .ws-page-tabs > [aria-pressed="true"] {
+  border-bottom-color: var(--ws-primary, #2563eb);
+  color: var(--ws-primary, #2563eb);
+  font-weight: 700;
+}
+.student-wispi button.student-wispi-primary,
+.student-wispi-account button.student-wispi-primary {
+  background: var(--ws-primary, #2563eb);
+  border-color: var(--ws-primary, #2563eb);
+  color: #fff;
+  font-weight: 700;
+}
+.student-wispi h2,
+.student-wispi-account h2 {
+  margin: 0 0 16px;
+  color: var(--ws-text-strong, #111827);
+  font-size: 20px;
+  font-weight: 700;
+}
+.student-wispi-muted {
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+}
+.student-wispi-error {
+  color: var(--ws-danger, #dc2626);
+  margin-block: 12px;
+}
+.student-wispi-error p {
+  margin: 0 0 8px;
+}
+.student-wispi-stage {
+  position: relative;
+  min-height: 420px;
+}
+.student-wispi-content {
+  min-width: 0;
+}
+.student-wispi-content.is-stopped {
+  filter: blur(5px);
+  pointer-events: none;
+  user-select: none;
+}
+.student-wispi-stopped {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 100px 16px 24px;
+  background: rgb(249 250 251 / 38%);
+  text-align: center;
+}
+.student-wispi-stopped strong {
+  color: var(--ws-text-strong, #111827);
+  font-size: 20px;
+  line-height: 1.5;
+}
+.student-wispi-market {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(0, 2.5fr);
+  align-items: start;
+  gap: 24px;
+}
+.student-wispi-instruments {
+  min-width: 0;
+}
+.student-wispi-instruments ul {
+  max-height: 560px;
+  overflow: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.student-wispi-instruments li {
+  margin: 0;
+}
+.student-wispi-instruments li > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 8px;
+  text-align: left;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  background: transparent;
+}
+.student-wispi-instruments li > button[aria-pressed="true"] {
+  background: var(--ws-primary-soft, #eff6ff);
+  color: var(--ws-primary, #2563eb);
+  box-shadow: inset 3px 0 var(--ws-primary, #2563eb);
+}
+.student-wispi-instruments li > button > span {
+  min-width: 0;
+}
+.student-wispi-instruments li > button > strong {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+.student-wispi-instruments small {
+  display: block;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+  margin-top: 4px;
+}
+.student-wispi-instruments strong {
+  overflow-wrap: anywhere;
+}
+.student-wispi-detail {
+  min-width: 0;
+}
+.student-wispi-price {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.student-wispi-price h2 {
+  margin: 0 0 8px;
+}
+.student-wispi-price p {
+  margin: 0;
+  color: var(--ws-text-strong, #111827);
+  font-size: 32px;
+  font-weight: 800;
+}
+.student-wispi-price small {
+  font-size: 16px;
+  font-weight: 500;
+}
+.student-wispi .is-up {
+  color: var(--ws-danger, #dc2626);
+}
+.student-wispi .is-down {
+  color: var(--ws-primary, #2563eb);
+}
+.student-wispi-periods {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 8px 16px;
+}
+.student-wispi-periods button {
+  border: 0;
+  background: transparent;
+}
+.student-wispi-periods button[aria-pressed="true"] {
+  color: var(--ws-primary, #2563eb);
+  font-weight: 700;
+}
+.student-wispi-description {
+  margin: 16px 0;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.student-wispi-order {
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ws-border, #e5e7eb);
+}
+.student-wispi-order > p {
+  margin: 0;
+}
+.student-wispi-inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.student-wispi-segments {
+  display: inline-flex;
+  gap: 4px;
+}
+.student-wispi-segments button {
+  min-width: 64px;
+}
+.student-wispi-segments button[aria-pressed="true"] {
+  color: var(--ws-primary, #2563eb);
+  border-color: var(--ws-primary, #2563eb);
+  font-weight: 700;
+}
+.student-wispi-order label,
+.student-wispi-transfer form label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.student-wispi-order label > span {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.student-wispi-order input,
+.student-wispi-transfer input {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  background: var(--ws-surface, #fff);
+}
+.student-wispi-balances {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0 0 24px;
+}
+.student-wispi-balances dt {
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+}
+.student-wispi-balances dd {
+  margin: 8px 0 0;
+  font-size: 24px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.student-wispi-balances small {
+  font-size: 14px;
+  font-weight: 500;
+}
+.student-wispi-transfer form {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+.student-wispi-transfer form label {
+  flex: 1 1 220px;
+}
+.student-wispi-transfer form label > span {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.student-wispi-transfer form {
+  max-width: 640px;
+}
+.student-wispi-transfer > .student-wispi-inline {
+  justify-content: flex-start;
+}
+.student-wispi-transfer form button {
+  flex: 0 1 auto;
+}
+.student-wispi-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--ws-border, #e5e7eb);
+}
+.student-wispi-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.student-wispi-list > li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+}
+.student-wispi-list li > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.student-wispi-list li > strong,
+.student-wispi-list li > button {
+  flex-shrink: 0;
+}
+.student-wispi-list small {
+  display: block;
+  margin-top: 4px;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+}
+.student-wispi-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+@media (max-width: 767px) {
+  .student-wispi-market {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  .student-wispi-instruments ul {
+    max-height: 240px;
+  }
+  .student-wispi-balances {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .student-wispi-balances dd {
+    font-size: 22px;
+  }
+  .student-wispi-price p {
+    font-size: 28px;
+  }
+  .student-wispi-stopped {
+    padding-top: 80px;
+  }
+}
+.student-wispi-account-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.student-wispi-account-actions button {
+  min-height: 44px;
+  background: transparent;
+  border: 0;
+  color: #475569;
+  font-size: 0.8125rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

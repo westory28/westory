@@ -287,6 +287,25 @@ service cloud.firestore {
             && profile.staffPermissions.hasAny(['point_read', 'point_manage'])));
     }
 
+    function hasWisStockStudentSessionRole() {
+      let profile = userProfile();
+      let identity = get(/databases/$(database)/documents/student_identities/$(request.auth.uid)).data;
+      return profile.role == 'student' && approvedRegistrationProfile(profile)
+        && profile.get('disabled', false) == false && profile.get('isDeleted', false) == false
+        && profile.get('deletedAt', null) == null && profile.get('weplayDeletionPending', false) == false
+        && profile.get('enrollmentStatus', 'active') in ['active', '', null]
+        && identity.studentUid == request.auth.uid && identity.get('accountStatus', 'ACTIVE') == 'ACTIVE';
+    }
+
+    function passesWisStockSessionMaintenanceFence() {
+      let maintenance = get(/databases/$(database)/documents/site_settings/student_maintenance);
+      // Same maintenance policy, using the existing compact validator so a
+      // full 20-entry bypass list stays below the rules expression budget.
+      return maintenance == null || (isValidCompactStudentMaintenanceConfig(maintenance.data)
+        && (maintenance.data.enabled == false || request.auth.token.email == 'westoria28@gmail.com'
+          || request.auth.uid in maintenance.data.bypassUids || userProfile().role in ['teacher', 'staff']));
+    }
+
     function canManagePointData() {
       return isAdmin() || hasPermission('point_manage');
     }
@@ -966,14 +985,15 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
-    // Board-only authority fence: observe only this teacher's current session.
+    // Stock authority fence: observe only this authorized user's current session.
     // Closure is itself a changed document, so an open listener loses access
     // without waiting for any student investment data to change.
     match /application_sessions/{userId}/sessions/{authTime} {
       allow get: if hasWestoryIdentity() && request.auth.uid == userId
         && authTime == string(request.auth.token.auth_time)
-        && hasActiveApplicationSession() && passesStudentMaintenanceFence()
-        && passesStudentRegistrationFence() && hasWisStockInvestmentReaderRole()
+        && hasActiveApplicationSession() && passesWisStockSessionMaintenanceFence()
+        && passesStudentRegistrationFence()
+        && (hasWisStockInvestmentReaderRole() || hasWisStockStudentSessionRole())
         && resource.data.uid == request.auth.uid
         && resource.data.keys().hasOnly(['uid', 'email', 'authTime', 'status', 'createdAt', 'lastActivityAt', 'lastTouchAt',
           'generalExpiresAt', 'highRiskExpiresAt', 'closedAt', 'schemaVersion', 'authorityGeneration', 'protocolVersion',
@@ -1297,6 +1317,103 @@ service cloud.firestore {
 
     // 학년도/학기 범위 컬렉션 권한
     match /years/{year}/semesters/{semester} {
+      function stockCurrentScope(checkInterfaceScope) {
+        let selected = year + '-' + semester;
+        let pointer = get(/databases/$(database)/documents/site_settings/semester_active).data;
+        let manifest = get(/databases/$(database)/documents/semester_manifests/$(selected)).data;
+        return year.matches('^20[0-9]{2}$') && semester in ['1', '2']
+          && (!checkInterfaceScope || stockInterfaceScopeMatches())
+          && [pointer.semesterId, manifest.semesterId,
+              manifest.status, manifest.get('readOnly', false), pointer.revision]
+            == [selected, selected, 'ACTIVE', false, manifest.revision]
+          && manifest.revision is int && manifest.revision >= 1;
+      }
+      function stockInterfaceScopeMatches() {
+        let config = get(/databases/$(database)/documents/site_settings/config).data;
+        return string(config.year) == year && string(config.semester) == semester;
+      }
+      function stockActiveStudent() {
+        let profile = userProfile();
+        let identity = get(/databases/$(database)/documents/student_identities/$(request.auth.uid)).data;
+        return profile.role == 'student' && approvedRegistrationProfile(profile)
+          && profile.get('disabled', false) == false && profile.get('isDeleted', false) == false
+          && profile.get('deletedAt', null) == null && profile.get('weplayDeletionPending', false) == false
+          && profile.get('enrollmentStatus', 'active') in ['active', '', null]
+          && identity.studentUid == request.auth.uid && identity.get('accountStatus', 'ACTIVE') == 'ACTIVE';
+      }
+      function stockMenuVisible() {
+        let visibility = get(/databases/$(database)/documents/site_settings/config).data.get('studentMenuVisibility', {});
+        return visibility is map && visibility.get('wispi', true) == true;
+      }
+      function stockReadFence(checkInterfaceScope) {
+        // Exact copies of the active-session/registration predicates avoid
+        // redundant exists()+get() calls. Own accounts also verify identity,
+        // enrollment, slot and classroom within Firestore's ten-read rule limit.
+        let session = get(applicationSessionPath()).data;
+        let profile = userProfile();
+        return hasWestoryIdentity() && request.auth.token.auth_time is int
+          && session.status == 'active' && session.authTime == request.auth.token.auth_time
+          && session.schemaVersion == 2 && session.authorityGeneration == 'w1r2-2026-08-09'
+          && session.protocolVersion is int && session.protocolVersion >= 2
+          && session.sessionRevision is string && session.sessionRevision.matches('^[a-f0-9]{64}$')
+          && session.authorityModeAtOpen in ['ENFORCE', 'OBSERVE_ONLY', 'DISABLED']
+          && session.generalExpiresAt is timestamp
+          && (session.authorityModeAtOpen != 'ENFORCE' || session.generalExpiresAt > request.time)
+          && (request.auth.token.email == 'westoria28@gmail.com' || approvedRegistrationProfile(profile))
+          && currentYutMaintenance() && stockCurrentScope(checkInterfaceScope);
+      }
+      match /wis_stock_public/{documentId} {
+        function safeStockPublication() {
+          return (documentId == 'current' && (resource == null ||
+              (resource.data.keys().hasOnly(['schemaVersion', 'semesterId', 'studentOpen', 'halted', 'tradingEpoch', 'revision', 'updatedAtMs'])
+                && resource.data.schemaVersion == 1 && resource.data.semesterId == year + '-' + semester
+                && resource.data.studentOpen is bool && resource.data.halted is bool)))
+            || (documentId == 'market' && resource != null
+              && get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/wis_stock_public/current).data.studentOpen == true
+              && resource.data.keys().hasOnly(['schemaVersion', 'semesterId', 'studentOpen', 'tradingEpoch', 'revision', 'updatedAtMs', 'rules', 'stocks'])
+              && resource.data.schemaVersion == 1 && resource.data.semesterId == year + '-' + semester
+              && resource.data.studentOpen == true && resource.data.rules is map && resource.data.stocks is list
+              && resource.data.stocks.size() <= 100);
+        }
+        allow get: if stockReadFence(true)
+          && (hasWisStockInvestmentReaderRole() || (stockActiveStudent() && stockMenuVisible()))
+          && safeStockPublication();
+        allow list, create, update, delete: if false;
+      }
+      match /wis_stock_accounts/{accountId} {
+        function ownActiveStockAccount() {
+          let wallet = get(/databases/$(database)/documents/semester_wis_accounts/$(accountId)).data;
+          // Both canonical IDs use SHA256(semesterId + '\n' + uid). The
+          // account's verified owner binds the slot prefix without trusting
+          // a client-supplied UID or stale stock-account roster metadata.
+          let slotId = accountId.replace('^wisacct_', 'slot_').replace('[a-f0-9]{24}$', '');
+          let enrollment = get(/databases/$(database)/documents/semester_enrollments/$(wallet.enrollmentId)).data;
+          let slot = get(/databases/$(database)/documents/semester_enrollment_slots/$(slotId)).data;
+          let classroom = get(/databases/$(database)/documents/semester_classes/$(wallet.classId)).data;
+          return accountId.matches('^wisacct_[a-f0-9]{64}$')
+            && wallet.accountId == accountId && wallet.studentUid == request.auth.uid && wallet.semesterId == year + '-' + semester
+            && wallet.schemaVersion == 1 && wallet.policyVersion == 'w7-v1'
+            && wallet.status == 'ACTIVE' && wallet.get('readOnly', false) == false
+            && (resource == null || (resource.data.schemaVersion == 1
+              && resource.data.studentUid == request.auth.uid && resource.data.semesterId == year + '-' + semester
+              && resource.data.accountId == accountId))
+            && [enrollment.enrollmentId, enrollment.studentUid, enrollment.semesterId, enrollment.enrollmentStatus,
+                enrollment.get('readOnly', false), enrollment.classId, slot.studentUid, slot.semesterId,
+                slot.activeEnrollmentId, slot.get('status', 'ACTIVE'), classroom.classId, classroom.semesterId,
+                classroom.status, classroom.get('readOnly', false)]
+              == [wallet.enrollmentId, request.auth.uid, year + '-' + semester, 'ACTIVE', false,
+                wallet.classId, request.auth.uid, year + '-' + semester, wallet.enrollmentId, 'ACTIVE',
+                wallet.classId, year + '-' + semester, 'ACTIVE', false];
+        }
+        // Missing exact own accounts may be observed for the first deposit;
+        // ownership and current roster come from the canonical general wallet.
+        // Personal scope uses the authoritative active pointer + manifest and
+        // deliberately skips interface config to retain the ten-read budget.
+        // Never allow broad probes, collection enumeration or client writes.
+        // Personal asset history stays readable when the market/menu is stopped.
+        allow get: if stockReadFence(false) && stockActiveStudent() && ownActiveStockAccount();
+        allow list, create, update, delete: if false;
+      }
       // Teacher-only complete projections. No raw market/seed, student account,
       // order or general-Wis wallet access is granted by this subscription.
       match /wis_stock_investment_boards/{boardId} {

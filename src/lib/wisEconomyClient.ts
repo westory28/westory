@@ -239,6 +239,8 @@ const activities = new Set([
   "weplay_cost",
   "weplay_reward",
   "weplay_rank_reward",
+  "wis_stock_deposit",
+  "wis_stock_withdrawal",
 ]);
 export const wisTransaction = (
   entry: WisRow,
@@ -252,6 +254,8 @@ export const wisTransaction = (
     REVERSAL: "manual_reclaim",
     ORDER_DEBIT: "purchase_hold",
     ORDER_REFUND: "purchase_cancel",
+    STOCK_TRANSFER_OUT: "wis_stock_deposit",
+    STOCK_TRANSFER_IN: "wis_stock_withdrawal",
   };
   const activityType = activities.has(entry.activityType)
     ? (entry.activityType as PointTransaction["type"])

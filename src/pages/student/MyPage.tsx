@@ -22,6 +22,7 @@ import {
 import { useAppToast } from "../../components/common/AppToastProvider";
 import PointRankBadge from "../../components/common/PointRankBadge";
 import { useAuth } from "../../contexts/AuthContext";
+import { useStudentWisStockStatus } from "../../hooks/useStudentWisStocks";
 import { subscribePointsUpdated } from "../../lib/appEvents";
 import { db } from "../../lib/firebase";
 import { lazyWithRetry } from "../../lib/lazyWithRetry";
@@ -75,7 +76,12 @@ const StudentAvatarStudio = lazyWithRetry(
   "student-avatar-studio",
 );
 
-type MainMenu = "profile" | "score" | "wrong_note" | "avatar";
+const StudentWisStockAccountPanel = lazyWithRetry(
+  () => import("./components/wispi/StudentWisStockAccountPanel"),
+  "student-wis-stock-account",
+);
+
+type MainMenu = "profile" | "score" | "wrong_note" | "avatar" | "wispi";
 
 interface UserProfileDoc {
   name?: string;
@@ -261,11 +267,14 @@ const MyPage: React.FC = () => {
 
   const menu: MainMenu =
     requestedMenu === "avatar" ||
+    requestedMenu === "wispi" ||
     requestedMenu === "score" ||
     requestedMenu === "wrong_note"
       ? requestedMenu
       : "profile";
   const isAvatarWardrobe = menu === "avatar";
+  const isIndependentMenu = isAvatarWardrobe || menu === "wispi";
+  const stockStatus = useStudentWisStockStatus(menu === "wispi");
   const [menuOpen, setMenuOpen] = useState(false);
   const [profile, setProfile] = useState<UserProfileDoc | null>(null);
   const [profileIcon, setProfileIcon] = useState("😀");
@@ -316,7 +325,7 @@ const MyPage: React.FC = () => {
   const [myPageError, setMyPageError] = useState("");
 
   useEffect(() => {
-    if (isAvatarWardrobe) {
+    if (isIndependentMenu) {
       setMyPageLoading(false);
       return;
     }
@@ -331,7 +340,7 @@ const MyPage: React.FC = () => {
     canUseLesson,
     canUseQuiz,
     canUseScore,
-    isAvatarWardrobe,
+    isIndependentMenu,
   ]);
 
   useEffect(() => {
@@ -500,7 +509,7 @@ const MyPage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (isAvatarWardrobe) return;
+    if (isIndependentMenu) return;
     void loadPointRankState();
     const unsubscribe = subscribePointsUpdated(() => {
       void loadPointRankState();
@@ -514,7 +523,7 @@ const MyPage: React.FC = () => {
     config?.year,
     config?.semester,
     iconModalOpen,
-    isAvatarWardrobe,
+    isIndependentMenu,
   ]);
 
   const loadScoreData = async (requestId = myPageRequestRef.current) => {
@@ -946,6 +955,7 @@ const MyPage: React.FC = () => {
   const leftMenus: Array<{ key: MainMenu; title: string; icon: string }> = [
     { key: "profile", title: "나의 기본 정보", icon: "fa-id-card" },
     { key: "avatar", title: "아바타 옷장", icon: "fa-shirt" },
+    { key: "wispi", title: "위스·주식 지갑", icon: "fa-wallet" },
     { key: "score", title: "나의 성적표", icon: "fa-chart-column" },
     { key: "wrong_note", title: "오답 노트", icon: "fa-book-open" },
   ];
@@ -1091,7 +1101,7 @@ const MyPage: React.FC = () => {
   ];
   return (
     <div className="student-my-page min-h-screen bg-slate-50 flex flex-col">
-      {((myPageLoading && !isAvatarWardrobe) || savingIcon || savingGoal) && (
+      {((myPageLoading && !isIndependentMenu) || savingIcon || savingGoal) && (
         <LoadingOverlay />
       )}
       <PortalWorkspace
@@ -1133,7 +1143,7 @@ const MyPage: React.FC = () => {
         </PortalSubNavigation>
 
         <section className="teacher-sub-content">
-          {myPageError && !isAvatarWardrobe && (
+          {myPageError && !isIndependentMenu && (
             <div role="alert">
               <p>{myPageError}</p>
               <button
@@ -1146,6 +1156,16 @@ const MyPage: React.FC = () => {
             </div>
           )}
           <div className="space-y-8">
+            {menu === "wispi" && (
+              <React.Suspense fallback={<InlineLoading />}>
+                <StudentWisStockAccountPanel
+                  tradingEnabled={
+                    stockStatus.data?.studentOpen === true &&
+                    stockStatus.data?.halted === false
+                  }
+                />
+              </React.Suspense>
+            )}
             {menu === "avatar" && (
               <React.Suspense fallback={<InlineLoading />}>
                 <StudentAvatarStudio mode="wardrobe" />

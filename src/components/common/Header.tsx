@@ -19,6 +19,7 @@ import {
 } from "../../constants/historyDictionaryPanels";
 import { MENUS, type MenuChild } from "../../constants/menus";
 import { getWisShopMenuKey } from "../../lib/avatarRoutes";
+import { useStudentWisStockStatus } from "../../hooks/useStudentWisStocks";
 import { TEACHER_POINT_TAB_LABELS } from "../../constants/pointLabels";
 import TeacherSidebar, {
   type TeacherSidebarGroup,
@@ -191,6 +192,7 @@ const Header: React.FC<{
         : "student";
 
   const isTeacherPortal = portal === "teacher";
+  const wisStockStatus = useStudentWisStockStatus(!isTeacherPortal);
   const foregroundScope = `${currentUser?.uid || ""}:${authGeneration}:${configReady}:${config?.year}:${config?.semester}:${portal}:${userData?.role || ""}`;
   const foregroundScopeRef = useRef(foregroundScope);
   foregroundScopeRef.current = foregroundScope;
@@ -259,6 +261,8 @@ const Header: React.FC<{
       : item.children.filter(
           (child) =>
             child.hidden !== true &&
+            (getWisShopMenuKey(child.url, "student") !== "stocks" ||
+              wisStockStatus.data?.studentOpen === true) &&
             (getWisShopMenuKey(child.url, "student") !== "avatar" ||
               (getStudentRouteAccess(
                 { pathname: "/student/mypage", search: "?menu=avatar" },

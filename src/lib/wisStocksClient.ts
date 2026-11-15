@@ -39,7 +39,7 @@ export interface WisStock {
 export interface WisStockManagement {
   semesterId: string;
   revision: number;
-  studentOpen: false;
+  studentOpen: boolean;
   maxStocks: number;
   historyLimit: number;
   updatedAtMs: number;

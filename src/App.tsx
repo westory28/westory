@@ -153,6 +153,10 @@ const StudentPoints = lazyWithRetry(
   () => import("./pages/student/Points"),
   "student-points",
 );
+const StudentWisStocks = lazyWithRetry(
+  () => import("./pages/student/WisStocks"),
+  "student-wispi",
+);
 const DeveloperLog = lazyWithRetry(
   () => import("./pages/DeveloperLog"),
   "developer-log",
@@ -478,6 +482,13 @@ const App: React.FC = () => {
                   element={renderWithLayout(
                     <StudentPoints />,
                     "위스 화면을 준비하는 중입니다.",
+                  )}
+                />
+                <Route
+                  path="/student/wispi"
+                  element={renderWithLayout(
+                    <StudentWisStocks />,
+                    "위스피를 준비하는 중입니다.",
                   )}
                 />
                 <Route

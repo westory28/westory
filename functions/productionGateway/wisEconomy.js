@@ -1123,7 +1123,7 @@ const zeroAccountTotals = () => ({
   spentTotal: 0,
   adjustedTotal: 0,
 });
-const ledgerTotalsContribution = (type, delta, activityType = "") => {
+const ledgerTotalsContribution = (type, delta, activityType = "", withdrawnProfit = 0) => {
   const contribution = zeroAccountTotals();
   if (type === "INITIAL_GRANT" && delta > 0) {
     contribution.earnedTotal = delta;
@@ -1143,6 +1143,9 @@ const ledgerTotalsContribution = (type, delta, activityType = "") => {
     contribution.spentTotal = Math.abs(delta);
   } else if (type === "ORDER_REFUND" && delta > 0) {
     contribution.spentTotal = -delta;
+  } else if (type === "STOCK_TRANSFER_OUT" || type === "STOCK_TRANSFER_IN") {
+    contribution.adjustedTotal = delta;
+    if (type === "STOCK_TRANSFER_IN") contribution.earnedTotal = withdrawnProfit;
   }
   return contribution;
 };
@@ -1199,9 +1202,17 @@ const totalsFromLedgerEntries = (entries) => {
       return addAccountTotals(totals, contribution);
     }
     if (entry.type !== "REVERSAL") {
+      if (["STOCK_TRANSFER_OUT", "STOCK_TRANSFER_IN"].includes(entry.type)
+        && (!Number.isSafeInteger(entry.delta) || !Number.isSafeInteger(entry.withdrawnProfit)
+          || entry.withdrawnProfit < 0 || !Number.isSafeInteger(entry.principalReturned) || entry.principalReturned < 0
+          || !entry.stockTransferId || entry.sourceId !== `wis_stock_transfer:${entry.stockTransferId}`
+          || (entry.type === "STOCK_TRANSFER_OUT"
+            ? entry.delta >= 0 || entry.withdrawnProfit !== 0 || entry.principalReturned !== 0
+            : entry.delta <= 0 || BigInt(entry.principalReturned) + BigInt(entry.withdrawnProfit) !== BigInt(entry.delta))))
+        fail("failed-precondition", "Stock transfer ledger totals are invalid.", "WIS_STOCK_LEDGER_INVALID");
       return addAccountTotals(
         totals,
-        ledgerTotalsContribution(entry.type, Number(entry.delta || 0), entry.activityType),
+        ledgerTotalsContribution(entry.type, Number(entry.delta || 0), entry.activityType, entry.withdrawnProfit),
       );
     }
     const source = byId.get(String(entry.sourceId || "")) || {};

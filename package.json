@@ -9,7 +9,7 @@
     "verify:rhythm-browser": "node scripts/verify-rhythm-browser.mjs",
     "verify:rhythm-network": "node scripts/verify-rhythm-network.mjs",
     "test:rhythm-publication": "node scripts/run-rhythm-publication-rules.mjs",
-    "prebuild": "npm run verify:wis-investments && npm run security:check-supply-chain && node scripts/verify-security-config.mjs && npm run typecheck && npm run verify:auth-recovery && npm run verify:device-session && node scripts/verify-student-developer-log-layout.mjs && node scripts/verify-student-profile-emoji.mjs && node scripts/verify-semester-archive.mjs && node scripts/verify-neis-performance-import.mjs && node scripts/verify-grading-performance-import.mjs && npm run verify:score-requests && npm run verify:lesson-text-selection && npm run verify:entry-map-motion && npm run verify:history-dictionary && npm run verify:history-atlas && npm run verify:avatar-previews && npm run verify:achievement-analysis && npm run verify:communication && npm run verify:written-exam-analysis",
+    "prebuild": "npm run verify:wispi-client && npm run verify:wis-investments && npm run security:check-supply-chain && node scripts/verify-security-config.mjs && npm run typecheck && npm run verify:auth-recovery && npm run verify:device-session && node scripts/verify-student-developer-log-layout.mjs && node scripts/verify-student-profile-emoji.mjs && node scripts/verify-semester-archive.mjs && node scripts/verify-neis-performance-import.mjs && node scripts/verify-grading-performance-import.mjs && npm run verify:score-requests && npm run verify:lesson-text-selection && npm run verify:entry-map-motion && npm run verify:history-dictionary && npm run verify:history-atlas && npm run verify:avatar-previews && npm run verify:achievement-analysis && npm run verify:communication && npm run verify:written-exam-analysis",
     "verify:auth-recovery": "node scripts/verify-auth-deadline.mjs && node scripts/verify-auth-startup-session-integration.mjs",
     "verify:device-session": "node scripts/verify-device-session.mjs && node scripts/verify-device-session-storage.mjs",
     "verify:entry-map-motion": "node scripts/verify-entry-map-motion.mjs",
@@ -56,7 +56,11 @@
     "verify:history-map-ui": "node scripts/verify-history-map-ui.mjs",
     "verify:wis-wallet": "node scripts/verify-wis-economy-adapter.mjs && node scripts/verify-wis-shop-client.mjs && node scripts/verify-wis-wallet-browser.mjs",
     "verify:avatar-previews": "node scripts/verify-avatar-character-clothing.mjs && node scripts/render-avatar-item-previews.mjs --check",
-    "verify:achievement-analysis": "node scripts/verify-history-achievement.mjs && node scripts/verify-achievement-psychometrics.mjs && node scripts/verify-achievement-analysis.mjs && node scripts/verify-achievement-estimates.mjs"
+    "verify:achievement-analysis": "node scripts/verify-history-achievement.mjs && node scripts/verify-achievement-psychometrics.mjs && node scripts/verify-achievement-analysis.mjs && node scripts/verify-achievement-estimates.mjs",
+    "verify:wispi-client": "node scripts/verify-student-wispi-client.mjs",
+    "test:wispi-trading": "node scripts/run-wis-stock-tests.mjs trading",
+    "test:wispi-access": "node scripts/run-wis-stock-tests.mjs access",
+    "verify:wispi-browser": "node scripts/verify-student-wispi-browser.mjs"
   },
   "dependencies": {
     "@fontsource/noto-serif-kr": "^5.3.1",

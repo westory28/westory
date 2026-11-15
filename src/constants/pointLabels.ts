@@ -202,6 +202,8 @@ export const POINT_TRANSACTION_TYPE_LABELS: Record<
   purchase_hold: "구매 요청",
   purchase_confirm: "구매 확정",
   purchase_cancel: "구매 취소",
+  wis_stock_deposit: "주식 계좌 입금",
+  wis_stock_withdrawal: "주식 계좌 출금",
 };
 
 export const POINT_POLICY_FIELD_LABELS: Record<

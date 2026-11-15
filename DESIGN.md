@@ -1348,6 +1348,11 @@ Teacher menu names and lesson tree labels stay on one line. Long labels use elli
 - Student full calendar reuses the teacher calendar shell, 1536px page width and 16px/24px gutters. Remove the inner duplicate heading; at 1120px and above place the centered month navigation and left actions on one row, with two compact rows below that width. Month rows are at least 160px high, with body height `max(visible weeks × 160px + 40px, 100dvh - 240px)` and natural page scrolling. Show three events per day before the more link. Keep student actions read-only.
 - Reuse the teacher left-aligned numeric date header and 24px event labels. The 16px attendance check stays beside the date in one non-wrapping row at every viewport width. Below 640px, use the existing 8px spacing token for the calendar shell's inner padding so seven date columns and attendance checks fit inside a 320px viewport.
 
+### WsPI student trading (2026-11-15)
+
+- Reuse the existing village navigation, transparent portal heading and compact sub-tabs. The teacher market control is blue when closed and red when open. Closing after publication retains the student menu; only interface settings hide it.
+- The stopped student page blurs and disables the underlying market with a concise status overlay. MyPage has a separate Wis/stock wallet tab with cash, reservations, transfers and 20-record history pages. Keep account and trade controls responsive, keyboard accessible and within the viewport; reuse the shared chart and existing motion/reduced-motion behavior. Verification is recorded in `docs/reviews/wispi-student-trading-20261115.md`.
+
 ### Korean text and assessment navigation
 
 - Korean prose, question content, options, hints, forms and dialogs preserve word boundaries with `word-break: keep-all`; `overflow-wrap: anywhere` is only the fallback for a single token wider than its container. Preserve explicit line breaks, code/preformatted text and existing numeric/table layout rules.

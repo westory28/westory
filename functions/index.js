@@ -8230,6 +8230,7 @@ exports.executeWisCommandFast = require('./productionGateway/productionSource').
 exports.getWisCommandStatusFast = require('./productionGateway/productionSource').getWisCommandStatusFast;
 exports.getWisRankingPreview = require('./wisRankingPreview').getWisRankingPreview;
 const wisStockHandlers = require('./wisStocks').createWisStockHandlers({ db });
+Object.assign(exports, require('./wisStockTradingExports').createWisStockTradingExports({ db }));
 exports.getWisStockManagement = onCall(
   { region: 'us-central1', memory: '256MiB', maxInstances: 10 },
   wisStockHandlers.getWisStockManagement,

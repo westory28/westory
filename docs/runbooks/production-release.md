@@ -268,6 +268,14 @@ gcloud storage buckets update gs://history-quiz-yongsin.firebasestorage.app --co
 
 CORS는 `firebase deploy --only storage`로 반영되지 않는 별도 버킷 설정이다. 적용 전 기존 CORS를 조회하고 다른 설정이 있으면 덮어쓰지 말고 병합한다. 적용 후 운영 원본 PDF 응답의 `Access-Control-Allow-Origin`과 실제 OCR 드래그를 확인한다. 원본 다운로드 URL과 토큰을 검증 기록에 남기지 않는다.
 
+## 위스피 거래 배포 (2026-11-15)
+
+학생 거래는 `wisStockTradingExports`의 10개 함수, 기존 종목 관리/가격 5개 함수, 서울 `executeCommand`의 원장 해석과 연결된다. 함수별 운영 ZIP을 비교하는 `prepare-wispi-access-release.mjs`와 전체 해시/runtime을 확인하는 `verify-wispi-access-release.mjs --after`의 준비 절차를 따른다. 이미 배포된 패치를 다시 준비할 때에는 기준 커밋을 대조하고 기존 원본 보존 기록을 사용한다. 소스가 다른 미국 `executeWisCommandFast`를 함께 배포하지 않는다.
+
+`settleWisStockOrderTask`는 기존 프로젝트 runtime 서비스 계정만 enqueue/invoke할 수 있어야 한다. 함수 `invoker`와 queue의 `roles/cloudtasks.enqueuer`, Cloud Run의 `roles/run.invoker`, 해당 서비스 계정의 자기 자신에 대한 `roles/iam.serviceAccountUser`를 함께 확인한다. 공개 호출 권한을 부여하지 않는다. 신규 빈 queue에서 Firebase CLI가 IAM bindings 오류를 내면 지정 계정의 최소 queue binding을 먼저 적용한 뒤 해당 함수만 재배포한다. 배포 뒤 비로그인 호출 거부와 학생 자료를 변경하지 않는 no-op task 처리를 확인한다.
+
+주문 복구 collection-group 인덱스와 개인 내역 인덱스가 READY여야 한다. 시장 개장은 교사 화면에서 별도로 한다. 배포나 테스트를 위해 학생 공개를 켜거나 학생 계좌에 돈을 넣지 않는다. [검증·회계 계약](../reviews/wispi-student-trading-20261115.md)을 따른다.
+
 ## 로그인 함수 소스 동기화
 
 2026-10-07 회사 PC에서 확인한 `7b1107a8`에는 운영 로그인 함수의 소스가 없었다. 이후 `76cb10f`에서 `sessionAuthority.js`, `studentMaintenance.js`, `studentRegistrationAccess.js`가 운영 원본으로 복원됐지만, `index.js`의 배포 export 연결은 빠져 있었다. 로그인 소스 동기화 패치에서 이 연결과 실제 export 검사, 배포 전 검사를 추가했다. [소스 대조 및 검증 기록](../reviews/login-source-sync-20261007.md)을 참고한다.

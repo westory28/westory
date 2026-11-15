@@ -22,6 +22,11 @@
   background: var(--ws-danger, #dc2626);
   color: #fff;
 }
+.wis-stocks button.wis-stock-emergency__button--open,
+.wis-stocks button.wis-stock-emergency__button--open:hover {
+  border-color: var(--ws-primary, #2563eb);
+  background: var(--ws-primary, #2563eb);
+}
 .wis-stocks .wis-stock-emergency button:focus-visible {
   outline: 2px solid var(--ws-ring, #3b82f6);
   outline-offset: 2px;

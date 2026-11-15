@@ -49,6 +49,10 @@ export const buildStudentMenuVisibility = (menuConfig: MenuConfig) => {
       childVisible("/student/mypage?menu=profile"),
     avatar: mypage && childVisible("/student/mypage?menu=avatar"),
     avatar_shop: avatarShop,
+    wispi:
+      parentVisible("/student/points") &&
+      childVisible("/student/wispi") &&
+      parentVisible("/student/wispi"),
     score: mypage && childVisible("/student/mypage?menu=score"),
     wrong_note: mypage && childVisible("/student/mypage?menu=wrong_note"),
   };
@@ -321,6 +325,7 @@ export const getStudentVisibleMenuItems = (
     const visibleChildren = originalChildren.filter(
       (child) =>
         child.hidden !== true &&
+        !(child.url === "/student/wispi" && visibility?.wispi === false) &&
         !(child.url === "/student/weplay" && visibility?.naval === false) &&
         !(
           child.url === "/student/weplay?game=joseon-yut" &&
@@ -424,6 +429,17 @@ export const getStudentRouteAccess = (
   }
 
   const routeParams = new URLSearchParams(normalizeSearch(target.search));
+  if (
+    pathname === "/student/wispi" &&
+    (config.studentMenuVisibility?.wispi === false ||
+      !buildStudentMenuVisibility(menuConfig).wispi)
+  ) {
+    return {
+      allowed: false,
+      redirectTo: STUDENT_HIDDEN_MENU_REDIRECT,
+      reason: "menu-config",
+    };
+  }
   if (
     pathname === "/student/points" &&
     routeParams.get("tab") === "shop" &&
