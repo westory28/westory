@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import GongsinDrumButton from "../../components/common/GongsinDrumButton";
 import { useAuth } from "../../contexts/AuthContext";
 import { getYearSemester } from "../../lib/semesterScope";
 import {
@@ -156,7 +157,15 @@ export default function AvatarEventSubmission({
       }
     }
   };
-  if (!enabled && !open) return null;
+  const availabilityError = availability.error ? (
+    <div className="avatar-event-entry">
+      <p role="alert">이벤트 참여 정보를 불러오지 못했습니다.</p>
+      <button type="button" onClick={() => availability.retry()}>
+        다시 확인하기
+      </button>
+    </div>
+  ) : null;
+  if (!enabled && !open) return availabilityError;
   const submitted = state?.participated === true;
   const receipt = state?.submission;
   const image = submitted ? receipt?.thumbnailUrl : snapshot.thumbnailUrl;
@@ -244,9 +253,11 @@ export default function AvatarEventSubmission({
                     {availability.avatarEventRewardWis.toLocaleString("ko-KR")}
                     위스 지급
                   </p>
-                  {(!enabled || !state.enabled) && (
-                    <p role="status">지금은 이벤트 접수를 받지 않습니다.</p>
-                  )}
+                  {availability.loaded &&
+                    !availability.error &&
+                    (!enabled || !state.enabled) && (
+                      <p role="status">지금은 이벤트 접수를 받지 않습니다.</p>
+                    )}
                 </>
               ) : null}
             </>
@@ -256,6 +267,7 @@ export default function AvatarEventSubmission({
               {error}
             </p>
           )}
+          {availabilityError}
         </div>
         <div className="avatar-event-dialog-actions">
           {!state && !loading && (
@@ -274,9 +286,12 @@ export default function AvatarEventSubmission({
                 {busy ? "불러오는 중…" : "아바타 다시 불러오기"}
               </button>
             ) : (
-              <button
+              <GongsinDrumButton
                 type="button"
-                className="avatar-primary"
+                size="large"
+                caption={busy ? "보내는 중…" : "신문고로 보내기"}
+                aria-label="공부의 神문고로 보내기"
+                loading={busy}
                 disabled={
                   busy ||
                   loading ||
@@ -285,9 +300,7 @@ export default function AvatarEventSubmission({
                   !description.trim()
                 }
                 onClick={() => void submit()}
-              >
-                {busy ? "보내는 중…" : "공부의 神문고로 보내기"}
-              </button>
+              />
             ))}
           {submitted && (
             <button type="button" onClick={close}>

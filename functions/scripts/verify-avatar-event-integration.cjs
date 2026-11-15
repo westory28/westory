@@ -81,6 +81,41 @@ module.exports = async function verifyAvatarEvent(h) {
     assert.equal((await get(accountPath)).balance, 500); assert.equal(await ledgerCount(), 0);
     counts.avatarConcurrentSubmit = { ...metrics(), calls: 20, committedQuestions: 1, committedReceipts: 1, ledgerEntries: 0 };
   });
+  await check('avatar event: submitted wardrobe snapshot appears in teacher all/waiting lists with notifications before one teacher reward', async () => {
+    const saved = await seedEvent();
+    await db.doc(settingsPath).update({ teacherQuestionNotifications: true, studentReplyNotifications: true });
+    // Avatar introductions do not require the learning-question warning acknowledgment.
+    await db.doc(`${root}/gongsinmoongo_acknowledgments/a`).delete();
+    resetMetrics();
+    const submitted = await command('a', 'submitAvatar', submission);
+    counts.avatarSubmitWithTeacherNotifications = { ...metrics() };
+    assert.equal(metrics().writes, 7); // question + marker + receipt + 2 inbox items/counters
+    assert.equal((await get(accountPath)).balance, 500); assert.equal(await ledgerCount(), 0);
+    for (const filter of ['all', 'waiting']) {
+      resetMetrics();
+      const list = await query('teacher', 'questions', { filter });
+      assert.equal(list.items.length, 1); assert.equal(list.items[0].id, submitted.question.id);
+      assert.equal(list.items[0].source.kind, 'avatar');
+      assert.equal(list.items[0].avatarEvent.thumbnailUrl, saved.thumbnailUrl);
+      assert.equal(list.items[0].avatarEvent.rewardWis, 100); assert.equal(list.items[0].avatarEvent.rewardedAt, undefined);
+      assert.equal(metrics().writes, 0); assert.equal(metrics().queries, 1);
+      counts[`avatarTeacherList${filter}`] = { ...metrics() };
+    }
+    assert.equal((await query('teacher', 'questions', { filter: 'selected' })).items.length, 0);
+    assert.equal((await query('b', 'questions', { filter: 'all' })).items.length, 0);
+    for (const uid of ['teacher', 'admin']) {
+      const inbox = await db.collection(`${root}/notification_inboxes/${uid}/items`).get();
+      assert.equal(inbox.size, 1); assert.equal(inbox.docs[0].data().entityId, submitted.question.id);
+      assert.equal(inbox.docs[0].data().targetUrl, `/teacher/gongsinmoongo?question=${encodeURIComponent(submitted.question.id)}`);
+    }
+    const paid = await command('teacher', 'rewardAvatar', { questionId: submitted.question.id, expectedRevision: 1 });
+    assert.equal(paid.reward.amount, 100); assert.equal((await get(accountPath)).balance, 600);
+    assert.equal((await query('teacher', 'questions', { filter: 'waiting' })).items.length, 0);
+    const all = await query('teacher', 'questions', { filter: 'all' });
+    assert.equal(all.items.length, 1); assert(all.items[0].avatarEvent.rewardedAt);
+    assert.equal((await db.collection(`${root}/notification_inboxes/a/items`).get()).size, 1);
+    assert.equal(await ledgerCount(), 1);
+  });
   await check('avatar event: teacher approval uses submitted amount, canonical wallet and projections, concurrent approvals pay once', async () => {
     await seedEvent(); const { question } = await command('a', 'submitAvatar', submission);
     await db.doc(settingsPath).update({ avatarEvent: { enabled: false, rewardWis: 900 }, enabled: false });

@@ -1,0 +1,122 @@
+.gongsin-drum-button {
+  --gongsin-drum-size: 64px;
+  appearance: none;
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  inline-size: var(--gongsin-drum-size);
+  min-inline-size: 44px;
+  max-inline-size: 100%;
+  min-block-size: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ws-text, #1f2937);
+  box-shadow: none;
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.gongsin-drum-button--large {
+  --gongsin-drum-size: 88px;
+}
+
+.gongsin-drum-button__disc {
+  position: relative;
+  display: block;
+  flex: 0 0 auto;
+  inline-size: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  transition:
+    transform 120ms ease,
+    filter 120ms ease;
+}
+
+.gongsin-drum-button__disc svg {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  overflow: visible;
+}
+
+.gongsin-drum-button:enabled:hover .gongsin-drum-button__disc {
+  filter: brightness(1.04);
+}
+
+.gongsin-drum-button:enabled:active .gongsin-drum-button__disc {
+  transform: translateY(1px) scale(0.97);
+}
+
+.gongsin-drum-button:focus-visible {
+  outline: none;
+}
+
+.gongsin-drum-button:focus-visible .gongsin-drum-button__disc {
+  outline: 3px solid var(--ws-primary, #2563eb);
+  outline-offset: 3px;
+}
+
+.gongsin-drum-button:disabled {
+  cursor: not-allowed;
+  color: var(--ws-text-muted, #6b7280);
+}
+
+.gongsin-drum-button:disabled .gongsin-drum-button__disc {
+  filter: grayscale(0.65);
+  opacity: 0.55;
+}
+
+.gongsin-drum-button.is-loading .gongsin-drum-button__disc {
+  filter: none;
+  opacity: 0.8;
+}
+
+.gongsin-drum-button__caption {
+  max-inline-size: 100%;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.gongsin-drum-button__progress {
+  position: absolute;
+  right: 0;
+  bottom: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  inline-size: 22px;
+  block-size: 22px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 50%;
+  background: var(--ws-surface, #ffffff);
+  color: var(--ws-primary, #2563eb);
+}
+
+.gongsin-drum-button__progress > span {
+  inline-size: 3px;
+  block-size: 3px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gongsin-drum-button__disc {
+    transition: none;
+  }
+
+  .gongsin-drum-button:enabled:active .gongsin-drum-button__disc {
+    transform: none;
+  }
+}

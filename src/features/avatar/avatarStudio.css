@@ -4,7 +4,7 @@
   container-type: inline-size;
   min-width: 0;
 }
-.avatar-studio button,
+.avatar-studio button:not(.gongsin-drum-button),
 .avatar-studio-status button {
   min-height: 44px;
   border: 1px solid var(--ws-border, #e5e7eb);
@@ -14,12 +14,12 @@
   font: inherit;
   cursor: pointer;
 }
-.avatar-studio button:focus-visible,
+.avatar-studio button:not(.gongsin-drum-button):focus-visible,
 .avatar-studio-status button:focus-visible {
   outline: 2px solid var(--ws-primary, #2563eb);
   outline-offset: 2px;
 }
-.avatar-studio button:disabled {
+.avatar-studio button:not(.gongsin-drum-button):disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

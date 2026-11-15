@@ -1,4 +1,5 @@
 import RefreshButton from "./RefreshButton";
+import GongsinDrumButton from "./GongsinDrumButton";
 import {
   useCallback,
   useEffect,
@@ -1039,9 +1040,10 @@ export default function GongsinmoongoWorkspace({
                       }
                       placeholder="학생에게 답변해 주세요."
                     />
-                    <button
+                    <GongsinDrumButton
                       className="gsm-send"
                       aria-label="답변 보내기"
+                      loading={busy}
                       disabled={
                         busy ||
                         !selected ||
@@ -1049,9 +1051,7 @@ export default function GongsinmoongoWorkspace({
                         reply.trim() === selected.reply
                       }
                       onClick={() => void answer()}
-                    >
-                      <Chevron direction="up" />
-                    </button>
+                    />
                   </div>
                 </>
               ) : (
@@ -1112,14 +1112,13 @@ export default function GongsinmoongoWorkspace({
                       onChange={(e) => setQuestion(e.target.value)}
                       placeholder="어떤 점이 궁금한가요?"
                     />
-                    <button
+                    <GongsinDrumButton
                       className="gsm-send"
                       aria-label="질문 보내기"
+                      loading={busy}
                       disabled={sendDisabled}
                       onClick={() => void submit()}
-                    >
-                      <Chevron direction="up" />
-                    </button>
+                    />
                   </div>
                 </>
               )}

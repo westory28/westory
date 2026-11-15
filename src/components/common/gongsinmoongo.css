@@ -14,11 +14,14 @@
 .gsm-workspace button {
   cursor: pointer;
 }
-.gsm-workspace button:disabled {
+.gsm-workspace button:not(.gongsin-drum-button):disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
-.gsm-workspace :is(button, input, textarea, select, a):focus-visible {
+.gsm-workspace
+  :is(button, input, textarea, select, a):not(
+    .gongsin-drum-button
+  ):focus-visible {
   outline: 3px solid var(--ws-ring, #3b82f6);
   outline-offset: 2px;
 }
@@ -85,8 +88,7 @@
   min-width: 44px;
   padding: 8px;
 }
-.gsm-primary,
-.gsm-send {
+.gsm-primary {
   background: var(--ws-primary, #2563eb);
   color: white;
   border: 0;
@@ -372,7 +374,7 @@
   gap: 8px;
   border: 1px solid var(--ws-border, #e5e7eb);
   border-radius: 16px;
-  padding: 6px 8px;
+  padding: 4px 8px;
 }
 .gsm-compose-row textarea {
   height: 48px;
@@ -393,14 +395,6 @@
   border: 0;
   border-radius: 0;
   box-shadow: none;
-}
-.gsm-send {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  flex: none;
 }
 .gsm-empty {
   margin: 0;

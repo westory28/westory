@@ -24,18 +24,24 @@
   height: 20px;
   flex: 0 0 auto;
 }
+.gongsin-student-preview .gongsin-drum-button__disc svg {
+  width: 100%;
+  height: 100%;
+}
 .gongsin-student-preview :is(button, textarea, select) {
   font: inherit;
 }
 .gongsin-student-preview button {
   cursor: pointer;
 }
-.gongsin-student-preview button:disabled {
+.gongsin-student-preview button:not(.gongsin-drum-button):disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 .gongsin-student-preview
-  :is(button, textarea, select, [tabindex]):focus-visible {
+  :is(button, textarea, select, [tabindex]):not(
+    .gongsin-drum-button
+  ):focus-visible {
   outline: 3px solid var(--ws-ring, #3b82f6);
   outline-offset: 2px;
 }
@@ -613,22 +619,6 @@
   color: inherit;
   line-height: 1.5;
   font-size: 16px;
-}
-.gsp-send {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 44px;
-  width: 44px;
-  height: 44px;
-  padding: 8px;
-  border: 0;
-  border-radius: 9999px;
-  background: var(--ws-primary, #2563eb);
-  color: white;
-}
-.gsp-send:hover {
-  background: var(--ws-primary-hover, #1d4ed8);
 }
 .gsp-composer-meta {
   flex: 0 0 auto;

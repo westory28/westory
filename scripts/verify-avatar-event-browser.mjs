@@ -7,7 +7,9 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { build } from "esbuild";
 const root = process.cwd(),
-  evidence = path.join(root, "output/avatar-polish-20261114/event-student");
+  evidence =
+    process.env.AVATAR_EVENT_EVIDENCE_DIR ||
+    path.join(root, "output/avatar-polish-20261114/event-student");
 await fs.mkdir(evidence, { recursive: true });
 const require = createRequire(import.meta.url);
 const { chromium } = require(
@@ -25,15 +27,17 @@ const thumbnail =
   ));
 const fixture = `
 import {useSyncExternalStore} from 'react';
-const listeners=new Set(), gates=new Set();
-const qa=window.eventQa={uid:'student-a',generation:1,enabled:true,rewardWis:100,participated:false,reads:[],writes:[],subscriptions:0,stops:0,failRead:false,failSend:false,hold:false,ready:true,changed:false,refreshes:0};
+const listeners=new Set(), gates=new Set(), gateFailures=new Set(), params=new URLSearchParams(location.search);
+const qa=window.eventQa={uid:'student-a',generation:1,enabled:!params.has('closed'),rewardWis:100,participated:false,reads:[],writes:[],subscriptions:0,stops:0,failRead:false,failSend:false,hold:false,ready:true,changed:false,refreshes:0,failGateReads:params.has('gate-error')?1:0};
 let state={user:{uid:qa.uid},authGeneration:1};
 export const auth={currentUser:state.user}, db={};
+export const getHistoryDictionaryCallable=()=>{throw Error('Unexpected avatar transport')};
 export const useAuth=()=>{useSyncExternalStore(fn=>{listeners.add(fn);return()=>listeners.delete(fn)},()=>state);return {...state,currentUser:state.user,config:{year:'2026',semester:'2'}}};
 qa.switchAccount=()=>{qa.generation++;state={user:{uid:'student-b'},authGeneration:qa.generation};auth.currentUser=state.user;listeners.forEach(fn=>fn())};
 qa.gate=value=>{qa.enabled=value;gates.forEach(fn=>fn({data:()=>({enabled:true,avatarEventEnabled:value,avatarEventRewardWis:qa.rewardWis})}))};
+qa.failGate=()=>gateFailures.forEach(fn=>fn(Error('공개 상태 조회 실패')));
 export const doc=(_db,path)=>({path});
-export const onSnapshot=(ref,ok)=>{qa.subscriptions++;gates.add(ok);queueMicrotask(()=>ok({data:()=>({enabled:true,avatarEventEnabled:qa.enabled,avatarEventRewardWis:100})}));return()=>{qa.stops++;gates.delete(ok)}};
+export const onSnapshot=(ref,ok,error)=>{qa.subscriptions++;gates.add(ok);gateFailures.add(error);queueMicrotask(()=>qa.failGateReads-->0?error(Error('공개 상태 조회 실패')):ok({data:()=>({enabled:true,avatarEventEnabled:qa.enabled,avatarEventRewardWis:100})}));return()=>{qa.stops++;gates.delete(ok);gateFailures.delete(error)}};
 export async function callWithApplicationSession(name,input){
  if(name==='getGongsinmoongo'){qa.reads.push(structuredClone(input));if(qa.hold)await new Promise(r=>qa.release=r);if(qa.failRead){qa.failRead=false;throw Error('접수 상태 조회 실패')};return{data:{enabled:qa.enabled,rewardWis:100,participated:qa.participated,submission:qa.submission}}}
  if(name!=='manageGongsinmoongo'||input.action!=='submitAvatar')throw Error('Unexpected transport');
@@ -42,14 +46,21 @@ export async function callWithApplicationSession(name,input){
  return{data:{replayed:false,avatarEvent:{enabled:true,rewardWis:100,participated:true,submission:qa.submission}}};
 }
 `;
-const entry = `import React,{useState} from 'react';import {createRoot} from 'react-dom/client';import AvatarEventSubmission from './src/features/avatar/AvatarEventSubmission';import {defaultAvatarLook} from './src/features/avatar/catalog';import {useAuth} from './src/contexts/AuthContext';import {useGongsinAvailability} from './src/lib/gongsinmoongo';import './src/features/avatar/avatarStudio.css';
-function App(){const auth=useAuth();useGongsinAvailability();const[ready,setReady]=useState(true);window.eventQa.setReady=setReady;const avatar={schemaVersion:1,catalogVersion:2,look:defaultAvatarLook(),revision:1,lookHash:'test',ownedItemIds:[],thumbnailUrl:${JSON.stringify(thumbnail)}};return <main className="avatar-studio"><AvatarEventSubmission key={auth.user.uid+auth.authGeneration} readyForSubmission={ready} avatar={avatar} refreshAvatar={async()=>{window.eventQa.refreshes++;return {...avatar,revision:2}}}/></main>};createRoot(document.getElementById('root')).render(<App/>);`;
+const entry = `import React,{useState} from 'react';import {createRoot} from 'react-dom/client';import AvatarEventSubmission from './src/features/avatar/AvatarEventSubmission';import {AvatarStudio} from './src/features/avatar/AvatarStudio';import {AppToastProvider} from './src/components/common/AppToastProvider';import {defaultAvatarLook} from './src/features/avatar/catalog';import {useAuth} from './src/contexts/AuthContext';import {useGongsinAvailability} from './src/lib/gongsinmoongo';import './src/features/avatar/avatarStudio.css';
+const studio=new URLSearchParams(location.search).has('studio'),qa=window.eventQa;
+qa.studioLoads=0;qa.studioSaves=[];qa.studioAvatar={schemaVersion:1,catalogVersion:2,look:defaultAvatarLook(),revision:0,lookHash:'test',ownedItemIds:[]};
+const adapter={load:async()=>{qa.studioLoads++;return{avatar:qa.studioAvatar,balance:0,pricing:{revision:0,prices:{}}}},purchase:async()=>{throw Error('Unexpected purchase')},save:async(look,revision,thumbnailUrl)=>{if(revision!==qa.studioAvatar.revision)throw Error('Stale avatar save');qa.studioAvatar={...qa.studioAvatar,look,revision:revision+1,thumbnailUrl,requiresThumbnailRefresh:false};qa.studioSaves.push({revision:revision+1,thumbnailUrl});return qa.studioAvatar}};
+function App(){const auth=useAuth();useGongsinAvailability();const[ready,setReady]=useState(true);window.eventQa.setReady=setReady;const avatar={schemaVersion:1,catalogVersion:2,look:defaultAvatarLook(),revision:1,lookHash:'test',ownedItemIds:[],thumbnailUrl:${JSON.stringify(thumbnail)}};return <AppToastProvider>{studio?<AvatarStudio key={auth.user.uid+auth.authGeneration} adapter={adapter} mode="wardrobe" studentAvatarEvent/>:<main className="avatar-studio"><AvatarEventSubmission key={auth.user.uid+auth.authGeneration} readyForSubmission={ready} avatar={avatar} refreshAvatar={async()=>{window.eventQa.refreshes++;return {...avatar,revision:2}}}/></main>}</AppToastProvider>};createRoot(document.getElementById('root')).render(<App/>);`;
 const result = await build({
   stdin: { contents: entry, loader: "tsx", resolveDir: root },
   bundle: true,
   write: false,
   format: "esm",
   outdir: "out",
+  define: {
+    "import.meta.env.BASE_URL": '"/"',
+    "process.env.NODE_ENV": '"production"',
+  },
   plugins: [
     {
       name: "event-local",
@@ -57,7 +68,7 @@ const result = await build({
         b.onResolve(
           {
             filter:
-              /\/AuthContext$|\/firebase$|\/applicationSession$|^firebase\/firestore$/,
+              /\/AuthContext$|\/firebase$|\/applicationSession$|\/historyDictionarySession$|^firebase\/firestore$/,
           },
           (args) => ({ path: "event-fixture", namespace: "fixture" }),
         );
@@ -72,7 +83,29 @@ const result = await build({
 });
 const js = result.outputFiles.find((f) => f.path.endsWith(".js")).text,
   css = result.outputFiles.find((f) => f.path.endsWith(".css")).text;
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
+  const pathname = new URL(req.url, "http://localhost").pathname;
+  if (pathname.startsWith("/avatar/")) {
+    const publicRoot = path.resolve(root, "public");
+    const file = path.resolve(publicRoot, `.${pathname}`);
+    if (!file.startsWith(publicRoot + path.sep)) {
+      res.writeHead(403).end();
+      return;
+    }
+    try {
+      const content = await fs.readFile(file);
+      const type = file.endsWith(".png")
+        ? "image/png"
+        : file.endsWith(".webp")
+          ? "image/webp"
+          : "application/json";
+      res.writeHead(200, { "Content-Type": type });
+      res.end(content);
+    } catch {
+      res.writeHead(404).end();
+    }
+    return;
+  }
   const file =
     req.url === "/fixture.js"
       ? ["text/javascript", js]
@@ -121,7 +154,7 @@ try {
     await page.evaluate(() => window.eventQa.setReady(true));
     await page.evaluate(() => (window.eventQa.failRead = true));
     await open.click();
-    await page.getByRole("alert").waitFor();
+    await page.locator('.avatar-event-dialog p[role="alert"]').waitFor();
     assert.equal(
       await page
         .getByRole("button", { name: "공부의 神문고로 보내기" })
@@ -163,7 +196,7 @@ try {
       window.eventQa.hold = false;
       window.eventQa.release();
     });
-    await page.getByRole("alert").waitFor();
+    await page.locator('.avatar-event-dialog p[role="alert"]').waitFor();
     assert.equal(
       await intro.inputValue(),
       "반짝이는 리본과 한복으로 꾸민 나의 아바타입니다.",
@@ -252,6 +285,168 @@ try {
     "old-account result discarded",
   );
   await page.close();
+  const recovery = await browser.newPage({
+    viewport: { width: 390, height: 900 },
+  });
+  await recovery.goto(`${origin}/?gate-error=1`);
+  await recovery
+    .getByText("이벤트 참여 정보를 불러오지 못했습니다.", { exact: true })
+    .waitFor();
+  assert.equal(
+    await recovery
+      .getByRole("button", { name: "내 아바타 보내기", exact: true })
+      .count(),
+    0,
+  );
+  assert.deepEqual(
+    await recovery.evaluate(() => ({
+      reads: window.eventQa.reads.length,
+      writes: window.eventQa.writes.length,
+      subscriptions: window.eventQa.subscriptions,
+    })),
+    { reads: 0, writes: 0, subscriptions: 1 },
+  );
+  await recovery
+    .getByRole("button", { name: "다시 확인하기", exact: true })
+    .click();
+  await recovery
+    .getByRole("button", { name: "내 아바타 보내기", exact: true })
+    .click();
+  await recovery
+    .getByRole("textbox", { name: "내 아바타 소개" })
+    .fill("연결을 다시 확인한 아바타 소개");
+  await recovery.evaluate(() => window.eventQa.failGate());
+  await recovery
+    .getByText("이벤트 참여 정보를 불러오지 못했습니다.", { exact: true })
+    .waitFor();
+  assert(
+    await recovery
+      .getByRole("button", { name: "공부의 神문고로 보내기", exact: true })
+      .isDisabled(),
+  );
+  await recovery
+    .getByRole("button", { name: "다시 확인하기", exact: true })
+    .click();
+  await recovery.waitForFunction(() => window.eventQa.subscriptions === 3);
+  assert(
+    await recovery
+      .getByRole("button", { name: "공부의 神문고로 보내기", exact: true })
+      .isEnabled(),
+  );
+  assert.equal(
+    await recovery
+      .getByRole("textbox", { name: "내 아바타 소개" })
+      .inputValue(),
+    "연결을 다시 확인한 아바타 소개",
+  );
+  assert.deepEqual(
+    await recovery.evaluate(() => ({
+      reads: window.eventQa.reads.length,
+      writes: window.eventQa.writes.length,
+      subscriptions: window.eventQa.subscriptions,
+      stops: window.eventQa.stops,
+    })),
+    { reads: 1, writes: 0, subscriptions: 3, stops: 2 },
+  );
+  reports.push({
+    availabilityRecovery: true,
+    explicitRetries: 2,
+    subscriptions: 3,
+    extraEventReads: 0,
+    writes: 0,
+    draftPreserved: true,
+  });
+  await recovery.goto(`${origin}/?closed=1`);
+  await recovery.waitForFunction(() => window.eventQa.subscriptions === 1);
+  assert.equal(
+    await recovery.locator(".avatar-event-entry").count(),
+    0,
+    "Normal closure stays hidden without an error or retry",
+  );
+  assert.equal(
+    await recovery.evaluate(
+      () => window.eventQa.reads.length + window.eventQa.writes.length,
+    ),
+    0,
+  );
+  await recovery.close();
+  for (const width of [390, 1280]) {
+    const page = await browser.newPage({ viewport: { width, height: 1000 } });
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.route("**/*", (route) =>
+      /^(data|blob):/.test(route.request().url()) ||
+      route.request().url().startsWith(origin)
+        ? route.continue()
+        : (requests.push(route.request().url()), route.abort()),
+    );
+    await page.goto(`${origin}/?studio=1`);
+    const opener = page.getByRole("button", {
+      name: "내 아바타 보내기",
+      exact: true,
+    });
+    await opener.waitFor({ timeout: 10000 }).catch(async (failure) => {
+      console.error(
+        JSON.stringify({
+          errors,
+          body: await page.locator("body").innerText(),
+          qa: await page.evaluate(() => window.eventQa),
+        }),
+      );
+      throw failure;
+    });
+    assert(await opener.isDisabled(), "An unsaved avatar cannot be submitted");
+    assert.equal(await page.evaluate(() => window.eventQa.reads.length), 0);
+    await page
+      .getByRole("button", { name: "여학생 아바타", exact: true })
+      .click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector(".avatar-studio")?.dataset.rendererReady ===
+        "true",
+    );
+    await page
+      .getByRole("button", { name: "아바타 저장", exact: true })
+      .click();
+    await page.waitForFunction(() => window.eventQa.studioSaves.length === 1);
+    assert(
+      await opener.isEnabled(),
+      "Saving enables submission without refreshing the page",
+    );
+    assert.equal(await page.evaluate(() => window.eventQa.studioLoads), 1);
+    assert.equal(await page.evaluate(() => window.eventQa.reads.length), 0);
+    await opener.click();
+    await page
+      .getByRole("textbox", { name: "내 아바타 소개" })
+      .fill("저장한 아바타를 선생님께 소개합니다.");
+    await page
+      .getByRole("button", { name: "공부의 神문고로 보내기", exact: true })
+      .click();
+    await page.getByText("아바타를 접수했습니다", { exact: true }).waitFor();
+    const submission = await page.evaluate(() => ({
+      writes: window.eventQa.writes,
+      saves: window.eventQa.studioSaves,
+      reads: window.eventQa.reads,
+    }));
+    assert.equal(submission.writes.length, 1);
+    assert.equal(
+      submission.writes[0].expectedAvatarRevision,
+      submission.saves[0].revision,
+    );
+    assert.equal(submission.writes[0].semesterId, "2026-2");
+    assert.equal(submission.reads.length, 1);
+    await page.screenshot({
+      path: path.join(evidence, `studio-submitted-${width}.png`),
+    });
+    reports.push({
+      width,
+      studioIntegration: true,
+      avatarSaves: 1,
+      eventReads: 1,
+      submitCalls: 1,
+      rewardWrites: 0,
+    });
+    await page.close();
+  }
   assert.deepEqual(errors, []);
   assert.deepEqual(requests, []);
   await fs.writeFile(

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import GongsinDrumButton from "../../../components/common/GongsinDrumButton";
 import {
   getDefaultProfileEmojiValue,
   getProfileEmojiValueById,
@@ -47,16 +48,7 @@ export interface GongsinStudentPreviewProps {
 function PreviewIcon({
   name,
 }: {
-  name:
-    | "back"
-    | "next"
-    | "bell"
-    | "send"
-    | "book"
-    | "close"
-    | "up"
-    | "chat"
-    | "lock";
+  name: "back" | "next" | "bell" | "book" | "close" | "up" | "chat" | "lock";
 }) {
   return (
     <svg
@@ -73,11 +65,6 @@ function PreviewIcon({
       {name === "bell" && (
         <>
           <path d="M5 16h14l-2-3V9a5 5 0 0 0-10 0v4ZM10 20h4" />
-        </>
-      )}
-      {name === "send" && (
-        <>
-          <path d="m12 4 7 8M12 4l-7 8M12 4v16" />
         </>
       )}
       {name === "book" && (
@@ -881,14 +868,12 @@ export default function GongsinStudentPreview({
                       placeholder="학생에게 답변을 작성하세요"
                     />
                   </label>
-                  <button
+                  <GongsinDrumButton
                     className="gsp-send"
                     type="submit"
                     aria-label="답변 보내기 (미리보기)"
                     disabled={!canSendTeacherReply}
-                  >
-                    <PreviewIcon name="send" />
-                  </button>
+                  />
                 </div>
               </form>
             ) : (
@@ -1014,7 +999,7 @@ export default function GongsinStudentPreview({
                       disabled={!canCompose}
                     />
                   </label>
-                  <button
+                  <GongsinDrumButton
                     className="gsp-send"
                     type="submit"
                     aria-label="질문 보내기 (미리보기)"
@@ -1025,9 +1010,7 @@ export default function GongsinStudentPreview({
                       !sourceAllowed ||
                       !text.trim()
                     }
-                  >
-                    <PreviewIcon name="send" />
-                  </button>
+                  />
                 </div>
                 <span className="sr-only" role="status">
                   {sendStatus}
