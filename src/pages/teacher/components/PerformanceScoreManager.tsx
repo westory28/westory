@@ -1,5 +1,6 @@
 import NumericInput from "../../../components/common/NumericInput";
 import RefreshButton from "../../../components/common/RefreshButton";
+import { invalidateWrittenExamAnalysisCache } from "../../../lib/writtenExamAnalysisCache";
 import InfoHelp from "../../../components/common/InfoHelp";
 import { readScoreWorkbookRows } from "../../../lib/scoreWorkbookReader";
 import { readWrittenExamScoreWorkbooks } from "../../../lib/writtenExamScoreWorkbooks";
@@ -6454,6 +6455,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   );
   const invalidateRosterReadCaches = (...rosterIds: string[]) => {
     rosterIds.filter(Boolean).forEach((rosterId) => {
+      invalidateWrittenExamAnalysisCache(rosterId);
       scoreDocumentRecordsByRosterCacheRef.current.delete(rosterId);
       scoreDocumentRecordPromisesByRosterRef.current.delete(rosterId);
       confirmationsByRosterCacheRef.current.delete(rosterId);

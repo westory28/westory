@@ -19,6 +19,83 @@ const name = (value: unknown) =>
     .normalize("NFC")
     .replace(/\s/g, "");
 
+/** Keep only roster matching and cumulative score evidence in the local cache. */
+export function compactWrittenExamMock(mock: QuizClassAchievement | null) {
+  if (!mock) return null;
+  const fields = [
+    "studentUid",
+    "uid",
+    "studentId",
+    "userId",
+    "semesterId",
+    "category",
+    "examRound",
+    "attemptId",
+    "canonicalAttemptId",
+    "resultId",
+    "legacyResultId",
+    "submissionRef",
+    "resultRef",
+    "submittedAtIso",
+    "timestamp",
+    "createdAt",
+    "percent",
+    "score",
+    "total",
+    "maxPoints",
+    "cutScoreQuestions",
+  ];
+  return {
+    semesterId: mock.semesterId,
+    complete: mock.complete,
+    students: mock.students.map(
+      ({ uid, name, classId, grade, classNumber, number }) => ({
+        uid,
+        name,
+        classId,
+        grade,
+        classNumber,
+        number,
+      }),
+    ),
+    mockExamScoreRows: mock.mockExamScoreRows.map(({ id, source, raw }) => ({
+      id,
+      source,
+      raw: {
+        ...Object.fromEntries(
+          fields
+            .filter((field) => field in raw)
+            .map((field) => [field, raw[field]]),
+        ),
+        ...(Array.isArray(raw.cutScoreQuestions)
+          ? {
+              cutScoreQuestions: raw.cutScoreQuestions.map((question) =>
+                question && typeof question === "object"
+                  ? Object.fromEntries(
+                      [
+                        "id",
+                        "points",
+                        "targetAchievementLevel",
+                        "intendedDifficulty",
+                      ]
+                        .filter((field) => field in question)
+                        .map((field) => [field, question[field]]),
+                    )
+                  : question,
+              ),
+            }
+          : {}),
+      },
+    })),
+    generatedAt: mock.generatedAt,
+    version: mock.version,
+    rawRows: [],
+    questions: [],
+    treeData: [],
+    configuredClasses: [],
+  } satisfies QuizClassAchievement;
+}
+
 /** Require a unique school identity plus the name; an explicit UID must agree. */
 export function projectWrittenExamAnalysis(input: {
   id: string;

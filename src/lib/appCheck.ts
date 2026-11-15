@@ -30,3 +30,16 @@ export const ensureWestoryAppCheck = (): Promise<void> => {
   });
   return flight;
 };
+
+/** REST reads must carry the same App Check token as SDK reads when configured. */
+export const getWestoryAppCheckToken = async (): Promise<string | null> => {
+  if (
+    !instance &&
+    !String(import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY || "").trim()
+  )
+    return null;
+  await ensureWestoryAppCheck();
+  if (!instance) return null;
+  const { getToken } = await import("firebase/app-check");
+  return (await getToken(instance)).token;
+};

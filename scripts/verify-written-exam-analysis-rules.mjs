@@ -173,6 +173,25 @@ const hooks = {
   failAfterCommit: false,
   failAfterUpload: false,
 };
+const originalFetch = globalThis.fetch;
+let scoreBatchRequests = 0;
+globalThis.fetch = async (url, options) => {
+  const response = await originalFetch(url, options);
+  if (String(url).endsWith(":batchGet")) {
+    assert.match(String(url), /^http:\/\/127\.0\.0\.1:18228\//);
+    scoreBatchRequests++;
+    if (response.ok) {
+      const entries = await response.clone().json();
+      for (const entry of entries)
+        hooks.calls.push({
+          kind: "batch-get",
+          path: (entry.found?.name || entry.missing).split("/documents/")[1],
+          documents: entry.found ? 1 : 0,
+        });
+    }
+  }
+  return response;
+};
 
 try {
   await env.clearFirestore();
@@ -331,6 +350,10 @@ try {
             path: "session",
             namespace: "synthetic",
           }));
+          builder.onResolve({ filter: /^\.\/appCheck$/ }, () => ({
+            path: "app-check",
+            namespace: "synthetic",
+          }));
           builder.onResolve({ filter: /^firebase\/firestore$/ }, (args) =>
             args.namespace === "instrument"
               ? { path: args.path, external: true }
@@ -340,11 +363,13 @@ try {
             { filter: /.*/, namespace: "synthetic" },
             ({ path }) => ({
               contents:
-                path === "session"
-                  ? "export const callWithApplicationSession = (...args) => globalThis.__writtenExamStore.call(...args);"
-                  : path === "singleton"
-                    ? "export const db = globalThis.__writtenExamStore.db; export const auth = globalThis.__writtenExamStore.auth; export const readWrittenExamAssetChunk = () => { throw Error('Archive mode is covered by the asset client suite'); };"
-                    : "export const isSemesterArchive = false; export const archiveScope = null; export const assertArchiveWritable = () => {};",
+                path === "app-check"
+                  ? "export const getWestoryAppCheckToken = async () => null;"
+                  : path === "session"
+                    ? "export const callWithApplicationSession = (...args) => globalThis.__writtenExamStore.call(...args);"
+                    : path === "singleton"
+                      ? "export const db = globalThis.__writtenExamStore.db; export const auth = globalThis.__writtenExamStore.auth; export const readWrittenExamAssetChunk = () => { throw Error('Archive mode is covered by the asset client suite'); };"
+                      : "export const isSemesterArchive = false; export const archiveScope = null; export const assertArchiveWritable = () => {};",
             }),
           );
           builder.onLoad({ filter: /.*/, namespace: "instrument" }, () => ({
@@ -1399,6 +1424,7 @@ try {
         0,
       );
       hooks.calls = [];
+      const batchesBefore = scoreBatchRequests;
       const complete = await store.loadWrittenExamScoreAnalysis(
         config,
         compactId,
@@ -1408,6 +1434,7 @@ try {
       assert.equal(complete.metadata.questions.length, 21);
       assert.equal(complete.students[0].totalScore, 0);
       assert.equal(complete.students[1].totalScore, 84);
+      assert.equal(scoreBatchRequests - batchesBefore, 3);
       assert.equal(
         hooks.calls.filter((call) => call.path.startsWith("users/")).length,
         284,
@@ -1443,6 +1470,7 @@ try {
     ),
   );
 } finally {
+  globalThis.fetch = originalFetch;
   await env.cleanup();
   await deleteApp(adminApp);
   rmSync(tempFile, { force: true });

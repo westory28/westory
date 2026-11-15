@@ -618,8 +618,12 @@ export default function QuizAchievementAnalysis({
                     key={row.level}
                     className={`qaa-level-${row.level} qa-chart-rise`}
                     style={{ width: `${row.percent}%` }}
-                    title={`${levelLabel(row.level)} ${percent(row.percent)}`}
-                  />
+                    title={`${levelLabel(row.level)} ${row.count}명 · ${percent(row.percent)}`}
+                  >
+                    <b className="qaa-level-stack-label" aria-hidden="true">
+                      {levelLabel(row.level)}
+                    </b>
+                  </span>
                 ))}
             </div>
           )}

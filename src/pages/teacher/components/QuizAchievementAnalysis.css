@@ -352,24 +352,61 @@
   margin-top: 24px;
   background: var(--ws-border, #e5e7eb);
 }
-.qaa-level-stack span {
+.qaa-level-stack > span {
+  position: relative;
+  isolation: isolate;
+  container-type: inline-size;
+  display: grid;
+  place-items: center;
+  flex: none;
+  min-width: 0;
+  color: var(--ws-surface, #fff);
+}
+.qaa-level-stack > span::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   background: var(--ws-primary, #2563eb);
-  border-right: 1px solid var(--ws-surface, #fff);
+  opacity: var(--qaa-level-opacity, 1);
+  box-shadow: inset -1px 0 0 var(--ws-surface, #fff);
+}
+.qaa-level-stack-label {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+.qaa-level-stack .qaa-level-B,
+.qaa-level-stack .qaa-level-C,
+.qaa-level-stack .qaa-level-D,
+.qaa-level-stack .qaa-level-E {
+  color: var(--ws-text-strong, #111827);
 }
 .qaa-level-stack .qaa-level-B {
-  opacity: 0.85;
+  --qaa-level-opacity: 0.8;
 }
 .qaa-level-stack .qaa-level-C {
-  opacity: 0.7;
+  --qaa-level-opacity: 0.7;
 }
 .qaa-level-stack .qaa-level-D {
-  opacity: 0.55;
+  --qaa-level-opacity: 0.55;
 }
 .qaa-level-stack .qaa-level-E {
-  opacity: 0.4;
+  --qaa-level-opacity: 0.4;
 }
-.qaa-level-stack .qaa-level-unclassified {
+.qaa-level-stack .qaa-level-unclassified::before {
   background: var(--ws-text-muted, #6b7280);
+}
+@container (max-width: 16px) {
+  .qaa-level-stack-label {
+    visibility: hidden;
+  }
+}
+@container (max-width: 40px) {
+  .qaa-level-unclassified .qaa-level-stack-label {
+    visibility: hidden;
+  }
 }
 .qaa-chart-button {
   background: transparent;

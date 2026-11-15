@@ -1,6 +1,7 @@
 import React, { lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import PortalSubNavigation from "../../../components/common/PortalSubNavigation";
+import { PageLoading } from "../../../components/common/LoadingState";
 import { WRITTEN_EXAM_SCORE_KIND } from "../../../lib/performanceScores";
 import PerformanceScoreManager from "./PerformanceScoreManager";
 import "./writtenExamAnalysis.css";
@@ -43,7 +44,7 @@ const WrittenExamEssayScoreManager: React.FC = () => {
     </PortalSubNavigation>
   );
   return analysis ? (
-    <Suspense fallback={<p role="status">평가 분석을 불러오는 중입니다.</p>}>
+    <Suspense fallback={<PageLoading />}>
       <WrittenExamAnalysis navigation={navigation} />
     </Suspense>
   ) : (

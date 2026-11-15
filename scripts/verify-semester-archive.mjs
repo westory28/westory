@@ -334,6 +334,20 @@ function checkImportAndTransportInventory() {
             ts.isTemplateExpression(node.arguments[0]) &&
             node.arguments[0].templateSpans.at(-1)?.literal.text ===
               ":runQuery";
+          let enclosingFunction = node.parent;
+          while (
+            enclosingFunction &&
+            !ts.isFunctionDeclaration(enclosingFunction)
+          )
+            enclosingFunction = enclosingFunction.parent;
+          // batchGet is also read-only despite POST. Permit this one dedicated
+          // helper and literal endpoint shape, never arbitrary score-source POSTs.
+          const scoreBatchRead =
+            name === "src/lib/writtenExamScoreSource.ts" &&
+            enclosingFunction?.name?.text === "loadStudentScoreBatches" &&
+            ts.isTemplateExpression(node.arguments[0]) &&
+            node.arguments[0].getText(source) ===
+              "`${firestoreRestBase()}/v1/projects/${db.app.options.projectId}/databases/(default)/documents:batchGet`";
           if (options) {
             assert.ok(
               ts.isObjectLiteralExpression(options),
@@ -368,6 +382,34 @@ function checkImportAndTransportInventory() {
                 );
                 continue;
               }
+              if (scoreBatchRead && key === "body") {
+                const body = property.initializer;
+                assert.ok(
+                  ts.isCallExpression(body) &&
+                    body.expression.getText(source) === "JSON.stringify" &&
+                    body.arguments.length === 1,
+                );
+                const payload = body.arguments[0];
+                assert.ok(ts.isObjectLiteralExpression(payload));
+                assert.equal(payload.properties.length, 2);
+                assert.ok(payload.properties.every(ts.isPropertyAssignment));
+                assert.deepEqual(
+                  payload.properties.map((property) =>
+                    property.name.getText(source),
+                  ),
+                  ["documents", "mask"],
+                );
+                assert.equal(
+                  payload.properties[0].initializer.getText(source),
+                  "batch",
+                );
+                const mask = payload.properties[1].initializer;
+                assert.ok(ts.isObjectLiteralExpression(mask));
+                assert.equal(mask.properties.length, 1);
+                assert.ok(ts.isShorthandPropertyAssignment(mask.properties[0]));
+                assert.equal(mask.properties[0].name.text, "fieldPaths");
+                continue;
+              }
               assert.notEqual(
                 key,
                 "body",
@@ -377,9 +419,10 @@ function checkImportAndTransportInventory() {
                 assert.ok(
                   ts.isPropertyAssignment(property) &&
                     ts.isStringLiteralLike(property.initializer) &&
-                    (scoreProjection ? /^(POST)$/ : /^(GET|HEAD)$/i).test(
-                      property.initializer.text,
-                    ),
+                    (scoreProjection || scoreBatchRead
+                      ? /^(POST)$/
+                      : /^(GET|HEAD)$/i
+                    ).test(property.initializer.text),
                   `${name}: new write transport needs archive protection`,
                 );
               }

@@ -143,6 +143,29 @@ const fetchMock = async (url, options) => {
   if (h.switchAccount)
     auth.currentUser = { ...account, uid: "different-teacher" };
   if (h.failFetch) return { ok: false, json: async () => ({}) };
+  if (url.endsWith(":batchGet")) {
+    const entries = body.documents.map((name) => {
+      const path = name.split("/documents/")[1];
+      h.reads.push(path);
+      if (h.failRead === path) throw new Error("injected read failure");
+      const value = h.docs.get(path);
+      return value
+        ? {
+            found: {
+              name,
+              fields: Object.fromEntries(
+                body.mask.fieldPaths
+                  .filter((field) => value[field] !== undefined)
+                  .map((field) => [field, encode(value[field])]),
+              ),
+            },
+          }
+        : { missing: name };
+    });
+    if (h.mutateBatch) h.mutateBatch(entries);
+    if (h.pauseBatch) await h.pauseBatch();
+    return { ok: true, json: async () => entries.reverse() };
+  }
   const source = h.docs.get(rosterPath);
   return {
     ok: true,
@@ -190,15 +213,21 @@ const built = await build({
           path: "assets",
           namespace: "synthetic",
         }));
+        builder.onResolve({ filter: /^\.\/appCheck$/ }, () => ({
+          path: "app-check",
+          namespace: "synthetic",
+        }));
         builder.onLoad(
           { filter: /.*/, namespace: "synthetic" },
           ({ path }) => ({
             contents:
-              path === "assets"
-                ? "export const {uploadWrittenExamAsset,readWrittenExamAsset,removeWrittenExamAsset}=globalThis.fixture.assets;"
-                : path === "firebase"
-                  ? "export const auth=globalThis.fixture.auth;export const db=globalThis.fixture.db;export const getFirebaseStorage=async()=>({});"
-                  : "export const isSemesterArchive=false;export const archiveScope=null;export const assertArchiveWritable=()=>{};",
+              path === "app-check"
+                ? "export const getWestoryAppCheckToken=async()=> 'synthetic-app-check-token';"
+                : path === "assets"
+                  ? "export const {uploadWrittenExamAsset,readWrittenExamAsset,removeWrittenExamAsset}=globalThis.fixture.assets;"
+                  : path === "firebase"
+                    ? "export const auth=globalThis.fixture.auth;export const db=globalThis.fixture.db;export const getFirebaseStorage=async()=>({});"
+                    : "export const isSemesterArchive=false;export const archiveScope=null;export const assertArchiveWritable=()=>{};",
           }),
         );
       },
@@ -281,6 +310,8 @@ const reset = () => {
   h.beforeTransaction = null;
   h.afterServerRead = null;
   h.afterStageWrite = null;
+  h.mutateBatch = null;
+  h.pauseBatch = null;
   auth.currentUser = account;
   h.docs.set(rosterPath, {
     id: examId,
@@ -329,6 +360,10 @@ await check(
       "Bearer synthetic-only-id-token",
     );
     assert.equal(request.options.cache, "no-store");
+    assert.equal(
+      request.options.headers["X-Firebase-AppCheck"],
+      "synthetic-app-check-token",
+    );
     assert.equal(query.where.fieldFilter.field.fieldPath, "scoreKind");
     assert.equal(
       query.where.fieldFilter.value.stringValue,
@@ -398,7 +433,14 @@ await check(
         assert.equal(data.scoreRows[0].evidence, "최신 근거");
       }
     }
-    assert.equal(h.rest.length, 2);
+    assert.equal(
+      h.rest.filter((entry) => entry.url.endsWith(":runQuery")).length,
+      2,
+    );
+    assert.equal(
+      h.rest.filter((entry) => entry.url.endsWith(":batchGet")).length,
+      2,
+    );
     assert.equal(h.reads.length, 10);
     assert.equal(h.reads.filter((path) => path === rosterPath).length, 2);
     assert.equal(h.reads.filter((path) => path === materialPath).length, 2);
@@ -418,6 +460,103 @@ await check(
     );
     assert.equal(h.reads.length, 6);
     assert.equal(data.metadata.studentCount, 3);
+  },
+);
+await check(
+  "284 students: three parallel bounded batches replace 284 individual network requests without dropping documents",
+  async () => {
+    const rows = Array.from({ length: 284 }, (_, index) =>
+      row(
+        `large-${index}`,
+        String((index % 9) + 1),
+        String(Math.floor(index / 9) + 1),
+      ),
+    );
+    const roster = h.docs.get(rosterPath);
+    roster.rows = rows;
+    roster.classes = Array.from({ length: 9 }, (_, i) => String(i + 1));
+    roster.rowCount = rows.length;
+    for (const student of rows)
+      h.docs.set(scorePath(student.uid), score(student));
+    const releases = [];
+    h.pauseBatch = () => new Promise((resolve) => releases.push(resolve));
+    const pending = api.loadWrittenExamScoreAnalysis(config, examId);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(
+      releases.length,
+      3,
+      "All three batches start before any batch completes",
+    );
+    releases.forEach((resolve) => resolve());
+    const data = await pending;
+    assert.equal(data.students.length, 284);
+    assert.equal(
+      h.reads.length,
+      286,
+      "Billed document count remains unchanged",
+    );
+    const batches = h.rest.filter((entry) => entry.url.endsWith(":batchGet"));
+    assert.deepEqual(
+      batches.map((entry) => entry.body.documents.length),
+      [100, 100, 84],
+    );
+    for (const entry of batches) {
+      assert.equal(entry.options.cache, "no-store");
+      assert.equal(
+        entry.options.headers.Authorization,
+        "Bearer synthetic-only-id-token",
+      );
+      assert.equal(
+        entry.options.headers["X-Firebase-AppCheck"],
+        "synthetic-app-check-token",
+      );
+      assert.ok(entry.body.mask.fieldPaths.includes("items"));
+      for (const field of ["signatureImage", "feedback", "evidence", "email"])
+        assert.ok(!entry.body.mask.fieldPaths.includes(field));
+    }
+    assert.equal(h.writes.length, 0);
+  },
+);
+for (const [name, mutate] of [
+  ["partial", (entries) => entries.pop()],
+  ["duplicate", (entries) => entries.push(entries[0])],
+  [
+    "unexpected",
+    (entries) =>
+      entries.push({
+        missing:
+          "projects/other/databases/(default)/documents/users/other/performance_scores/other",
+      }),
+  ],
+  [
+    "stream error",
+    (entries) => entries.push({ error: { status: "PERMISSION_DENIED" } }),
+  ],
+])
+  await check(
+    `batch ${name} response fails closed and fresh retry succeeds`,
+    async () => {
+      h.mutateBatch = mutate;
+      await assert.rejects(
+        api.loadWrittenExamScoreAnalysis(config, examId),
+        /답안/,
+      );
+      h.mutateBatch = null;
+      const result = await api.loadWrittenExamScoreAnalysis(config, examId);
+      assert.equal(result.students.length, 3);
+      assert.equal(h.writes.length, 0);
+    },
+  );
+await check(
+  "account replacement during a batched response rejects data",
+  async () => {
+    h.pauseBatch = async () => {
+      auth.currentUser = { ...account, uid: "other" };
+    };
+    await assert.rejects(
+      api.loadWrittenExamScoreAnalysis(config, examId),
+      /사용자/,
+    );
   },
 );
 await check(
@@ -1140,9 +1279,13 @@ console.log(
       failed: failures,
       readContract: {
         selectedClassPerRefresh:
-          "1 metadata REST query + 1 roster get + 1 materials get + 3 selected UID gets",
-        twoRefreshes: "2 REST queries + 10 fresh SDK get calls",
-        wholeGrade: "1 roster get + 1 materials get + 4 linked UID gets",
+          "1 metadata REST query + 1 roster get + 1 materials get + 1 batchGet for 3 selected UID documents",
+        twoRefreshes:
+          "2 catalog queries + 4 SDK gets + 2 batchGet requests, 10 analysis documents total",
+        wholeGrade:
+          "1 roster get + 1 materials get + 1 batchGet for 4 linked UID documents",
+        wholeGrade284:
+          "2 SDK gets + 3 parallel batchGet requests; 286 documents total, no document-count reduction claimed",
         essayPerRefresh: "1 roster get, 0 materials/student gets, 0 writes",
         objectiveWithoutItems: "1 roster get, 0 materials/student gets",
       },

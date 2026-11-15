@@ -1,5 +1,7 @@
 import { doc, getDocFromServer } from "firebase/firestore";
 import { auth, db } from "./firebase";
+import { getWestoryAppCheckToken } from "./appCheck";
+import { invalidateWrittenExamAnalysisCache } from "./writtenExamAnalysisCache";
 import { getSemesterCollectionPath, getYearSemester } from "./semesterScope";
 import { parseObjectiveAnswerChoices } from "./writtenExamEssayScoreWorkbook";
 import {
@@ -93,6 +95,129 @@ const decode = (value: RestValue): unknown => {
   return null;
 };
 
+const firestoreRestBase = () => {
+  const emulator = import.meta.env.VITE_FIRESTORE_EMULATOR_HOST;
+  return emulator || import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true"
+    ? `http://${emulator || "127.0.0.1"}:${import.meta.env.VITE_FIRESTORE_EMULATOR_PORT || "8080"}`
+    : "https://firestore.googleapis.com";
+};
+
+// Keep authorization on every explicit student document. A batch changes the
+// number of network requests, not the billed document count. Nothing is cached.
+async function loadStudentScoreBatches(
+  id: string,
+  rows: PerformanceScoreRoster["rows"],
+  owner: NonNullable<typeof auth.currentUser>,
+) {
+  const scores = new Map<string, PerformanceScoreRecord | null>();
+  const names = rows.flatMap((row) =>
+    row.uid
+      ? [
+          `projects/${db.app.options.projectId}/databases/(default)/documents/users/${segment(row.uid)}/${PERFORMANCE_SCORE_USER_COLLECTION}/${segment(id)}`,
+        ]
+      : [],
+  );
+  if (!names.length) return scores;
+  const [token, appCheckToken] = await Promise.all([
+    owner.getIdToken(),
+    getWestoryAppCheckToken(),
+  ]);
+  const assertOwner = () => {
+    if (auth.currentUser !== owner)
+      throw new Error("로그인 사용자가 바뀌었습니다. 다시 조회해 주세요.");
+  };
+  assertOwner();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  const fieldPaths = [
+    "uid",
+    "rosterId",
+    "scoreKind",
+    "scoreContentKind",
+    "academicYear",
+    "semester",
+    "grade",
+    "class",
+    "number",
+    "studentName",
+    "items",
+    "enteredScoreCount",
+    "totalScore",
+    "totalMaxScore",
+  ];
+  let next = 0;
+  const worker = async () => {
+    while (next < names.length) {
+      assertOwner();
+      const batch = names.slice(next, next + 100);
+      next += batch.length;
+      const response = await fetch(
+        `${firestoreRestBase()}/v1/projects/${db.app.options.projectId}/databases/(default)/documents:batchGet`,
+        {
+          method: "POST",
+          cache: "no-store",
+          signal: controller.signal,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            ...(appCheckToken ? { "X-Firebase-AppCheck": appCheckToken } : {}),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ documents: batch, mask: { fieldPaths } }),
+        },
+      );
+      if (!response.ok)
+        throw new Error(
+          "학생별 답안을 불러오지 못했습니다. 다시 분석해 주세요.",
+        );
+      const result: Array<{
+        found?: { name: string; fields?: Record<string, RestValue> };
+        missing?: string;
+      }> = await response.json();
+      assertOwner();
+      const remaining = new Set(batch);
+      if (!Array.isArray(result))
+        throw new Error("학생별 답안 응답을 확인하지 못했습니다.");
+      for (const entry of result) {
+        const name = entry?.found?.name || entry?.missing;
+        if (!name || !remaining.delete(name) || "error" in entry)
+          throw new Error(
+            "학생별 답안을 모두 확인하지 못했습니다. 다시 분석해 주세요.",
+          );
+        const uid = name.split("/").at(-3)!;
+        scores.set(
+          uid,
+          entry.found
+            ? (Object.fromEntries(
+                Object.entries(entry.found.fields || {}).map(([key, value]) => [
+                  key,
+                  decode(value),
+                ]),
+              ) as unknown as PerformanceScoreRecord)
+            : null,
+        );
+      }
+      if (remaining.size)
+        throw new Error(
+          "학생별 답안을 모두 확인하지 못했습니다. 다시 분석해 주세요.",
+        );
+    }
+  };
+  try {
+    await Promise.all(
+      Array.from(
+        { length: Math.min(3, Math.ceil(names.length / 100)) },
+        worker,
+      ),
+    );
+    return scores;
+  } catch (error) {
+    controller.abort();
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 /** Server projection excludes names, answers, feedback and signatures from the picker.
  * This reduces transferred fields, not the billed document count. No result limit. */
 export async function listWrittenExamScoreSources(
@@ -103,14 +228,13 @@ export async function listWrittenExamScoreSources(
   const { year, semester } = getYearSemester(config);
   if (!/^\d{4}$/.test(year) || !/^[12]$/.test(semester))
     throw new Error("학기를 확인해 주세요.");
-  const token = await owner.getIdToken();
+  const [token, appCheckToken] = await Promise.all([
+    owner.getIdToken(),
+    getWestoryAppCheckToken(),
+  ]);
   if (auth.currentUser !== owner)
     throw new Error("로그인 사용자가 바뀌었습니다.");
-  const emulator = import.meta.env.VITE_FIRESTORE_EMULATOR_HOST;
-  const base =
-    emulator || import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true"
-      ? `http://${emulator || "127.0.0.1"}:${import.meta.env.VITE_FIRESTORE_EMULATOR_PORT || "8080"}`
-      : "https://firestore.googleapis.com";
+  const base = firestoreRestBase();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);
   try {
@@ -122,6 +246,7 @@ export async function listWrittenExamScoreSources(
         signal: controller.signal,
         headers: {
           Authorization: `Bearer ${token}`,
+          ...(appCheckToken ? { "X-Firebase-AppCheck": appCheckToken } : {}),
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -406,7 +531,11 @@ export async function loadWrittenExamScoreAnalysis(
   id: string,
   options: { classId?: string; analysisKind?: "objective" | "essay" } = {},
 ) {
+  const owner = auth.currentUser;
+  if (!owner) throw new Error("로그인 상태를 확인해 주세요.");
   const roster = await loadWrittenExamScoreRoster(config, id);
+  if (auth.currentUser !== owner)
+    throw new Error("로그인 사용자가 바뀌었습니다. 다시 조회해 주세요.");
   const classIds = scoreSourceClasses(roster);
   if (options.classId && !classIds.includes(options.classId))
     throw new Error("선택한 학급의 점수표가 없습니다.");
@@ -445,112 +574,99 @@ export async function loadWrittenExamScoreAnalysis(
       scoreRows: rows,
       scoreItems: roster.items,
     };
-  const materials = await loadWrittenExamMaterials(config, id);
+  const [materials, scores] = await Promise.all([
+    loadWrittenExamMaterials(config, id),
+    loadStudentScoreBatches(id, rows, owner),
+  ]);
+  if (auth.currentUser !== owner)
+    throw new Error("로그인 사용자가 바뀌었습니다. 다시 조회해 주세요.");
   const questions = mergeScoreSourceQuestions(
     questionsFromScoreSource(roster),
     materials?.questions || [],
   );
-  const hydrated: PerformanceScoreRoster["rows"] = [];
   // Objective items are intentionally omitted from roster rows to fit Firestore.
   // Read only this assessment's explicitly linked students in the selected class.
-  for (let offset = 0; offset < rows.length; offset += 20) {
-    hydrated.push(
-      ...(await Promise.all(
-        rows.slice(offset, offset + 20).map(async (row) => {
-          if (!row.uid) {
-            if (hasEnteredPerformanceScore(row))
-              throw new Error(
-                "등록된 점수의 학생 연결이 누락되어 분석을 중단했습니다. 점수표의 학적 연결을 확인해 주세요.",
-              );
-            return row;
-          }
-          const snapshot = await getDocFromServer(
-            doc(
-              db,
-              "users",
-              segment(row.uid),
-              PERFORMANCE_SCORE_USER_COLLECTION,
-              segment(id),
-            ),
-          );
-          if (!snapshot.exists()) {
-            if (hasEnteredPerformanceScore(row))
-              throw new Error(
-                "학생별 점수 저장이 완료되지 않았습니다. 점수 등록 및 확인에서 저장 상태를 확인해 주세요.",
-              );
-            return row;
-          }
-          const score = snapshot.data() as PerformanceScoreRecord;
-          if (
-            score.uid !== row.uid ||
-            score.rosterId !== id ||
-            score.scoreKind !== WRITTEN_EXAM_SCORE_KIND ||
-            String(score.academicYear) !== String(roster.academicYear) ||
-            String(score.semester) !== String(roster.semester) ||
-            school(score.grade) !== school(row.grade) ||
-            school(score.class) !== school(row.class) ||
-            school(score.number) !== school(row.number) ||
-            score.studentName?.normalize("NFC").replace(/\s/g, "") !==
-              row.studentName?.normalize("NFC").replace(/\s/g, "")
-          )
-            throw new Error(
-              "학생별 점수의 학기 또는 학적 연결이 달라 분석을 중단했습니다. 점수표를 확인해 주세요.",
-            );
-          score.items = (score.items || []).map((item) =>
-            withLegacyEssaySection(
-              item,
-              score.scoreContentKind || roster.scoreContentKind,
-            ),
-          );
-          const answers = (score.items || []).filter(objective);
-          const expectedAnswers =
-            answers.length > 0 ||
-            ((score.scoreContentKind === "objective" ||
-              score.scoreContentKind === "mixed") &&
-              hasEnteredPerformanceScore(score));
-          if (expectedAnswers) {
-            const byNumber = new Map(
-              answers.map((item) => [Number(item.questionNumber), item]),
-            );
-            if (
-              answers.length !== questions.length ||
-              byNumber.size !== answers.length ||
-              questions.some((question) => {
-                const item = byNumber.get(question.number);
-                return (
-                  !item ||
-                  choice(item.correctAnswer) !== question.answer ||
-                  Number(item.maxScore) !== question.points ||
-                  !Number.isFinite(item.score) ||
-                  item.score < 0 ||
-                  item.score > item.maxScore
-                );
-              })
-            )
-              throw new Error(
-                "학생별 문항 답안이 누락되었거나 점수표의 정답·배점과 다릅니다. 점수 등록 및 확인에서 저장 상태를 확인해 주세요.",
-              );
-            if (
-              answers.some((item) => item.scoreEntered !== false) &&
-              answers.some((item) => item.scoreEntered === false)
-            )
-              throw new Error(
-                "일부 문항의 점수가 미입력 상태입니다. 점수 등록을 완료한 뒤 분석해 주세요.",
-              );
-          }
-          return {
-            ...row,
-            items: score.items,
-            enteredScoreCount: score.enteredScoreCount,
-            totalScore: score.totalScore,
-            totalMaxScore: score.totalMaxScore,
-            feedback: score.feedback,
-            evidence: score.evidence,
-          };
-        }),
-      )),
+  const hydrated = rows.map((row) => {
+    if (!row.uid) {
+      if (hasEnteredPerformanceScore(row))
+        throw new Error(
+          "등록된 점수의 학생 연결이 누락되어 분석을 중단했습니다. 점수표의 학적 연결을 확인해 주세요.",
+        );
+      return row;
+    }
+    const score = scores.get(row.uid);
+    if (!score) {
+      if (hasEnteredPerformanceScore(row))
+        throw new Error(
+          "학생별 점수 저장이 완료되지 않았습니다. 점수 등록 및 확인에서 저장 상태를 확인해 주세요.",
+        );
+      return row;
+    }
+    if (
+      score.uid !== row.uid ||
+      score.rosterId !== id ||
+      score.scoreKind !== WRITTEN_EXAM_SCORE_KIND ||
+      String(score.academicYear) !== String(roster.academicYear) ||
+      String(score.semester) !== String(roster.semester) ||
+      school(score.grade) !== school(row.grade) ||
+      school(score.class) !== school(row.class) ||
+      school(score.number) !== school(row.number) ||
+      score.studentName?.normalize("NFC").replace(/\s/g, "") !==
+        row.studentName?.normalize("NFC").replace(/\s/g, "")
+    )
+      throw new Error(
+        "학생별 점수의 학기 또는 학적 연결이 달라 분석을 중단했습니다. 점수표를 확인해 주세요.",
+      );
+    score.items = (score.items || []).map((item) =>
+      withLegacyEssaySection(
+        item,
+        score.scoreContentKind || roster.scoreContentKind,
+      ),
     );
-  }
+    const answers = (score.items || []).filter(objective);
+    const expectedAnswers =
+      answers.length > 0 ||
+      ((score.scoreContentKind === "objective" ||
+        score.scoreContentKind === "mixed") &&
+        hasEnteredPerformanceScore(score));
+    if (expectedAnswers) {
+      const byNumber = new Map(
+        answers.map((item) => [Number(item.questionNumber), item]),
+      );
+      if (
+        answers.length !== questions.length ||
+        byNumber.size !== answers.length ||
+        questions.some((question) => {
+          const item = byNumber.get(question.number);
+          return (
+            !item ||
+            choice(item.correctAnswer) !== question.answer ||
+            Number(item.maxScore) !== question.points ||
+            !Number.isFinite(item.score) ||
+            item.score < 0 ||
+            item.score > item.maxScore
+          );
+        })
+      )
+        throw new Error(
+          "학생별 문항 답안이 누락되었거나 점수표의 정답·배점과 다릅니다. 점수 등록 및 확인에서 저장 상태를 확인해 주세요.",
+        );
+      if (
+        answers.some((item) => item.scoreEntered !== false) &&
+        answers.some((item) => item.scoreEntered === false)
+      )
+        throw new Error(
+          "일부 문항의 점수가 미입력 상태입니다. 점수 등록을 완료한 뒤 분석해 주세요.",
+        );
+    }
+    return {
+      ...row,
+      items: score.items,
+      enteredScoreCount: score.enteredScoreCount,
+      totalScore: score.totalScore,
+      totalMaxScore: score.totalMaxScore,
+    };
+  });
   const participants = hydrated.filter((row) =>
     (row.items || []).some(
       (item) =>
@@ -600,7 +716,7 @@ export async function saveWrittenExamScoreMaterials(
     questionsFromScoreSource(roster),
     input.questions,
   );
-  return saveWrittenExamAnalysis(
+  const saved = await saveWrittenExamAnalysis(
     config,
     {
       ...input,
@@ -634,4 +750,6 @@ export async function saveWrittenExamScoreMaterials(
       },
     },
   );
+  invalidateWrittenExamAnalysisCache(input.examId);
+  return saved;
 }

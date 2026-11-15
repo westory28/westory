@@ -9,6 +9,13 @@ import {
 import { createPortal } from "react-dom";
 import { useAuth } from "../../../contexts/AuthContext";
 import RefreshButton from "../../../components/common/RefreshButton";
+import { LoadingOverlay } from "../../../components/common/LoadingState";
+import {
+  invalidateWrittenExamAnalysisCache,
+  readWrittenExamAnalysisCache,
+  writeWrittenExamAnalysisCache,
+  writtenExamAnalysisCacheRevision,
+} from "../../../lib/writtenExamAnalysisCache";
 import InfoHelp from "../../../components/common/InfoHelp";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { getAssessmentSemesterId } from "../../../lib/assessmentRelease";
@@ -46,7 +53,10 @@ import {
   getQuizClassAchievement,
   type QuizClassAchievement,
 } from "../../../lib/quizClassAnalysis";
-import { projectWrittenExamAnalysis } from "../../../lib/writtenExamAnalysisProjection";
+import {
+  compactWrittenExamMock,
+  projectWrittenExamAnalysis,
+} from "../../../lib/writtenExamAnalysisProjection";
 import type { AchievementAnalysis } from "../../../lib/achievementAnalysis";
 import QuizAchievementAnalysis from "./QuizAchievementAnalysis";
 import WrittenExamEssayAnalysis from "./WrittenExamEssayAnalysis";
@@ -81,7 +91,6 @@ type LoadedExam = {
   scoreRows: PerformanceScoreRosterRow[];
   scoreItems: PerformanceScoreRoster["items"];
   mock: QuizClassAchievement | null;
-  mockReady: boolean;
   loadKind: "objective" | "essay";
   classId: string;
   identity: string;
@@ -98,12 +107,21 @@ export default function WrittenExamAnalysis({
 }: {
   navigation: ReactNode;
 }) {
-  const { config, currentUser, authGeneration } = useAuth();
+  const { config, currentUser, authGeneration, userData } = useAuth();
   const semesterId = getAssessmentSemesterId(config);
-  const identity = `${currentUser?.uid}:${authGeneration}:${semesterId}`;
+  const identity = JSON.stringify([
+    currentUser?.uid,
+    authGeneration,
+    semesterId,
+    userData?.role,
+    userData?.registrationApprovalStatus,
+    userData?.teacherPortalEnabled,
+    [...(userData?.staffPermissions || [])].sort(),
+  ]);
   const identityRef = useRef(identity);
   identityRef.current = identity;
   const request = useRef(0);
+  const inFlight = useRef("");
   const [catalogRows, setCatalog] = useState<WrittenExamScoreSource[]>([]);
   const [catalogIdentity, setCatalogIdentity] = useState("");
   const catalog = catalogIdentity === identity ? catalogRows : [];
@@ -126,9 +144,10 @@ export default function WrittenExamAnalysis({
       target: string,
       room: string,
       refreshCatalog = false,
-      reuse?: LoadedExam,
       kind = analysisKind,
     ) => {
+      if (inFlight.current === identity) return;
+      inFlight.current = identity;
       const run = ++request.current;
       const current = identity;
       setLoading(true);
@@ -144,12 +163,34 @@ export default function WrittenExamAnalysis({
           setCatalogIdentity(current);
         }
         if (!target) return;
-        const result =
-          reuse ||
-          (await loadWrittenExamScoreAnalysis(config, target, {
-            ...(room ? { classId: room } : {}),
-            analysisKind: kind,
-          }));
+        const source = (list || catalog).find((entry) => entry.id === target);
+        const cacheKey = JSON.stringify([
+          current,
+          target,
+          room,
+          kind,
+          source?.updatedAt,
+        ]);
+        if (refreshCatalog) invalidateWrittenExamAnalysisCache(target);
+        const cacheRevision = writtenExamAnalysisCacheRevision();
+        const cached = source
+          ? readWrittenExamAnalysisCache<LoadedExam>(current, cacheKey)
+          : null;
+        if (
+          cached?.identity === current &&
+          cached.metadata?.id === target &&
+          cached.classId === room &&
+          cached.loadKind === kind &&
+          Array.isArray(cached.students) &&
+          Array.isArray(cached.scoreRows)
+        ) {
+          setLoaded(cached);
+          return;
+        }
+        const result = await loadWrittenExamScoreAnalysis(config, target, {
+          ...(room ? { classId: room } : {}),
+          analysisKind: kind,
+        });
         if (run !== request.current || identityRef.current !== current) return;
         let mock: QuizClassAchievement | null = null;
         if (kind === "objective" && result.students.length > 0) {
@@ -165,7 +206,7 @@ export default function WrittenExamAnalysis({
                 ...(room ? {} : { grade: result.metadata.grade }),
               },
               current,
-              true,
+              refreshCatalog,
             );
             if (mock.semesterId !== semesterId || mock.complete === false)
               throw new Error("모의고사 분석 범위를 확인하지 못했습니다.");
@@ -180,23 +221,36 @@ export default function WrittenExamAnalysis({
           }
         }
         if (run !== request.current || identityRef.current !== current) return;
-        setLoaded({
+        const snapshot: LoadedExam = {
           ...result,
-          mock,
-          mockReady: kind === "objective",
+          mock: compactWrittenExamMock(mock),
           loadKind: kind,
           classId: room,
           identity: current,
-        });
+        };
+        setLoaded(snapshot);
+        // A failed mock lookup is retryable, not a successful cached estimate.
+        if (source && (kind === "essay" || mock || !result.students.length))
+          writeWrittenExamAnalysisCache(
+            current,
+            target,
+            cacheKey,
+            kind === "objective"
+              ? { ...snapshot, scoreRows: [], scoreItems: [] }
+              : snapshot,
+            cacheRevision,
+          );
       } catch (failure) {
         if (run === request.current && identityRef.current === current)
           setError(message(failure));
       } finally {
-        if (run === request.current && identityRef.current === current)
+        if (run === request.current && identityRef.current === current) {
+          inFlight.current = "";
           setLoading(false);
+        }
       }
     },
-    [identity, config, semesterId, analysisKind],
+    [identity, config, semesterId, analysisKind, catalog],
   );
 
   useEffect(() => {
@@ -208,6 +262,7 @@ export default function WrittenExamAnalysis({
     void load("", "", true);
     return () => {
       ++request.current;
+      inFlight.current = "";
     };
   }, [identity]);
 
@@ -229,7 +284,14 @@ export default function WrittenExamAnalysis({
     loaded &&
     loaded.identity === identity &&
     loaded.metadata.id === examId &&
-    loaded.classId === classId;
+    loaded.classId === classId &&
+    loaded.loadKind === analysisKind;
+  const clearResult = () => {
+    setLoaded(null);
+    setInspect(null);
+    setError("");
+    setMockError("");
+  };
   const help = (
     <InfoHelp
       label="정기시험 추정 수준 기준"
@@ -304,24 +366,9 @@ export default function WrittenExamAnalysis({
               className={analysisKind === kind ? "is-active" : ""}
               aria-disabled={loading}
               onClick={() => {
-                if (loading) return;
+                if (loading || analysisKind === kind) return;
                 setAnalysisKind(kind);
-                setInspect(null);
-                if (
-                  current &&
-                  loaded &&
-                  kind === "objective" &&
-                  loaded.loadKind === "essay"
-                ) {
-                  void load(examId, classId, false, undefined, kind);
-                } else if (
-                  kind === "objective" &&
-                  current &&
-                  loaded &&
-                  !loaded.mockReady
-                ) {
-                  void load(examId, classId, false, loaded, "objective");
-                }
+                clearResult();
               }}
             >
               {label}
@@ -331,22 +378,28 @@ export default function WrittenExamAnalysis({
         <RefreshButton
           loading={loading}
           label="정기시험 분석 새로고침"
-          onClick={() => load(examId, classId, true)}
+          onClick={() => load(current ? examId : "", classId, true)}
         />
       </div>
-      <div className="written-exam-filters">
+      <form
+        className="written-exam-filters written-exam-analysis-filters"
+        aria-label="정기시험 분석 조건"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (selected && !loading) void load(examId, classId);
+        }}
+      >
         <label>
           평가명
           <select
             value={examId}
+            title={selected?.title}
             disabled={loading}
             onChange={(event) => {
               const id = event.target.value;
               setExamId(id);
               setClassId("");
-              setLoaded(null);
-              setInspect(null);
-              if (id) void load(id, "");
+              clearResult();
             }}
           >
             <option value="">평가 선택</option>
@@ -364,8 +417,7 @@ export default function WrittenExamAnalysis({
             disabled={!selected || loading}
             onChange={(event) => {
               setClassId(event.target.value);
-              setInspect(null);
-              void load(examId, event.target.value);
+              clearResult();
             }}
           >
             <option value="">학년 전체</option>
@@ -396,7 +448,15 @@ export default function WrittenExamAnalysis({
             )}
           </select>
         </label>
-      </div>
+        <button
+          type="submit"
+          className="qca-primary"
+          disabled={!selected || loading}
+          aria-busy={loading}
+        >
+          {loading ? "불러오는 중…" : "분석"}
+        </button>
+      </form>
       <div
         id="written-exam-analysis-panel"
         role="tabpanel"
@@ -413,7 +473,7 @@ export default function WrittenExamAnalysis({
             {mockError}
           </p>
         )}
-        {loading && <p role="status">분석 자료를 불러오는 중입니다.</p>}
+        {loading && <LoadingOverlay />}
         {!loading && !catalog.length && !error && (
           <p className="written-exam-empty">
             등록된 정기시험 점수표가 없습니다.

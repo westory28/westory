@@ -18,9 +18,8 @@ async function source(file) {
   });
   return module.exports;
 }
-const { projectWrittenExamAnalysis: project } = await source(
-  "src/lib/writtenExamAnalysisProjection.ts",
-);
+const { projectWrittenExamAnalysis: project, compactWrittenExamMock } =
+  await source("src/lib/writtenExamAnalysisProjection.ts");
 const {
   buildCumulativeAchievementScores: levels,
   adaptAchievementAttempts,
@@ -95,6 +94,29 @@ const mock = {
   mockExamScoreRows: [raw],
 };
 const combined = project({ ...base, mock }).data;
+const compact = compactWrittenExamMock({
+  ...mock,
+  students: mock.students.map((student) => ({
+    ...student,
+    email: "synthetic@example.test",
+  })),
+  mockExamScoreRows: mock.mockExamScoreRows.map((row) => ({
+    ...row,
+    raw: {
+      ...row.raw,
+      email: "synthetic@example.test",
+      studentEmail: "synthetic@example.test",
+      details: Array(100).fill("unused answer data"),
+    },
+  })),
+});
+assert.deepEqual(
+  JSON.parse(JSON.stringify(calc(project({ ...base, mock: compact }).data))),
+  JSON.parse(JSON.stringify(calc(combined))),
+  "Compact browser cache preserves cumulative score and cut-score estimates",
+);
+assert.ok(!JSON.stringify(compact).includes("synthetic@example.test"));
+assert.ok(!JSON.stringify(compact).includes("unused answer data"));
 const joined = calc(combined)[0];
 assert.equal(combined.students[0].uid, "uid1");
 assert.equal(joined.rounds.length, 2);

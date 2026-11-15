@@ -22,6 +22,7 @@ import {
   prepareApplicationSession,
 } from "../lib/applicationSession";
 import { clearDeviceSession } from "../lib/deviceSession";
+import { invalidateWrittenExamAnalysisCache } from "../lib/writtenExamAnalysisCache";
 import { clearAuthDeadline, setAuthDeadline } from "../lib/authDeadline";
 import {
   AuthStartupController,
@@ -301,6 +302,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             readyUserRef.current === state.currentUser;
           const lostReadyProfile =
             authPhaseRef.current === "ready" && state.phase !== "ready";
+          if (
+            lostReadyProfile ||
+            (readyUserRef.current &&
+              readyUserRef.current.uid !== state.currentUser?.uid)
+          )
+            invalidateWrittenExamAnalysisCache();
           authPhaseRef.current = state.phase;
           readyUserRef.current =
             state.phase === "ready" ? state.currentUser : null;

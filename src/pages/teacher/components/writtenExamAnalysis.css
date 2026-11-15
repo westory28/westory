@@ -64,6 +64,40 @@
   min-width: 160px;
   max-width: 384px;
 }
+.written-exam-analysis-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 136px minmax(160px, 240px) auto;
+}
+.written-exam-analysis-filters label:first-child {
+  min-width: 0;
+  max-width: none;
+}
+.written-exam-analysis-filters select {
+  width: 100%;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+.written-exam-analysis-filters button[type="submit"] {
+  min-height: 44px;
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  .written-exam-analysis-filters {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) auto;
+  }
+  .written-exam-analysis-filters label:first-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 480px) {
+  .written-exam-analysis-filters {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  }
+  .written-exam-analysis-filters button[type="submit"] {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+}
 .written-exam-empty {
   padding: 48px 0;
   color: var(--ws-text-muted, #64748b);

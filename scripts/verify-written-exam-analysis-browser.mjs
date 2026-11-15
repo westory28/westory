@@ -60,7 +60,7 @@ const metadata = {
   schemaVersion: 1,
   year: "2026",
   semester: "2",
-  title: "가상 정기시험",
+  title: "2026학년도 2학기 3학년 2차 정기시험 역사과 긴 평가명 배치 검증",
   examDate: "2026-11-14",
   grade: "3",
   revision: "qa-revision",
@@ -86,7 +86,7 @@ const mocks = {
   "qa-assessment-release": `export const getAssessmentSemesterId=config=>config.year+'-'+config.semester;`,
   "qa-score-kind": `export const WRITTEN_EXAM_SCORE_KIND='written_exam_essay';`,
   "qa-score-manager": `import React,{useState} from 'react';export default function Manager({navigation,writtenExamMaterials}){const[open,setOpen]=useState(false);const[busy,setBusy]=useState(false);return <section><div className="ws-page-header"><h2>정기시험 점수 관리</h2></div>{navigation}<button>이의제기</button><button onClick={()=>setOpen(true)}>업로드</button><button>서명 현황</button>{open&&<section role="dialog" aria-label="정기시험 점수표 업로드"><button disabled={busy} onClick={()=>setOpen(false)}>업로드 창 닫기</button>{typeof writtenExamMaterials==='function'?writtenExamMaterials(setBusy):writtenExamMaterials}</section>}</section>}`,
-  "qa-source": `import{qa,begin}from'qa-state';
+  "qa-source": `import{qa,begin}from'qa-state';import{invalidateWrittenExamAnalysisCache}from'${root}/src/lib/writtenExamAnalysisCache';
 const essayItems=[{itemKey:'essay-1',name:'논술형 1',shortName:'1-(1)',examSection:'essay',maxScore:2},{itemKey:'essay-2',name:'논술형 2',shortName:'1-(2)',examSection:'essay',maxScore:3}];
 const scoreRows=()=>qa.students.map((student,index)=>{const scores=[[0,0],[2,3],[1,null],[null,null]][index%4];return{uid:'qa-uid-'+student.key,rowKey:student.key,grade:student.grade,class:student.class,number:student.number,studentName:student.name,items:essayItems.map((item,i)=>({...item,score:scores[i],scoreEntered:scores[i]!==null,feedback:i===0?(index%2===0?'백지':'문항 근거를\\n  다시 확인하세요.'):(index%4===3?'백지':'')})),feedback:'교사가 확인한 기존 피드백 '+student.key+'\\n  역사적 근거를 연결하세요.\\r\\n   다음 학습에서 확인합니다.',evidence:'기존 채점 근거',totalScore:scores.reduce((sum,score)=>sum+(score||0),0),enteredScoreCount:scores.filter(score=>score!==null).length,totalMaxScore:5}});
 const source=()=>({id:qa.metadata.id,title:qa.metadata.title,targetGrade:'3',classes:['1','2'],scoreKind:'written_exam_essay',scoreContentKind:'mixed',academicYear:'2026',semester:'2',items:[...qa.scoreQuestions.map(q=>({...q,examSection:'objective',questionNumber:q.number,correctAnswer:q.answer,maxScore:q.points,answerChoices:q.options})),...essayItems],rows:scoreRows()});
@@ -97,7 +97,7 @@ export async function loadWrittenExamMaterials(config,id){await begin('materials
 export function scoreSourceClasses(s){return s.classes.map(c=>s.targetGrade+'-'+c)}
 export function questionsFromScoreSource(s){return s.items.filter(i=>i.examSection==='objective').map(i=>({number:i.questionNumber,answer:i.correctAnswer,points:i.maxScore,options:i.answerChoices,achievementStandardCodes:[],targetAchievementLevel:'',intendedDifficulty:'',concepts:[]}))}
 export function mergeScoreSourceQuestions(source,info){if(!info.length)return source;if(source.length!==info.length||source.some(q=>!info.some(i=>i.number===q.number&&i.answer===q.answer&&i.points===q.points)))throw new Error('문항정보표의 문항번호·정답·배점이 등록된 점수표와 다릅니다.');return info}
-export async function saveWrittenExamScoreMaterials(config,input){await begin('save',{hasStudentPayload:'students'in input});if('students'in input)throw new Error('Student payload must not reach materials API');if(qa.failSave)throw new Error('합성 자료 등록 실패');if(qa.conflictSave){qa.conflictSave=false;qa.metadata={...qa.metadata,revision:qa.metadata.revision+'-concurrent'};}if(input.expectedRevision!==qa.metadata.revision)throw new Error('다른 작업에서 분석 자료가 변경되었습니다. 새로고침한 뒤 다시 저장해 주세요.');qa.saved=input;qa.metadata={...qa.metadata,...input,id:input.examId,revision:qa.metadata.revision+'-next',files:input.files.map(({blob,...file})=>({...file,size:blob.size,contentType:blob.type}))};for(const file of input.files)qa.assets.set(file.fileName,file.blob);return qa.metadata}
+export async function saveWrittenExamScoreMaterials(config,input){await begin('save',{hasStudentPayload:'students'in input});if('students'in input)throw new Error('Student payload must not reach materials API');if(qa.failSave)throw new Error('합성 자료 등록 실패');if(qa.conflictSave){qa.conflictSave=false;qa.metadata={...qa.metadata,revision:qa.metadata.revision+'-concurrent'};}if(input.expectedRevision!==qa.metadata.revision)throw new Error('다른 작업에서 분석 자료가 변경되었습니다. 새로고침한 뒤 다시 저장해 주세요.');invalidateWrittenExamAnalysisCache(input.examId);qa.saved=input;qa.metadata={...qa.metadata,...input,id:input.examId,revision:qa.metadata.revision+'-next',files:input.files.map(({blob,...file})=>({...file,size:blob.size,contentType:blob.type}))};for(const file of input.files)qa.assets.set(file.fileName,file.blob);return qa.metadata}
 `,
   "qa-store": `import{qa,begin}from'qa-state';
 export async function listWrittenExamAnalyses(){await begin('list');return [qa.metadata]}
@@ -110,7 +110,6 @@ export const quizClassAnalysisError=e=>e.message;
 export async function getQuizClassQuestion(){throw new Error('Imported question must not fetch mock paper')}
 export async function getQuizClassAchievement(scope){await begin('mock',{scope});if(qa.failMock)throw new Error('합성 모의고사 읽기 실패');const students=qa.students.filter(s=>!scope.classIds.length||scope.classIds.includes(s.grade+'-'+s.class)).map((s,i)=>({uid:'qa-uid-'+s.key,name:s.name,classId:s.grade+'-'+s.class,number:s.number,grade:s.grade,classNumber:s.class}));return{semesterId:'2026-2',grade:'3',complete:true,questions:[],students,treeData:[],rawRows:[],configuredClasses:[],mockExamScoreRows:students.filter((s,i)=>i%2===0).map(s=>({id:'mock-'+s.uid,source:'legacy',raw:{studentUid:s.uid,semesterId:'2026-2',category:'exam_prep',examRound:'round_1',timestamp:'2026-11-01T00:00:00Z',score:50,total:qa.metadata.questions.length,maxPoints:80,cutScoreQuestions:qa.metadata.questions.map(q=>({...q,id:q.number}))}}))}}`,
   "qa-updates": `export const useQuizClassUpdates=options=>{if(options.enabled)throw new Error('Imported analysis must not subscribe to live mock updates')};`,
-  "qa-loading": `import React from'react';export const LoadingOverlay=({loading})=>loading?<p role="status">불러오는 중</p>:null;`,
 };
 const mappings = [
   ["/contexts/AuthContext", "qa-auth"],
@@ -123,7 +122,6 @@ const mappings = [
   ["/lib/writtenExamScoreSource", "qa-source"],
   ["/lib/quizClassAnalysis", "qa-class"],
   ["/useQuizClassUpdates", "qa-updates"],
-  ["/components/common/LoadingState", "qa-loading"],
 ];
 await build({
   stdin: {
@@ -394,6 +392,15 @@ try {
     "Hidden analysis tab must not read data",
   );
   await page.getByRole("button", { name: "평가 분석", exact: true }).click();
+  const analyze = page.getByRole("button", { name: "분석", exact: true });
+  const analyzeReady = () =>
+    page.waitForFunction(
+      () =>
+        !document.querySelector(
+          '.written-exam-analysis-filters button[type="submit"]',
+        ).disabled,
+    );
+  assert.equal(await analyze.isDisabled(), true);
   assert.equal(
     await page
       .getByRole("button", { name: "분석 자료 업로드", exact: true })
@@ -406,6 +413,64 @@ try {
     .nth(0)
     .selectOption("qa-exam");
   await page.locator(".written-exam-filters select").nth(2).selectOption("3");
+  assert.deepEqual(
+    await page.evaluate(() => window.examQa.calls.map(({ op }) => op)),
+    ["list"],
+    "Choosing an exam/report must not fetch analysis before submission",
+  );
+  await page.getByRole("button", { name: "정기시험 분석 새로고침" }).click();
+  await analyzeReady();
+  assert.deepEqual(
+    await page.evaluate(() => window.examQa.calls.map(({ op }) => op)),
+    ["list", "list"],
+    "Refreshing unsubmitted filters refreshes only the catalog",
+  );
+  await page.evaluate(() => {
+    window.examQa.pauseOps = ["load"];
+  });
+  const analysisStart = await page.evaluate(() => {
+    const count = window.examQa.calls.length;
+    const form = document.querySelector(".written-exam-analysis-filters");
+    form.requestSubmit();
+    form.requestSubmit();
+    return count;
+  });
+  await page.waitForFunction(() => window.examQa.releases.length > 0);
+  assert.deepEqual(
+    await page.evaluate(
+      (start) => window.examQa.calls.slice(start).map(({ op }) => op),
+      analysisStart,
+    ),
+    ["load"],
+    "Same-tick duplicate analysis submissions must issue one request",
+  );
+  assert.equal(
+    await page
+      .locator('.written-exam-analysis-filters button[type="submit"]')
+      .isDisabled(),
+    true,
+  );
+  assert.match(
+    await page
+      .locator('.written-exam-analysis-filters button[type="submit"]')
+      .innerText(),
+    /중/,
+  );
+  await page.getByRole("status", { name: "처리 중", exact: true }).waitFor();
+  assert.equal(
+    await page.locator(".ws-loading-surface .ws-loading__logo").count(),
+    1,
+    "The real Westory loading surface appears while analysis is pending",
+  );
+  await page.screenshot({
+    path: path.join(out, "analysis-loading.png"),
+    fullPage: true,
+  });
+  await page.evaluate(() => {
+    window.examQa.pauseOps = [];
+    window.examQa.releases.splice(0).forEach((resolve) => resolve());
+  });
+  await analyzeReady();
   await page
     .getByText("모의고사 1회 + 정기시험", { exact: true })
     .first()
@@ -417,14 +482,68 @@ try {
   );
   const initialCalls = await page.evaluate(() => window.examQa.calls.slice());
   assert.equal(initialCalls.filter((call) => call.op === "mock").length, 1);
+  await analyze.press("Enter");
+  await analyzeReady();
+  assert.deepEqual(
+    await page.evaluate(() => window.examQa.calls.slice()),
+    initialCalls,
+    "Repeating the same successful analysis reuses the bounded snapshot",
+  );
   assert(
     initialCalls
       .filter((call) => ["list", "load"].includes(call.op))
       .every((call) => call.from === "score-ledger"),
     "Analysis reads the registered score ledger",
   );
-  for (const width of [390, 768, 1280, 1440]) {
+  for (const width of [320, 390, 768, 1280, 1440, 1880]) {
     await page.setViewportSize({ width, height: 1000 });
+    const filterLayout = await page
+      .locator(".written-exam-analysis-filters")
+      .evaluate((form) => {
+        const controls = [...form.querySelectorAll("select,button")].map(
+          (el) => {
+            const rect = el.getBoundingClientRect();
+            return {
+              left: rect.left,
+              right: rect.right,
+              top: rect.top,
+              bottom: rect.bottom,
+              height: rect.height,
+            };
+          },
+        );
+        const overlaps = controls.flatMap((rect, index) =>
+          controls
+            .slice(index + 1)
+            .filter(
+              (other) =>
+                Math.min(rect.right, other.right) -
+                  Math.max(rect.left, other.left) >
+                  1 &&
+                Math.min(rect.bottom, other.bottom) -
+                  Math.max(rect.top, other.top) >
+                  1,
+            ),
+        );
+        return {
+          controls,
+          overlaps: overlaps.length,
+          background: getComputedStyle(form).backgroundColor,
+        };
+      });
+    assert.equal(
+      filterLayout.overlaps,
+      0,
+      `Filter controls overlap at ${width}px`,
+    );
+    assert(
+      filterLayout.controls.every(
+        (control) =>
+          control.height >= 44 && control.left >= 0 && control.right <= width,
+      ),
+      `Filter hit targets/bounds at ${width}px`,
+    );
+    assert.equal(filterLayout.background, "rgba(0, 0, 0, 0)");
     const css = await page
       .locator(".written-exam-analysis > .ws-page-header")
       .evaluate((el) => {
@@ -463,7 +582,7 @@ try {
         animations: "disabled",
       });
     }
-    evidence.push({ width, header: css, reports: 7 });
+    evidence.push({ width, header: css, filterLayout, reports: 7 });
   }
   assert.equal(
     await page.evaluate(
@@ -474,6 +593,18 @@ try {
   );
   await page.locator(".written-exam-filters select").nth(1).selectOption("3-2");
   await page.locator(".written-exam-filters select").nth(2).selectOption("5");
+  assert.equal(
+    await page.locator(".quiz-achievement-analysis").count(),
+    0,
+    "Changed class hides the previous result",
+  );
+  assert.equal(
+    await page.evaluate(
+      () => window.examQa.calls.filter((call) => call.op === "mock").length,
+    ),
+    1,
+  );
+  await analyze.click();
   await page.waitForFunction(
     () => window.examQa.calls.filter((call) => call.op === "mock").length === 2,
   );
@@ -590,7 +721,7 @@ try {
   assert.deepEqual(
     firstEssayLoad.map((call) => call.op),
     [],
-    "The loaded objective snapshot already contains atomic essay roster rows",
+    "Switching analysis kind must wait for explicit analysis",
   );
   await essayTab.press("Home");
   await ready();
@@ -603,8 +734,8 @@ try {
       .getByRole("alert")
       .filter({ hasText: "모의고사 자료를 불러오지 못해" })
       .count(),
-    1,
-    "Returning to the cached choice snapshot preserves its mock error until an explicit reload",
+    0,
+    "Switching analysis kind clears errors from the previous condition",
   );
   await page.locator(".written-exam-filters select").nth(1).selectOption("");
   await ready();
@@ -632,9 +763,11 @@ try {
     assert.deepEqual(
       (await callsSince(start)).map((call) => call.op),
       [],
-      "Keyboard tab switching reuses the same complete assessment snapshot",
+      "Keyboard tab switching does not fetch analysis",
     );
   }
+  await analyze.click();
+  await ready();
   const beforeEssay = await callCount();
   const essayTitles = [
     "전체 결과",
@@ -985,6 +1118,12 @@ try {
   );
   const essayClassStart = await callCount();
   await page.locator(".written-exam-filters select").nth(1).selectOption("3-1");
+  assert.deepEqual(
+    await callsSince(essayClassStart),
+    [],
+    "Class selection is local until analysis",
+  );
+  await analyze.click();
   await ready();
   const essayClassCalls = await callsSince(essayClassStart);
   assert.deepEqual(
@@ -1027,8 +1166,15 @@ try {
   assert.equal(
     await objectiveTab.evaluate((el) => document.activeElement === el),
     true,
-    "A tab that needs fresh objective details retains focus through loading",
+    "A tab change retains keyboard focus",
   );
+  assert.deepEqual(
+    await callsSince(choiceReturnStart),
+    [],
+    "Returning to choice waits for analysis",
+  );
+  await analyze.click();
+  await ready();
   const choiceReturn = await callsSince(choiceReturnStart);
   assert.deepEqual(
     choiceReturn.map((call) => call.op),
@@ -1504,6 +1650,8 @@ try {
     .nth(0)
     .selectOption("qa-exam");
   await page.locator(".written-exam-filters select").nth(2).selectOption("1");
+  await analyze.click();
+  await ready();
   const buttons = await page
     .locator(".quiz-achievement-analysis button")
     .allTextContents();
@@ -1545,6 +1693,7 @@ try {
   // An old account's delayed essay refresh may finish after a new auth render.
   // The old rows and their feedback must remain hidden and may not start a mock read.
   await essayTab.click();
+  await analyze.click();
   await ready();
   await page.locator(".written-exam-filters select").nth(2).selectOption("3");
   await pagination
@@ -1592,6 +1741,7 @@ try {
     .locator(".written-exam-filters select")
     .nth(0)
     .selectOption("qa-exam");
+  await analyze.click();
   await page
     .getByRole("alert")
     .filter({ hasText: "합성 서버 읽기 실패" })
@@ -1604,7 +1754,7 @@ try {
   await page.evaluate(() => {
     window.examQa.failLoad = false;
   });
-  await page.getByRole("button", { name: "정기시험 분석 새로고침" }).click();
+  await analyze.click();
   await ready();
   assert.equal(await studentTable.locator("tbody tr").count(), 12);
   assert.equal(
@@ -1634,6 +1784,117 @@ try {
   assert.equal(semesterCalls[0].year, "2027");
   assert.equal(semesterCalls[0].semester, "1");
   boundaryChecks.push({ accountCalls, semesterCalls, staleResultHidden: true });
+  // A separate tab keeps cache assertions independent from the long materials
+  // workflow above. Reload retains this tab's sessionStorage, never auth tokens.
+  const cachePage = await browser.newPage({
+    viewport: { width: 1440, height: 1000 },
+  });
+  await cachePage.route("**/*", (route) =>
+    route.request().url().startsWith(origin) ? route.continue() : route.abort(),
+  );
+  cachePage.on("pageerror", (error) => errors.push(error.message));
+  const cacheCalls = () =>
+    cachePage.evaluate(() => window.examQa.calls.map(({ op }) => op));
+  const cacheReady = () =>
+    cachePage.waitForFunction(
+      () =>
+        !document.querySelector(
+          '.written-exam-analysis-filters button[type="submit"]',
+        ).disabled,
+    );
+  const cacheAnalyze = () =>
+    cachePage.getByRole("button", { name: "분석", exact: true }).click();
+  const cacheKind = (name) =>
+    cachePage.getByRole("tab", { name, exact: true }).click();
+  const openCacheAnalysis = async () => {
+    await cachePage
+      .getByRole("button", { name: "평가 분석", exact: true })
+      .click();
+    await cachePage
+      .locator(".written-exam-filters select")
+      .first()
+      .selectOption("qa-exam");
+    await cacheAnalyze();
+    await cacheReady();
+    await cachePage.locator(".quiz-achievement-analysis").waitFor();
+  };
+  await cachePage.goto(origin);
+  await openCacheAnalysis();
+  assert.deepEqual(await cacheCalls(), ["list", "load", "mock"]);
+  await cacheAnalyze();
+  await cacheReady();
+  assert.deepEqual(await cacheCalls(), ["list", "load", "mock"]);
+  await cacheKind("논술형");
+  await cacheAnalyze();
+  await cacheReady();
+  assert.deepEqual(await cacheCalls(), ["list", "load", "mock", "load"]);
+  await cacheKind("선택형");
+  await cacheAnalyze();
+  await cacheReady();
+  assert.deepEqual(
+    await cacheCalls(),
+    ["list", "load", "mock", "load"],
+    "Returning to a successful choice snapshot does not repeat reads",
+  );
+  await cachePage
+    .getByRole("button", { name: "정기시험 분석 새로고침" })
+    .click();
+  await cacheReady();
+  assert.deepEqual(await cacheCalls(), [
+    "list",
+    "load",
+    "mock",
+    "load",
+    "list",
+    "load",
+    "mock",
+  ]);
+  await cacheKind("논술형");
+  await cacheAnalyze();
+  await cacheReady();
+  assert.deepEqual(
+    await cacheCalls(),
+    ["list", "load", "mock", "load", "list", "load", "mock", "load"],
+    "Explicit refresh invalidates both analysis kinds",
+  );
+  const cacheBeforeReload = await cacheCalls();
+  await cachePage.reload();
+  await openCacheAnalysis();
+  assert.deepEqual(
+    await cacheCalls(),
+    ["list"],
+    "Reload checks the fresh catalog and reuses a successful same-tab result",
+  );
+  await cachePage.evaluate(() => {
+    window.examQa.failMock = true;
+  });
+  await cachePage
+    .getByRole("button", { name: "정기시험 분석 새로고침" })
+    .click();
+  await cacheReady();
+  await cachePage
+    .getByRole("alert")
+    .filter({ hasText: "모의고사 자료를 불러오지 못해" })
+    .waitFor();
+  await cachePage.evaluate(() => {
+    window.examQa.failMock = false;
+  });
+  const failedMockCalls = await cacheCalls();
+  await cacheAnalyze();
+  await cacheReady();
+  assert.deepEqual(
+    (await cacheCalls()).slice(failedMockCalls.length),
+    ["load", "mock"],
+    "Failed mock lookups are retried instead of cached",
+  );
+  assert.equal(await cachePage.getByRole("alert").count(), 0);
+  boundaryChecks.push({
+    cacheBeforeReload,
+    cacheAfterReload: await cacheCalls(),
+    reloadReusedSnapshot: true,
+    failedMockRetried: true,
+  });
+  await cachePage.close();
   assert.deepEqual(errors, []);
   await fs.writeFile(
     path.join(out, "result.json"),
@@ -1653,7 +1914,7 @@ try {
     ),
   );
   console.log(
-    `PASS written exam UI: choice 7 + essay 4 reports at 390/768/1280/1440; full-group charts, blank-feedback counts, class pagination, feedback dialogs; typed source calls, refresh/filter/page preservation, account/semester/late-response recovery; materials-only XLSX+PDF save and byte preservation; question image/focus. Source read counts here are facade contracts; real source requests are verified by verify-written-exam-score-source.mjs. Evidence: ${out}`,
+    `PASS written exam UI: explicit analysis submission and loading; long-title filters at 320/390/768/1280/1440/1880; choice 7 + essay 4 reports; full-group charts, blank-feedback counts, class pagination, feedback dialogs; same-condition/type-return/reload cache reuse, forced refresh and failed-mock retry; typed source calls, refresh/filter/page preservation, account/semester/late-response recovery; materials-only XLSX+PDF save and byte preservation; question image/focus. Source read counts here are facade contracts; real source requests are verified by verify-written-exam-score-source.mjs. Evidence: ${out}`,
   );
 } catch (error) {
   await page?.screenshot({
