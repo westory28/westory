@@ -8,8 +8,9 @@ import {
 import { saveRhythmPublication } from "../../../../lib/rhythmPublication";
 import { useAppToast } from "../../AppToastProvider";
 import { InlineLoading } from "../../LoadingState";
+import { prepareWeplayIntroAudio } from "../weplayIntroAudio";
 import useRhythmPublication from "./useRhythmPublication";
-import RhythmGame from "./RhythmGame";
+import RhythmOpening from "./RhythmOpening";
 import "./rhythm.css";
 import "../../portalPage.css";
 
@@ -78,12 +79,12 @@ export default function RhythmGameEntry({
   if (teacher && !canRead)
     return <p role="alert">위플레이 관리 화면을 볼 권한이 없습니다.</p>;
   return (
-    <div className="ws-page rhythm-entry">
+    <div className="ws-page rhythm-entry" tabIndex={-1}>
       <Link className="weplay-catalog-back" to={`/${portal}/weplay`}>
         ← 전체 게임
       </Link>
       <div className="ws-page-header rhythm-entry-heading">
-        <h1>덩기덕 쿵더Rock</h1>
+        <h1 tabIndex={-1}>덩기덕 쿵더Rock</h1>
       </div>
       {teacher && (
         <div className="rhythm-publication">
@@ -113,7 +114,10 @@ export default function RhythmGameEntry({
           )}
           <button
             type="button"
-            onClick={() => setPreview(!preview)}
+            onClick={() => {
+              if (!preview) prepareWeplayIntroAudio();
+              setPreview(!preview);
+            }}
             aria-pressed={preview}
           >
             {preview ? "미리보기 닫기" : "미리보기"}
@@ -141,7 +145,7 @@ export default function RhythmGameEntry({
       )}
       {((teacher && preview) ||
         (!teacher && publication.status === "open")) && (
-        <RhythmGame
+        <RhythmOpening
           key={`${portal}/${scope}`}
           preview={teacher}
           playable={teacher || publication.status === "open"}

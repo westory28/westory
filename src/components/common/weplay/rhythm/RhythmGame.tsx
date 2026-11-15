@@ -29,7 +29,9 @@ import {
   findHit,
   getJudgement,
   type DrumKind,
+  type DrumHand,
   type RhythmDifficulty,
+  type RhythmJudgement,
 } from "./rhythmCore";
 import {
   isWeplayAudioMuted,
@@ -45,10 +47,27 @@ const DIFFICULTIES: { id: RhythmDifficulty; name: string }[] = [
   { id: "hard", name: "휘모리 장단" },
 ];
 const JUDGEMENT_TEXT = {
-  perfect: "얼쑤!",
-  good: "좋아요",
-  ok: "이어가요",
+  perfect: "지화자 좋다!",
+  good: "얼씨구",
+  ok: "좋다",
   miss: "아쉬워요",
+};
+const JUDGEMENT_POINTS = { perfect: 1000, good: 650, ok: 300, miss: 0 };
+const HIT_SPOTS = [
+  { kind: "rim", hand: "left", x: 0.28, y: 0.12, key: "Z" },
+  { kind: "rim", hand: "right", x: 0.72, y: 0.12, key: "X" },
+  { kind: "center", hand: "left", x: 0.38, y: 0.32, key: "←" },
+  { kind: "center", hand: "right", x: 0.62, y: 0.32, key: "→" },
+] as const;
+type CollectedNote = {
+  id: number;
+  kind: DrumKind;
+  hand: DrumHand;
+  grade: RhythmJudgement;
+  x: number;
+  y: number;
+  dx: number;
+  dy: number;
 };
 
 export default function RhythmGame({
@@ -67,13 +86,29 @@ export default function RhythmGame({
   const [elapsed, setElapsed] = useState(0);
   const [score, setScore] = useState(createScore);
   const [feedback, setFeedback] = useState("");
+  const [feedbackGrade, setFeedbackGrade] = useState<RhythmJudgement | null>(
+    null,
+  );
+  const [collected, setCollected] = useState<CollectedNote[]>([]);
+  const [arrivalId, setArrivalId] = useState(0);
+  const [handStrikes, setHandStrikes] = useState<
+    Partial<Record<DrumHand, { id: number; kind: DrumKind }>>
+  >({});
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const scoreTargetRef = useRef<HTMLElement>(null);
   const [lastStrike, setLastStrike] = useState<{
     kind: DrumKind;
     at: number;
     id: number;
   } | null>(null);
   const [effects, setEffects] = useState<
-    { id: number; kind: DrumKind; x: number; y: number }[]
+    {
+      id: number;
+      kind: DrumKind;
+      grade: RhythmJudgement | "tap";
+      x: number;
+      y: number;
+    }[]
   >([]);
   const strikeId = useRef(0);
   const drumArtRef = useRef<HTMLDivElement>(null);
@@ -183,6 +218,10 @@ export default function RhythmGame({
     setScore(scoreRef.current);
     setElapsed(0);
     setFeedback("");
+    setFeedbackGrade(null);
+    setCollected([]);
+    setHandStrikes({});
+    setArrivalId(0);
     setLastStrike(null);
     setEffects([]);
     setError("");
@@ -267,6 +306,7 @@ export default function RhythmGame({
         judged.current.add(note.id);
         next = applyJudgement(next, "miss");
         setFeedback(JUDGEMENT_TEXT.miss);
+        setFeedbackGrade("miss");
         setFeedbackId((value) => value + 1);
       }
       if (next !== scoreRef.current) {
@@ -285,7 +325,7 @@ export default function RhythmGame({
   }, [phase, chart, song.duration, offset, finish, pause]);
 
   const strike = useCallback(
-    (kind: DrumKind, point?: { x: number; y: number }) => {
+    (kind: DrumKind, hand: DrumHand, point?: { x: number; y: number }) => {
       if (
         phaseRef.current !== "playing" ||
         !playableRef.current ||
@@ -298,25 +338,73 @@ export default function RhythmGame({
       audio.current.hit(kind);
       const id = ++strikeId.current;
       setLastStrike({ kind, at: now, id });
+      setHandStrikes((previous) => ({ ...previous, [hand]: { id, kind } }));
+      const note = findHit(
+        chart,
+        judged.current,
+        kind,
+        now - offset / 1000,
+        hand,
+      );
+      const grade = note
+        ? getJudgement(now - offset / 1000 - note.time)
+        : "tap";
+      const spot = HIT_SPOTS.find(
+        (item) => item.kind === kind && item.hand === hand,
+      )!;
       setEffects((previous) => [
         ...previous.slice(-7),
         {
           id,
           kind,
-          x: point?.x ?? (kind === "center" ? 0.5 : 0.24),
-          y: point?.y ?? (kind === "center" ? 0.32 : 0.12),
+          grade,
+          x: point?.x ?? spot.x,
+          y: point?.y ?? spot.y,
         },
       ]);
-      const note = findHit(chart, judged.current, kind, now - offset / 1000);
       if (!note) return;
       const judgement = getJudgement(now - offset / 1000 - note.time);
+      const canvas = canvasRef.current;
+      const source = canvas?.querySelector(`[data-note-id="${note.id}"]`);
+      const target = scoreTargetRef.current;
+      if (canvas && source && target) {
+        const rect = canvas.getBoundingClientRect();
+        const from = source.getBoundingClientRect();
+        const to = target.getBoundingClientRect();
+        const origin = rhythmPointerPosition(
+          rect,
+          from.x + from.width / 2,
+          from.y + from.height / 2,
+          stage.rotated,
+        );
+        const destination = rhythmPointerPosition(
+          rect,
+          to.x + to.width / 2,
+          to.y + to.height / 2,
+          stage.rotated,
+        );
+        setCollected((items) => [
+          ...items.slice(-11),
+          {
+            id,
+            kind,
+            hand,
+            grade: judgement,
+            x: origin.x * canvas.clientWidth,
+            y: origin.y * canvas.clientHeight,
+            dx: (destination.x - origin.x) * canvas.clientWidth,
+            dy: (destination.y - origin.y) * canvas.clientHeight,
+          },
+        ]);
+      }
       judged.current.add(note.id);
       scoreRef.current = applyJudgement(scoreRef.current, judgement);
       setScore(scoreRef.current);
       setFeedback(JUDGEMENT_TEXT[judgement]);
+      setFeedbackGrade(judgement);
       setFeedbackId(id);
     },
-    [chart, offset],
+    [chart, offset, stage.rotated],
   );
   useEffect(() => {
     if (!lastStrike) return;
@@ -365,7 +453,12 @@ export default function RhythmGame({
             : null;
       if (kind && phaseRef.current === "playing") {
         event.preventDefault();
-        strike(kind);
+        strike(
+          kind,
+          event.code === "ArrowLeft" || event.code === "KeyZ"
+            ? "left"
+            : "right",
+        );
       }
     };
     window.addEventListener("keydown", key);
@@ -380,6 +473,8 @@ export default function RhythmGame({
     setElapsed(0);
     setError("");
     setEffects([]);
+    setCollected([]);
+    setHandStrikes({});
   };
   const active =
     phase === "playing" || phase === "paused" || phase === "starting";
@@ -413,7 +508,7 @@ export default function RhythmGame({
       tabIndex={-1}
       aria-label="덩기덕 쿵더Rock 경기장"
     >
-      <div className="rhythm-canvas">
+      <div className="rhythm-canvas" ref={canvasRef}>
         {stage.portrait ? (
           <div className="rhythm-orientation-gate" role="status">
             <RhythmMascot />
@@ -474,11 +569,15 @@ export default function RhythmGame({
                     },
                     {
                       title: "키보드",
-                      text: "← / →는 가운데, Z / X는 가장자리입니다. Escape는 일시정지입니다. 북 버튼은 Enter와 Space로도 칠 수 있습니다.",
+                      text: "노트의 왼·오에 맞춰 치세요. ← / Z는 왼손, → / X는 오른손입니다. 방향키는 가운데, Z / X는 가장자리입니다. 모바일은 북 위의 원을 누르세요. Escape는 일시정지, Enter와 Space는 선택한 북 버튼입니다.",
                     },
                     {
                       title: "소리와 판정",
                       text: "소리가 늦게 들리면 시작 전에 판정 시차를 조절하세요. 점수는 이번 연주에만 표시됩니다.",
+                    },
+                    {
+                      title: "판정과 점수",
+                      text: "지화자 좋다! 1,000점 · 얼씨구 650점 · 좋다 300점. 연속으로 맞히면 콤보가 쌓입니다.",
                     },
                   ]}
                 />
@@ -618,9 +717,9 @@ export default function RhythmGame({
                     {[
                       ["정확도", `${accuracy}%`],
                       ["최대 이어치기", score.maxCombo],
-                      ["얼쑤", score.perfect],
-                      ["좋아요", score.good],
-                      ["이어가요", score.ok],
+                      ["지화자 좋다!", score.perfect],
+                      ["얼씨구", score.good],
+                      ["좋다", score.ok],
                       ["놓친 박자", score.miss],
                     ].map(([label, value]) => (
                       <div key={label}>
@@ -658,7 +757,11 @@ export default function RhythmGame({
                 <div className="rhythm-scorebar">
                   <div>
                     <span>{song.title}</span>
-                    <strong>
+                    <strong
+                      ref={scoreTargetRef}
+                      key={arrivalId}
+                      className={arrivalId ? "rhythm-score-arrival" : ""}
+                    >
                       {score.score.toLocaleString()}
                       <small>점</small>
                     </strong>
@@ -696,6 +799,7 @@ export default function RhythmGame({
                         <div
                           key={note.id}
                           data-kind={note.kind}
+                          data-hand={note.hand}
                           data-note-id={note.id}
                           className={`rhythm-note rhythm-note--${note.kind}`}
                           style={{
@@ -703,6 +807,9 @@ export default function RhythmGame({
                           }}
                         >
                           <RhythmNoteArt kind={note.kind} />
+                          <b className="rhythm-note-hand">
+                            {note.hand === "left" ? "왼" : "오"}
+                          </b>
                           <span>{note.kind === "center" ? "쿵" : "덕"}</span>
                         </div>
                       ))}
@@ -724,12 +831,20 @@ export default function RhythmGame({
                     </div>
                     <div
                       key={feedbackId}
-                      className={`rhythm-feedback${feedback === "얼쑤!" ? " rhythm-feedback--perfect" : ""}`}
+                      className={`rhythm-feedback rhythm-feedback--${feedbackGrade || "count"}`}
+                      data-grade={feedbackGrade}
                       aria-hidden="true"
                     >
                       {elapsed < COUNT_IN_SECONDS
                         ? Math.max(1, Math.ceil(COUNT_IN_SECONDS - elapsed))
                         : feedback}
+                      {elapsed >= COUNT_IN_SECONDS &&
+                        feedbackGrade &&
+                        feedbackGrade !== "miss" && (
+                          <small>
+                            +{JUDGEMENT_POINTS[feedbackGrade].toLocaleString()}
+                          </small>
+                        )}
                     </div>
                     {score.combo > 0 && score.combo % 10 === 0 && (
                       <div
@@ -766,45 +881,62 @@ export default function RhythmGame({
                               event.clientY,
                               stage.rotated,
                             );
-                            const kind = classifyDrumHit(point.x, point.y);
+                            const hitButton = (
+                              event.target as Element
+                            ).closest<HTMLButtonElement>("[data-hit-kind]");
+                            const kind = hitButton
+                              ? (hitButton.dataset.hitKind as DrumKind)
+                              : classifyDrumHit(point.x, point.y);
                             if (kind) {
                               event.preventDefault();
-                              strike(kind, point);
+                              if (hitButton) {
+                                strike(
+                                  hitButton.dataset.hitKind as DrumKind,
+                                  hitButton.dataset.hand as DrumHand,
+                                );
+                              } else
+                                strike(
+                                  kind,
+                                  point.x < 0.5 ? "left" : "right",
+                                  point,
+                                );
                             }
                           }}
                         >
-                          <button
-                            type="button"
-                            className="rhythm-rim-button"
-                            aria-label="북 가장자리 덕 (Z 또는 X)"
-                            disabled={phase !== "playing" || !playable}
-                            onClick={(event) => {
-                              if (event.detail === 0) strike("rim");
-                            }}
-                          >
-                            <span>
-                              덕 <kbd>Z · X</kbd>
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            className="rhythm-center-button"
-                            aria-label="북 가운데 쿵 (왼쪽 또는 오른쪽 방향키)"
-                            disabled={phase !== "playing" || !playable}
-                            onClick={(event) => {
-                              if (event.detail === 0) strike("center");
-                            }}
-                          >
-                            <span>
-                              쿵 <kbd>← · →</kbd>
-                            </span>
-                          </button>
+                          {HIT_SPOTS.map((spot) => (
+                            <button
+                              key={`${spot.hand}-${spot.kind}`}
+                              type="button"
+                              className={`rhythm-hit-spot rhythm-${spot.kind}-button`}
+                              data-hit-kind={spot.kind}
+                              data-hand={spot.hand}
+                              style={{
+                                left: `${spot.x * 100}%`,
+                                top: `${spot.y * 100}%`,
+                              }}
+                              aria-label={`${spot.hand === "left" ? "왼손" : "오른손"} ${spot.kind === "center" ? "가운데 쿵" : "가장자리 덕"} (${spot.key})`}
+                              disabled={phase !== "playing" || !playable}
+                              onClick={(event) => {
+                                if (event.detail === 0)
+                                  strike(spot.kind, spot.hand);
+                              }}
+                            >
+                              <span>
+                                {spot.hand === "left" ? "왼" : "오"}
+                                <small>
+                                  {spot.kind === "center" ? "쿵" : "덕"}
+                                </small>
+                                <kbd>{spot.key}</kbd>
+                              </span>
+                            </button>
+                          ))}
                         </div>
                         <div className="rhythm-hit-effects" aria-hidden="true">
                           {effects.map((effect) => (
                             <div
                               key={effect.id}
-                              className={`rhythm-hit-effect rhythm-hit-effect--${effect.kind}`}
+                              className={`rhythm-hit-effect rhythm-hit-effect--${effect.kind} rhythm-hit-effect--${effect.grade}`}
+                              data-grade={effect.grade}
                               style={{
                                 left: `${effect.x * 100}%`,
                                 top: `${effect.y * 100}%`,
@@ -819,23 +951,58 @@ export default function RhythmGame({
                               }}
                             >
                               <i className="rhythm-shockwave" />
+                              {effect.grade === "perfect" && (
+                                <i className="rhythm-shockwave rhythm-shockwave--echo" />
+                              )}
                               <b>{effect.kind === "center" ? "쿵!" : "덕!"}</b>
-                              {Array.from({ length: 7 }, (_, index) => (
-                                <i
-                                  key={index}
-                                  className="rhythm-spark"
-                                  style={
-                                    {
-                                      "--angle": `${index * (360 / 7)}deg`,
-                                      "--travel": `${36 + (index % 3) * 18}px`,
-                                    } as CSSProperties
-                                  }
-                                />
-                              ))}
+                              {Array.from(
+                                {
+                                  length:
+                                    effect.grade === "perfect"
+                                      ? 12
+                                      : effect.grade === "good"
+                                        ? 6
+                                        : effect.grade === "ok"
+                                          ? 3
+                                          : 0,
+                                },
+                                (_, index) => (
+                                  <i
+                                    key={index}
+                                    className="rhythm-spark"
+                                    style={
+                                      {
+                                        "--angle": `${index * (360 / (effect.grade === "perfect" ? 12 : effect.grade === "good" ? 6 : 3))}deg`,
+                                        "--travel": `${36 + (index % 3) * 18}px`,
+                                      } as CSSProperties
+                                    }
+                                  />
+                                ),
+                              )}
                             </div>
                           ))}
                         </div>
                       </div>
+                    </div>
+                    <div className="rhythm-mallets" aria-hidden="true">
+                      {(["left", "right"] as const).map((hand) => (
+                        <div
+                          className={`rhythm-mallet-position rhythm-mallet-position--${hand}`}
+                          key={hand}
+                        >
+                          <img
+                            key={handStrikes[hand]?.id || 0}
+                            className={`rhythm-mallet rhythm-mallet--${hand}${handStrikes[hand] ? " rhythm-mallet--striking" : ""}`}
+                            data-kind={handStrikes[hand]?.kind || "center"}
+                            data-strike-id={handStrikes[hand]?.id || 0}
+                            src={rhythmAsset(`mallet-${hand}`)}
+                            alt=""
+                            width={320}
+                            height={512}
+                            draggable={false}
+                          />
+                        </div>
+                      ))}
                     </div>
                     <div className="rhythm-play-legend">
                       <span>
@@ -891,6 +1058,36 @@ export default function RhythmGame({
             )}
           </>
         )}
+        <div className="rhythm-collection-layer" aria-hidden="true">
+          {collected.map((note) => (
+            <div
+              key={note.id}
+              className={`rhythm-collected-note rhythm-collected-note--${note.grade}`}
+              data-grade={note.grade}
+              style={
+                {
+                  left: note.x,
+                  top: note.y,
+                  "--collect-x": `${note.dx}px`,
+                  "--collect-y": `${note.dy}px`,
+                } as CSSProperties
+              }
+              onAnimationEnd={(event) => {
+                if (event.target !== event.currentTarget) return;
+                setCollected((items) =>
+                  items.filter((item) => item.id !== note.id),
+                );
+                setArrivalId(note.id);
+              }}
+            >
+              <RhythmNoteArt kind={note.kind} />
+              <b className="rhythm-note-hand">
+                {note.hand === "left" ? "왼" : "오"}
+              </b>
+              <strong>+{JUDGEMENT_POINTS[note.grade].toLocaleString()}</strong>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );

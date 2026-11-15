@@ -212,11 +212,13 @@ const pageFor = async (width = 1280, height = 900, fallback = true) => {
         buffers: 0,
         resumes: 0,
       };
+      window.rhythmContexts = [];
       const NativeAudio = window.AudioContext;
       window.AudioContext = class extends NativeAudio {
         constructor(...args) {
           super(...args);
           window.rhythmSound.contexts++;
+          window.rhythmContexts.push(this);
         }
         createOscillator(...args) {
           window.rhythmSound.oscillators++;
@@ -243,7 +245,37 @@ const frames = (page) =>
         requestAnimationFrame(() => requestAnimationFrame(resolve)),
       ),
   );
-const phase = (page, value) => page.locator(`.rhythm-game--${value}`).waitFor();
+const phase = async (page, value) => {
+  if (value === "ready") {
+    await page
+      .locator(".rhythm-game--ready, .weplay-studio-intro")
+      .first()
+      .waitFor();
+    if (await page.locator(".weplay-studio-intro").count()) {
+      const before = await readCount(page);
+      if (page.viewportSize().width === 1440) {
+        await page
+          .locator(".weplay-studio-intro")
+          .click({ position: { x: 20, y: 20 } });
+        await page.waitForFunction(() => window.rhythmSound.buffers > 0);
+        await shot(page, "1440x1000-opening");
+      }
+      await page.evaluate(() => {
+        window.rhythmQA.intros = (window.rhythmQA.intros || 0) + 1;
+      });
+      await page.getByRole("button", { name: /건너뛰기/ }).click();
+      assert.equal(
+        await readCount(page),
+        before,
+        "intro completion adds zero reads",
+      );
+      await page.waitForFunction(() =>
+        window.rhythmContexts.every((context) => context.state === "closed"),
+      );
+    }
+  }
+  await page.locator(`.rhythm-game--${value}`).waitFor();
+};
 const readCount = (page) => page.evaluate(() => window.rhythmQA.reads.length);
 const hitCount = (page) => page.evaluate(() => window.rhythmQA.hits.length);
 const score = (page) =>
@@ -331,6 +363,90 @@ const key = async (page, code, repeat = false) =>
       ),
     { code, repeat },
   );
+const hitSpot = (page, kind, hand) =>
+  page.locator(`[data-hit-kind="${kind}"][data-hand="${hand}"]`);
+const spotPosition = (kind, hand) => ({
+  x:
+    kind === "center"
+      ? hand === "left"
+        ? 0.38
+        : 0.62
+      : hand === "left"
+        ? 0.28
+        : 0.72,
+  y: kind === "center" ? 0.32 : 0.12,
+});
+const tapSpot = async (page, kind, hand, edge = false) => {
+  const p = spotPosition(kind, hand);
+  return tap(page, p.x + (edge ? (hand === "left" ? 0.03 : -0.03) : 0), p.y);
+};
+const noteKey = (note) =>
+  note.kind === "center"
+    ? note.hand === "left"
+      ? "ArrowLeft"
+      : "ArrowRight"
+    : note.hand === "left"
+      ? "KeyZ"
+      : "KeyX";
+const malletIds = (page) =>
+  page
+    .locator(".rhythm-mallet")
+    .evaluateAll((elements) =>
+      Object.fromEntries(
+        elements.map((el) => [
+          el.classList.contains("rhythm-mallet--left") ? "left" : "right",
+          Number(el.dataset.strikeId),
+        ]),
+      ),
+    );
+const combo = (page) =>
+  page
+    .locator(".rhythm-combo strong")
+    .evaluate((el) => Number(el.textContent.replace(/\D/g, "")));
+const targetCenter = (page) =>
+  page.locator(".rhythm-scorebar > div:first-child strong").evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
+const collectCheck = async (page, target, grade) => {
+  const result = await page
+    .locator(`.rhythm-collected-note--${grade}`)
+    .last()
+    .evaluate((el) => {
+      const animation = el
+        .getAnimations()
+        .find((item) => item.animationName === "rhythm-collect");
+      if (!animation) throw Error("Missing note collection animation");
+      animation.pause();
+      animation.currentTime = 600;
+      const r = el.getBoundingClientRect(),
+        duration = animation.effect.getTiming().duration;
+      const result = {
+        x: r.x + r.width / 2,
+        y: r.y + r.height / 2,
+        duration,
+        points: el.querySelector("strong").textContent,
+      };
+      animation.finish();
+      return result;
+    });
+  assert(
+    Math.hypot(result.x - target.x, result.y - target.y) < 1,
+    `collection reaches physical score target after rotation: ${JSON.stringify({ target, result })}`,
+  );
+  assert.equal(result.duration, 600);
+  assert.equal(
+    result.points,
+    grade === "perfect" ? "+1,000" : grade === "good" ? "+650" : "+300",
+  );
+  await page
+    .locator(`.rhythm-collected-note--${grade}`)
+    .waitFor({ state: "detached" });
+  await page.waitForFunction(() => {
+    const el = document.querySelector(".rhythm-score-arrival");
+    return el && getComputedStyle(el).animationName === "rhythm-score-arrival";
+  });
+};
 const start = async (page) => {
   await time(page, 0);
   await page.getByRole("button", { name: "연주 시작", exact: false }).click();
@@ -619,20 +735,31 @@ try {
           .toJSON(),
       }));
     const beforeFocus = await focusGeometry();
-    await page.locator(".rhythm-rim-button").focus();
-    await page.keyboard.press("Tab");
     assert.equal(
-      await page
-        .locator(".rhythm-center-button")
-        .evaluate((el) => el === document.activeElement),
-      true,
-      "Tab reaches center button",
+      await page.locator(".rhythm-hit-spot").count(),
+      4,
+      "four distinct hand/surface controls",
     );
-    assert.deepEqual(
-      await focusGeometry(),
-      beforeFocus,
-      "drum geometry remains fixed after keyboard focus",
-    );
+    await hitSpot(page, "rim", "left").focus();
+    for (const [kind, hand] of [
+      ["rim", "right"],
+      ["center", "left"],
+      ["center", "right"],
+    ]) {
+      await page.keyboard.press("Tab");
+      assert.equal(
+        await hitSpot(page, kind, hand).evaluate(
+          (el) => el === document.activeElement,
+        ),
+        true,
+        `Tab reaches ${hand} ${kind}`,
+      );
+      assert.deepEqual(
+        await focusGeometry(),
+        beforeFocus,
+        "drum geometry remains fixed after keyboard focus",
+      );
+    }
     const activationStart = await hitCount(page);
     await page.keyboard.down("Enter");
     await page.keyboard.down("Enter");
@@ -640,7 +767,7 @@ try {
     assert.equal(
       await hitCount(page),
       activationStart + 1,
-      "Enter repeat causes one accessible center hit",
+      "Enter repeat causes one accessible hit",
     );
     await page.keyboard.down("Space");
     await page.keyboard.down("Space");
@@ -648,21 +775,87 @@ try {
     assert.equal(
       await hitCount(page),
       activationStart + 2,
-      "Space repeat causes one accessible center hit",
+      "Space repeat causes one accessible hit",
     );
     await page.locator(".rhythm-game").focus();
-    const keyStart = await hitCount(page);
-    for (const code of ["ArrowLeft", "ArrowRight", "KeyZ", "KeyX"])
+    for (const [code, kind, hand] of [
+      ["ArrowLeft", "center", "left"],
+      ["ArrowRight", "center", "right"],
+      ["KeyZ", "rim", "left"],
+      ["KeyX", "rim", "right"],
+    ]) {
+      const beforeIds = await malletIds(page),
+        beforeHits = await hitCount(page);
       await key(page, code);
-    assert.deepEqual(
+      const afterIds = await malletIds(page);
+      assert(
+        afterIds[hand] > beforeIds[hand],
+        `${code} animates ${hand} mallet`,
+      );
+      const other = hand === "left" ? "right" : "left";
+      assert.equal(
+        afterIds[other],
+        beforeIds[other],
+        "opposite mallet remains independent",
+      );
+      assert.equal(await hitCount(page), beforeHits + 1);
+      assert.equal(
+        await page.evaluate(() => window.rhythmQA.hits.at(-1)),
+        kind,
+      );
+    }
+    await page.evaluate(() => {
+      window.rhythmQA.leftMallet = document.querySelector(
+        ".rhythm-mallet--left",
+      );
+      window.rhythmQA.rightMallet = document.querySelector(
+        ".rhythm-mallet--right",
+      );
+    });
+    await key(page, "ArrowLeft");
+    assert(
       await page.evaluate(
-        (start) => window.rhythmQA.hits.slice(start),
-        keyStart,
+        () =>
+          window.rhythmQA.leftMallet !==
+            document.querySelector(".rhythm-mallet--left") &&
+          window.rhythmQA.rightMallet ===
+            document.querySelector(".rhythm-mallet--right"),
       ),
-      ["center", "center", "rim", "rim"],
-      "all four physical keys",
+      "same-hand retrigger replaces only that mallet animation",
     );
+    for (const kind of ["center", "rim"])
+      for (const hand of ["left", "right"]) {
+        for (const edge of [false, true]) {
+          const before = await hitCount(page),
+            ids = await malletIds(page);
+          await tapSpot(page, kind, hand, edge);
+          assert.equal(
+            await hitCount(page),
+            before + 1,
+            `${hand} ${kind} ${edge ? "edge" : "center"} touch registers exactly once`,
+          );
+          assert.equal(
+            await page.evaluate(() => window.rhythmQA.hits.at(-1)),
+            kind,
+          );
+          const after = await malletIds(page);
+          assert(after[hand] > ids[hand]);
+          assert.equal(
+            after[hand === "left" ? "right" : "left"],
+            ids[hand === "left" ? "right" : "left"],
+          );
+          assert.equal(
+            await page
+              .locator(`.rhythm-mallet--${hand}`)
+              .evaluate((el) => getComputedStyle(el).animationName),
+            `rhythm-mallet-${kind}`,
+          );
+        }
+      }
     const notes = await page.evaluate(() => window.rhythmQA.chart());
+    await page.waitForFunction(
+      () => document.querySelectorAll(".rhythm-hit-effect").length === 0,
+    );
     // Physical pointer positions are transformed by the actual DOM and game inverse.
     const first = notes[0];
     await time(page, first.time);
@@ -690,16 +883,50 @@ try {
       "cropped lower half is not touchable",
     );
     const wrong = first.kind === "center" ? "rim" : "center";
-    await tap(page, 0.5, wrong === "center" ? 0.3 : 0.06);
-    assert.equal(await score(page), 0, "wrong type does not consume note");
-    const correctPoint = await tap(
-      page,
-      0.5,
-      first.kind === "center" ? 0.3 : 0.06,
+    await tapSpot(page, wrong, first.hand);
+    assert.equal(await score(page), 0, "wrong surface does not consume note");
+    await tapSpot(page, first.kind, first.hand === "left" ? "right" : "left");
+    assert.equal(
+      await score(page),
+      0,
+      "correct surface with wrong hand cannot score",
     );
-    assert.equal(await score(page), 1000, "perfect transformed touch");
+    await page.waitForFunction(
+      () => document.querySelectorAll(".rhythm-hit-effect").length === 0,
+    );
+    const firstTarget = await targetCenter(page);
+    const correctPoint = await tapSpot(page, first.kind, first.hand);
+    assert.equal(
+      await score(page),
+      1000,
+      "perfect transformed matching-hand touch",
+    );
+    assert.equal(
+      await page.locator(".rhythm-feedback").textContent(),
+      "지화자 좋다!+1,000",
+    );
+    assert.equal(
+      await page.locator(".rhythm-hit-effect--perfect .rhythm-spark").count(),
+      12,
+    );
+    assert.equal(
+      await page
+        .locator(".rhythm-hit-effect--perfect .rhythm-shockwave")
+        .count(),
+      2,
+    );
+    assert.equal(
+      await page.locator(".rhythm-collected-note--perfect").count(),
+      1,
+      "one scored note creates one score flight",
+    );
+    await page.locator(".rhythm-collected-note--perfect").evaluate((el) => {
+      const animation = el.getAnimations()[0];
+      animation.pause();
+      animation.currentTime = 200;
+    });
     const firstHits = await hitCount(page);
-    await tap(page, 0.5, first.kind === "center" ? 0.3 : 0.06);
+    await tapSpot(page, first.kind, first.hand);
     assert.equal(await score(page), 1000, "same note never scores twice");
     assert.equal(
       await hitCount(page),
@@ -734,13 +961,46 @@ try {
     await page.screenshot({
       path: path.join(evidence, `${label}-play-viewport.png`),
     });
-    const second = notes.find((note) => note.time > first.time + 0.2);
-    await time(page, second.time);
-    const repeatBefore = await hitCount(page);
-    await key(page, second.kind === "center" ? "ArrowLeft" : "KeyZ", true);
+    await collectCheck(page, firstTarget, "perfect");
+    const second = notes[1];
+    await time(page, second.time + 0.1);
+    const secondTarget = await targetCenter(page),
+      repeatBefore = await hitCount(page);
+    await key(page, noteKey(second), true);
     assert.equal(await hitCount(page), repeatBefore, "repeat key suppressed");
-    await key(page, second.kind === "center" ? "ArrowRight" : "KeyX");
-    assert.equal(await score(page), 2000, "arrow/Z/X mapped to second note");
+    await key(page, noteKey(second));
+    assert.equal(await score(page), 1650, "great hit adds exactly 650");
+    assert.equal(
+      await page.locator(".rhythm-feedback").textContent(),
+      "얼씨구+650",
+    );
+    assert.equal(
+      await page.locator(".rhythm-hit-effect--good .rhythm-spark").count(),
+      6,
+    );
+    await collectCheck(page, secondTarget, "good");
+    const third = notes[2];
+    await time(page, third.time + 0.15);
+    const thirdTarget = await targetCenter(page);
+    await tapSpot(page, third.kind, third.hand, true);
+    assert.equal(await score(page), 1950, "good hit adds exactly 300");
+    assert.equal(
+      await page.locator(".rhythm-feedback").textContent(),
+      "좋다+300",
+    );
+    assert.equal(
+      await page.locator(".rhythm-hit-effect--ok .rhythm-spark").count(),
+      3,
+    );
+    assert.equal(await combo(page), 3);
+    await collectCheck(page, thirdTarget, "ok");
+    await time(page, notes[3].time + 0.161);
+    assert.equal(await score(page), 1950, "miss adds zero points");
+    assert.equal(await combo(page), 0, "miss resets combo");
+    assert.equal(
+      await page.locator(".rhythm-feedback").textContent(),
+      "아쉬워요",
+    );
     await page.getByRole("button", { name: "일시정지", exact: true }).click();
     await phase(page, "paused");
     await page.waitForFunction(
@@ -774,7 +1034,7 @@ try {
       await page
         .locator(".rhythm-result-score")
         .evaluate((el) => Number(el.textContent.replace(/\D/g, ""))),
-      2000,
+      1950,
     );
     assert.equal(
       await page
@@ -826,6 +1086,9 @@ try {
     checks.push({
       viewport: label,
       portraitFallback: portrait,
+      introSeen: await page.evaluate(() => window.rhythmQA.intros || 0),
+      handAndJudgementChecks:
+        "four spot centers/edges; strict hand/type; three grades; score flight and arrival; independent mallets",
       layout,
       pointer: { outside, lower, correctPoint },
       sound,
@@ -970,6 +1233,8 @@ try {
     "drum",
     "title-logo",
     "start-plaque",
+    "mallet-left",
+    "mallet-right",
   ])
     assert(
       assets.has(`/assets/weplay/rhythm/v2/${name}.webp`),

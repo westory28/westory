@@ -64,8 +64,10 @@ for (const song of songs) {
           n.time >= 3 &&
           n.time < song.duration - 1 &&
           ["center", "rim"].includes(n.kind) &&
+          n.hand === (i % 2 === 0 ? "left" : "right") &&
           (i === 0 || n.time > chart[i - 1].time),
       ),
+      `${song.id}/${difficulty}: sorted chart alternates left/right from the first left hand`,
     );
     assert(chart.some((n) => n.kind === "rim"));
     assert(chart.some((n) => n.kind === "center"));
@@ -76,6 +78,28 @@ for (const song of songs) {
     `${song.id}: density should increase`,
   );
 }
+// Assign hands after time sorting and merging simultaneous melody onsets.
+const unorderedSong = {
+  ...songs[0],
+  id: "unordered-ties",
+  bpm: 120,
+  totalBeats: 0,
+  melody: [2, 0, 1, 1, 3].map((beat) => ({ beat, length: 0.25, pitch: 60 })),
+};
+const orderedChart = core.createChart(unorderedSong, "hard");
+assert.deepEqual(
+  Array.from(orderedChart, (note) => note.time),
+  [3, 3.5, 4, 4.5],
+);
+assert.deepEqual(
+  Array.from(orderedChart, (note) => note.hand),
+  ["left", "right", "left", "right"],
+);
+assert.deepEqual(
+  orderedChart,
+  core.createChart(unorderedSong, "hard"),
+  "Tied onsets retain deterministic alternating hands",
+);
 for (const sign of [-1, 1]) {
   assert.equal(core.getJudgement(sign * 0.065), "perfect");
   assert.equal(core.getJudgement(sign * 0.0651), "good");
@@ -87,11 +111,86 @@ for (const sign of [-1, 1]) {
 for (const delta of [NaN, Infinity, -Infinity])
   assert.equal(core.getJudgement(delta), "miss");
 const notes = [
-  { id: "a", time: 3, kind: "center" },
-  { id: "b", time: 3.2, kind: "rim" },
-  { id: "c", time: 3.4, kind: "center" },
+  { id: "a", time: 3, kind: "center", hand: "left" },
+  { id: "b", time: 3.2, kind: "rim", hand: "right" },
+  { id: "c", time: 3.4, kind: "center", hand: "left" },
 ];
 const judged = new Set();
+assert.equal(
+  core.findHit(notes, judged, "center", 3, "right"),
+  null,
+  "Correct surface with wrong hand does not consume a note",
+);
+assert.equal(judged.size, 0);
+assert.equal(core.findHit(notes, judged, "center", 3, "left")?.id, "a");
+assert.equal(core.findHit(notes, judged, "rim", 3.2, "left"), null);
+assert.equal(core.findHit(notes, judged, "rim", 3.2, "right")?.id, "b");
+for (const note of notes) {
+  for (const sign of [-1, 1]) {
+    assert.equal(
+      core.findHit(
+        [note],
+        judged,
+        note.kind,
+        note.time + sign * 0.16,
+        note.hand,
+      )?.id,
+      note.id,
+      "Correct hand includes exact judgement boundary",
+    );
+    assert.equal(
+      core.findHit(
+        [note],
+        judged,
+        note.kind,
+        note.time + sign * 0.1601,
+        note.hand,
+      ),
+      null,
+      "Correct hand cannot exceed judgement boundary",
+    );
+    assert.equal(
+      core.findHit(
+        [note],
+        judged,
+        note.kind,
+        note.time + sign * 0.16,
+        note.hand === "left" ? "right" : "left",
+      ),
+      null,
+      "Wrong hand remains excluded at the judgement boundary",
+    );
+  }
+}
+const simultaneous = [
+  { id: "sim-left", time: 3, kind: "center", hand: "left" },
+  { id: "sim-right", time: 3, kind: "center", hand: "right" },
+  { id: "sim-later-left", time: 3.1, kind: "center", hand: "left" },
+];
+assert.equal(
+  core.findHit(simultaneous, judged, "center", 3, "left")?.id,
+  "sim-left",
+);
+assert.equal(
+  core.findHit(simultaneous, judged, "center", 3, "right")?.id,
+  "sim-right",
+  "Same-time tie still respects requested hand",
+);
+assert.equal(
+  core.findHit(simultaneous, new Set(["sim-left"]), "center", 3, "right")?.id,
+  "sim-right",
+  "Consuming the left note does not consume its simultaneous right note",
+);
+assert.equal(
+  core.findHit(simultaneous, judged, "center", 3.1, "right")?.id,
+  "sim-right",
+  "Nearest wrong-hand note cannot hide an eligible matching-hand note",
+);
+assert.equal(
+  core.findHit(simultaneous, judged, "center", 3.05, "left")?.id,
+  "sim-left",
+  "Equal-distance ties retain the earlier eligible note",
+);
 assert.equal(
   core.findHit(notes, judged, "rim", 3),
   null,
@@ -137,6 +236,16 @@ assert.equal(score.combo, 0);
 assert.equal(score.maxCombo, 3);
 assert.equal(score.score, 1950);
 assert.equal(score.miss, 1);
+let longCombo = core.createScore();
+for (let index = 0; index < 100; index++)
+  longCombo = core.applyJudgement(longCombo, "perfect");
+assert.equal(
+  longCombo.score,
+  100000,
+  "Combo accumulation adds no score multiplier",
+);
+assert.equal(longCombo.combo, 100);
+assert.equal(longCombo.maxCombo, 100);
 assert.equal(
   emptyScore.score,
   0,
@@ -417,7 +526,7 @@ await assert.rejects(
 assert.equal(contexts.at(-1).sources.length, 0);
 assert.equal(contexts.at(-1).state, "closed");
 console.log(
-  "Rhythm checks passed: four scores, chart density/determinism, timing and touch boundaries, duplicate/wrong hits, scoring, audio scheduling, pause/resume, mute, teardown, unsupported browser and server authorization (pending/allowed/denied/error/canceled/timeout).",
+  "Rhythm checks passed: four scores, chart density/determinism, alternating hands in all difficulties and tied onsets, strict hand/surface/timing matching, touch boundaries, duplicate hits, unchanged scoring without combo multipliers, audio scheduling, pause/resume, mute, teardown, unsupported browser and server authorization (pending/allowed/denied/error/canceled/timeout).",
 );
 
 if (process.argv.includes("--audio-render")) {

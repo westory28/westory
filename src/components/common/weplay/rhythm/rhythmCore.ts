@@ -1,6 +1,7 @@
 import type { RhythmSong } from "./rhythmSongs";
 
 export type DrumKind = "center" | "rim";
+export type DrumHand = "left" | "right";
 export type RhythmDifficulty = "easy" | "normal" | "hard";
 export type RhythmJudgement = "perfect" | "good" | "ok" | "miss";
 export interface RhythmNote {
@@ -8,6 +9,7 @@ export interface RhythmNote {
   /** Seconds on the audio clock, including the count-in. */
   time: number;
   kind: DrumKind;
+  hand: DrumHand;
 }
 
 export const COUNT_IN_SECONDS = 3;
@@ -29,13 +31,19 @@ export function findHit(
   judged: ReadonlySet<string>,
   kind: DrumKind,
   elapsed: number,
+  hand?: DrumHand,
 ): RhythmNote | null {
   if (!Number.isFinite(elapsed)) return null;
   let best: RhythmNote | null = null;
   let distance = HIT_WINDOW_SECONDS + TIMING_EPSILON;
   for (const note of notes) {
     if (note.time > elapsed + HIT_WINDOW_SECONDS + TIMING_EPSILON) break;
-    if (note.kind !== kind || judged.has(note.id)) continue;
+    if (
+      note.kind !== kind ||
+      (hand !== undefined && note.hand !== hand) ||
+      judged.has(note.id)
+    )
+      continue;
     const delta = Math.abs(note.time - elapsed);
     if (delta <= distance) {
       // Equal-distance hits prefer the earlier note, keeping ordered phrases intact.
@@ -131,5 +139,6 @@ export function createChart(
       id: `${song.id}-${difficulty}-${i}`,
       time: COUNT_IN_SECONDS + (beat / 1000) * secondsPerBeat,
       kind,
+      hand: i % 2 === 0 ? "left" : "right",
     }));
 }

@@ -166,7 +166,6 @@ export default function WeplayGameCatalog({
                   onClick={(event) => {
                     if (
                       portal === "student" &&
-                      game.id !== "gungdeok-rock" &&
                       !event.ctrlKey &&
                       !event.metaKey &&
                       !event.shiftKey &&

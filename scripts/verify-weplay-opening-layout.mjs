@@ -75,7 +75,7 @@ const params=new URLSearchParams(location.search),teacher=params.has('teacher');
 export const qa=window.openingQa={calls:[],writes:[],settings:${JSON.stringify({ ...core.DEFAULT_GAME_SETTINGS, enabled: true })}};
 export const config={year:'2026',semester:'2',showLesson:true,showQuiz:true,showScore:true};
 export const auth={currentUser:{uid:'opening-qa',email:teacher?'westoria28@gmail.com':'student@example.invalid',getIdTokenResult:async()=>({claims:{auth_time:Math.floor(Date.now()/1000)}})}};
-const state={config,currentUser:auth.currentUser,userData:{uid:'opening-qa',role:teacher?'teacher':'student',teacherPortalEnabled:teacher,staffPermissions:[],name:'검증 계정',weplayGuideCompleted:!params.has('guide')},loading:false,authPhase:'ready',configReady:true,menuConfigReady:true,menuConfig:MENUS,settingsLoadedAt:Date.now(),refreshConfig:async()=>{},refreshMenuConfig:async()=>{},refreshInterfaceConfig:async()=>{},logout:async()=>{}};
+const state={config,currentUser:auth.currentUser,userData:{uid:'opening-qa',role:teacher?'teacher':'student',teacherPortalEnabled:teacher,staffPermissions:[],name:'검증 계정',weplayGuideCompleted:!params.has('guide')},loading:false,authPhase:'ready',configReady:true,menuConfigReady:true,interfaceConfigReady:true,interfaceConfig:{},menuConfig:MENUS,settingsLoadedAt:Date.now(),refreshConfig:async()=>{},refreshMenuConfig:async()=>{},refreshInterfaceConfig:async()=>{},logout:async()=>{}};
 export const useAuth=()=>state;
 export const db={};
 const lessons=${JSON.stringify(lessons)},policy=${JSON.stringify(core.DEFAULT_POLICY)};
@@ -90,6 +90,9 @@ export const getHttpsCallable=async name=>async data=>{
  throw new Error('Unexpected service call: '+name);
 };
 export const getYutLobby=async()=>{qa.calls.push({name:'getYutLobby'});return {enabled:true,room:null,classes:[{id:'qa-class',label:'1학년 1반'}],classId:'qa-class',serverNowMs:Date.now()}};
+export const getYutPublication=async()=>{qa.calls.push({name:'getYutPublication'});return {enabled:true,settings:normalizeYutSettings()}};
+export const getRhythmPublication=async()=>{qa.calls.push({name:'getRhythmPublication'});return {enabled:true,revision:1}};
+export const saveRhythmPublication=async()=>{throw new Error('Unexpected rhythm publication write')};
 export const getYutManagement=async()=>{qa.calls.push({name:'getYutManagement'});return {settings:normalizeYutSettings(),rooms:[],truncated:false,serverNowMs:Date.now()}};
 export const saveYutSettings=async()=>{throw new Error('Unexpected Yut settings write')};
 export const commandYutRoom=async()=>{throw new Error('Unexpected Yut command')};
@@ -161,7 +164,7 @@ createRoot(document.getElementById('root')).render(new URLSearchParams(location.
           const request = args.path.replaceAll("\\", "/");
           let id = request in mocks ? request : null;
           if (
-            /contexts\/AuthContext$|lib\/(firebase|yut)$|^\.\/firebase$/.test(
+            /contexts\/AuthContext$|lib\/(firebase|yut|rhythmPublication)$|^\.\/firebase$/.test(
               request,
             )
           )
@@ -267,8 +270,8 @@ const errors = [],
   linkedFrames = [],
   diagnostics = [];
 let failure;
-async function openAudio(route, extra = "") {
-  const page = await browser.newPage({
+async function openAudio(route, extra = "", owner = browser) {
+  const page = await owner.newPage({
     viewport: { width: 1280, height: 900 },
   });
   page.setDefaultTimeout(5000);
@@ -282,12 +285,18 @@ async function openAudio(route, extra = "") {
     return request.abort();
   });
   await page.addInitScript(() => {
-    const qa = (window.audioQa = { contexts: [], voices: [], players: [] });
+    const qa = (window.audioQa = {
+      contexts: [],
+      voices: [],
+      players: [],
+      createdInCatalog: [],
+    });
     const NativeContext = window.AudioContext;
     window.AudioContext = class extends NativeContext {
       constructor(...args) {
         super(...args);
         qa.contexts.push(this);
+        qa.createdInCatalog.push(!!document.querySelector(".weplay-catalog"));
       }
       createBufferSource() {
         const source = super.createBufferSource(),
@@ -326,12 +335,18 @@ async function openAudio(route, extra = "") {
   });
   await page.goto(
     `${origin}/?${route.startsWith("/teacher") ? "teacher&" : ""}${extra}#${route}`,
+    extra.includes("autoplay-check") ? { waitUntil: "networkidle" } : {},
   );
-  await page.locator(".teacher-layout,.student-layout").waitFor();
+  if (!extra.includes("autoplay-check"))
+    await page.locator(".teacher-layout,.student-layout").waitFor();
   return page;
 }
-const audioState = (page) =>
-  page.evaluate(() => ({
+const audioState = async (page) => {
+  // Reading an autoplay state must not itself grant transient user activation.
+  const session = await page.context().newCDPSession(page);
+  try {
+    const { result } = await session.send("Runtime.evaluate", {
+      expression: `({
     states: window.audioQa.contexts.map((context) => context.state),
     voices: window.audioQa.voices.map((voice) => ({
       offset: voice.starts[0]?.[1],
@@ -342,14 +357,48 @@ const audioState = (page) =>
       paused: player.paused,
       src: player.src,
     })),
-  }));
+  })`,
+      returnByValue: true,
+      userGesture: false,
+    });
+    return result.value;
+  } finally {
+    await session.detach();
+  }
+};
 async function verifyAudioBrowser() {
   for (const [route, entry] of [
     ["/student/weplay", "catalog"],
     ["/teacher/weplay?game=history-rain", "preview"],
+    ["/student/weplay", "rhythm-catalog"],
+    ["/teacher/weplay?game=gungdeok-rock", "rhythm-preview"],
   ]) {
     const page = await openAudio(route);
-    if (entry === "catalog")
+    if (entry === "rhythm-catalog") {
+      const card = page.locator('a.weplay-game-card[href*="gungdeok-rock"]');
+      await card.waitFor();
+      const images = await card.locator(".rhythm-cover img").evaluateAll((nodes) =>
+        nodes.map((node) => {
+          const style = getComputedStyle(node);
+          return { background: style.backgroundColor, aspect: style.aspectRatio };
+        }),
+      );
+      assert.equal(
+        images.length,
+        4,
+        "Rhythm cover retains logo, mascot and two notes",
+      );
+      assert(
+        images.every(
+          (image) =>
+            image.background === "rgba(0, 0, 0, 0)" && image.aspect === "auto",
+        ),
+        JSON.stringify(images),
+      );
+      await card.click();
+    } else if (entry === "rhythm-preview")
+      await page.getByRole("button", { name: "미리보기", exact: true }).click();
+    else if (entry === "catalog")
       await page.locator('a.weplay-game-card[href*="history-rain"]').click();
     else
       await page.getByRole("button", { name: "체험하기", exact: true }).click();
@@ -363,6 +412,12 @@ async function verifyAudioBrowser() {
       "Entry click's prepared context must be reused",
     );
     assert.equal(state.states[0], "running");
+    if (entry === "rhythm-catalog")
+      assert.deepEqual(
+        await page.evaluate(() => window.audioQa.createdInCatalog),
+        [true],
+        "Rhythm link prepares its context before the catalogue unmounts",
+      );
     assert(state.voices[0].offset < 0.5, JSON.stringify(state));
     await page.getByRole("button", { name: "소리 끄기", exact: true }).click();
     await page.waitForFunction(() =>
@@ -386,60 +441,74 @@ async function verifyAudioBrowser() {
     await page.close();
   }
   checks.push(
-    "Real AudioContext: student catalogue and teacher preview clicks reuse their unlocked context; mute/unmute resumes at the current offset; skip closes it and does not start previously-off BGM.",
+    "Real AudioContext: naval/rhythm student catalogue and teacher preview clicks reuse their unlocked context; rhythm prepares before catalogue unmount, its cover images stay transparent at natural aspect ratios; mute/unmute resumes at the current offset; skip closes it and does not start previously-off BGM.",
   );
   for (const gesture of ["pointer", "space"]) {
-    const page = await openAudio("/student/weplay?game=history-rain");
-    await page.locator(".weplay-studio-intro").waitFor();
-    await page.waitForTimeout(350);
-    const initial = await audioState(page);
-    assert(
-      initial.states.every((state) => state === "suspended"),
-      JSON.stringify(initial),
-    );
-    assert.equal(initial.voices.length, 0, "Blocked direct entry stays silent");
-    const sound = page.getByRole("button", { name: "소리 켜기", exact: true });
-    if (gesture === "pointer") {
-      const box = await sound.boundingBox();
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      await page.mouse.down();
-      await page.waitForTimeout(150);
-      assert.equal(
-        (await audioState(page)).voices.length,
-        0,
-        "Pointer hold must not preempt the enable click",
+    // Keep this policy check independent of earlier same-origin audio gestures.
+    const blockedBrowser = await chromium.launch({
+      channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge",
+      headless: true,
+      args: ["--autoplay-policy=document-user-activation-required"],
+    });
+    try {
+      const page = await openAudio(
+        "/student/weplay?game=history-rain",
+        "autoplay-check",
+        blockedBrowser,
       );
-      await page.mouse.up();
-    } else {
-      await sound.focus();
-      await page.keyboard.down("Space");
-      await page.waitForTimeout(150);
-      assert.equal(
-        (await audioState(page)).voices.length,
-        0,
-        "Space hold must not preempt the enable click",
+      await page.waitForTimeout(350);
+      const initial = await audioState(page);
+      assert.equal(initial.states.length, 1, "Direct entry owns one audio context");
+      assert(
+        initial.states.every((state) => state === "suspended"),
+        JSON.stringify(initial),
       );
-      await page.keyboard.up("Space");
+      assert.equal(initial.voices.length, 0, "Blocked direct entry stays silent");
+      const sound = page.getByRole("button", { name: "소리 켜기", exact: true });
+      if (gesture === "pointer") {
+        const box = await sound.boundingBox();
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        await page.mouse.down();
+        await page.waitForTimeout(150);
+        assert.equal(
+          (await audioState(page)).voices.length,
+          0,
+          "Pointer hold must not preempt the enable click",
+        );
+        await page.mouse.up();
+      } else {
+        await sound.focus();
+        await page.keyboard.down("Space");
+        await page.waitForTimeout(150);
+        assert.equal(
+          (await audioState(page)).voices.length,
+          0,
+          "Space hold must not preempt the enable click",
+        );
+        await page.keyboard.up("Space");
+      }
+      await page.waitForFunction(() =>
+        window.audioQa.voices.some((voice) => voice.starts.length),
+      );
+      const state = await audioState(page);
+      assert(
+        state.voices[0].offset > 0.35 && state.voices[0].offset < 2.5,
+        JSON.stringify(state),
+      );
+      assert.equal(
+        await page
+          .getByRole("button", { name: "소리 끄기", exact: true })
+          .count(),
+        1,
+      );
+      await page.getByRole("button", { name: /건너뛰기/ }).click();
+      await page.waitForFunction(() =>
+        window.audioQa.contexts.every((context) => context.state === "closed"),
+      );
+      await page.close();
+    } finally {
+      await blockedBrowser.close();
     }
-    await page.waitForFunction(() =>
-      window.audioQa.voices.some((voice) => voice.starts.length),
-    );
-    const state = await audioState(page);
-    assert(
-      state.voices[0].offset > 0.35 && state.voices[0].offset < 2.5,
-      JSON.stringify(state),
-    );
-    assert.equal(
-      await page
-        .getByRole("button", { name: "소리 끄기", exact: true })
-        .count(),
-      1,
-    );
-    await page.getByRole("button", { name: /건너뛰기/ }).click();
-    await page.waitForFunction(() =>
-      window.audioQa.contexts.every((context) => context.state === "closed"),
-    );
-    await page.close();
   }
   checks.push(
     "Autoplay-blocked direct entry stays silent; 150ms pointer and Space holds on Enable Sound remain silent until click/release, then start at the current visual offset without toggling back to mute.",
@@ -998,15 +1067,7 @@ async function verifyOpeningLayout() {
         );
         assert.equal(await page.locator(".weplay-page .yut-game").count(), 0);
         assert((await page.locator(".yut-game").boundingBox()).width < 1280);
-        const music = page.getByRole("button", {
-          name: /음악 켜기|음악 끄기/,
-        });
-        assert.equal(
-          await music.evaluate((element) =>
-            element.previousElementSibling?.getAttribute("aria-label"),
-          ),
-          label.startsWith("teacher") ? "방 나가기" : "전체 게임",
-        );
+        await headerOrder(page, label.startsWith("teacher"));
         await capture(page, `${label}-${reduced}-game`);
       }
       const calls = await page.evaluate(() =>

@@ -98,7 +98,7 @@ const result = await build({
         plugin.onResolve(
           {
             filter:
-              /(?:^|\/)contexts\/AuthContext$|^\.\/firebase$|^firebase\/firestore$|(?:^|\/)AppToastProvider$|(?:^|\/)LoadingState$|^\.\/RhythmGame$/,
+              /(?:^|\/)contexts\/AuthContext$|^\.\/firebase$|^firebase\/firestore$|(?:^|\/)AppToastProvider$|(?:^|\/)LoadingState$|^\.\/RhythmOpening$/,
           },
           () => ({ path: "fixture", namespace: "fixture" }),
         );

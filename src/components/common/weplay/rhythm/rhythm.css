@@ -625,40 +625,35 @@
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
-.rhythm-rim-button {
-  inset: 0;
-  width: 100%;
-  height: 100%;
+.rhythm-drum-touch .rhythm-hit-spot {
+  width: clamp(44px, 11%, 80px);
+  aspect-ratio: 1;
+  height: auto;
+  transform: translate(-50%, -50%);
+  border: 3px solid var(--rh-red);
   border-radius: 50%;
+  background: #f5e8bc99;
+  box-shadow:
+    inset 0 0 0 3px #fff8df55,
+    0 2px 0 #352c2633;
+  color: var(--rh-ink);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
 }
-.rhythm-center-button {
-  left: 14%;
-  top: 14%;
-  width: 72%;
-  height: 72%;
-  border-radius: 50%;
+.rhythm-drum-touch .rhythm-rim-button {
+  border-color: var(--rh-blue);
+  color: var(--rh-blue);
 }
-.rhythm-rim-button > span {
-  position: absolute;
-  top: 6%;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 1px 12px;
-  border-radius: 16px;
-  background: var(--rh-paper);
-  font-size: 18px;
+.rhythm-hit-spot > span {
+  display: block;
+  font-size: clamp(16px, 2cqw, 24px);
+  line-height: 1.05;
   font-weight: 900;
 }
-.rhythm-center-button > span {
-  position: absolute;
-  top: 22%;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 4px 16px;
-  background: #f5e8bcd9;
-  border-radius: 16px;
-  font-size: 24px;
-  font-weight: 900;
+.rhythm-hit-spot small {
+  font-size: 11px;
+  margin-left: 2px;
 }
 .rhythm-drum-touch kbd {
   display: block;
@@ -682,8 +677,8 @@
 }
 .rhythm-feedback {
   position: absolute;
-  top: 8px;
-  left: 50%;
+  top: 8%;
+  left: 21%;
   transform: translateX(-50%);
   z-index: 3;
   font-size: clamp(22px, 8cqh, 38px);
@@ -1176,15 +1171,11 @@
   .rhythm-play-legend b {
     font-size: 11px;
   }
-  .rhythm-rim-button > span {
-    font-size: 13px;
-    top: 5%;
-    padding: 0 8px;
+  .rhythm-hit-spot > span {
+    font-size: 16px;
   }
-  .rhythm-center-button > span {
-    font-size: 18px;
-    top: 22%;
-    padding: 2px 12px;
+  .rhythm-hit-spot small {
+    font-size: 10px;
   }
   .rhythm-drum-touch kbd {
     font-size: 10px;
@@ -1403,4 +1394,224 @@
   border-left: 2px solid var(--rh-green);
   transform: rotate(45deg);
   background: var(--rh-paper);
+}
+
+/* First-person hands and successful notes stay in the logical (rotatable) canvas. */
+.weplay-game-card .rhythm-cover img {
+  background: transparent;
+  aspect-ratio: auto;
+}
+.rhythm-opening {
+  position: relative;
+  min-width: 0;
+}
+.rhythm-opening > .weplay-music-button {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+}
+.rhythm-note-hand {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  width: 54%;
+  height: 54%;
+  border-radius: 50%;
+  background: #f5e8bce8;
+  color: var(--rh-ink);
+  font-size: clamp(16px, 2.8cqh, 24px);
+  line-height: 1;
+  font-weight: 900;
+  box-shadow: 0 1px 2px #352c2633;
+}
+.rhythm-feedback small {
+  display: block;
+  text-align: center;
+  font-size: 16px;
+  line-height: 1.2;
+}
+.rhythm-feedback--perfect {
+  color: #8d5200;
+  filter: drop-shadow(0 0 6px #e5b51e88);
+}
+.rhythm-feedback--good {
+  color: var(--rh-green);
+}
+.rhythm-feedback--ok {
+  color: var(--rh-blue);
+  font-size: 24px;
+}
+.rhythm-feedback--miss {
+  color: var(--rh-ink);
+}
+.rhythm-hit-effect--perfect {
+  color: var(--rh-gold);
+}
+.rhythm-hit-effect--good {
+  color: var(--rh-green);
+}
+.rhythm-hit-effect--ok {
+  color: var(--rh-blue);
+}
+.rhythm-hit-effect--tap {
+  opacity: 0.6;
+}
+.rhythm-hit-effect--ok .rhythm-shockwave {
+  width: 56px;
+  height: 56px;
+  left: -28px;
+  top: -28px;
+  border-width: 3px;
+}
+.rhythm-shockwave--echo {
+  animation-delay: 60ms;
+  border-style: dashed;
+}
+.rhythm-mallets {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: min(75cqw, 190cqh);
+  height: min(37.5cqw, 95cqh);
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 3;
+}
+.rhythm-mallet-position {
+  position: absolute;
+  width: 24%;
+  bottom: -18%;
+}
+.rhythm-mallet-position--left {
+  left: 20%;
+}
+.rhythm-mallet-position--right {
+  right: 20%;
+}
+.rhythm-mallet {
+  width: 100%;
+  height: auto;
+  display: block;
+  user-select: none;
+  filter: drop-shadow(0 3px 2px #352c2640);
+}
+.rhythm-mallet--left {
+  transform-origin: 25% 81%;
+  --mallet-turn: -12deg;
+  --mallet-aim: -22deg;
+}
+.rhythm-mallet--right {
+  transform-origin: 72% 79%;
+  --mallet-turn: 12deg;
+  --mallet-aim: 22deg;
+}
+.rhythm-mallet--striking {
+  animation: rhythm-mallet-center 220ms ease-out both;
+}
+.rhythm-mallet--striking[data-kind="rim"] {
+  animation-name: rhythm-mallet-rim;
+}
+.rhythm-collection-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+  overflow: clip;
+}
+.rhythm-collected-note {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  animation: rhythm-collect 600ms cubic-bezier(0.2, 0.6, 0.35, 1) both;
+  color: var(--rh-green);
+}
+.rhythm-collected-note img {
+  width: 100%;
+  height: 100%;
+}
+.rhythm-collected-note strong {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  font-size: 18px;
+  white-space: nowrap;
+  text-shadow:
+    1px 1px var(--rh-paper),
+    -1px -1px var(--rh-paper);
+}
+.rhythm-collected-note--perfect {
+  color: #8d5200;
+  filter: drop-shadow(0 0 5px var(--rh-gold));
+}
+.rhythm-collected-note--ok {
+  color: var(--rh-blue);
+}
+.rhythm-score-arrival {
+  animation: rhythm-score-arrival 280ms ease-out;
+}
+@keyframes rhythm-collect {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  45% {
+    transform: translate(
+        calc(-50% + var(--collect-x) * 0.4),
+        calc(-50% + var(--collect-y) * 0.7 - 32px)
+      )
+      scale(1.12);
+    opacity: 1;
+  }
+  86% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(
+        calc(-50% + var(--collect-x)),
+        calc(-50% + var(--collect-y))
+      )
+      scale(0.25);
+    opacity: 0;
+  }
+}
+@keyframes rhythm-score-arrival {
+  40% {
+    transform: scale(1.2);
+    color: var(--rh-red);
+  }
+}
+@keyframes rhythm-mallet-center {
+  0%,
+  100% {
+    transform: rotate(0) translateY(0);
+  }
+  22% {
+    transform: rotate(var(--mallet-turn)) translateY(-8%);
+  }
+  48% {
+    transform: rotate(0) translateY(13%);
+  }
+  70% {
+    transform: rotate(var(--mallet-turn)) translateY(-4%);
+  }
+}
+@keyframes rhythm-mallet-rim {
+  0%,
+  100% {
+    transform: rotate(0) translateY(0);
+  }
+  22% {
+    transform: translateY(-36%) rotate(var(--mallet-aim));
+  }
+  48% {
+    transform: translateY(-28%) rotate(var(--mallet-aim));
+  }
+  70% {
+    transform: translateY(-32%) rotate(var(--mallet-aim));
+  }
 }
