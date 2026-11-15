@@ -50,13 +50,13 @@ const WrittenExamEssayScoreManager: React.FC = () => {
     <PerformanceScoreManager
       scoreKind={WRITTEN_EXAM_SCORE_KIND}
       navigation={navigation}
-      writtenExamMaterials={
+      writtenExamMaterials={(onBusyChange) => (
         <Suspense
           fallback={<p role="status">원안지 등록을 준비하고 있습니다.</p>}
         >
-          <WrittenExamMaterials />
+          <WrittenExamMaterials onBusyChange={onBusyChange} />
         </Suspense>
-      }
+      )}
     />
   );
 };

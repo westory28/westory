@@ -755,16 +755,25 @@ function PaperPreview({
   );
 }
 
-export function WrittenExamMaterials() {
+export function WrittenExamMaterials({
+  onBusyChange,
+}: {
+  onBusyChange?: (busy: boolean) => void;
+}) {
   const { config, currentUser, authGeneration } = useAuth();
   return (
     <WrittenExamMaterialEditor
       key={`${currentUser?.uid}:${authGeneration}:${getAssessmentSemesterId(config)}`}
+      onBusyChange={onBusyChange}
     />
   );
 }
 
-function WrittenExamMaterialEditor() {
+function WrittenExamMaterialEditor({
+  onBusyChange,
+}: {
+  onBusyChange?: (busy: boolean) => void;
+}) {
   const { config, currentUser, authGeneration } = useAuth();
   const { showToast } = useAppToast();
   const identity = `${currentUser?.uid}:${authGeneration}:${getAssessmentSemesterId(config)}`;
@@ -790,13 +799,22 @@ function WrittenExamMaterialEditor() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [preview, setPreview] = useState(false);
+  const [fileInputVersion, setFileInputVersion] = useState(0);
+  const operation = useRef(false);
+  const sourceSelect = useRef<HTMLSelectElement>(null);
+  const dateInput = useRef<HTMLInputElement>(null);
   const controller = useRef<AbortController | null>(null);
+  useEffect(() => {
+    onBusyChange?.(busy);
+    return () => onBusyChange?.(false);
+  }, [busy, onBusyChange]);
   const source = sources.find((item) => item.id === sourceId);
   const reload = async () => {
     const sequence = ++run.current,
       expected = identity;
     setBusy(true);
     setError("");
+    setProgress("점수표 목록 불러오는 중");
     try {
       const list = await listWrittenExamScoreSources(config);
       if (sequence === run.current && owner.current === expected)
@@ -837,6 +855,7 @@ function WrittenExamMaterialEditor() {
     setError("");
     if (!id) return;
     setBusy(true);
+    setProgress("등록 자료 불러오는 중");
     try {
       const saved = await loadWrittenExamMaterials(config, id);
       if (sequence !== run.current || owner.current !== expected) return;
@@ -850,22 +869,90 @@ function WrittenExamMaterialEditor() {
         setBusy(false);
     }
   };
+  const persist = async (
+    prepared: {
+      questions: WrittenExamQuestionInfo[];
+      crops: WrittenExamPaperCrop[];
+      files: typeof files;
+    },
+    sequence: number,
+    expected: string,
+  ) => {
+    if (!source || sequence !== run.current || owner.current !== expected)
+      return;
+    setProgress("서버에 등록 중");
+    const saved = await saveWrittenExamScoreMaterials(config, {
+      examId: source.id,
+      expectedRevision: existing?.revision || null,
+      examDate,
+      ...prepared,
+    });
+    if (sequence !== run.current || owner.current !== expected) return;
+    setExisting(saved);
+    setPreview(false);
+    setInfoFile(null);
+    setPdfFile(null);
+    setFileInputVersion((value) => value + 1);
+    showToast({ tone: "success", title: "원안지·문항정보를 등록했습니다." });
+  };
+  const refreshRegistration = async () => {
+    if (!source || busy || operation.current) return;
+    const sequence = ++run.current,
+      expected = identity;
+    operation.current = true;
+    setBusy(true);
+    setProgress("등록 상태 불러오는 중");
+    try {
+      const saved = await loadWrittenExamMaterials(config, source.id);
+      if (sequence !== run.current || owner.current !== expected) return;
+      setExisting(saved);
+      setError("");
+      showToast({
+        tone: "success",
+        title: "최신 등록 상태를 불러왔습니다.",
+        message: "준비한 자료를 확인한 뒤 다시 등록해 주세요.",
+      });
+    } catch (failure) {
+      if (sequence === run.current && owner.current === expected)
+        setError(message(failure));
+    } finally {
+      operation.current = false;
+      if (sequence === run.current && owner.current === expected) {
+        setBusy(false);
+        setProgress("");
+      }
+    }
+  };
   const prepare = async () => {
-    if (!source || !examDate) {
-      setError("점수표와 시험일을 선택해 주세요.");
+    if (operation.current) return;
+    if (!source) {
+      setError("자료를 연결할 점수표를 선택해 주세요.");
+      sourceSelect.current?.focus();
+      return;
+    }
+    if (!examDate) {
+      setError("시험일을 입력해 주세요.");
+      dateInput.current?.focus();
+      return;
+    }
+    if (!infoFile && !pdfFile && !existing) {
+      setError("문항정보표 엑셀 또는 원안지 PDF를 선택해 주세요.");
       return;
     }
     const sequence = ++run.current,
       expected = identity;
     setBusy(true);
+    operation.current = true;
     setError("");
     setProgress("등록 자료 확인 중");
     controller.current = new AbortController();
     try {
       const roster = await loadWrittenExamScoreRoster(config, source.id);
+      if (sequence !== run.current || owner.current !== expected) return;
       const info = infoFile
         ? await readWrittenExamInfoWorkbook(infoFile)
         : { questions: existing?.questions || [], warnings: [] };
+      if (sequence !== run.current || owner.current !== expected) return;
       const nextQuestions = mergeScoreSourceQuestions(
         questionsFromScoreSource(roster),
         info.questions,
@@ -910,18 +997,54 @@ function WrittenExamMaterialEditor() {
             ),
           })),
         );
-        const oldPages: WrittenExamPaperPage[] = [];
-        for (const file of nextFiles.filter((file) => file.kind === "page")) {
-          const bitmap = await createImageBitmap(file.blob);
-          oldPages.push({
-            page: file.page!,
-            width: bitmap.width,
-            height: bitmap.height,
-            blob: file.blob,
-          });
-          bitmap.close();
+        if (sequence !== run.current || owner.current !== expected) return;
+        const questionsChanged =
+          existing.questions.length !== nextQuestions.length ||
+          nextQuestions.some(
+            (question) =>
+              existing.questions.find((old) => old.number === question.number)
+                ?.answer !== question.answer,
+          );
+        if (questionsChanged) {
+          const original = nextFiles.find((file) => file.kind === "pdf");
+          if (!original)
+            throw new Error(
+              "문항 구성 또는 정답이 변경되었습니다. 원안지 PDF를 다시 선택해 주세요.",
+            );
+          paper = await processWrittenExamPaper(
+            new File([original.blob], "paper.pdf", { type: "application/pdf" }),
+            nextQuestions,
+            {
+              signal: controller.current.signal,
+              onProgress: (page, total) => {
+                if (owner.current === expected && sequence === run.current)
+                  setProgress(`PDF ${page}/${total}쪽 처리 중`);
+              },
+            },
+          );
+          nextFiles = [
+            original,
+            ...paper.pages.map((page) => ({
+              fileName: `page-${page.page}.webp`,
+              blob: page.blob,
+              kind: "page" as const,
+              page: page.page,
+            })),
+          ];
+        } else {
+          const oldPages: WrittenExamPaperPage[] = [];
+          for (const file of nextFiles.filter((file) => file.kind === "page")) {
+            const bitmap = await createImageBitmap(file.blob);
+            oldPages.push({
+              page: file.page!,
+              width: bitmap.width,
+              height: bitmap.height,
+              blob: file.blob,
+            });
+            bitmap.close();
+          }
+          paper = { pages: oldPages, crops: existing.crops, warnings: [] };
         }
-        paper = { pages: oldPages, crops: existing.crops, warnings: [] };
       } else {
         paper = { pages: [], crops: [], warnings: [] };
         nextFiles = [];
@@ -933,10 +1056,22 @@ function WrittenExamMaterialEditor() {
       setFiles(nextFiles);
       setWarnings([...info.warnings, ...paper.warnings]);
       setPreview(true);
+      if (paper.crops.some((crop) => crop.status !== "ready")) {
+        setError(
+          "자동으로 구분하지 못한 문항의 영역을 확인한 뒤 자료를 등록해 주세요.",
+        );
+        return;
+      }
+      await persist(
+        { questions: nextQuestions, crops: paper.crops, files: nextFiles },
+        sequence,
+        expected,
+      );
     } catch (failure) {
       if (sequence === run.current && owner.current === expected)
         setError(message(failure));
     } finally {
+      operation.current = false;
       if (sequence === run.current && owner.current === expected) {
         setBusy(false);
         setProgress("");
@@ -944,31 +1079,25 @@ function WrittenExamMaterialEditor() {
     }
   };
   const save = async () => {
-    if (!source) return;
+    if (
+      !source ||
+      operation.current ||
+      crops.some((crop) => crop.status !== "ready")
+    )
+      return;
     const sequence = ++run.current,
       expected = identity;
     setBusy(true);
+    operation.current = true;
     setError("");
-    setProgress("원안지·문항정보 저장 중");
+    setProgress("서버에 등록 중");
     try {
-      const saved = await saveWrittenExamScoreMaterials(config, {
-        examId: source.id,
-        expectedRevision: existing?.revision || null,
-        examDate,
-        questions,
-        crops,
-        files,
-      });
-      if (sequence !== run.current || owner.current !== expected) return;
-      setExisting(saved);
-      setPreview(false);
-      setInfoFile(null);
-      setPdfFile(null);
-      showToast({ tone: "success", title: "원안지·문항정보를 저장했습니다." });
+      await persist({ questions, crops, files }, sequence, expected);
     } catch (failure) {
       if (sequence === run.current && owner.current === expected)
         setError(message(failure));
     } finally {
+      operation.current = false;
       if (sequence === run.current && owner.current === expected) {
         setBusy(false);
         setProgress("");
@@ -979,6 +1108,7 @@ function WrittenExamMaterialEditor() {
     <section
       className="written-exam-materials"
       aria-label="원안지·문항정보 등록"
+      aria-busy={busy}
     >
       {!preview ? (
         <>
@@ -986,6 +1116,8 @@ function WrittenExamMaterialEditor() {
             <label>
               등록된 점수표
               <select
+                ref={sourceSelect}
+                aria-required="true"
                 value={sourceId}
                 disabled={busy}
                 onChange={(event) => void select(event.target.value)}
@@ -1001,6 +1133,8 @@ function WrittenExamMaterialEditor() {
             <label>
               시험일
               <input
+                ref={dateInput}
+                aria-required="true"
                 type="date"
                 value={examDate}
                 disabled={busy}
@@ -1023,7 +1157,7 @@ function WrittenExamMaterialEditor() {
               </div>
               <input
                 id="written-exam-info-file"
-                key={`info:${sourceId}:${existing?.revision}`}
+                key={`info:${sourceId}:${fileInputVersion}`}
                 type="file"
                 accept=".xlsx"
                 disabled={busy}
@@ -1045,7 +1179,7 @@ function WrittenExamMaterialEditor() {
               </div>
               <input
                 id="written-exam-paper-file"
-                key={`pdf:${sourceId}:${existing?.revision}`}
+                key={`pdf:${sourceId}:${fileInputVersion}`}
                 type="file"
                 accept=".pdf,application/pdf"
                 disabled={busy}
@@ -1094,7 +1228,7 @@ function WrittenExamMaterialEditor() {
         </>
       )}
       {error && (
-        <p role="alert" className="qca-error">
+        <p role="alert" className="qca-error" id="written-exam-material-error">
           {error}
         </p>
       )}
@@ -1107,6 +1241,13 @@ function WrittenExamMaterialEditor() {
             label="점수표 목록 새로고침"
             loading={busy}
             onClick={reload}
+          />
+        )}
+        {error && sourceId && (
+          <RefreshButton
+            label="등록 상태 새로고침"
+            loading={busy}
+            onClick={refreshRegistration}
           />
         )}
         {preview && (
@@ -1122,14 +1263,14 @@ function WrittenExamMaterialEditor() {
         <button
           type="button"
           className="qca-primary"
+          aria-busy={busy}
+          aria-describedby={error ? "written-exam-material-error" : undefined}
           disabled={
-            busy ||
-            !sourceId ||
-            (preview && crops.some((crop) => crop.status !== "ready"))
+            busy || (preview && crops.some((crop) => crop.status !== "ready"))
           }
           onClick={() => void (preview ? save() : prepare())}
         >
-          {preview ? "원안지·문항정보 저장" : "자료 확인"}
+          {busy ? progress || "불러오는 중" : "자료 등록"}
         </button>
       </div>
     </section>
@@ -1208,6 +1349,7 @@ function CropReview({
                 page: Number(e.target.value),
                 status: "review",
                 highlights: [],
+                contextRects: [],
               })
             }
           >

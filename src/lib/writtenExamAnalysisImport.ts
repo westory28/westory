@@ -146,14 +146,77 @@ export function parseWrittenExamQuestionInfo(
   };
   const warnings: string[] = [];
   const questions: WrittenExamQuestionInfo[] = [];
+  const difficultyMap: Record<
+    string,
+    WrittenExamQuestionInfo["intendedDifficulty"]
+  > = {
+    easy: "easy",
+    쉬움: "easy",
+    하: "easy",
+    medium: "medium",
+    보통: "medium",
+    중: "medium",
+    hard: "hard",
+    어려움: "hard",
+    상: "hard",
+  };
+  // NEIS print exports use a merged difficulty heading and a second row of
+  // radio columns. Recognize that exact structure, without swallowing data rows.
+  const difficultyHeader = rows[headerIndex + 1] || [];
+  const difficultyColumns = difficultyHeader.flatMap((value, index) =>
+    columns.difficulty >= 0 &&
+    index >= columns.difficulty &&
+    index < Math.min(columns.points, columns.answer) &&
+    difficultyMap[key(value)]
+      ? [{ index, value: difficultyMap[key(value)] }]
+      : [],
+  );
+  const groupedDifficulty =
+    difficultyColumns.length === 3 &&
+    new Set(difficultyColumns.map((item) => item.value)).size === 3 &&
+    difficultyHeader.every(
+      (value, index) =>
+        !text(value) || difficultyColumns.some((item) => item.index === index),
+    );
+  let essaySection = false;
   for (let rowIndex = headerIndex + 1; rowIndex < rows.length; rowIndex++) {
     const row = rows[rowIndex];
     if (!row.some((value) => text(value))) continue;
+    if (groupedDifficulty && rowIndex === headerIndex + 1) continue;
     const rawNumber = cell(row, columns.number);
-    if (/^(?:합계|총계|평균|계)$/.test(text(rawNumber))) continue;
-    if (/서술|논술/.test(text(cell(row, columns.kind)))) {
+    const values = row.map(text).filter(Boolean);
+    if (
+      values.length === 1 &&
+      /^(?:선택형|객관식|서답형|서술형|논술형)\s*문항$/.test(values[0])
+    ) {
+      essaySection = /서답형|서술형|논술형/.test(values[0]);
+      continue;
+    }
+    if (
+      /^(?:합계|총합계|총계|평균|계|비율\s*[%％(（)）]*)$/.test(text(rawNumber))
+    )
+      continue;
+    if (
+      key(rawNumber) === key(headers[columns.number]) &&
+      key(cell(row, columns.answer)) === key(headers[columns.answer]) &&
+      key(cell(row, columns.points)) === key(headers[columns.points])
+    )
+      continue;
+    // A printed page footer is separate from the question table. Unknown rows
+    // still fail below so malformed question information cannot disappear.
+    if (
+      !text(rawNumber) &&
+      !text(cell(row, columns.answer)) &&
+      !text(cell(row, columns.points)) &&
+      /^[1-9]\d* \/ [1-9]\d*(?: [^\d]+학교)?$/.test(values.join(" "))
+    )
+      continue;
+    if (
+      (essaySection && questionNumber(rawNumber)) ||
+      /서답|서술|논술/.test(text(cell(row, columns.kind)))
+    ) {
       warnings.push(
-        `${rowIndex + 1}행의 서술·논술형 문항은 이번 선택형 분석에서 제외했습니다.`,
+        `${rowIndex + 1}행의 서답·서술·논술형 문항은 이번 선택형 분석에서 제외했습니다.`,
       );
       continue;
     }
@@ -176,21 +239,20 @@ export function parseWrittenExamQuestionInfo(
       .trim();
     if (rawLevel && !/^[A-E]$/.test(rawLevel))
       throw new Error(`${itemNumber}번의 목표 성취수준은 A~E로 입력해 주세요.`);
-    const rawDifficulty = key(cell(row, columns.difficulty));
-    const difficultyMap: Record<
-      string,
-      WrittenExamQuestionInfo["intendedDifficulty"]
-    > = {
-      easy: "easy",
-      쉬움: "easy",
-      하: "easy",
-      medium: "medium",
-      보통: "medium",
-      중: "medium",
-      hard: "hard",
-      어려움: "hard",
-      상: "hard",
-    };
+    let rawDifficulty = key(cell(row, columns.difficulty));
+    if (groupedDifficulty) {
+      const selected = difficultyColumns.filter((item) =>
+        text(row[item.index]),
+      );
+      if (
+        selected.length > 1 ||
+        selected.some((item) => !/^[○◯〇●◎oO]$/.test(text(row[item.index])))
+      )
+        throw new Error(
+          `${itemNumber}번의 난이도 표시를 한 곳만 선택해 주세요.`,
+        );
+      rawDifficulty = selected[0]?.value || "";
+    }
     if (rawDifficulty && !difficultyMap[rawDifficulty])
       throw new Error(
         `${itemNumber}번의 난이도는 상·중·하 또는 어려움·보통·쉬움으로 입력해 주세요.`,

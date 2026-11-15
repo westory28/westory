@@ -213,6 +213,10 @@
   display: grid;
   gap: 16px;
 }
+.written-exam-materials .qca-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 .written-exam-material-fields {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 180px;

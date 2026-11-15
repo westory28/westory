@@ -67,6 +67,73 @@ const duplicate = detect(
 );
 assert.equal(duplicate.crops[0].status, "review");
 assert.equal(duplicate.crops[0].highlights.length, 0);
+const insetInstructions = detect(
+  [
+    {
+      ...page,
+      items: [
+        ...[1, 2, 3, 4].map((number, index) =>
+          text(`${number}. 안내`, 0.0735, 0.03 + index * 0.008),
+        ),
+        ...page.items,
+      ],
+    },
+  ],
+  questions,
+);
+assert.ok(insetInstructions.crops.every((crop) => crop.status === "ready"));
+const shared = detect(
+  [
+    {
+      ...page,
+      items: [
+        text("[1~2] 다음 공통 자료를 보시오.", 0.06, 0.04),
+        ...block(1, 0.06, 0.2),
+        ...block(2, 0.06, 0.65),
+        text("1학년 1학기 가상평가 1 - 1", 0.4, 0.9),
+      ],
+    },
+  ],
+  [
+    { number: 1, answer: "5" },
+    { number: 2, answer: "5" },
+  ],
+);
+assert.ok(shared.crops.every((crop) => crop.status === "ready"));
+assert.ok(shared.crops.every((crop) => crop.contextRects?.length === 1));
+assert.ok(shared.crops.every((crop) => crop.highlights.length === 1));
+assert.equal(shared.crops[1].contextRects[0].y, 0.034);
+assert.ok(
+  shared.crops[1].contextRects[0].y + shared.crops[1].contextRects[0].height <
+    shared.crops[0].rect.y,
+);
+assert.ok(
+  shared.crops[1].rect.y > 0.6,
+  "The second question must not include the first question",
+);
+assert.ok(
+  shared.crops[1].rect.y + shared.crops[1].rect.height < 0.9,
+  "Printed page footer is not question content",
+);
+const overlappingShared = detect(
+  [
+    {
+      ...page,
+      items: [
+        text("[1~2] 공통 자료", 0.06, 0.03),
+        text("[1~2] 다른 공통 자료", 0.06, 0.05),
+        ...block(1, 0.06, 0.2),
+        ...block(2, 0.06, 0.5),
+      ],
+    },
+  ],
+  questions.slice(0, 2),
+);
+assert.ok(
+  overlappingShared.crops.every(
+    (crop) => crop.status === "review" && !crop.contextRects,
+  ),
+);
 const merged = detect(
   [
     {

@@ -85,7 +85,7 @@ function moduleFor(value) {
 }
 const result = await build({
   stdin: {
-    contents: `import React,{useEffect}from'react';import{createRoot}from'react-dom/client';import{BrowserRouter}from'react-router-dom';import Manager from'${root}/src/pages/teacher/components/PerformanceScoreManager';import{LoadingProvider}from'${root}/src/components/common/LoadingState';import'qa-state';function Materials(){useEffect(()=>{window.scoreQa.events.push({op:'materials-mount'});return()=>window.scoreQa.events.push({op:'materials-unmount'})},[]);return <div data-testid='materials-slot'><label>원안지 PDF<input type='file'/></label><button>자료 저장</button></div>}createRoot(document.getElementById('root')).render(<BrowserRouter><LoadingProvider><div id="qa-sidebar">주 메뉴</div><div id="qa-header">위스토리</div><main id="qa-page" className="ws-page"><Manager scoreKind={new URLSearchParams(location.search).get('kind')||'written_exam_essay'} navigation={<nav id='qa-subnav'>점수 등록 및 확인 · 평가 분석</nav>} writtenExamMaterials={<Materials/>}/></main></LoadingProvider></BrowserRouter>);`,
+    contents: `import React,{useEffect}from'react';import{createRoot}from'react-dom/client';import{BrowserRouter}from'react-router-dom';import Manager from'${root}/src/pages/teacher/components/PerformanceScoreManager';import{LoadingProvider}from'${root}/src/components/common/LoadingState';import'qa-state';function Materials({onBusyChange}){useEffect(()=>{window.scoreQa.events.push({op:'materials-mount'});return()=>window.scoreQa.events.push({op:'materials-unmount'})},[]);return <div data-testid='materials-slot'><button onClick={()=>onBusyChange(true)}>처리 시작</button><button onClick={()=>onBusyChange(false)}>처리 완료</button><label>원안지 PDF<input type='file'/></label><button>자료 저장</button></div>}createRoot(document.getElementById('root')).render(<BrowserRouter><LoadingProvider><div id="qa-sidebar">주 메뉴</div><div id="qa-header">위스토리</div><main id="qa-page" className="ws-page"><Manager scoreKind={new URLSearchParams(location.search).get('kind')||'written_exam_essay'} navigation={<nav id='qa-subnav'>점수 등록 및 확인 · 평가 분석</nav>} writtenExamMaterials={onBusyChange=><Materials onBusyChange={onBusyChange}/> }/></main></LoadingProvider></BrowserRouter>);`,
     loader: "tsx",
     resolveDir: root,
   },
@@ -230,7 +230,7 @@ try {
     channel: process.platform === "win32" ? "msedge" : undefined,
     headless: true,
   });
-  for (const width of [390, 768, 1440]) {
+  for (const width of [320, 390, 768, 1440]) {
     const page = await browser.newPage({ viewport: { width, height: 960 } });
     page.on("pageerror", (error) => report.pageErrors.push(error.message));
     await page.route("**/*", (route) =>
@@ -261,7 +261,7 @@ try {
       0,
       "Materials do not mount in score mode",
     );
-    const modes = dialog.getByRole("group", { name: "정기시험 업로드 종류" });
+    const modes = dialog.getByRole("tablist", { name: "정기시험 업로드 종류" });
     assert.equal(
       await modes.locator(".written-score-upload-choice").count(),
       3,
@@ -270,6 +270,46 @@ try {
       await dialog.locator(".written-score-upload-scope").count(),
       1,
     );
+    assert.equal(
+      await dialog.getByText("2학기 정기시험 서답형", { exact: true }).count(),
+      1,
+    );
+    assert.equal(
+      await dialog.getByText("2학기 정기시험 논술형", { exact: true }).count(),
+      0,
+    );
+    const objectiveTab = modes.getByRole("tab", {
+      name: "서답형",
+      exact: true,
+    });
+    const tabStyle = await objectiveTab.evaluate((el) => ({
+      border: getComputedStyle(el).borderBottomWidth,
+      radius: getComputedStyle(el).borderRadius,
+    }));
+    assert.equal(
+      tabStyle.border,
+      "3px",
+      "Selected subtab uses the portal underline",
+    );
+    assert.equal(tabStyle.radius, "0px");
+    await objectiveTab.focus();
+    await page.keyboard.press("ArrowRight");
+    assert.equal(
+      await modes
+        .getByRole("tab", { name: "논술형", exact: true })
+        .getAttribute("aria-selected"),
+      "true",
+    );
+    assert.equal(
+      await dialog.getByText("2학기 정기시험 서답형", { exact: true }).count(),
+      0,
+    );
+    assert.equal(
+      await dialog.getByText("2학기 정기시험 논술형", { exact: true }).count(),
+      1,
+    );
+    await page.keyboard.press("Home");
+    assert.equal(await objectiveTab.getAttribute("aria-selected"), "true");
     const fileHeight = await dialog
       .locator(".written-score-upload-file")
       .evaluate((el) => el.getBoundingClientRect().height);
@@ -301,7 +341,7 @@ try {
     await page.getByRole("tooltip").waitFor();
     await page.keyboard.press("Escape");
     await dialog
-      .getByRole("button", { name: "원안지·문항정보표", exact: true })
+      .getByRole("tab", { name: "원안지·문항정보표", exact: true })
       .click();
     assert.equal(
       await page.locator('[data-testid="materials-slot"]').count(),
@@ -316,7 +356,23 @@ try {
       0,
     );
     assert.equal(await page.getByRole("dialog").count(), 1, "No nested dialog");
-    await dialog.getByRole("button", { name: "논술형", exact: true }).click();
+    await dialog
+      .getByRole("button", { name: "처리 시작", exact: true })
+      .click();
+    assert.equal(await dialog.getAttribute("aria-busy"), "true");
+    const lockedTab = dialog.getByRole("tab", { name: "논술형", exact: true });
+    assert.equal(await lockedTab.getAttribute("aria-disabled"), "true");
+    await lockedTab.evaluate((el) => el.click());
+    await page.keyboard.press("Escape");
+    assert.equal(
+      await page.locator('[data-testid="materials-slot"]').count(),
+      1,
+    );
+    assert.equal(await dialog.count(), 1, "Busy upload cannot close mid-save");
+    await dialog
+      .getByRole("button", { name: "처리 완료", exact: true })
+      .click();
+    await dialog.getByRole("tab", { name: "논술형", exact: true }).click();
     assert.equal(
       await page.locator('[data-testid="materials-slot"]').count(),
       0,
@@ -327,7 +383,7 @@ try {
         .count(),
       1,
     );
-    await dialog.getByRole("button", { name: "서답형", exact: true }).click();
+    await dialog.getByRole("tab", { name: "서답형", exact: true }).click();
     const input = dialog.getByLabel("서답형 엑셀 선택", { exact: true });
     assert.equal(await input.getAttribute("multiple"), "");
     await dialog

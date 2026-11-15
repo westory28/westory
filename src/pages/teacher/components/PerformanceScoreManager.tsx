@@ -8,6 +8,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "./performance-score-list.css";
 import "./written-score-upload.css";
+import "../../../components/common/portalPage.css";
 import { useSearchParams } from "react-router-dom";
 import {
   collection,
@@ -126,7 +127,9 @@ type ParsedUpload = ParsedPerformanceScoreUpload;
 interface PerformanceScoreManagerProps {
   scoreKind?: PerformanceScoreKind;
   navigation?: React.ReactNode;
-  writtenExamMaterials?: React.ReactNode;
+  writtenExamMaterials?: (
+    onBusyChange: (busy: boolean) => void,
+  ) => React.ReactNode;
 }
 
 type WrittenExamUploadMode = "objective" | "essay";
@@ -6031,6 +6034,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     useState<WrittenExamUploadMode>("objective");
   const [writtenExamMaterialsOpen, setWrittenExamMaterialsOpen] =
     useState(false);
+  const [writtenExamMaterialsBusy, setWrittenExamMaterialsBusy] =
+    useState(false);
   const [students, setStudents] = useState<StudentProfile[]>([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
   const [studentsLoaded, setStudentsLoaded] = useState(false);
@@ -6092,7 +6097,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   }, [uploadFlowOpen, uploadPreviewOpen]);
 
   const closeScoreUploadDialog = (preview: boolean) => {
-    if (saving || parsing) return;
+    if (saving || parsing || writtenExamMaterialsBusy) return;
     if (preview) setParsed(null);
     else setUploadModalOpen(false);
   };
@@ -6262,6 +6267,17 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     useState(false);
   const writtenExamUploadModeOption = getWrittenExamUploadModeOption(
     writtenExamUploadMode,
+  );
+  const uploadHistoryRosters = useMemo(
+    () =>
+      !isWrittenExamMode
+        ? rosters
+        : rosters.filter(
+            writtenExamUploadMode === "objective"
+              ? isWrittenExamObjectiveRoster
+              : isWrittenExamEssayRoster,
+          ),
+    [isWrittenExamMode, rosters, writtenExamUploadMode],
   );
 
   useEffect(() => {
@@ -11536,7 +11552,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             role="dialog"
             aria-modal="true"
             aria-labelledby="score-upload-modal-title"
-            aria-busy={parsing || saving}
+            aria-busy={parsing || saving || writtenExamMaterialsBusy}
             onKeyDown={(event) => handleScoreUploadDialogKeyDown(event, false)}
             className="w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl"
           >
@@ -11557,7 +11573,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               <button
                 type="button"
                 onClick={() => closeScoreUploadDialog(false)}
-                disabled={parsing || saving}
+                disabled={parsing || saving || writtenExamMaterialsBusy}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="업로드 창 닫기"
               >
@@ -11568,9 +11584,39 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             <div className="max-h-[78vh] overflow-y-auto px-5 py-5">
               {isWrittenExamMode && (
                 <div
-                  className="written-score-upload-modes"
-                  role="group"
+                  className="ws-page-tabs written-score-upload-modes"
+                  role="tablist"
                   aria-label="정기시험 업로드 종류"
+                  onKeyDown={(event) => {
+                    if (parsing || writtenExamMaterialsBusy) return;
+                    if (
+                      !["ArrowLeft", "ArrowRight", "Home", "End"].includes(
+                        event.key,
+                      )
+                    )
+                      return;
+                    const tabs = Array.from(
+                      event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                        '[role="tab"]',
+                      ),
+                    );
+                    const index = tabs.indexOf(
+                      event.target as HTMLButtonElement,
+                    );
+                    if (index < 0) return;
+                    event.preventDefault();
+                    const next =
+                      event.key === "Home"
+                        ? 0
+                        : event.key === "End"
+                          ? tabs.length - 1
+                          : (index +
+                              (event.key === "ArrowRight" ? 1 : -1) +
+                              tabs.length) %
+                            tabs.length;
+                    tabs[next].focus();
+                    tabs[next].click();
+                  }}
                 >
                   {WRITTEN_EXAM_UPLOAD_MODE_OPTIONS.map((option) => {
                     const selected =
@@ -11583,10 +11629,15 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                       >
                         <button
                           type="button"
-                          aria-pressed={selected}
-                          disabled={parsing}
+                          role="tab"
+                          id={`written-score-upload-tab-${option.key}`}
+                          aria-selected={selected}
+                          aria-controls="written-score-upload-panel"
+                          tabIndex={selected ? 0 : -1}
+                          aria-disabled={parsing || writtenExamMaterialsBusy}
                           className={selected ? "is-active" : ""}
                           onClick={() => {
+                            if (parsing || writtenExamMaterialsBusy) return;
                             setWrittenExamMaterialsOpen(false);
                             setWrittenExamUploadMode(option.key);
                           }}
@@ -11608,10 +11659,17 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                     <div className="written-score-upload-choice">
                       <button
                         type="button"
-                        aria-pressed={writtenExamMaterialsOpen}
-                        disabled={parsing}
+                        role="tab"
+                        id="written-score-upload-tab-materials"
+                        aria-selected={writtenExamMaterialsOpen}
+                        aria-controls="written-score-upload-panel"
+                        tabIndex={writtenExamMaterialsOpen ? 0 : -1}
+                        aria-disabled={parsing || writtenExamMaterialsBusy}
                         className={writtenExamMaterialsOpen ? "is-active" : ""}
-                        onClick={() => setWrittenExamMaterialsOpen(true)}
+                        onClick={() => {
+                          if (!parsing && !writtenExamMaterialsBusy)
+                            setWrittenExamMaterialsOpen(true);
+                        }}
                       >
                         원안지·문항정보표
                       </button>
@@ -11625,287 +11683,304 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                   )}
                 </div>
               )}
-              {isWrittenExamMode && writtenExamMaterialsOpen ? (
-                writtenExamMaterials
-              ) : (
-                <>
-                  <div
-                    className={
-                      isWrittenExamMode
-                        ? "written-score-upload-scope"
-                        : "mt-4 grid gap-3 sm:grid-cols-2"
-                    }
-                  >
-                    {isWrittenExamMode && (
-                      <label className="block written-score-upload-subject">
-                        <span className="text-xs font-black text-slate-600">
-                          과목
-                        </span>
-                        <input
-                          lang="ko"
-                          inputMode="text"
-                          type="text"
-                          value={subject}
-                          onChange={(event) => setSubject(event.target.value)}
-                          disabled={parsing}
-                          className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
-                        />
-                      </label>
-                    )}
-                    <label className="block">
-                      <span className="text-xs font-black text-slate-600">
-                        대상 학년
-                      </span>
-                      <select
-                        value={targetGrade}
-                        onChange={(event) => setTargetGrade(event.target.value)}
-                        disabled={parsing}
-                        className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
-                      >
-                        {DEFAULT_GRADE_OPTIONS.map((grade) => (
-                          <option key={grade} value={grade}>
-                            {grade}학년
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="block">
-                      <span className="text-xs font-black text-slate-600">
-                        기본 반
-                      </span>
-                      <select
-                        value={fallbackClass}
-                        onChange={(event) =>
-                          setFallbackClass(event.target.value)
-                        }
-                        disabled={parsing}
-                        className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
-                      >
-                        <option value="">파일에서 인식</option>
-                        {DEFAULT_CLASS_OPTIONS.map((classValue) => (
-                          <option key={classValue} value={classValue}>
-                            {classValue}반
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                  {isWrittenExamMode && writtenExamUploadMode === "essay" && (
-                    <div className="written-score-upload-essay">
-                      <label className="block">
-                        <span className="text-xs font-black text-slate-600">
-                          {managerCopy.uploadSelectLabel}
-                        </span>
-                        <input
-                          lang="ko"
-                          inputMode="text"
-                          type="text"
-                          value={writtenExamItemName}
-                          onChange={(event) =>
-                            setWrittenExamItemName(event.target.value)
-                          }
-                          disabled={parsing}
-                          className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="text-xs font-black text-slate-600">
-                          기본 만점
-                        </span>
-                        <NumericInput
-                          allowEmpty
-                          type="number"
-                          min="0"
-                          step="0.1"
-                          value={writtenExamMaxScore}
-                          onChange={(event) =>
-                            setWrittenExamMaxScore(event.target.value)
-                          }
-                          disabled={parsing}
-                          className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
-                        />
-                      </label>
-                    </div>
-                  )}
-                  <div
-                    className={
-                      isWrittenExamMode
-                        ? "written-score-upload-file-actions"
-                        : ""
-                    }
-                  >
-                    <label
+              <div
+                id={
+                  isWrittenExamMode ? "written-score-upload-panel" : undefined
+                }
+                role={isWrittenExamMode ? "tabpanel" : undefined}
+                aria-labelledby={
+                  isWrittenExamMode
+                    ? `written-score-upload-tab-${writtenExamMaterialsOpen ? "materials" : writtenExamUploadMode}`
+                    : undefined
+                }
+              >
+                {isWrittenExamMode && writtenExamMaterialsOpen ? (
+                  writtenExamMaterials?.(setWrittenExamMaterialsBusy)
+                ) : (
+                  <>
+                    <div
                       className={
                         isWrittenExamMode
-                          ? "written-score-upload-file"
-                          : "mt-5 flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-blue-200 bg-blue-50 px-4 py-8 text-center transition hover:bg-blue-100 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-blue-600"
+                          ? "written-score-upload-scope"
+                          : "mt-4 grid gap-3 sm:grid-cols-2"
                       }
                     >
-                      <i
+                      {isWrittenExamMode && (
+                        <label className="block written-score-upload-subject">
+                          <span className="text-xs font-black text-slate-600">
+                            과목
+                          </span>
+                          <input
+                            lang="ko"
+                            inputMode="text"
+                            type="text"
+                            value={subject}
+                            onChange={(event) => setSubject(event.target.value)}
+                            disabled={parsing}
+                            className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
+                          />
+                        </label>
+                      )}
+                      <label className="block">
+                        <span className="text-xs font-black text-slate-600">
+                          대상 학년
+                        </span>
+                        <select
+                          value={targetGrade}
+                          onChange={(event) =>
+                            setTargetGrade(event.target.value)
+                          }
+                          disabled={parsing}
+                          className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
+                        >
+                          {DEFAULT_GRADE_OPTIONS.map((grade) => (
+                            <option key={grade} value={grade}>
+                              {grade}학년
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-black text-slate-600">
+                          기본 반
+                        </span>
+                        <select
+                          value={fallbackClass}
+                          onChange={(event) =>
+                            setFallbackClass(event.target.value)
+                          }
+                          disabled={parsing}
+                          className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
+                        >
+                          <option value="">파일에서 인식</option>
+                          {DEFAULT_CLASS_OPTIONS.map((classValue) => (
+                            <option key={classValue} value={classValue}>
+                              {classValue}반
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    {isWrittenExamMode && writtenExamUploadMode === "essay" && (
+                      <div className="written-score-upload-essay">
+                        <label className="block">
+                          <span className="text-xs font-black text-slate-600">
+                            {managerCopy.uploadSelectLabel}
+                          </span>
+                          <input
+                            lang="ko"
+                            inputMode="text"
+                            type="text"
+                            value={writtenExamItemName}
+                            onChange={(event) =>
+                              setWrittenExamItemName(event.target.value)
+                            }
+                            disabled={parsing}
+                            className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-xs font-black text-slate-600">
+                            기본 만점
+                          </span>
+                          <NumericInput
+                            allowEmpty
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            value={writtenExamMaxScore}
+                            onChange={(event) =>
+                              setWrittenExamMaxScore(event.target.value)
+                            }
+                            disabled={parsing}
+                            className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
+                          />
+                        </label>
+                      </div>
+                    )}
+                    <div
+                      className={
+                        isWrittenExamMode
+                          ? "written-score-upload-file-actions"
+                          : ""
+                      }
+                    >
+                      <label
                         className={
                           isWrittenExamMode
-                            ? "fas fa-file-excel"
-                            : "fas fa-file-excel mb-3 text-2xl text-blue-600"
+                            ? "written-score-upload-file"
+                            : "mt-5 flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-blue-200 bg-blue-50 px-4 py-8 text-center transition hover:bg-blue-100 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-blue-600"
                         }
-                        aria-hidden="true"
-                      />
-                      <span>
-                        {parsing
-                          ? "파일 인식 중..."
-                          : isWrittenExamMode
-                            ? `${writtenExamUploadModeOption.shortLabel} 엑셀 선택`
-                            : "엑셀 파일 선택"}
-                      </span>
-                      {!isWrittenExamMode && (
-                        <span className="mt-1 text-xs font-bold text-blue-700">
-                          .xlsx 파일을 선택하면 미리보기 화면으로 이동합니다.
-                        </span>
-                      )}
-                      <input
-                        type="file"
-                        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        multiple={isWrittenExamMode}
-                        className="sr-only"
-                        aria-label={
-                          isWrittenExamMode
-                            ? `${writtenExamUploadModeOption.shortLabel} 엑셀 선택`
-                            : "엑셀 파일 선택"
-                        }
-                        onChange={(event) => void handleUpload(event)}
-                        disabled={parsing}
-                      />
-                    </label>
-                    {isWrittenExamMode && writtenExamUploadMode === "essay" && (
-                      <button
-                        type="button"
-                        onClick={() => void downloadWrittenExamTemplate()}
-                        disabled={parsing || downloadingWrittenExamTemplate}
-                        className="written-score-upload-template"
                       >
-                        {downloadingWrittenExamTemplate
-                          ? "생성 중"
-                          : "논술형 양식 다운로드"}
-                      </button>
-                    )}
-                  </div>
-                  <div className="mt-5 border-t border-slate-200 pt-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <h4 className="text-sm font-black text-slate-800">
-                        업로드 기록
-                      </h4>
-                      <span className="text-xs font-bold text-slate-400">
-                        {rosters.length}개
-                      </span>
-                    </div>
-                    {rostersLoading ? (
-                      <LoadingOverlay />
-                    ) : rosters.length === 0 ? (
-                      <div className="mt-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-bold text-slate-400">
-                        아직 저장된 업로드 기록이 없습니다.
-                      </div>
-                    ) : (
-                      <div className="mt-3 space-y-2">
-                        {rosters.map((roster) => (
-                          <div
-                            key={roster.id}
-                            className={`flex flex-col gap-3 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between ${
-                              scoreListRosterId === roster.id
-                                ? "border-blue-200 bg-blue-50/60"
-                                : "border-slate-200 bg-white"
-                            }`}
+                        <i
+                          className={
+                            isWrittenExamMode
+                              ? "fas fa-file-excel"
+                              : "fas fa-file-excel mb-3 text-2xl text-blue-600"
+                          }
+                          aria-hidden="true"
+                        />
+                        <span>
+                          {parsing
+                            ? "파일 인식 중..."
+                            : isWrittenExamMode
+                              ? `${writtenExamUploadModeOption.shortLabel} 엑셀 선택`
+                              : "엑셀 파일 선택"}
+                        </span>
+                        {!isWrittenExamMode && (
+                          <span className="mt-1 text-xs font-bold text-blue-700">
+                            .xlsx 파일을 선택하면 미리보기 화면으로 이동합니다.
+                          </span>
+                        )}
+                        <input
+                          type="file"
+                          accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                          multiple={isWrittenExamMode}
+                          className="sr-only"
+                          aria-label={
+                            isWrittenExamMode
+                              ? `${writtenExamUploadModeOption.shortLabel} 엑셀 선택`
+                              : "엑셀 파일 선택"
+                          }
+                          onChange={(event) => void handleUpload(event)}
+                          disabled={parsing}
+                        />
+                      </label>
+                      {isWrittenExamMode &&
+                        writtenExamUploadMode === "essay" && (
+                          <button
+                            type="button"
+                            onClick={() => void downloadWrittenExamTemplate()}
+                            disabled={parsing || downloadingWrittenExamTemplate}
+                            className="written-score-upload-template"
                           >
-                            <div className="min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <h5 className="truncate text-sm font-black text-slate-900">
-                                  {roster.title}
-                                </h5>
-                                {isWrittenExamMode &&
-                                  roster.scoreContentKind && (
-                                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-black text-slate-700">
-                                      {getWrittenExamContentKindBadgeLabel(
-                                        roster.scoreContentKind,
-                                      )}
+                            {downloadingWrittenExamTemplate
+                              ? "생성 중"
+                              : "논술형 양식 다운로드"}
+                          </button>
+                        )}
+                    </div>
+                    <div className="mt-5 border-t border-slate-200 pt-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <h4 className="text-sm font-black text-slate-800">
+                          업로드 기록
+                        </h4>
+                        <span className="text-xs font-bold text-slate-400">
+                          {uploadHistoryRosters.length}개
+                        </span>
+                      </div>
+                      {rostersLoading ? (
+                        <LoadingOverlay />
+                      ) : uploadHistoryRosters.length === 0 ? (
+                        <div className="mt-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-bold text-slate-400">
+                          아직 저장된 업로드 기록이 없습니다.
+                        </div>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          {uploadHistoryRosters.map((roster) => (
+                            <div
+                              key={roster.id}
+                              className={`flex flex-col gap-3 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between ${
+                                scoreListRosterId === roster.id
+                                  ? "border-blue-200 bg-blue-50/60"
+                                  : "border-slate-200 bg-white"
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h5 className="truncate text-sm font-black text-slate-900">
+                                    {roster.title}
+                                  </h5>
+                                  {isWrittenExamMode &&
+                                    roster.scoreContentKind && (
+                                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-black text-slate-700">
+                                        {getWrittenExamContentKindBadgeLabel(
+                                          roster.scoreContentKind,
+                                        )}
+                                      </span>
+                                    )}
+                                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-black text-blue-700">
+                                    {roster.targetGrade}학년
+                                  </span>
+                                  {roster.classes?.length > 0 && (
+                                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-black text-slate-600">
+                                      {roster.classes.join(", ")}반
                                     </span>
                                   )}
-                                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-black text-blue-700">
-                                  {roster.targetGrade}학년
-                                </span>
-                                {roster.classes?.length > 0 && (
-                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-black text-slate-600">
-                                    {roster.classes.join(", ")}반
+                                </div>
+                                <div className="mt-1 flex flex-wrap gap-2 text-[11px] font-bold text-slate-500">
+                                  <span>저장 {roster.matchedCount}명</span>
+                                  <span>전체 {roster.rowCount}명</span>
+                                  <span>
+                                    만점{" "}
+                                    {formatPerformanceScore(
+                                      roster.totalMaxScore,
+                                    )}
+                                    점
                                   </span>
-                                )}
+                                </div>
                               </div>
-                              <div className="mt-1 flex flex-wrap gap-2 text-[11px] font-bold text-slate-500">
-                                <span>저장 {roster.matchedCount}명</span>
-                                <span>전체 {roster.rowCount}명</span>
-                                <span>
-                                  만점{" "}
-                                  {formatPerformanceScore(roster.totalMaxScore)}
-                                  점
-                                </span>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    selectScoreRoster(roster.id);
+                                    setUploadModalOpen(false);
+                                  }}
+                                  disabled={scoreEditing || savingScoreEdits}
+                                  className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-white px-3 text-xs font-black text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <i
+                                    className="fas fa-list"
+                                    aria-hidden="true"
+                                  ></i>
+                                  선택
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void openRosterForEditing(roster)
+                                  }
+                                  disabled={
+                                    scoreListLoading ||
+                                    scoreEditing ||
+                                    savingScoreEdits
+                                  }
+                                  className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-white px-3 text-xs font-black text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <i
+                                    className="fas fa-pen-to-square"
+                                    aria-hidden="true"
+                                  ></i>
+                                  수정
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void deleteRoster(roster)}
+                                  disabled={
+                                    deletingRosterId === roster.id ||
+                                    scoreEditing ||
+                                    savingScoreEdits
+                                  }
+                                  className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-rose-200 bg-white px-3 text-xs font-black text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <i
+                                    className="fas fa-trash"
+                                    aria-hidden="true"
+                                  ></i>
+                                  {deletingRosterId === roster.id
+                                    ? "삭제 중"
+                                    : "삭제"}
+                                </button>
                               </div>
                             </div>
-                            <div className="flex shrink-0 items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  selectScoreRoster(roster.id);
-                                  setUploadModalOpen(false);
-                                }}
-                                disabled={scoreEditing || savingScoreEdits}
-                                className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-white px-3 text-xs font-black text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                <i
-                                  className="fas fa-list"
-                                  aria-hidden="true"
-                                ></i>
-                                선택
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  void openRosterForEditing(roster)
-                                }
-                                disabled={
-                                  scoreListLoading ||
-                                  scoreEditing ||
-                                  savingScoreEdits
-                                }
-                                className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-white px-3 text-xs font-black text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                <i
-                                  className="fas fa-pen-to-square"
-                                  aria-hidden="true"
-                                ></i>
-                                수정
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void deleteRoster(roster)}
-                                disabled={
-                                  deletingRosterId === roster.id ||
-                                  scoreEditing ||
-                                  savingScoreEdits
-                                }
-                                className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-rose-200 bg-white px-3 text-xs font-black text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                <i
-                                  className="fas fa-trash"
-                                  aria-hidden="true"
-                                ></i>
-                                {deletingRosterId === roster.id
-                                  ? "삭제 중"
-                                  : "삭제"}
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </section>
         </div>

@@ -46,6 +46,68 @@ assert.equal(info.questions[0].targetAchievementLevel, "C");
 assert.equal(info.questions[0].intendedDifficulty, "easy");
 assert.equal(info.questions[1].intendedDifficulty, "hard");
 assert.equal(info.questions[0].reviewLessonId, "lesson-1");
+const sparse = (values) => {
+  const row = Array(24).fill(null);
+  for (const [column, value] of Object.entries(values))
+    row[Number(column) - 1] = value;
+  return row;
+};
+const printedRows = [
+  sparse({ 2: "가상 문항정보표" }),
+  sparse({ 2: "선택형 문항" }),
+  sparse({
+    2: "문항번호",
+    3: "내용영역",
+    4: "성취기준",
+    16: "난이도",
+    21: "배점",
+    23: "정답",
+  }),
+  sparse({ 16: "어려움", 18: "보통", 20: "쉬움" }),
+  sparse({
+    2: 1,
+    3: "가상 개념",
+    4: "[9역01-01] 가상 기준\n[9역01-02] 다른 기준",
+    16: "○",
+    21: 2,
+    23: 1,
+  }),
+  sparse({ 7: 1, 8: "/", 9: 2, 12: "가상학교" }),
+  sparse({ 2: 2, 18: "○", 21: 3, 23: 2 }),
+  sparse({ 2: 3, 20: "○", 21: 4, 23: 3 }),
+  sparse({ 2: "서답형 문항" }),
+  sparse({ 2: 1, 16: "○", 21: 10, 23: "별도 관리" }),
+  sparse({ 2: "총합계", 21: 19, 23: "-" }),
+  sparse({ 2: "비율(%)", 21: 100, 23: "-" }),
+  sparse({ 7: 2, 8: "/", 9: 2, 12: "가상학교" }),
+];
+const printed = parseInfo(printedRows);
+assert.equal(printed.questions.length, 3);
+assert.equal(
+  printed.questions.reduce((sum, question) => sum + question.points, 0),
+  9,
+);
+assert.deepEqual(
+  plain(printed.questions.map((question) => question.intendedDifficulty)),
+  ["hard", "medium", "easy"],
+);
+assert.deepEqual(plain(printed.questions[0].achievementStandardCodes), [
+  "9역01-01",
+  "9역01-02",
+]);
+assert.ok(
+  printed.questions.every((question) => question.targetAchievementLevel === ""),
+  "Difficulty must not invent achievement levels",
+);
+assert.ok(
+  printed.warnings.some((warning) => warning.includes("선택형 분석에서 제외")),
+);
+const badDifficulty = structuredClone(printedRows);
+badDifficulty[4][17] = "○";
+assert.throws(() => parseInfo(badDifficulty), /난이도 표시/);
+const unknownRow = structuredClone(printedRows);
+unknownRow.splice(6, 0, sparse({ 3: "문항 번호가 빠진 자료", 21: 2, 23: 1 }));
+assert.throws(() => parseInfo(unknownRow), /문항번호/);
 assert.throws(
   () =>
     parseInfo([

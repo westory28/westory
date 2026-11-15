@@ -480,13 +480,19 @@ const findObjectiveScoreLayout = (
       .findIndex((cell) => toText(cell).length > 0);
     const totalIndex =
       totalOffset >= 0 ? lastQuestionIndex + 1 + totalOffset : -1;
+    const declaredClassNumberIndex = beforeQuestionColumns.findIndex((cell) =>
+      /^반[/／-]?번호$/.test(toHeaderKey(cell)),
+    );
+    const classNumberIndex =
+      declaredClassNumberIndex >= 0 ? declaredClassNumberIndex : 0;
 
     return {
       headerRowIndex: rowIndex,
       answerRowIndex,
       maxScoreRowIndex,
-      classNumberIndex: 0,
-      studentCodeIndex: firstQuestionIndex >= 3 ? 1 : -1,
+      classNumberIndex,
+      studentCodeIndex:
+        firstQuestionIndex - classNumberIndex >= 3 ? classNumberIndex + 1 : -1,
       nameIndex: Math.max(0, firstQuestionIndex - 1),
       totalIndex,
       questionColumns: normalizedQuestionColumns,

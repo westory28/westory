@@ -36,6 +36,9 @@ pdfmetrics.registerFont(TTFont('Korean', 'C:/Windows/Fonts/malgun.ttf'))
 c=Canvas(sys.argv[1],pagesize=(600,850))
 for page in range(2):
   c.setFont('Korean',10)
+  if page==0:
+    c.drawString(36,825,'[1~2] 다음 공통 자료를 보시오.')
+    c.drawString(46,805,'두 문항이 함께 사용하는 가상 자료')
   for col,x in enumerate([36,330]):
     for row,y in enumerate([770,420]):
       n=page*4+col*2+row+1
@@ -45,9 +48,9 @@ for page in range(2):
       c.drawString(x+20,y-65,'문항별 그림 영역')
       for i,marker in enumerate('①②③④⑤'):
         c.drawString(x+10,y-110-i*24,marker+' 가상 선택지 '+str(i+1))
-      if row==1:
+      if row==1 and col==0:
         c.drawString(x,y-265,'서술형 1. 이 영역은 크롭에서 제외합니다.')
-  c.drawCentredString(300,18,str(page+1))
+  c.drawCentredString(300,40,'3학년 2학기 가상평가 2 - '+str(page+1))
   c.showPage()
 c.save()
 `,
@@ -113,6 +116,55 @@ try {
         size: result.size,
       });
     }
+    // Compare the image with and without highlights pixel by pixel: all color
+    // changes must remain in the individual question after the passage offset.
+    const target = paper.crops.find((crop) => crop.questionNumber === 2);
+    const source = paper.pages.find((page) => page.page === target.page);
+    const highlighted = await createImageBitmap(
+      await module.renderWrittenExamCrop(source.blob, target),
+    );
+    const plain = await createImageBitmap(
+      await module.renderWrittenExamCrop(source.blob, target, {
+        highlight: false,
+      }),
+    );
+    const pixels = (bitmap) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(bitmap, 0, 0);
+      return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    };
+    const highlightedPixels = pixels(highlighted),
+      plainPixels = pixels(plain);
+    const questionY = target.contextRects.reduce(
+      (sum, rect) =>
+        sum +
+        Math.round(rect.height * source.height) +
+        Math.round(source.height * 0.006),
+      0,
+    );
+    const highlightY =
+      questionY + (target.highlights[0].y - target.rect.y) * source.height;
+    let changedInPassage = 0,
+      changedInAnswer = 0;
+    for (let y = 0; y < highlighted.height; y++) {
+      for (let x = 0; x < highlighted.width; x++) {
+        const i = (y * highlighted.width + x) * 4;
+        const delta = Math.abs(highlightedPixels[i + 2] - plainPixels[i + 2]);
+        if (delta > 35) {
+          if (y < questionY - 8) changedInPassage++;
+          if (
+            y >= highlightY - 5 &&
+            y <= highlightY + target.highlights[0].height * source.height + 5
+          )
+            changedInAnswer++;
+        }
+      }
+    }
+    highlighted.close();
+    plain.close();
     return {
       pages: paper.pages.map(({ page, width, height }) => ({
         page,
@@ -122,6 +174,8 @@ try {
       crops: paper.crops,
       warnings: paper.warnings,
       rendered,
+      changedInPassage,
+      changedInAnswer,
     };
   });
   assert.equal(result.pages.length, 2);
@@ -131,6 +185,25 @@ try {
     JSON.stringify(result.crops),
   );
   assert.ok(result.crops.every((crop) => crop.highlights.length === 1));
+  assert.ok(
+    result.crops
+      .filter((crop) => [1, 2].includes(crop.questionNumber))
+      .every((crop) => crop.contextRects?.length === 1),
+  );
+  assert.ok(
+    result.crops
+      .filter((crop) => crop.questionNumber > 2)
+      .every((crop) => !crop.contextRects),
+  );
+  assert.equal(
+    result.changedInPassage,
+    0,
+    "Shared passage must never receive the answer highlight",
+  );
+  assert.ok(
+    result.changedInAnswer > 100,
+    "Highlight must move down by the exact shared-passage image height",
+  );
   assert.ok(
     result.rendered.every(
       (image) => image.width > 600 && image.height > 500 && image.size > 1000,
@@ -151,7 +224,7 @@ try {
     JSON.stringify(result, null, 2),
   );
   console.log(
-    `PASS real PDF pipeline: 2 pages, 2 columns, 8 questions, vector figures, answer-only highlights, essay exclusion. Evidence: ${out}`,
+    `PASS real PDF pipeline: 2 pages, 2 columns, 8 questions, shared passages, exact answer-only highlight offset, printed footer and essay exclusion. Evidence: ${out}`,
   );
 } finally {
   await browser.close();

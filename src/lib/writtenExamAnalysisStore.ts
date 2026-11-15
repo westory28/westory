@@ -10,6 +10,7 @@ import {
   setDoc,
   where,
   writeBatch,
+  type Transaction,
 } from "firebase/firestore";
 import { deleteObject, getBlob, ref, uploadBytes } from "firebase/storage";
 import { auth, db, getFirebaseStorage } from "./firebase";
@@ -19,7 +20,10 @@ import type {
   WrittenExamImportedStudent,
   WrittenExamQuestionInfo,
 } from "./writtenExamAnalysisImport";
-import type { WrittenExamPaperCrop } from "./writtenExamPaperCrop";
+import {
+  normalizeWrittenExamPaperRect,
+  type WrittenExamPaperCrop,
+} from "./writtenExamPaperCrop";
 
 type Config = Parameters<typeof getYearSemester>[0];
 export const WRITTEN_EXAM_ANALYSES_COLLECTION = "written_exam_analyses";
@@ -178,11 +182,20 @@ export async function loadWrittenExamAnalysisAsset(
 export async function saveWrittenExamAnalysis(
   config: Config,
   input: WrittenExamAnalysisSaveInput,
-  options: { materialsOnly?: boolean } = {},
+  options: {
+    materialsOnly?: boolean;
+    beforePublish?: (transaction: Transaction) => Promise<void>;
+  } = {},
 ): Promise<WrittenExamAnalysisMetadata> {
   assertArchiveWritable();
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error("로그인 상태를 확인한 뒤 다시 저장해 주세요.");
+  const assertSaveOwner = () => {
+    if (auth.currentUser?.uid !== uid)
+      throw new Error(
+        "로그인 사용자가 바뀌었습니다. 자료를 다시 등록해 주세요.",
+      );
+  };
   const root = scopePath(config);
   const { year, semester } = getYearSemester(config);
   const examId = input.examId
@@ -306,6 +319,30 @@ export async function saveWrittenExamAnalysis(
     )
   )
     throw new Error("문항 크롭에 연결된 페이지 이미지가 없습니다.");
+  const crops = input.crops.map((crop) => {
+    if (crop.contextRects === undefined) return crop;
+    if (!Array.isArray(crop.contextRects) || crop.contextRects.length > 2)
+      throw new Error(
+        "공통 지문 영역은 문항마다 두 개까지 등록할 수 있습니다.",
+      );
+    return {
+      ...crop,
+      contextRects: crop.contextRects.map((rect) => {
+        if (
+          !rect ||
+          ![rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) ||
+          rect.x < 0 ||
+          rect.y < 0 ||
+          rect.width <= 0 ||
+          rect.height <= 0 ||
+          rect.x + rect.width > 1 + 1e-9 ||
+          rect.y + rect.height > 1 + 1e-9
+        )
+          throw new Error("공통 지문 영역이 페이지 안에 있는지 확인해 주세요.");
+        return normalizeWrittenExamPaperRect(rect);
+      }),
+    };
+  });
   const manifestRef = doc(db, root, examId);
   const revision = doc(collection(manifestRef, "revisions")).id;
   const revisionRef = doc(manifestRef, "revisions", revision);
@@ -321,7 +358,7 @@ export async function saveWrittenExamAnalysis(
     classIds,
     studentCount: input.students.length,
     questions: input.questions,
-    crops: input.crops,
+    crops,
     files,
     updatedBy: uid,
     updatedAt: null,
@@ -343,15 +380,19 @@ export async function saveWrittenExamAnalysis(
       studentCount: metadata.studentCount,
       createdAt: serverTimestamp(),
     });
+    assertSaveOwner();
     for (const file of input.files) {
       const path = assetPath(config, examId, revision, file.fileName);
+      const storage = await getFirebaseStorage();
+      assertSaveOwner();
       // Track before sending so an acknowledged-on-server / failed-on-client upload is cleaned up too.
       uploaded.push(path);
-      await uploadBytes(ref(await getFirebaseStorage(), path), file.blob, {
+      await uploadBytes(ref(storage, path), file.blob, {
         contentType: file.blob.type,
         cacheControl: "private, no-store",
         customMetadata: { ownerUid: uid, year, semester, examId, revision },
       });
+      assertSaveOwner();
     }
     const batch = writeBatch(db);
     for (const [classId, students] of options.materialsOnly ? [] : groups) {
@@ -371,26 +412,38 @@ export async function saveWrittenExamAnalysis(
       );
     }
     if (!options.materialsOnly) await batch.commit();
+    assertSaveOwner();
     await runTransaction(db, async (transaction) => {
+      assertSaveOwner();
       const current = await transaction.get(manifestRef);
+      assertSaveOwner();
       const currentRevision = current.exists() ? current.data().revision : null;
       if (currentRevision !== input.expectedRevision)
         throw new Error(
           "다른 작업에서 분석 자료가 변경되었습니다. 새로고침한 뒤 다시 저장해 주세요.",
         );
+      // Linked score data must still describe the same assessment when the
+      // uploaded assets become visible. Complete every read before writing.
+      await options.beforePublish?.(transaction);
+      assertSaveOwner();
       transaction.update(revisionRef, { state: "ready" });
       transaction.set(manifestRef, {
         ...metadata,
         updatedAt: serverTimestamp(),
       });
     });
+    assertSaveOwner();
     return { ...metadata, updatedAt: new Date() };
   } catch (error) {
+    // A new account must never continue an old account's write or cleanup work.
+    if (auth.currentUser?.uid !== uid) throw error;
     // A lost commit acknowledgement must never delete a published revision.
     try {
       const savedRevision = await getDocFromServer(revisionRef);
+      assertSaveOwner();
       if (savedRevision.data()?.state === "ready") {
         const savedManifest = await getDocFromServer(manifestRef);
+        assertSaveOwner();
         if (savedManifest.data()?.revision === revision)
           return {
             ...savedManifest.data(),
@@ -401,13 +454,16 @@ export async function saveWrittenExamAnalysis(
         savedRevision.data().uploadedBy === uid
       ) {
         const cleanup = await Promise.allSettled([
-          ...uploaded.map(async (path) =>
-            deleteObject(ref(await getFirebaseStorage(), path)),
-          ),
+          ...uploaded.map(async (path) => {
+            const storage = await getFirebaseStorage();
+            assertSaveOwner();
+            return deleteObject(ref(storage, path));
+          }),
           ...writtenClasses.map((classId) =>
             deleteDoc(doc(revisionRef, "classes", classId)),
           ),
         ]);
+        assertSaveOwner();
         // Keep the staging marker when cleanup cannot finish; it remains invisible to readers.
         if (
           cleanup.every(

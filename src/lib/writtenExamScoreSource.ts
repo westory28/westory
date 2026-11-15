@@ -188,9 +188,17 @@ export async function loadWrittenExamScoreRoster(config: Config, id: string) {
   );
   if (!snapshot.exists())
     throw new Error("점수표가 삭제되었습니다. 목록을 새로고침해 주세요.");
+  return normalizeScoreRoster(snapshot.data(), snapshot.id, config);
+}
+
+const normalizeScoreRoster = (
+  data: Record<string, unknown>,
+  id: string,
+  config: Config,
+) => {
   const roster = {
-    ...snapshot.data(),
-    id: snapshot.id,
+    ...data,
+    id,
   } as PerformanceScoreRoster;
   const { year, semester } = getYearSemester(config);
   if (
@@ -225,7 +233,20 @@ export async function loadWrittenExamScoreRoster(config: Config, id: string) {
     );
   studentsFromScoreRoster(roster, []);
   return roster;
-}
+};
+
+// Compare the already-fetched ledger in memory, without logging student data.
+// Sorting object keys keeps Firestore map serialization order irrelevant.
+const rosterFingerprint = (roster: PerformanceScoreRoster) =>
+  JSON.stringify(roster, (_key, value) =>
+    value && typeof value === "object" && !Array.isArray(value)
+      ? Object.fromEntries(
+          Object.entries(value).sort(([left], [right]) =>
+            left.localeCompare(right),
+          ),
+        )
+      : value,
+  );
 
 export function scoreSourceClasses(
   source: Pick<WrittenExamScoreSource, "targetGrade" | "classes">,
@@ -569,7 +590,12 @@ export async function saveWrittenExamScoreMaterials(
     examId: string;
   },
 ) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error("로그인 상태를 확인한 뒤 다시 등록해 주세요.");
   const roster = await loadWrittenExamScoreRoster(config, input.examId);
+  if (auth.currentUser?.uid !== uid)
+    throw new Error("로그인 사용자가 바뀌었습니다. 자료를 다시 등록해 주세요.");
+  const expectedRoster = rosterFingerprint(roster);
   const questions = mergeScoreSourceQuestions(
     questionsFromScoreSource(roster),
     input.questions,
@@ -583,6 +609,29 @@ export async function saveWrittenExamScoreMaterials(
       grade: school(roster.targetGrade),
       students: studentsFromScoreRoster(roster, questions),
     },
-    { materialsOnly: true },
+    {
+      materialsOnly: true,
+      beforePublish: async (transaction) => {
+        const latest = await transaction.get(
+          doc(
+            db,
+            getSemesterCollectionPath(
+              config,
+              PERFORMANCE_SCORE_ROSTERS_COLLECTION,
+            ),
+            segment(input.examId),
+          ),
+        );
+        if (!latest.exists())
+          throw new Error(
+            "연결된 점수표가 삭제되어 자료를 등록하지 못했습니다. 점수표를 다시 선택해 주세요.",
+          );
+        const current = normalizeScoreRoster(latest.data(), latest.id, config);
+        if (rosterFingerprint(current) !== expectedRoster)
+          throw new Error(
+            "연결된 점수표가 변경되어 자료를 등록하지 못했습니다. 최신 점수표를 확인한 뒤 다시 등록해 주세요.",
+          );
+      },
+    },
   );
 }

@@ -73,7 +73,7 @@ const metadata = {
   updatedAt: null,
 };
 const state = `
-export const qa = window.examQa = {calls:[],failLoad:false,failMock:false,failAsset:false,pause:false,pauseOps:[],releases:[],metadata:${JSON.stringify(metadata)},students:${JSON.stringify(students)},assets:new Map(),saved:null,auth:{config:{year:'2026',semester:'2'},currentUser:{uid:'qa-teacher'},authGeneration:1,userData:{role:'teacher'}}};
+export const qa = window.examQa = {calls:[],failLoad:false,failMock:false,failAsset:false,failSave:false,conflictSave:false,pause:false,pauseOps:[],releases:[],metadata:${JSON.stringify(metadata)},scoreQuestions:${JSON.stringify(questions)},students:${JSON.stringify(students)},assets:new Map(),saved:null,auth:{config:{year:'2026',semester:'2'},currentUser:{uid:'qa-teacher'},authGeneration:1,userData:{role:'teacher'}}};
 export const authListeners=new Set();
 qa.setAuth=values=>{qa.auth={...qa.auth,...values,authGeneration:qa.auth.authGeneration+1};authListeners.forEach(listener=>listener())};
 export async function begin(op,data={}){qa.calls.push({op,owner:qa.auth.currentUser.uid,...data});if(qa.pause||qa.pauseOps.includes(op))await new Promise(resolve=>qa.releases.push(resolve));}
@@ -85,11 +85,11 @@ const mocks = {
   "qa-archive": `export const isSemesterArchive=false;`,
   "qa-assessment-release": `export const getAssessmentSemesterId=config=>config.year+'-'+config.semester;`,
   "qa-score-kind": `export const WRITTEN_EXAM_SCORE_KIND='written_exam_essay';`,
-  "qa-score-manager": `import React,{useState} from 'react';export default function Manager({navigation,writtenExamMaterials}){const[open,setOpen]=useState(false);return <section><div className="ws-page-header"><h2>정기시험 점수 관리</h2></div>{navigation}<button>이의제기</button><button onClick={()=>setOpen(true)}>업로드</button><button>서명 현황</button>{open&&<section role="dialog" aria-label="정기시험 점수표 업로드"><button onClick={()=>setOpen(false)}>업로드 창 닫기</button>{writtenExamMaterials}</section>}</section>}`,
+  "qa-score-manager": `import React,{useState} from 'react';export default function Manager({navigation,writtenExamMaterials}){const[open,setOpen]=useState(false);const[busy,setBusy]=useState(false);return <section><div className="ws-page-header"><h2>정기시험 점수 관리</h2></div>{navigation}<button>이의제기</button><button onClick={()=>setOpen(true)}>업로드</button><button>서명 현황</button>{open&&<section role="dialog" aria-label="정기시험 점수표 업로드"><button disabled={busy} onClick={()=>setOpen(false)}>업로드 창 닫기</button>{typeof writtenExamMaterials==='function'?writtenExamMaterials(setBusy):writtenExamMaterials}</section>}</section>}`,
   "qa-source": `import{qa,begin}from'qa-state';
 const essayItems=[{itemKey:'essay-1',name:'논술형 1',shortName:'1-(1)',examSection:'essay',maxScore:2},{itemKey:'essay-2',name:'논술형 2',shortName:'1-(2)',examSection:'essay',maxScore:3}];
 const scoreRows=()=>qa.students.map((student,index)=>{const scores=[[0,0],[2,3],[1,null],[null,null]][index%4];return{uid:'qa-uid-'+student.key,rowKey:student.key,grade:student.grade,class:student.class,number:student.number,studentName:student.name,items:essayItems.map((item,i)=>({...item,score:scores[i],scoreEntered:scores[i]!==null,feedback:i===0?(index%2===0?'백지':'문항 근거를\\n  다시 확인하세요.'):(index%4===3?'백지':'')})),feedback:'교사가 확인한 기존 피드백 '+student.key+'\\n  역사적 근거를 연결하세요.\\r\\n   다음 학습에서 확인합니다.',evidence:'기존 채점 근거',totalScore:scores.reduce((sum,score)=>sum+(score||0),0),enteredScoreCount:scores.filter(score=>score!==null).length,totalMaxScore:5}});
-const source=()=>({id:qa.metadata.id,title:qa.metadata.title,targetGrade:'3',classes:['1','2'],scoreKind:'written_exam_essay',scoreContentKind:'mixed',academicYear:'2026',semester:'2',items:[...qa.metadata.questions.map(q=>({...q,examSection:'objective',questionNumber:q.number,correctAnswer:q.answer,maxScore:q.points,answerChoices:q.options})),...essayItems],rows:scoreRows()});
+const source=()=>({id:qa.metadata.id,title:qa.metadata.title,targetGrade:'3',classes:['1','2'],scoreKind:'written_exam_essay',scoreContentKind:'mixed',academicYear:'2026',semester:'2',items:[...qa.scoreQuestions.map(q=>({...q,examSection:'objective',questionNumber:q.number,correctAnswer:q.answer,maxScore:q.points,answerChoices:q.options})),...essayItems],rows:scoreRows()});
 export async function listWrittenExamScoreSources(config){await begin('list',{from:'score-ledger',year:config.year,semester:config.semester});return[source(),{...source(),id:'qa-other',title:'다른 정기시험'}]}
 export async function loadWrittenExamScoreAnalysis(config,id,options={}){const essay=options.analysisKind==='essay';const selected=qa.students.filter(s=>!options.classId||('3-'+s.class)===options.classId);const rows=scoreRows().filter(s=>!options.classId||('3-'+s.class)===options.classId);const result={metadata:essay?{...qa.metadata,questions:[],crops:[],files:[],examDate:'',revision:'scores',studentCount:rows.length}:qa.metadata,hasObjectiveScores:true,students:essay?[]:selected,scoreRows:rows,scoreItems:source().items};await begin('load',{id,...options,analysisKind:options.analysisKind||'objective',from:'score-ledger',readContract:{roster:1,materials:essay?0:1,userDocuments:essay?0:selected.length}});if(qa.failLoad)throw new Error('합성 서버 읽기 실패');return result}
 export async function loadWrittenExamScoreRoster(config,id){await begin('roster',{id});return {...source(),id}}
@@ -97,7 +97,7 @@ export async function loadWrittenExamMaterials(config,id){await begin('materials
 export function scoreSourceClasses(s){return s.classes.map(c=>s.targetGrade+'-'+c)}
 export function questionsFromScoreSource(s){return s.items.filter(i=>i.examSection==='objective').map(i=>({number:i.questionNumber,answer:i.correctAnswer,points:i.maxScore,options:i.answerChoices,achievementStandardCodes:[],targetAchievementLevel:'',intendedDifficulty:'',concepts:[]}))}
 export function mergeScoreSourceQuestions(source,info){if(!info.length)return source;if(source.length!==info.length||source.some(q=>!info.some(i=>i.number===q.number&&i.answer===q.answer&&i.points===q.points)))throw new Error('문항정보표의 문항번호·정답·배점이 등록된 점수표와 다릅니다.');return info}
-export async function saveWrittenExamScoreMaterials(config,input){await begin('save',{hasStudentPayload:'students'in input});if('students'in input)throw new Error('Student payload must not reach materials API');qa.saved=input;qa.metadata={...qa.metadata,...input,id:input.examId,revision:qa.metadata.revision+'-next',files:input.files.map(({blob,...file})=>({...file,size:blob.size,contentType:blob.type}))};for(const file of input.files)qa.assets.set(file.fileName,file.blob);return qa.metadata}
+export async function saveWrittenExamScoreMaterials(config,input){await begin('save',{hasStudentPayload:'students'in input});if('students'in input)throw new Error('Student payload must not reach materials API');if(qa.failSave)throw new Error('합성 자료 등록 실패');if(qa.conflictSave){qa.conflictSave=false;qa.metadata={...qa.metadata,revision:qa.metadata.revision+'-concurrent'};}if(input.expectedRevision!==qa.metadata.revision)throw new Error('다른 작업에서 분석 자료가 변경되었습니다. 새로고침한 뒤 다시 저장해 주세요.');qa.saved=input;qa.metadata={...qa.metadata,...input,id:input.examId,revision:qa.metadata.revision+'-next',files:input.files.map(({blob,...file})=>({...file,size:blob.size,contentType:blob.type}))};for(const file of input.files)qa.assets.set(file.fileName,file.blob);return qa.metadata}
 `,
   "qa-store": `import{qa,begin}from'qa-state';
 export async function listWrittenExamAnalyses(){await begin('list');return [qa.metadata]}
@@ -243,6 +243,10 @@ await variant(infoWorkbook, "missing-info.xlsx", (book) =>
 await variant(infoWorkbook, "updated-metadata.xlsx", (book) => {
   book.getWorksheet("문항정보 1").getRow(2).getCell(5).value = "E";
   book.getWorksheet("문항정보 2").getRow(6).getCell(5).value = "E";
+});
+await variant(infoWorkbook, "updated-answer.xlsx", (book) => {
+  book.getWorksheet("문항정보 1").getRow(2).getCell(2).value = "2";
+  book.getWorksheet("문항정보 2").getRow(6).getCell(2).value = "2";
 });
 await variant(answerWorkbook, "invalid-sheet.xlsx", (book) =>
   book.addWorksheet("알 수 없는 시트").addRow(["참고 자료"]),
@@ -1051,30 +1055,114 @@ try {
   const originalStudents = await page.evaluate(() =>
     JSON.stringify(window.examQa.students),
   );
+  const materialPanel = dialog.getByRole("region", {
+    name: "원안지·문항정보 등록",
+    exact: true,
+  });
+  const register = () =>
+    dialog.getByRole("button", { name: "자료 등록", exact: true });
+  const materialReady = () =>
+    page.waitForFunction(
+      () =>
+        document
+          .querySelector(".written-exam-materials")
+          ?.getAttribute("aria-busy") === "false",
+    );
+  await materialReady();
+  const emptyRegistrationStart = await callCount();
+  await register().click();
+  await dialog
+    .getByRole("alert")
+    .filter({ hasText: "점수표를 선택" })
+    .waitFor();
+  assert.equal(
+    await dialog
+      .locator(".written-exam-material-fields select")
+      .evaluate((el) => document.activeElement === el),
+    true,
+  );
+  assert.equal(
+    await callCount(),
+    emptyRegistrationStart,
+    "Missing source gives feedback without server requests",
+  );
+  await dialog
+    .locator(".written-exam-material-fields select")
+    .selectOption("qa-other");
+  await materialReady();
+  await register().click();
+  await dialog
+    .getByRole("alert")
+    .filter({ hasText: "시험일을 입력" })
+    .waitFor();
+  assert.equal(
+    await dialog
+      .getByLabel("시험일", { exact: true })
+      .evaluate((el) => document.activeElement === el),
+    true,
+  );
   await dialog
     .locator(".written-exam-material-fields select")
     .selectOption("qa-exam");
+  await materialReady();
   await dialog
     .getByLabel("문항정보표 엑셀")
     .setInputFiles(path.join(out, "conflicting-info.xlsx"));
   await dialog.getByLabel("원안지 PDF", { exact: true }).setInputFiles(pdfFile);
+  await register().click();
+  await dialog.getByRole("alert").filter({ hasText: "문항정보 2" }).waitFor();
+  await materialReady();
+  await page.evaluate(() => {
+    window.examQa.metadata = {
+      ...window.examQa.metadata,
+      revision: window.examQa.metadata.revision + "-external",
+    };
+  });
+  await dialog
+    .getByRole("button", { name: "등록 상태 새로고침", exact: true })
+    .click();
+  await materialReady();
+  assert.equal(
+    await dialog
+      .getByLabel("문항정보표 엑셀")
+      .evaluate((el) => el.files[0]?.name),
+    "conflicting-info.xlsx",
+    "Registration-state refresh preserves selected XLSX DOM input",
+  );
+  assert.equal(
+    await dialog
+      .getByLabel("원안지 PDF", { exact: true })
+      .evaluate((el) => el.files.length),
+    1,
+    "Registration-state refresh preserves selected PDF DOM input",
+  );
   await dialog
     .locator(".written-exam-material-fields select")
     .selectOption("qa-other");
+  await materialReady();
   await dialog.getByLabel("시험일", { exact: true }).fill("2026-11-14");
-  await dialog.getByRole("button", { name: "자료 확인", exact: true }).click();
-  await dialog.getByText(/8문항 · PDF 0쪽/).waitFor();
-  assert.equal(
-    await dialog.getByRole("alert").count(),
-    0,
-    "Changing the source clears stale info and PDF file state",
-  );
+  await register().click();
   await dialog
-    .getByRole("button", { name: "파일 다시 선택", exact: true })
-    .click();
+    .getByRole("alert")
+    .filter({ hasText: "엑셀 또는 원안지 PDF" })
+    .waitFor();
+  assert.equal(
+    await dialog
+      .getByLabel("문항정보표 엑셀")
+      .evaluate((el) => el.files.length),
+    0,
+  );
+  assert.equal(
+    await dialog
+      .getByLabel("원안지 PDF", { exact: true })
+      .evaluate((el) => el.files.length),
+    0,
+    "Changing source clears both stale file inputs",
+  );
   await dialog
     .locator(".written-exam-material-fields select")
     .selectOption("qa-exam");
+  await materialReady();
   await dialog.getByLabel("시험일", { exact: true }).fill("2026-11-14");
   assert.equal(
     await dialog.getByLabel("학생답 정오표 엑셀").count(),
@@ -1083,8 +1171,109 @@ try {
   );
   await dialog.getByLabel("문항정보표 엑셀").setInputFiles(infoFile);
   await dialog.getByLabel("원안지 PDF", { exact: true }).setInputFiles(pdfFile);
-  await dialog.getByRole("button", { name: "자료 확인", exact: true }).click();
-  await dialog.getByText(/8문항 · PDF 2쪽/).waitFor({ timeout: 30000 });
+  const registrationStart = await page.evaluate(() => {
+    window.examQa.pauseOps = ["roster", "save"];
+    window.examQa.failSave = true;
+    window.examQa.progress = [];
+    const panel = document.querySelector(".written-exam-materials");
+    window.examQa.progressObserver = new MutationObserver(() => {
+      const text = panel.querySelector('[role="status"]')?.textContent;
+      if (text && !window.examQa.progress.includes(text))
+        window.examQa.progress.push(text);
+    });
+    window.examQa.progressObserver.observe(panel, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    });
+    const count = window.examQa.calls.length;
+    const button = [...panel.querySelectorAll("button")].find(
+      (el) => el.textContent === "자료 등록",
+    );
+    button.click();
+    button.click();
+    return count;
+  });
+  await page.waitForFunction(() => window.examQa.releases.length === 1);
+  assert.deepEqual(
+    (await callsSince(registrationStart)).map((call) => call.op),
+    ["roster"],
+    "Same-tick registration double click prepares once",
+  );
+  assert.equal(await materialPanel.getAttribute("aria-busy"), "true");
+  assert.equal(
+    await dialog
+      .getByRole("button", { name: "등록 자료 확인 중", exact: true })
+      .isDisabled(),
+    true,
+  );
+  assert.equal(
+    await dialog
+      .getByRole("button", { name: "업로드 창 닫기", exact: true })
+      .isDisabled(),
+    true,
+    "Busy callback reaches the parent host",
+  );
+  await page.evaluate(() => {
+    window.examQa.pauseOps = ["save"];
+    window.examQa.releases.splice(0).forEach((resolve) => resolve());
+  });
+  await dialog
+    .getByRole("button", { name: "서버에 등록 중", exact: true })
+    .waitFor({ timeout: 30000 });
+  assert.equal(
+    await dialog
+      .getByRole("button", { name: "서버에 등록 중", exact: true })
+      .isDisabled(),
+    true,
+  );
+  assert.equal(
+    (await callsSince(registrationStart)).filter((call) => call.op === "save")
+      .length,
+    1,
+    "Ready PDF crops proceed directly to one save",
+  );
+  await page.evaluate(() => {
+    window.examQa.pauseOps = [];
+    window.examQa.releases.splice(0).forEach((resolve) => resolve());
+  });
+  await dialog
+    .getByRole("alert")
+    .filter({ hasText: "합성 자료 등록 실패" })
+    .waitFor();
+  await materialReady();
+  await dialog.getByText(/8문항 · PDF 2쪽/).waitFor();
+  const registrationProgress = await page.evaluate(() => {
+    window.examQa.progressObserver.disconnect();
+    return window.examQa.progress;
+  });
+  assert.ok(registrationProgress.some((value) => /등록 자료 확인/.test(value)));
+  assert.ok(registrationProgress.some((value) => /PDF.*쪽 처리/.test(value)));
+  assert.ok(registrationProgress.some((value) => /서버에 등록/.test(value)));
+  boundaryChecks.push({
+    registrationProgress,
+    registrationDoubleClickRequests: (await callsSince(registrationStart)).map(
+      (call) => call.op,
+    ),
+  });
+  for (const width of [390, 768, 1280, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    assert.equal(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > innerWidth + 1,
+      ),
+      false,
+      `Registration recovery overflow at ${width}`,
+    );
+    await page.screenshot({
+      path: path.join(out, `materials-retry-${width}.png`),
+      fullPage: true,
+      animations: "disabled",
+    });
+  }
+  await page.evaluate(() => {
+    window.examQa.failSave = false;
+  });
   const highlight = await dialog
     .locator(".written-exam-highlight")
     .first()
@@ -1099,7 +1288,7 @@ try {
     .click();
   assert.equal(
     await dialog
-      .getByRole("button", { name: "원안지·문항정보 저장", exact: true })
+      .getByRole("button", { name: "자료 등록", exact: true })
       .isDisabled(),
     true,
   );
@@ -1124,9 +1313,7 @@ try {
     .getByRole("button", { name: "이 문항 영역 확인", exact: true })
     .focus();
   await page.keyboard.press("Enter");
-  await dialog
-    .getByRole("button", { name: "원안지·문항정보 저장", exact: true })
-    .click();
+  await dialog.getByRole("button", { name: "자료 등록", exact: true }).click();
   await dialog.getByText(/등록됨 · 8문항 · 원안지 2쪽/).waitFor();
   const saved = await page.evaluate(() => ({
     count: window.examQa.students.length,
@@ -1174,11 +1361,14 @@ try {
   await dialog
     .getByLabel("문항정보표 엑셀")
     .setInputFiles(path.join(out, "updated-metadata.xlsx"));
-  await dialog.getByRole("button", { name: "자료 확인", exact: true }).click();
-  await dialog.getByText(/8문항 · PDF 2쪽/).waitFor();
-  await dialog
-    .getByRole("button", { name: "원안지·문항정보 저장", exact: true })
-    .click();
+  await dialog.getByRole("button", { name: "자료 등록", exact: true }).click();
+  await page.waitForFunction(
+    () =>
+      window.examQa.saved.examDate === "2026-11-15" &&
+      document
+        .querySelector(".written-exam-materials")
+        .getAttribute("aria-busy") === "false",
+  );
   await dialog.getByText(/등록됨 · 8문항 · 원안지 2쪽/).waitFor();
   const paperAfter = await page.evaluate(async () => {
     const digest = async (blob) =>
@@ -1219,6 +1409,92 @@ try {
     24,
     "Materials save leaves ledger responses untouched",
   );
+  const originalHighlight = await page.evaluate(
+    () =>
+      window.examQa.saved.crops.find((crop) => crop.questionNumber === 1)
+        .highlights,
+  );
+  await page.evaluate(() => {
+    window.examQa.scoreQuestions = window.examQa.scoreQuestions.map(
+      (question) =>
+        question.number === 1 ? { ...question, answer: "2" } : question,
+    );
+    window.examQa.conflictSave = true;
+  });
+  await dialog
+    .getByLabel("문항정보표 엑셀")
+    .setInputFiles(path.join(out, "updated-answer.xlsx"));
+  const recropStart = await callCount();
+  await register().click();
+  await dialog
+    .getByRole("alert")
+    .filter({ hasText: "다른 작업에서 분석 자료가 변경" })
+    .waitFor({ timeout: 30000 });
+  await materialReady();
+  await dialog.getByText(/8문항 · PDF 2쪽/).waitFor();
+  const recropCalls = await callsSince(recropStart);
+  assert.ok(
+    recropCalls.some(
+      (call) => call.op === "asset" && call.fileName === "paper.pdf",
+    ),
+    "Changed answers reprocess the original stored PDF",
+  );
+  const casRefreshStart = await callCount();
+  await dialog
+    .getByRole("button", { name: "등록 상태 새로고침", exact: true })
+    .click();
+  await materialReady();
+  assert.deepEqual(
+    (await callsSince(casRefreshStart))
+      .filter((call) => call.op !== "toast")
+      .map((call) => call.op),
+    ["materials"],
+    "CAS recovery refreshes the current registration only",
+  );
+  await dialog.getByText(/8문항 · PDF 2쪽/).waitFor();
+  const retryStart = await callCount();
+  await register().click();
+  await materialReady();
+  await page.waitForFunction(
+    () => window.examQa.saved.questions[0].answer === "2",
+  );
+  assert.deepEqual(
+    (await callsSince(retryStart))
+      .filter((call) => call.op !== "toast")
+      .map((call) => call.op),
+    ["save"],
+    "A refreshed revision reuses prepared crop files without parsing or roster rereads",
+  );
+  assert.notDeepEqual(
+    await page.evaluate(
+      () =>
+        window.examQa.saved.crops.find((crop) => crop.questionNumber === 1)
+          .highlights,
+    ),
+    originalHighlight,
+    "Answer changes replace the old correct-choice highlight",
+  );
+  const originalPdfRetained = await page.evaluate(async () => {
+    const pdf = window.examQa.saved.files.find((file) => file.kind === "pdf");
+    return Array.from(
+      new Uint8Array(
+        await crypto.subtle.digest("SHA-256", await pdf.blob.arrayBuffer()),
+      ),
+    ).join(",");
+  });
+  assert.equal(
+    originalPdfRetained,
+    paperBefore.find(([name]) => name === "paper.pdf")[1],
+  );
+  assert.equal(
+    await page.evaluate(() => JSON.stringify(window.examQa.students)),
+    originalStudents,
+  );
+  boundaryChecks.push({
+    recropCalls,
+    casRefreshCalls: await callsSince(casRefreshStart),
+    originalPdfRetained: true,
+  });
   await dialog
     .getByRole("button", { name: "업로드 창 닫기", exact: true })
     .click();

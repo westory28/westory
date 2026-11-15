@@ -11,6 +11,8 @@ export interface WrittenExamPaperCrop {
   questionNumber: number;
   page: number;
   rect: WrittenExamPaperRect;
+  /** Same-page shared passages, rendered before the individual question. */
+  contextRects?: WrittenExamPaperRect[];
   highlights: WrittenExamPaperRect[];
   status: "ready" | "review";
   warnings: string[];
@@ -155,7 +157,9 @@ export function detectWrittenExamPaperCrops(
       : [Math.min(...anchors.map((a) => a.rect.x))];
     for (const anchor of anchors) {
       const column = split && anchor.rect.x >= 0.45 ? 1 : 0;
-      if (Math.abs(anchor.rect.x - rails[column]) > 0.035) continue;
+      // Numbered instructions can sit in an inset box above question 1. The
+      // question-number rail is much tighter than the full text indentation.
+      if (Math.abs(anchor.rect.x - rails[column]) > 0.008) continue;
       candidates.push({ ...anchor, page, column, split });
     }
   }
@@ -194,7 +198,75 @@ export function detectWrittenExamPaperCrops(
     );
     const x = Math.max(0.015, anchor.rect.x - 0.008);
     const edge = anchor.split && anchor.column === 0 ? 0.49 : 0.98;
-    const top = Math.max(0, anchor.rect.y - 0.006);
+    let top = Math.max(0, anchor.rect.y - 0.002);
+    const sharedPassages = anchor.page.items.flatMap((item) => {
+      const range = /^\s*\[\s*(\d{1,3})\s*[~～]\s*(\d{1,3})\s*\]/.exec(
+        item.text,
+      );
+      if (!range || Math.abs(item.rect.x - anchor.rect.x) > 0.008) return [];
+      const firstNumber = Number(range[1]),
+        lastNumber = Number(range[2]);
+      if (
+        lastNumber <= firstNumber ||
+        lastNumber - firstNumber > 4 ||
+        Array.from(
+          { length: lastNumber - firstNumber + 1 },
+          (_, index) => firstNumber + index,
+        ).some((number) => !expected.has(number))
+      )
+        return [];
+      const first = sameColumn.find(
+        (candidate) => candidate.number === firstNumber,
+      );
+      if (!first || item.rect.y >= first.rect.y - 0.015) return [];
+      return [{ firstNumber, lastNumber, item, first }];
+    });
+    const sharedBoundary = sharedPassages
+      .filter((passage) => passage.item.rect.y > anchor.rect.y + 0.01)
+      .sort((a, b) => a.item.rect.y - b.item.rect.y)[0];
+    const contexts = sharedPassages.filter(
+      (passage) =>
+        question.number >= passage.firstNumber &&
+        question.number <= passage.lastNumber,
+    );
+    const contextRects: WrittenExamPaperRect[] =
+      contexts.length === 1
+        ? [
+            {
+              x,
+              y: Math.max(0, contexts[0].item.rect.y - 0.006),
+              width: edge - x,
+              height:
+                contexts[0].first.rect.y -
+                0.002 -
+                Math.max(0, contexts[0].item.rect.y - 0.006),
+            },
+          ]
+        : [];
+    // Keep the shared passage's lower frame in its own image, rather than
+    // cutting it across both pieces when the first question closely follows it.
+    if (contexts.length === 1 && contexts[0].firstNumber === question.number)
+      top = Math.max(0, anchor.rect.y - 0.001);
+    const footer = groupLines(anchor.page.items)
+      .filter((line) => line[0].rect.y > 0.88)
+      .find((line) => {
+        const value = line.map((item) => item.text).join(" ");
+        const pageNumber = new RegExp(
+          `(?:^|\\s)${pages.length}\\s*[-/]\\s*${anchor.page.page}(?:\\s|$)`,
+        );
+        return (
+          (/학년/.test(value) &&
+            /학기/.test(value) &&
+            pageNumber.test(value)) ||
+          (line.length === 1 &&
+            line[0].rect.x > 0.35 &&
+            line[0].rect.x < 0.65 &&
+            (value.trim() === String(anchor.page.page) ||
+              new RegExp(
+                `^\\s*${anchor.page.page}\\s*[/]\\s*${pages.length}\\s*$`,
+              ).test(value)))
+        );
+      });
     const sectionBoundary = anchor.page.items
       .filter(
         (item) =>
@@ -209,6 +281,8 @@ export function detectWrittenExamPaperCrops(
     const end = Math.min(
       next ? next.rect.y - 0.007 : 0.96,
       sectionBoundary ? sectionBoundary.rect.y - 0.007 : 0.96,
+      footer ? footer[0].rect.y - 0.007 : 0.96,
+      sharedBoundary ? sharedBoundary.item.rect.y - 0.007 : 0.96,
     );
     const rect = {
       x,
@@ -225,6 +299,8 @@ export function detectWrittenExamPaperCrops(
     const segments = optionSegments(items);
     const markers = segments.filter((segment) => segment.option);
     const issues: string[] = [];
+    if (contexts.length > 1)
+      issues.push("공통 지문 범위가 겹칩니다. 문항 영역을 확인해 주세요.");
     if (
       new Set(markers.map((marker) => marker.option)).size !== 5 ||
       markers.length !== 5
@@ -292,6 +368,7 @@ export function detectWrittenExamPaperCrops(
       questionNumber: question.number,
       page: anchor.page.page,
       rect,
+      ...(contextRects.length ? { contextRects } : {}),
       highlights,
       status: issues.length ? "review" : "ready",
       warnings: [...new Set(issues)],
@@ -477,34 +554,69 @@ export async function renderWrittenExamCrop(
   const bitmap = await createImageBitmap(pageBlob);
   const canvas = document.createElement("canvas");
   try {
-    const sx = rect.x * bitmap.width,
-      sy = rect.y * bitmap.height;
-    canvas.width = Math.max(1, Math.round(rect.width * bitmap.width));
-    canvas.height = Math.max(1, Math.round(rect.height * bitmap.height));
+    if ((crop.contextRects?.length || 0) > 2)
+      throw new Error("공통 지문 영역은 두 개 이하로 지정해 주세요.");
+    const regions = [
+      ...(crop.contextRects || []).map(normalizeWrittenExamPaperRect),
+      rect,
+    ];
+    const gap = Math.round(bitmap.height * 0.006);
+    canvas.width = Math.max(
+      1,
+      ...regions.map((region) => Math.round(region.width * bitmap.width)),
+    );
+    canvas.height = Math.max(
+      1,
+      regions.reduce(
+        (sum, region) => sum + Math.round(region.height * bitmap.height),
+        0,
+      ) +
+        gap * (regions.length - 1),
+    );
     const context = canvas.getContext("2d");
     if (!context) throw new Error("문항 이미지를 표시할 수 없습니다.");
-    context.drawImage(
-      bitmap,
-      sx,
-      sy,
-      rect.width * bitmap.width,
-      rect.height * bitmap.height,
-      0,
-      0,
-      canvas.width,
-      canvas.height,
-    );
+    context.fillStyle = "white";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    let offsetY = 0,
+      questionY = 0;
+    for (const [index, region] of regions.entries()) {
+      const width = Math.max(1, Math.round(region.width * bitmap.width));
+      const height = Math.max(1, Math.round(region.height * bitmap.height));
+      if (index === regions.length - 1) questionY = offsetY;
+      context.drawImage(
+        bitmap,
+        region.x * bitmap.width,
+        region.y * bitmap.height,
+        region.width * bitmap.width,
+        region.height * bitmap.height,
+        0,
+        offsetY,
+        width,
+        height,
+      );
+      offsetY += height + gap;
+    }
     if (options.highlight !== false) {
+      context.save();
+      context.beginPath();
+      context.rect(
+        0,
+        questionY,
+        rect.width * bitmap.width,
+        rect.height * bitmap.height,
+      );
+      context.clip();
       context.fillStyle = "rgba(255, 224, 64, 0.35)";
       for (const highlight of crop.highlights) {
         const safe = normalizeWrittenExamPaperRect(highlight);
         context.fillRect(
           (safe.x - rect.x) * bitmap.width,
-          (safe.y - rect.y) * bitmap.height,
+          questionY + (safe.y - rect.y) * bitmap.height,
           safe.width * bitmap.width,
           safe.height * bitmap.height,
         );
       }
+      context.restore();
     }
     return await toBlob(canvas);
   } finally {
