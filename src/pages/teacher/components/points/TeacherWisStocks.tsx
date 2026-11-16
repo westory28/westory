@@ -12,10 +12,13 @@ import PortalSubNavigation from "../../../../components/common/PortalSubNavigati
 import WisStockChartPreview from "./WisStockChartPreview";
 import WisStockMarketRules from "./WisStockMarketRules";
 import WisStockInvestmentBoard from "./WisStockInvestmentBoard";
-import WisStockMarketOverview, {
-  WisStockSparkline,
-} from "./WisStockMarketOverview";
-import WisStockPriceChart from "../../../../components/common/WisStockPriceChart";
+import WisStockMarketOverview from "./WisStockMarketOverview";
+import {
+  wisStockQuote,
+  quoteNumber,
+  signedQuote,
+  quoteDirection,
+} from "./wisStockQuote";
 import { getYearSemester } from "../../../../lib/semesterScope";
 import { watchWisStockListings } from "../../../../lib/wisStockListingSubscription";
 import {
@@ -111,6 +114,8 @@ export default function TeacherWisStocks({
   const [haltConflict, setHaltConflict] = useState(false);
   const haltIntent = useRef(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [viewId, setViewId] = useState<string | null>(null);
+  const editButtonRef = useRef<HTMLButtonElement>(null);
   const [growthFilter, setGrowthFilter] = useState<
     "ALL" | "HISTORICAL" | "VALUE"
   >("ALL");
@@ -159,6 +164,7 @@ export default function TeacherWisStocks({
   useEffect(() => {
     setMarket(null);
     setSelectedId(null);
+    setViewId(null);
     setGrowthFilter("ALL");
     setPeriodFilter(null);
     setTemplateId("");
@@ -281,6 +287,10 @@ export default function TeacherWisStocks({
     value: WisStockSettings[K],
   ) => setDraft((current) => ({ ...current, [key]: value }));
   const choose = (stock?: WisStock) => {
+    if (stock?.id === editor.current.selectedId && editor.current.dirty) {
+      formRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+      return;
+    }
     setTemplateId("");
     setSelectedId(stock?.id || "");
     setDraft(stock ? { ...stock.settings } : emptySettings());
@@ -412,6 +422,23 @@ export default function TeacherWisStocks({
     [typeStocks, selectedPeriod],
   );
   const marketOpen = market?.studentOpen === true && !market.rules.halted;
+  const activeViewId =
+    viewId === null
+      ? null
+      : visibleStocks.some((stock) => stock.id === viewId)
+        ? viewId
+        : visibleStocks[0]?.id || null;
+  const viewedStock = visibleStocks.find((stock) => stock.id === activeViewId);
+  useEffect(() => {
+    setViewId(activeViewId);
+  }, [activeViewId]);
+  const indexChange = market?.marketIndex?.history.length
+    ? market.marketIndex.value - market.marketIndex.previousClose
+    : null;
+  const indexPercent =
+    indexChange !== null && market?.marketIndex?.previousClose
+      ? (indexChange / market.marketIndex.previousClose) * 100
+      : null;
   return (
     <section className="wis-stocks" aria-label="위스피(WsPI) 관리">
       <PortalSubNavigation
@@ -550,9 +577,6 @@ export default function TeacherWisStocks({
         </form>
       )}
       {market && tab === "stocks" && (
-        <WisStockMarketOverview index={market.marketIndex} />
-      )}
-      {market && tab === "stocks" && (
         <div className="wis-stocks__summary">
           <span>
             등록 {stats.count} / {market.maxStocks}
@@ -628,63 +652,136 @@ export default function TeacherWisStocks({
         </div>
       )}
       {market && (
-        <div
-          className={`wis-stocks__workspace${selectedId !== null ? " is-editing" : ""}`}
-          hidden={tab !== "stocks"}
-        >
-          <div className="wis-stocks__list">
-            {visibleStocks.length === 0 ? (
-              <p className="wis-stocks__empty">
-                {market.stocks.length === 0
-                  ? "등록된 종목이 없습니다."
-                  : "선택한 유형의 종목이 없습니다."}
-              </p>
-            ) : (
-              visibleStocks.map((stock) => (
+        <div className="wis-stocks__management" hidden={tab !== "stocks"}>
+          <div className="wis-stocks__workspace">
+            <div className="wis-stocks__watchlist">
+              <div className="wis-stocks__list-heading">
+                <span>종목</span>
+                <span>현재가</span>
+                <span>
+                  등락
+                  <InfoHelp label="종목 등락 기준">
+                    <p>
+                      한국 시각 기준 전 거래일의 마지막 기록 가격과 비교합니다.
+                      첫 거래일에는 첫 관측 가격과 비교하며, 가격 기록이 없으면
+                      등락을 표시하지 않습니다.
+                    </p>
+                  </InfoHelp>
+                </span>
+              </div>
+              <div
+                className="wis-stocks__list"
+                role="group"
+                aria-label="종목 시세 목록"
+                tabIndex={0}
+              >
                 <button
                   type="button"
-                  key={stock.id}
-                  className={`wis-stocks__row${selectedId === stock.id ? " is-selected" : ""}`}
-                  disabled={saving || loading}
-                  aria-pressed={selectedId === stock.id}
-                  onClick={() => choose(stock)}
+                  className={`wis-stocks__market-row wis-stocks__quote-row${activeViewId === null ? " is-selected" : ""}`}
+                  aria-pressed={activeViewId === null}
+                  onClick={() => setViewId(null)}
                 >
-                  {wisStockCatalog.find(
-                    (company) => company.name === stock.settings.name,
-                  )?.logoUrl && (
-                    <img
-                      className="wis-stocks__catalog-logo"
-                      src={
-                        wisStockCatalog.find(
-                          (company) => company.name === stock.settings.name,
-                        )!.logoUrl
-                      }
-                      width={32}
-                      height={32}
-                      alt=""
-                    />
-                  )}
                   <span className="wis-stocks__row-name">
-                    <strong>{stock.settings.name}</strong>
-                    <span>{stock.settings.period || "시대 미지정"}</span>
-                    {stock.settings.description && (
-                      <span className="wis-stocks__row-description">
-                        {stock.settings.description}
-                      </span>
-                    )}
+                    <strong>전체 위스피</strong>
+                    <span>WsPI</span>
                   </span>
                   <span className="wis-stocks__row-price">
-                    <strong>{stock.price.toLocaleString()} 위스</strong>
+                    <strong>
+                      {market.marketIndex?.history.length
+                        ? quoteNumber(market.marketIndex.value, 2)
+                        : "—"}
+                    </strong>
+                    <span>pt</span>
+                  </span>
+                  <span
+                    className={`wis-stocks__row-change ${quoteDirection(indexChange)}`}
+                  >
+                    <strong>
+                      {indexChange === null ? "—" : signedQuote(indexChange, 2)}
+                    </strong>
                     <span>
-                      {stock.settings.automatic
-                        ? `${stock.settings.intervalHours}시간마다 자동`
-                        : "자동 변동 정지"}
+                      {indexPercent === null
+                        ? "—"
+                        : `${signedQuote(indexPercent, 2)}%`}
                     </span>
                   </span>
-                  <WisStockSparkline stock={stock} />
                 </button>
-              ))
-            )}
+                {visibleStocks.length === 0 ? (
+                  <p className="wis-stocks__empty">
+                    {market.stocks.length === 0
+                      ? "등록된 종목이 없습니다."
+                      : "선택한 유형의 종목이 없습니다."}
+                  </p>
+                ) : (
+                  visibleStocks.map((stock) => {
+                    const quote = wisStockQuote(stock, market.updatedAtMs);
+                    return (
+                      <button
+                        type="button"
+                        key={stock.id}
+                        className={`wis-stocks__row wis-stocks__quote-row${activeViewId === stock.id ? " is-selected" : ""}`}
+                        aria-pressed={activeViewId === stock.id}
+                        onClick={() => setViewId(stock.id)}
+                      >
+                        <span className="wis-stocks__row-name">
+                          <strong>{stock.settings.name}</strong>
+                          <span>{stock.settings.period || "시대 미지정"}</span>
+                        </span>
+                        <span className="wis-stocks__row-price">
+                          <strong>{stock.price.toLocaleString()}</strong>
+                          <span>위스</span>
+                        </span>
+                        <span
+                          className={`wis-stocks__row-change ${quoteDirection(quote.change)}`}
+                        >
+                          <strong>
+                            {quote.change === null
+                              ? "—"
+                              : signedQuote(quote.change)}
+                          </strong>
+                          <span>
+                            {quote.percent === null
+                              ? "—"
+                              : `${signedQuote(quote.percent, 2)}%`}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+            <aside className="wis-stocks__detail" aria-label="선택 종목 그래프">
+              {tab === "stocks" && (
+                <WisStockMarketOverview
+                  index={market.marketIndex}
+                  stock={viewedStock}
+                  asOfMs={market.updatedAtMs}
+                  actions={
+                    viewedStock && (
+                      <button
+                        ref={editButtonRef}
+                        type="button"
+                        className="wis-stocks__edit-button"
+                        disabled={
+                          saving ||
+                          loading ||
+                          (dirty && selectedId !== viewedStock.id)
+                        }
+                        title={
+                          dirty && selectedId !== viewedStock.id
+                            ? "작성 중인 종목을 저장하거나 닫아 주세요."
+                            : undefined
+                        }
+                        onClick={() => choose(viewedStock)}
+                      >
+                        {canManage ? "종목 편집" : "종목 설정 보기"}
+                      </button>
+                    )
+                  }
+                />
+              )}
+            </aside>
           </div>
           {selectedId !== null && (
             <form
@@ -702,19 +799,14 @@ export default function TeacherWisStocks({
                 <button
                   type="button"
                   disabled={saving}
-                  onClick={() => setSelectedId(null)}
+                  onClick={() => {
+                    setSelectedId(null);
+                    requestAnimationFrame(() => editButtonRef.current?.focus());
+                  }}
                 >
                   닫기
                 </button>
               </div>
-              {selected && tab === "stocks" && (
-                <div className="wis-stocks__selected-chart">
-                  {selected.settings.description && (
-                    <p>{selected.settings.description}</p>
-                  )}
-                  <WisStockPriceChart stock={selected} days={Infinity} />
-                </div>
-              )}
               <fieldset disabled={!canManage || saving || loading}>
                 {!selected && (
                   <label className="wis-stocks__wide">
@@ -995,7 +1087,9 @@ export default function TeacherWisStocks({
               <button
                 type="button"
                 className="wis-stocks__primary"
-                disabled={saving || loading || stats.count >= market.maxStocks}
+                disabled={
+                  saving || loading || dirty || stats.count >= market.maxStocks
+                }
                 onClick={() => choose()}
               >
                 {stats.count >= market.maxStocks

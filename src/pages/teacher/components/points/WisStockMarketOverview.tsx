@@ -1,12 +1,16 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import InfoHelp from "../../../../components/common/InfoHelp";
-import WisStockPriceChart, {
-  stockObservations,
-} from "../../../../components/common/WisStockPriceChart";
+import WisStockPriceChart from "../../../../components/common/WisStockPriceChart";
 import type {
   WisStock,
   WisStockMarketIndex,
 } from "../../../../lib/wisStocksClient";
+import {
+  wisStockQuote,
+  quoteNumber,
+  signedQuote,
+  quoteDirection,
+} from "./wisStockQuote";
 
 const number = (value: number) =>
   value.toLocaleString("ko-KR", {
@@ -16,8 +20,14 @@ const number = (value: number) =>
 
 export default function WisStockMarketOverview({
   index,
+  stock,
+  asOfMs,
+  actions,
 }: {
   index?: WisStockMarketIndex;
+  stock?: WisStock;
+  asOfMs: number;
+  actions?: ReactNode;
 }) {
   const series = useMemo(
     () => ({
@@ -33,87 +43,77 @@ export default function WisStockMarketOverview({
     }),
     [index],
   );
-  const change = index ? index.value - index.previousClose : 0;
-  const percent = index?.previousClose
-    ? (change / index.previousClose) * 100
-    : 0;
+  const quote = stock ? wisStockQuote(stock, asOfMs) : null;
+  const change = stock
+    ? quote!.change
+    : index?.history.length
+      ? index.value - index.previousClose
+      : null;
+  const percent = stock
+    ? quote!.percent
+    : index?.previousClose && change !== null
+      ? (change / index.previousClose) * 100
+      : null;
+  const updatedAtMs = stock?.updatedAtMs || index?.updatedAtMs || 0;
+  const name = stock?.settings.name || "전체 위스피";
   return (
-    <section className="wis-stocks__market-index" aria-label="전체 위스피 지수">
+    <section
+      className="wis-stocks__market-index"
+      aria-label={stock ? `${name} 시세` : "전체 위스피 지수"}
+    >
       <div className="wis-stocks__index-quote">
         <div className="wis-stocks__index-title">
-          <h3>전체 위스피</h3>
-          <InfoHelp label="위스피 지수 계산">
-            <p>
-              기준 지수는 1,000입니다. 종목 가격과 발행 주식 수를 반영하며 신규
-              상장이나 발행량 변경만으로 지수가 변하지 않도록 조정합니다. 보관된
-              실제 가격 기록으로 계산하며 전 거래일 마지막 지수와 비교합니다.
-              첫날은 시작 지수와 비교합니다.
-            </p>
-          </InfoHelp>
+          <h3>{name}</h3>
+          {!stock && (
+            <InfoHelp label="위스피 지수 계산">
+              <p>
+                기준 지수는 1,000입니다. 종목 가격과 발행 주식 수를 반영하며
+                신규 상장이나 발행량 변경만으로 지수가 변하지 않도록 조정합니다.
+                보관된 실제 가격 기록으로 계산하며 전 거래일 마지막 지수와
+                비교합니다. 첫날은 시작 지수와 비교합니다.
+              </p>
+            </InfoHelp>
+          )}
+          {actions}
         </div>
         <strong>
-          {index?.history.length ? number(index.value) : "—"}
-          <small>pt</small>
+          {stock
+            ? quoteNumber(stock.price)
+            : index?.history.length
+              ? number(index.value)
+              : "—"}
+          <small>{stock ? "위스" : "pt"}</small>
         </strong>
-        {Boolean(index?.history.length) && (
-          <span
-            className={
-              change > 0 ? "is-up" : change < 0 ? "is-down" : "is-flat"
-            }
-          >
-            {change > 0 ? "+" : ""}
-            {number(change)} ({percent > 0 ? "+" : ""}
-            {number(percent)}%)
+        {change !== null && percent !== null && (
+          <span className={quoteDirection(change)}>
+            {signedQuote(change, stock ? 0 : 2)} ({signedQuote(percent, 2)}%)
           </span>
         )}
-        {Boolean(index?.updatedAtMs) && (
-          <time dateTime={new Date(index!.updatedAtMs).toISOString()}>
+        {Boolean(updatedAtMs) && (
+          <time dateTime={new Date(updatedAtMs).toISOString()}>
             {new Intl.DateTimeFormat("ko-KR", {
               month: "numeric",
               day: "numeric",
               hour: "2-digit",
               minute: "2-digit",
               timeZone: "Asia/Seoul",
-            }).format(index!.updatedAtMs)}{" "}
+            }).format(updatedAtMs)}{" "}
             기준
           </time>
         )}
       </div>
-      {index?.history.length ? (
+      {stock ? (
+        <WisStockPriceChart stock={stock} days={Infinity} />
+      ) : index?.history.length ? (
         <WisStockPriceChart stock={series} days={Infinity} kind="index" />
       ) : (
         <p className="wis-stocks__empty">아직 지수 기록이 없습니다.</p>
       )}
+      {stock?.settings.description && (
+        <p className="wis-stocks__detail-description">
+          {stock.settings.description}
+        </p>
+      )}
     </section>
-  );
-}
-
-export function WisStockSparkline({ stock }: { stock: WisStock }) {
-  const observations = stockObservations(stock);
-  if (!observations.length)
-    return <span className="wis-stocks__sparkline-empty">가격 기록 없음</span>;
-  const low = Math.min(...observations.map((point) => point.price));
-  const high = Math.max(...observations.map((point) => point.price));
-  const start = observations[0].atMs;
-  const end = observations.at(-1)!.atMs;
-  const points = observations.map((point) => ({
-    x: end === start ? 80 : 4 + ((point.atMs - start) / (end - start)) * 152,
-    y: high === low ? 32 : 58 - ((point.price - low) / (high - low)) * 52,
-  }));
-  const last = points.at(-1)!;
-  const change = observations.at(-1)!.price - observations[0].price;
-  return (
-    <svg
-      className={`wis-stocks__sparkline ${change > 0 ? "is-up" : change < 0 ? "is-down" : "is-flat"}`}
-      viewBox="0 0 160 64"
-      role="img"
-      aria-label={`${stock.settings.name} 실제 가격 추이, ${observations.length}건, ${observations[0].price}에서 ${observations.at(-1)!.price} 위스`}
-    >
-      <path d="M4 60H156" className="wis-stocks__sparkline-axis" />
-      <polyline
-        points={points.map((point) => `${point.x},${point.y}`).join(" ")}
-      />
-      <circle cx={last.x} cy={last.y} r="3" />
-    </svg>
   );
 }

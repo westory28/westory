@@ -1,4 +1,4 @@
-.wis-stocks { min-width: 0; color: var(--ws-text, #1f2937); }
+.wis-stocks { min-width: 0; color: var(--ws-text, #1f2937); container: wis-stocks / inline-size; }
 .wis-stocks__toolbar, .wis-stocks__title, .wis-stocks__actions, .wis-stocks__summary, .wis-stocks__editor-title, .wis-stocks__quote, .wis-stock-chart__values { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .wis-stocks__toolbar, .wis-stocks__editor-title, .wis-stock-chart__values { justify-content: space-between; }
 .wis-stocks__title { gap: 8px; }
@@ -20,14 +20,20 @@
 .wis-stocks .wis-stocks__period-filters button { min-height: 44px; max-width: 100%; padding: 8px 12px; background: transparent; overflow-wrap: anywhere; white-space: normal; }
 .wis-stocks .wis-stocks__period-filters button[aria-pressed="true"] { color: var(--ws-primary, #2563eb); border-color: var(--ws-primary, #2563eb); background: var(--ws-primary-soft, #eff6ff); font-weight: 700; }
 .wis-stocks__filter-count { color: var(--ws-text-muted, #6b7280); font-size: 12px; white-space: nowrap; }
-.wis-stocks__workspace { display: grid; gap: 24px; margin-top: 16px; min-width: 0; }
-.wis-stocks__workspace.is-editing { grid-template-columns: minmax(240px, 1fr) minmax(0, 2fr); align-items: start; }
-.wis-stocks__list { min-width: 0; }
-.wis-stocks button.wis-stocks__row { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 16px; border-radius: 0; padding: 16px; border-width: 0 0 1px; text-align: left; }
-.wis-stocks button.wis-stocks__row.is-selected { background: var(--ws-primary-soft, #eff6ff); box-shadow: inset 3px 0 var(--ws-primary, #2563eb); }
-.wis-stocks__row-name, .wis-stocks__row-price { display: grid; gap: 4px; min-width: 0; }
+.wis-stocks__workspace { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(0, 2fr); align-items: start; gap: 24px; margin-top: 24px; min-width: 0; }
+.wis-stocks__watchlist, .wis-stocks__detail { min-width: 0; }
+.wis-stocks__detail { position: sticky; top: 24px; }
+.wis-stocks__list { min-width: 0; max-height: min(64vh, 640px); overflow: auto; scrollbar-gutter: stable; }
+.wis-stocks__list:focus-visible { outline: 2px solid var(--ws-ring, #3b82f6); outline-offset: 2px; }
+.wis-stocks__list-heading, .wis-stocks button.wis-stocks__quote-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(64px, 80px) minmax(76px, 88px); align-items: center; gap: 8px; padding: 12px 8px; }
+.wis-stocks__list-heading { font-size: 12px; color: var(--ws-text-muted, #6b7280); border-bottom: 1px solid var(--ws-border, #e5e7eb); padding-right: 24px; }
+.wis-stocks__list-heading > span:not(:first-child) { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+.wis-stocks button.wis-stocks__quote-row { width: 100%; min-height: 72px; border-radius: 0; border-width: 0 0 1px; text-align: left; background: transparent; font-size: 14px; }
+.wis-stocks button.wis-stocks__quote-row.is-selected { background: var(--ws-primary-soft, #eff6ff); box-shadow: inset 3px 0 var(--ws-primary, #2563eb); }
+.wis-stocks__row-name, .wis-stocks__row-price, .wis-stocks__row-change { display: grid; gap: 4px; min-width: 0; }
 .wis-stocks__row-name strong { overflow-wrap: anywhere; word-break: keep-all; }
-.wis-stocks__row-price { text-align: right; flex-shrink: 0; }
+.wis-stocks__row-price, .wis-stocks__row-change { text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.wis-stocks__row-change span { font-size: 12px; }
 .wis-stocks__row-name span, .wis-stocks__row-price span { font-size: 12px; color: var(--ws-text-muted, #6b7280); }
 .wis-stocks__editor { min-width: 0; padding: 24px; background: var(--ws-surface, #fff); border: 1px solid var(--ws-border, #e5e7eb); border-radius: 12px; }
 .wis-stocks__editor-title { margin-bottom: 16px; }
@@ -49,16 +55,17 @@
 .wis-stocks__quote > strong { font-size: 24px; font-variant-numeric: tabular-nums; }
 .wis-stocks__quote small { font-size: 14px; font-weight: 500; }
 .wis-stocks__quote > span { color: var(--ws-text-muted, #6b7280); font-size: 12px; }
-@media (max-width: 767px) { .wis-stocks__workspace.is-editing { grid-template-columns: minmax(0,1fr); } .wis-stocks__editor { padding: 16px; } .wis-stocks__editor { order: -1; } }
 @media (max-width: 359px) { .wis-stocks__editor fieldset { grid-template-columns: minmax(0,1fr); } .wis-stocks__actions { gap: 8px; } }
 
 .wis-stocks [hidden] { display: none !important; }
 .wis-stocks .teacher-settings-heading { background: transparent; box-shadow: none; }
 .wis-stocks .teacher-settings-sections.ws-page-tabs { border-bottom: 0; }
 .wis-stocks .teacher-settings-heading h1 { font-size: 24px; }
-.wis-stocks__market-index { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(0, 3fr); align-items: center; gap: 24px; margin: 20px 0 24px; }
+.wis-stocks__market-index { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; margin: 0; }
 .wis-stocks__index-quote { display: grid; gap: 12px; min-width: 0; }
-.wis-stocks__index-title { display: flex; align-items: center; gap: 6px; }
+.wis-stocks__index-title { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.wis-stocks__index-title h3 { min-width: 0; overflow-wrap: anywhere; }
+.wis-stocks__edit-button { margin-left: auto; flex-shrink: 0; }
 .wis-stocks__index-quote > strong { font-size: clamp(28px, 3vw, 38px); font-variant-numeric: tabular-nums; line-height: 1.2; }
 .wis-stocks__index-quote small { margin-left: 6px; font-size: 16px; font-weight: 500; }
 .wis-stocks__index-quote > span { font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -66,20 +73,10 @@
 .wis-stocks .is-up { color: var(--ws-danger, #dc2626); }
 .wis-stocks .is-down { color: var(--ws-primary, #2563eb); }
 .wis-stocks .is-flat { color: var(--ws-text-muted, #6b7280); }
-.wis-stocks__list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 0 24px; align-content: start; }
-.wis-stocks button.wis-stocks__row { display: grid; grid-template-columns: 32px minmax(0, 1fr) minmax(100px, 140px); align-items: start; gap: 8px 12px; padding: 20px 8px; background: transparent; }
-.wis-stocks__row-name { grid-column: 2; grid-row: 1 / 3; }
-.wis-stocks__row-price { grid-column: 3; grid-row: 1; }
-.wis-stocks__row-name .wis-stocks__row-description { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; line-height: 1.6; margin-top: 4px; font-size: 13px; white-space: normal; overflow-wrap: anywhere; }
-.wis-stocks__sparkline { grid-column: 3; grid-row: 2; width: 100%; height: 64px; align-self: end; overflow: visible; }
-.wis-stocks__sparkline polyline { fill: none; stroke: currentColor; stroke-width: 2; }
-.wis-stocks__sparkline circle { fill: currentColor; }
-.wis-stocks__sparkline-axis { stroke: var(--ws-border, #e5e7eb); fill: none; }
-.wis-stocks__sparkline-empty { grid-column: 3; font-size: 12px; color: var(--ws-text-muted, #6b7280); }
-.wis-stocks__selected-chart { min-width: 0; margin: 16px 0 24px; }
-.wis-stocks__selected-chart > p { margin: 0 0 16px; line-height: 1.7; font-size: 14px; white-space: pre-line; overflow-wrap: anywhere; }
-@media (max-width: 1000px) { .wis-stocks__workspace.is-editing { grid-template-columns: minmax(0,1fr); } .wis-stocks__workspace.is-editing .wis-stocks__editor { order: -1; padding: 0 0 24px; border-left: 0; border-bottom: 1px solid var(--ws-border, #e5e7eb); } }
-@media (max-width: 600px) { .wis-stocks__market-index { grid-template-columns: minmax(0,1fr); gap: 16px; } .wis-stocks__index-quote { gap: 8px; } .wis-stocks button.wis-stocks__row { grid-template-columns: 28px minmax(0,1fr) 104px; gap: 8px; padding-inline: 0; } .wis-stocks__row-name { grid-column: 2 / 4; grid-row: 1; } .wis-stocks__row-price { grid-column: 2; grid-row: 2; text-align: left; align-self: center; } .wis-stocks__sparkline { grid-row: 2; } }
+.wis-stocks__detail-description { margin: 0; font-size: 14px; line-height: 1.7; white-space: pre-line; overflow-wrap: anywhere; }
+.wis-stocks__management > .wis-stocks__editor { margin-top: 24px; padding: 24px 0 0; border: 0; border-top: 1px solid var(--ws-border, #e5e7eb); }
+.wis-stocks__add-action { display: flex; justify-content: flex-end; margin-top: 24px; }
+@container wis-stocks (max-width: 760px) { .wis-stocks__workspace { grid-template-columns: minmax(0, 1fr); } .wis-stocks__detail { position: static; order: -1; } .wis-stocks__list { max-height: 320px; } .wis-stocks__index-quote { gap: 8px; } }
 .wis-stocks button.wis-stocks__new { justify-content: flex-start; color: var(--ws-primary, #2563eb); background: transparent; }
 .wis-stocks__new > span { font-size: 24px; font-weight: 400; }
 .wis-stocks__new > small { margin-left: auto; color: var(--ws-text-muted, #6b7280); font-size: 12px; }
