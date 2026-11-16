@@ -783,42 +783,11 @@ const ScopedScoreConfirmationView: React.FC<
       setObjections(loadedObjections);
       setAnswerSheetRequests(loadedAnswerSheetRequests);
       setWarningConsentChecked(false);
-      const defaultRecord =
-        scoreKind === WRITTEN_EXAM_SCORE_KIND
-          ? loaded.find((record) =>
-              getWrittenExamItemGroups(record.items || []).some((group) =>
-                isObjectiveWrittenExamGroup(group),
-              ),
-            ) || loaded[0]
-          : loaded[0];
-      setSelectedId((current) => {
-        if (scoreKind === PERFORMANCE_SCORE_KIND) {
-          return loaded.some((record) => getRecordScoreId(record) === current)
-            ? current
-            : "";
-        }
-        const nextSelectedId = loaded.some((record) => record.id === current)
+      setSelectedId((current) =>
+        loaded.some((record) => getRecordScoreId(record) === current)
           ? current
-          : defaultRecord?.id || "";
-        const nextRecord =
-          loaded.find((record) => record.id === nextSelectedId) ||
-          defaultRecord ||
-          null;
-        if (scoreKind === WRITTEN_EXAM_SCORE_KIND && nextRecord) {
-          const groups = getWrittenExamItemGroups(nextRecord.items || []);
-          const fallbackGroup =
-            groups.find((group) => isObjectiveWrittenExamGroup(group)) ||
-            groups[0] ||
-            null;
-          setSelectedWrittenExamGroupKey((currentGroupKey) =>
-            currentGroupKey &&
-            groups.some((group) => group.key === currentGroupKey)
-              ? currentGroupKey
-              : fallbackGroup?.key || "",
-          );
-        }
-        return nextSelectedId;
-      });
+          : "",
+      );
     } catch (error) {
       console.error("Failed to load performance scores:", error);
       setRecords([]);
@@ -2611,7 +2580,7 @@ const ScopedScoreConfirmationView: React.FC<
         const groups = getWrittenExamItemGroups(record.items || []);
         return (groups.length ? groups : [null]).map((group) => {
           const active =
-            getRecordScoreId(record) === getRecordScoreId(selectedRecord) &&
+            getRecordScoreId(record) === selectedId &&
             (!group || activeWrittenExamGroup?.key === group.key);
           const label = group
             ? isObjectiveWrittenExamGroup(group)
@@ -2753,8 +2722,7 @@ const ScopedScoreConfirmationView: React.FC<
         {resolvedCopy.emptyDescription}
       </p>
     </div>
-  ) : scoreKind === PERFORMANCE_SCORE_KIND &&
-    selectedId !== getRecordScoreId(selectedRecord) ? null : (
+  ) : selectedId !== getRecordScoreId(selectedRecord) ? null : (
     <section className="min-w-0 break-keep rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">

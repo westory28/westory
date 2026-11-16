@@ -1570,9 +1570,12 @@ try {
   );
   report.checks.push("Load failure and excluded roster block request UI.");
   const openWrittenSignatureReview = async (page) => {
-    const choices = page
-      .getByRole("navigation", { name: "정기시험 점수 목록 메뉴", exact: true })
-      .locator(".performance-score-tab > button");
+    const navigation = page.getByRole("navigation", {
+      name: "정기시험 점수 목록 메뉴",
+      exact: true,
+    });
+    await navigation.waitFor();
+    const choices = navigation.locator(".performance-score-tab > button");
     for (let index = 0; index < (await choices.count()); index++)
       await choices.nth(index).click();
     assert.equal(await signAction(page).isEnabled(), true);
@@ -1619,13 +1622,69 @@ try {
       );
     const initialReads = await readCount();
     assert.equal(
+      await navigation.locator('[aria-current="page"]').count(),
+      0,
+      "No score tab is selected before the first click",
+    );
+    assert.equal(
+      await detailPage
+        .getByRole("heading", { name: "가상 정기시험", exact: true })
+        .count(),
+      0,
+      "No score details are shown before choosing a tab",
+    );
+    assert.equal(
+      await detailPage
+        .locator(".written-exam-score-omr, .performance-score-feedback")
+        .count(),
+      0,
+    );
+    assert.equal(
       await signAction(detailPage).isEnabled(),
       false,
-      "Initial automatic detail display does not bypass explicit review",
+      "Unopened score details cannot be confirmed",
     );
+    await detailPage.screenshot({
+      path: `${out}/written-unselected-${width}.png`,
+      fullPage: true,
+    });
+    report.screenshots.push(`written-unselected-${width}.png`);
+    if (width === 390) {
+      await navigation
+        .getByRole("button", { name: "논술형 1번", exact: true })
+        .click();
+      await detailPage
+        .getByRole("heading", {
+          name: "1번 논술형 문제 문항별 점수와 피드백",
+          exact: true,
+        })
+        .waitFor();
+      assert.equal(
+        await detailPage.locator(".performance-score-feedback").count(),
+        4,
+        "An essay may be opened first",
+      );
+      assert.equal(
+        await detailPage.locator(".written-exam-score-omr").count(),
+        0,
+      );
+      assert.equal(await signAction(detailPage).isEnabled(), false);
+    }
     await navigation
       .getByRole("button", { name: "선택형", exact: true })
       .click();
+    await detailPage.locator(".written-exam-score-omr").waitFor();
+    assert.equal(
+      await navigation
+        .getByRole("button", { name: "선택형", exact: true })
+        .getAttribute("aria-current"),
+      "page",
+    );
+    assert.equal(
+      await readCount(),
+      initialReads,
+      "Opening the first chosen detail adds no server reads",
+    );
     assert.equal(
       await signAction(detailPage).isEnabled(),
       false,
@@ -1804,6 +1863,12 @@ try {
     .getByRole("navigation", { name: "정기시험 점수 목록 메뉴", exact: true })
     .waitFor();
   assert.equal(await signAction(totalOnly).isEnabled(), false);
+  assert.equal(
+    await totalOnly
+      .getByRole("heading", { name: "가상 정기시험", exact: true })
+      .count(),
+    0,
+  );
   await totalOnly
     .getByRole("navigation", { name: "정기시험 점수 목록 메뉴", exact: true })
     .locator(".performance-score-tab > button")
@@ -1816,6 +1881,19 @@ try {
   await totalOnly.close();
   for (const width of [390, 768, 1280]) {
     const writtenSigningPage = await createPage(width, "?written");
+    const navigation = writtenSigningPage.getByRole("navigation", {
+      name: "정기시험 점수 목록 메뉴",
+      exact: true,
+    });
+    await navigation.waitFor();
+    assert.equal(
+      await writtenSigningPage.locator(".performance-score-feedback").count(),
+      0,
+    );
+    assert.equal(await navigation.locator('[aria-current="page"]').count(), 0);
+    await navigation
+      .getByRole("button", { name: "논술형 1번", exact: true })
+      .click();
     await writtenSigningPage
       .getByRole("heading", {
         name: "1번 논술형 문제 문항별 점수와 피드백",
@@ -1936,6 +2014,10 @@ try {
     await writtenSigningPage.close();
   }
   const writtenGeneral = await createPage(1280, "?written&general-note");
+  await writtenGeneral
+    .getByRole("navigation", { name: "정기시험 점수 목록 메뉴", exact: true })
+    .getByRole("button", { name: "논술형 1번", exact: true })
+    .click();
   await writtenGeneral
     .getByRole("heading", { name: "전체 피드백", exact: true })
     .waitFor();
