@@ -26,3 +26,43 @@
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
+
+.written-exam-score-omr-panels {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 639px) {
+  .performance-score-workspace .written-exam-score-omr {
+    padding: 8px;
+  }
+
+  .written-exam-score-omr-panels {
+    gap: 8px;
+  }
+
+  .written-exam-score-omr-panels > section {
+    padding: 4px;
+  }
+
+  .written-exam-score-omr-panels > section > div > div {
+    padding: 8px 0;
+  }
+
+  .written-exam-score-omr-panels [aria-label*="번 문항"] {
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 4px;
+    font-size: 12px;
+  }
+
+  .written-exam-score-omr-panels [aria-hidden="true"] {
+    width: 100%;
+    gap: 2px;
+  }
+
+  .written-exam-score-omr-panels [aria-hidden="true"] > span {
+    width: 100%;
+    max-width: 20px;
+    height: 28px;
+  }
+}

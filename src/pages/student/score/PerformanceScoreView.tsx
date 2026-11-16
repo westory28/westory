@@ -22,7 +22,6 @@ import {
   LoadingOverlay,
 } from "../../../components/common/LoadingState";
 import InfoHelp from "../../../components/common/InfoHelp";
-import PortalSubNavigation from "../../../components/common/PortalSubNavigation";
 import PortalWorkspace from "../../../components/common/PortalWorkspace";
 import "./performance-score-view.css";
 import { useAppToast } from "../../../components/common/AppToastProvider";
@@ -241,7 +240,7 @@ const isObjectiveWrittenExamGroup = (
 const getWrittenExamGroupDisplayTitle = (
   group: ReturnType<typeof getWrittenExamItemGroups>[number],
 ) =>
-  isObjectiveWrittenExamGroup(group) ? "서답형" : `${group.label} 논술형 문제`;
+  isObjectiveWrittenExamGroup(group) ? "선택형" : `${group.label} 논술형 문제`;
 
 const getObjectiveOmrItems = (
   group: ReturnType<typeof getWrittenExamItemGroups>[number] | null,
@@ -344,6 +343,21 @@ const getScoreDetailVisitKey = (record: PerformanceScoreRecord) =>
   JSON.stringify([
     getRecordScoreId(record),
     getPerformanceScoreVersion(record.updatedAt),
+  ]);
+
+const getWrittenExamDetailId = (
+  record: PerformanceScoreRecord,
+  groupKey = "",
+) => JSON.stringify([getRecordScoreId(record), groupKey]);
+
+const getWrittenExamDetailVisitKey = (record: PerformanceScoreRecord) =>
+  JSON.stringify([
+    getScoreDetailVisitKey(record),
+    record.totalScore,
+    record.totalMaxScore,
+    record.items,
+    record.evidence,
+    record.feedback,
   ]);
 
 const getPerformanceDetailTabs = (records: PerformanceScoreRecord[]) => {
@@ -624,7 +638,6 @@ const ScopedScoreConfirmationView: React.FC<
   const [visitedScoreDetails, setVisitedScoreDetails] = useState<
     Map<string, string>
   >(() => new Map());
-  const [scoreMenuOpen, setScoreMenuOpen] = useState(false);
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [signatureDetailScope, setSignatureDetailScope] = useState("");
   const [signatureConsent, setSignatureConsent] = useState(false);
@@ -848,33 +861,6 @@ const ScopedScoreConfirmationView: React.FC<
     selectedItems.some(
       (item, index) => getWrittenExamItemMeta(item, index).detailed,
     );
-  const hasWrittenExamSidebarGroups =
-    scoreKind === WRITTEN_EXAM_SCORE_KIND &&
-    records.some((record) =>
-      (record.items || []).some(
-        (item, index) => getWrittenExamItemMeta(item, index).detailed,
-      ),
-    );
-  const writtenExamNavigationEntries = useMemo(() => {
-    if (scoreKind !== WRITTEN_EXAM_SCORE_KIND) return [];
-    return records.flatMap((record) =>
-      getWrittenExamItemGroups(record.items || []).map((group) => ({
-        record,
-        scoreId: getRecordScoreId(record),
-        group,
-      })),
-    );
-  }, [records, scoreKind]);
-  const writtenExamObjectiveEntry =
-    writtenExamNavigationEntries.find(({ group }) =>
-      isObjectiveWrittenExamGroup(group),
-    ) || null;
-  const writtenExamEssayEntries = writtenExamNavigationEntries.filter(
-    ({ group }) => !isObjectiveWrittenExamGroup(group),
-  );
-  const writtenExamEssayActive = Boolean(
-    activeWrittenExamGroup && !activeWrittenExamGroupIsObjective,
-  );
   const visibleChartEntries =
     hasDetailedWrittenExamItems && activeWrittenExamGroup
       ? activeWrittenExamGroup.items.map(({ label, item }) => ({ label, item }))
@@ -1049,14 +1035,66 @@ const ScopedScoreConfirmationView: React.FC<
         : [],
     [records, scoreKind],
   );
-  const registeredDetailTabs = performanceDetailTabs.filter(({ record }) =>
-    hasEnteredPerformanceScore(record),
+  const writtenExamDetailTabs = useMemo(
+    () =>
+      scoreKind !== WRITTEN_EXAM_SCORE_KIND
+        ? []
+        : records.flatMap((record) => {
+            const groups = getWrittenExamItemGroups(record.items || []);
+            const visitKey = getWrittenExamDetailVisitKey(record);
+            return groups.length
+              ? groups.map((group) => ({
+                  record,
+                  id: getWrittenExamDetailId(record, group.key),
+                  label: isObjectiveWrittenExamGroup(group)
+                    ? "선택형"
+                    : group.key === "essay"
+                      ? group.label
+                      : `논술형 ${group.label}`,
+                  visitKey,
+                  entered:
+                    hasEnteredPerformanceScore(record) &&
+                    group.items.some(
+                      ({ item }) => getEnteredItemScore(item) !== null,
+                    ),
+                }))
+              : [
+                  {
+                    record,
+                    id: getWrittenExamDetailId(record),
+                    label: record.title,
+                    visitKey,
+                    entered: hasEnteredPerformanceScore(record),
+                  },
+                ];
+          }),
+    [records, scoreKind],
   );
+  const registeredDetailTabs = useMemo(
+    () =>
+      scoreKind === WRITTEN_EXAM_SCORE_KIND
+        ? writtenExamDetailTabs.filter(({ entered }) => entered)
+        : performanceDetailTabs.filter(({ record }) =>
+            hasEnteredPerformanceScore(record),
+          ),
+    [scoreKind, writtenExamDetailTabs, performanceDetailTabs],
+  );
+  const markWrittenExamDetailVisited = (
+    record: PerformanceScoreRecord,
+    groupKey = "",
+  ) => {
+    const id = getWrittenExamDetailId(record, groupKey);
+    const detail = registeredDetailTabs.find((tab) => tab.id === id);
+    if (!detail) return;
+    setVisitedScoreDetails((previous) =>
+      new Map(previous).set(id, detail.visitKey),
+    );
+  };
   const unvisitedDetailTabs = registeredDetailTabs.filter(
     ({ id, visitKey }) => visitedScoreDetails.get(id) !== visitKey,
   );
   const currentDetailScope = JSON.stringify(
-    registeredDetailTabs.map(({ visitKey }) => visitKey).sort(),
+    registeredDetailTabs.map(({ id, visitKey }) => [id, visitKey]).sort(),
   );
   const detailVisitRequired =
     pendingRecords.length > 0 && unvisitedDetailTabs.length > 0;
@@ -1073,13 +1111,13 @@ const ScopedScoreConfirmationView: React.FC<
   useEffect(() => {
     setVisitedScoreDetails((previous) => {
       const next = new Map<string, string>();
-      for (const { record, id, visitKey } of performanceDetailTabs) {
+      for (const { record, id, visitKey } of registeredDetailTabs) {
         if (hasEnteredPerformanceScore(record) && previous.get(id) === visitKey)
           next.set(id, visitKey);
       }
       return next.size === previous.size ? previous : next;
     });
-  }, [performanceDetailTabs]);
+  }, [registeredDetailTabs]);
   const signatureScoreSections = useMemo<SignatureScoreSection[]>(() => {
     if (pendingRecords.length === 0) return [];
 
@@ -1467,7 +1505,7 @@ const ScopedScoreConfirmationView: React.FC<
     }
     if (detailVisitRequired) {
       showToast({
-        title: "수행평가 확인 필요",
+        title: `${resolvedCopy.scoreLabel} 확인 필요`,
         message: detailVisitMessage,
         tone: "warning",
       });
@@ -2033,6 +2071,15 @@ const ScopedScoreConfirmationView: React.FC<
       if (latestRecords && latestById) {
         if (
           !matchesReviewedPerformanceScores(records, latestRecords) ||
+          (scoreKind === WRITTEN_EXAM_SCORE_KIND &&
+            registeredRecords.some((record) => {
+              const latest = latestById.get(record.id);
+              return (
+                !latest ||
+                getWrittenExamDetailVisitKey(record) !==
+                  getWrittenExamDetailVisitKey(latest)
+              );
+            })) ||
           getStudentIdentityError(latestRecords) ||
           registeredRecords.some(
             (record) =>
@@ -2556,210 +2603,45 @@ const ScopedScoreConfirmationView: React.FC<
       ))}
     </nav>
   ) : (
-    <PortalSubNavigation
-      title="점수 목록"
-      activeLabel={
-        activeWrittenExamGroup
-          ? `${selectedRecord.title} · ${getWrittenExamGroupDisplayTitle(activeWrittenExamGroup)}`
-          : selectedRecord.title
-      }
-      open={scoreMenuOpen}
-      onOpenChange={setScoreMenuOpen}
+    <nav
+      className="ws-page-tabs performance-score-navigation"
+      aria-label="정기시험 점수 목록 메뉴"
     >
-      {hasWrittenExamSidebarGroups
-        ? [
-            writtenExamObjectiveEntry ? (
+      {records.flatMap((record) => {
+        const groups = getWrittenExamItemGroups(record.items || []);
+        return (groups.length ? groups : [null]).map((group) => {
+          const active =
+            getRecordScoreId(record) === getRecordScoreId(selectedRecord) &&
+            (!group || activeWrittenExamGroup?.key === group.key);
+          const label = group
+            ? isObjectiveWrittenExamGroup(group)
+              ? "선택형"
+              : group.key === "essay"
+                ? group.label
+                : `논술형 ${group.label}`
+            : record.title;
+          return (
+            <div
+              key={`${getRecordScoreId(record)}-${group?.key || "score"}`}
+              className="performance-score-tab"
+            >
               <button
-                key={`written-objective-${writtenExamObjectiveEntry.scoreId}`}
                 type="button"
+                aria-current={active ? "page" : undefined}
                 onClick={() => {
-                  setSelectedId(writtenExamObjectiveEntry.record.id || "");
-                  setSelectedWrittenExamGroupKey(
-                    writtenExamObjectiveEntry.group.key,
-                  );
-                  setScoreMenuOpen(false);
+                  setSelectedId(getRecordScoreId(record));
+                  setSelectedWrittenExamGroupKey(group?.key || "");
+                  markWrittenExamDetailVisited(record, group?.key);
                 }}
-                aria-current={
-                  activeWrittenExamGroupIsObjective ? "true" : undefined
-                }
-                className={`teacher-settings-section${activeWrittenExamGroupIsObjective ? " is-active" : ""}`}
               >
-                <div className="w-6 shrink-0 text-center">
-                  <i
-                    className="fas fa-clipboard-check text-sm"
-                    aria-hidden="true"
-                  ></i>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="whitespace-normal break-keep text-sm font-bold leading-5">
-                    서답형
-                  </div>
-                  <div
-                    className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold ${
-                      activeWrittenExamGroupIsObjective
-                        ? "text-blue-500"
-                        : "text-slate-500"
-                    }`}
-                  >
-                    <span>
-                      획득{" "}
-                      {formatPerformanceScore(
-                        getWrittenExamGroupScore(
-                          writtenExamObjectiveEntry.group,
-                        ),
-                      )}{" "}
-                      /{" "}
-                      {formatPerformanceScore(
-                        getWrittenExamGroupMaxScore(
-                          writtenExamObjectiveEntry.group,
-                        ),
-                      )}
-                    </span>
-                    {writtenExamObjectiveEntry.record.signatureName && (
-                      <span className="text-blue-700">확인 완료</span>
-                    )}
-                  </div>
-                </div>
+                {label}
               </button>
-            ) : null,
-            writtenExamEssayEntries.length > 0 ? (
-              <div key="written-essay-menu" className="min-w-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const firstEssayEntry = writtenExamEssayEntries[0];
-                    if (!firstEssayEntry) return;
-                    setSelectedId(firstEssayEntry.record.id || "");
-                    setSelectedWrittenExamGroupKey(firstEssayEntry.group.key);
-                    setScoreMenuOpen(false);
-                  }}
-                  aria-current={writtenExamEssayActive ? "true" : undefined}
-                  className={`teacher-settings-section${writtenExamEssayActive ? " is-active" : ""}`}
-                >
-                  <div className="w-6 shrink-0 text-center">
-                    <i
-                      className="fas fa-clipboard-check text-sm"
-                      aria-hidden="true"
-                    ></i>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="whitespace-normal break-keep text-sm font-bold leading-5">
-                      논술형
-                    </div>
-                    <div className="mt-1 text-xs font-bold text-slate-500">
-                      {writtenExamEssayEntries.length}개 문항
-                    </div>
-                  </div>
-                </button>
-                <div className="border-t border-slate-100 px-3 pb-3 lg:px-4">
-                  <div className="grid gap-2 pt-2">
-                    {writtenExamEssayEntries.map(
-                      ({ record, scoreId, group }) => {
-                        const groupActive =
-                          record.id === selectedRecord.id &&
-                          activeWrittenExamGroup?.key === group.key;
-                        return (
-                          <button
-                            key={`written-essay-${scoreId}-${group.key}`}
-                            type="button"
-                            onClick={() => {
-                              setSelectedId(record.id || "");
-                              setSelectedWrittenExamGroupKey(group.key);
-                              setScoreMenuOpen(false);
-                            }}
-                            aria-current={groupActive ? "true" : undefined}
-                            className={`teacher-settings-section${groupActive ? " is-active" : ""}`}
-                          >
-                            <span className="min-w-0 flex-1">
-                              <span className="block">
-                                {getWrittenExamGroupDisplayTitle(group)}
-                              </span>
-                              <span
-                                className={`mt-1 block font-bold ${
-                                  groupActive
-                                    ? "text-blue-700"
-                                    : "text-slate-400"
-                                }`}
-                              >
-                                {formatPerformanceScore(
-                                  getWrittenExamGroupScore(group),
-                                )}{" "}
-                                /{" "}
-                                {formatPerformanceScore(
-                                  getWrittenExamGroupMaxScore(group),
-                                )}
-                              </span>
-                            </span>
-                          </button>
-                        );
-                      },
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : null,
-          ].filter(Boolean)
-        : records.map((record) => {
-            const active =
-              record.id === selectedRecord.id ||
-              (!selectedRecord.id && record.id === records[0]?.id);
-            return (
-              <button
-                key={record.id || record.rosterId}
-                type="button"
-                onClick={() => {
-                  setSelectedId(record.id || "");
-                  setScoreMenuOpen(false);
-                }}
-                aria-current={active ? "true" : undefined}
-                className={`teacher-settings-section${active ? " is-active" : ""}`}
-              >
-                <div className="w-6 shrink-0 text-center">
-                  <i
-                    className="fas fa-clipboard-check text-sm"
-                    aria-hidden="true"
-                  ></i>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div
-                    title={record.title}
-                    className="performance-score-navigation-title whitespace-normal break-keep text-sm font-bold leading-5"
-                  >
-                    {record.title}
-                  </div>
-                  <div
-                    className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold ${
-                      active ? "text-blue-500" : "text-slate-500"
-                    }`}
-                  >
-                    <span>
-                      {hasEnteredPerformanceScore(record)
-                        ? `획득 ${formatPerformanceScore(record.totalScore)} / ${formatPerformanceScore(record.totalMaxScore)}`
-                        : "점수 미등록"}
-                    </span>
-                    {record.signatureName && (
-                      <span className="text-blue-700">확인 완료</span>
-                    )}
-                    {pendingObjectionScoreIds.has(getRecordScoreId(record)) && (
-                      <span className="text-amber-700">
-                        {pendingObjectionAnswerSheetScoreIds.has(
-                          getRecordScoreId(record),
-                        )
-                          ? "이의·답안지 확인 처리 대기"
-                          : "이의 처리 대기"}
-                      </span>
-                    )}
-                    {pendingAnswerSheetRequestScoreIds.has(
-                      getRecordScoreId(record),
-                    ) && (
-                      <span className="text-blue-700">답안지 확인 요청 중</span>
-                    )}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-    </PortalSubNavigation>
+              <InfoHelp label={`${label} 전체 평가명`}>{record.title}</InfoHelp>
+            </div>
+          );
+        });
+      })}
+    </nav>
   );
   const scoreHeader = (
     <div className="ws-flat-section mb-5">
@@ -2873,9 +2755,7 @@ const ScopedScoreConfirmationView: React.FC<
     </div>
   ) : scoreKind === PERFORMANCE_SCORE_KIND &&
     selectedId !== getRecordScoreId(selectedRecord) ? null : (
-    <section
-      className={`min-w-0 break-keep rounded-xl border border-slate-200 bg-white p-5 shadow-sm ${scoreKind === PERFORMANCE_SCORE_KIND ? "" : "mt-6 md:mt-0"}`}
-    >
+    <section className="min-w-0 break-keep rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="text-sm font-black text-blue-700">
@@ -2952,7 +2832,7 @@ const ScopedScoreConfirmationView: React.FC<
             </div>
             <p className="mt-5 whitespace-normal break-keep text-sm font-bold leading-6 text-blue-900/70">
               {activeWrittenExamGroupIsObjective
-                ? "서답형 정오답을 확인해 주세요."
+                ? "선택형 정오답을 확인해 주세요."
                 : `점수와 ${resolvedCopy.evidenceTitle}을 함께 확인해 주세요.`}
             </p>
           </div>
@@ -2964,14 +2844,15 @@ const ScopedScoreConfirmationView: React.FC<
           >
             {activeWrittenExamGroupIsObjective ? (
               <ExamOmrCard
-                title="서답형 OMR"
+                title="선택형 OMR"
                 items={activeObjectiveOmrItems}
                 mode="student"
                 showScore
                 scoreLabel={`${formatPerformanceScore(
                   visibleTotalScore,
                 )} / ${formatPerformanceScore(visibleTotalMaxScore)}점`}
-                className="border-0 shadow-none"
+                panelGridClassName="written-exam-score-omr-panels"
+                className="written-exam-score-omr border-0 shadow-none"
               />
             ) : visibleChartItems.length > 0 ? (
               <div
@@ -3058,27 +2939,13 @@ const ScopedScoreConfirmationView: React.FC<
 
   return (
     <>
-      {scoreKind === PERFORMANCE_SCORE_KIND ? (
-        <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--tabs performance-score-workspace">
-          <div className="teacher-sub-content">
-            {scoreHeader}
-            {scoreNavigation}
-            {scoreBody}
-          </div>
-        </PortalWorkspace>
-      ) : (
-        <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-10">
+      <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--tabs performance-score-workspace">
+        <div className="teacher-sub-content">
           {scoreHeader}
-          {selectedRecord ? (
-            <div className="teacher-sub-workspace gap-6">
-              {scoreNavigation}
-              {scoreBody}
-            </div>
-          ) : (
-            scoreBody
-          )}
+          {scoreNavigation}
+          {scoreBody}
         </div>
-      )}
+      </PortalWorkspace>
 
       {objectionModalOpen && selectedRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">

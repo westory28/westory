@@ -62,7 +62,10 @@ if (process.env.SCORE_QA_WORKBOOK) {
     "src/lib/writtenExamEssayScoreWorkbook.ts",
     {
       "./performanceScores": scoreHelpers,
-      "./writtenExamFeedback": await loadParserModule("src/lib/writtenExamFeedback.ts", {}),
+      "./writtenExamFeedback": await loadParserModule(
+        "src/lib/writtenExamFeedback.ts",
+        {},
+      ),
     },
   );
   const workbookPath = path.resolve(process.env.SCORE_QA_WORKBOOK);
@@ -101,6 +104,13 @@ if(written){
  if(scenario.has('general-note'))records[0].evidence='전체 답안에서 사료의 근거를 확인해 주세요.\\n\\n'+evidence+'\\n\\n(9) 교사의 추가 설명을 확인해 주세요.';
 }
 if(workbookScore)records[0]={...records[0],...workbookScore,title:'업로드 파일 검증용 가상 정기시험'};
+if(written&&scenario.has('all-details')){
+ const essay=records[0];
+ records.push({...structuredClone(essay),id:'qa-essay-2',rosterId:'qa-essay-2',items:essay.items.map((item,index)=>({...item,name:'2-('+(index+1)+')',shortName:'2-('+(index+1)+')',itemKey:'2-('+(index+1)+')',groupKey:'2',groupLabel:'2번'}))});
+ records.push({...structuredClone(essay),id:'qa-blank-essay',rosterId:'qa-blank-essay',enteredScoreCount:0,totalScore:0,items:essay.items.map((item,index)=>({...item,name:'3-('+(index+1)+')',shortName:'3-('+(index+1)+')',itemKey:'3-('+(index+1)+')',groupKey:'3',groupLabel:'3번',scoreEntered:false}))});
+ records.unshift({...structuredClone(essay),id:'qa-objective',rosterId:'qa-objective',enteredScoreCount:20,totalScore:40,totalMaxScore:40,items:Array.from({length:20},(_,index)=>({name:'선택형 '+(index+1),itemKey:'objective-'+(index+1),examSection:'objective',groupKey:'objective',questionNumber:index+1,score:2,maxScore:2,scoreEntered:true,correctAnswer:'1',studentAnswer:index%2?'2':'1',answerCorrect:!(index%2)})),feedback:'',evidence:''});
+}
+if(written&&scenario.has('total-only'))records[0]={...records[0],items:[],enteredScoreCount:1,totalScore:0,totalMaxScore:10};
 if(scenario.has('legacy'))state.legacy.push({id:'qa-legacy',uid:'qa-student',scoreId:'qa-score',status:'pending',reason:'기존 답안지 확인 요청'});
 if(scenario.has('blank-pair')||scenario.has('blank-only')||scenario.has('registered-pair')){
  records[0]={...records[0],title:'1차 역사 자료 해석',assessmentOrder:1,enteredScoreCount:1,items:[{name:'자료 해석',score:15,maxScore:20,scoreEntered:true}]};
@@ -136,7 +146,7 @@ export const getDocs=(ref)=>readScores(ref,false);export const getDocsFromServer
 export const onSnapshot=()=>{throw new Error('Unexpected realtime subscription');};
 export const getDoc=async(ref)=>{state.events.push({name:'serverRead',path:ref.path});const value=ref.path.includes('/confirmations/')?state.confirmations.get(ref.path):state.serverRecords.get(ref.id);return{id:ref.id,exists:()=>Boolean(value),data:()=>value};};export const getDocFromServer=getDoc;
 export const serverTimestamp=()=>({seconds:++state.clock,nanoseconds:0});export const setDoc=async()=>{throw new Error('Unexpected direct write')};
-export const writeBatch=()=>{const pending=[];return{set:(ref,value)=>pending.push({ref,value}),commit:async()=>{for(const{ref,value}of pending){if(!ref.path.includes('/confirmations/'))throw new Error('Unexpected non-signature write');state.confirmations.set(ref.path,value);state.events.push({name:'signature',path:ref.path,rosterId:value.rosterId});}state.afterSignatureCommit?.();}};};`,
+export const writeBatch=()=>{const pending=[];return{set:(ref,value)=>pending.push({ref,value}),commit:async()=>{if(state.failSignatureCommit)throw new Error('Synthetic signature failure');for(const{ref,value}of pending){if(!ref.path.includes('/confirmations/'))throw new Error('Unexpected non-signature write');state.confirmations.set(ref.path,value);state.events.push({name:'signature',path:ref.path,rosterId:value.rosterId});}state.afterSignatureCommit?.();}};};`,
   "qa-scores": `export * from '${root}/src/lib/performanceScores.ts';import{normalizePerformanceScoreSettings,applyPerformanceScoreConfirmation,sortPerformanceScoreRecords,getLatestPerformanceScoreSignatureRecord}from'${root}/src/lib/performanceScores.ts';import{state}from'qa-state';
 const settings=normalizePerformanceScoreSettings();
 const consent=()=>state.consented?{uid:'qa-student',academicYear:'2026',semester:'2',acknowledged:true,warningVersion:settings.warningVersion,warningTextHash:settings.warningTextHash}:null;
@@ -159,6 +169,9 @@ return{objectionSavedCount:1,objectionSkippedProcessedCount:0,recipientCount:1,c
   "qa-archive": `export const isSemesterArchive=false;export const archiveScope=null;`,
   "qa-archive-boundary": `export const SemesterArchiveBanner=()=>null;export const SemesterArchiveUnavailable=()=>null;export const isArchiveUnavailableRoute=()=>false;`,
   "qa-null-component": `export default ()=>null;`,
+  "qa-preload": `export const preloadStudentWeplay=()=>{};`,
+  "qa-app-check": `export const ensureWestoryAppCheck=async()=>{};export const getWestoryAppCheckToken=async()=>null;`,
+  "qa-stock-status": `export const useStudentWisStockStatus=()=>({status:'ready',data:{studentOpen:false},error:''});`,
   "qa-rank-promotion": `import {resolvePointRankPolicy} from '${root}/src/lib/pointRanks.ts';export const loadStudentRankPromotionSnapshot=async()=>({rank:null,wallet:{balance:0},policy:{rankPolicy:resolvePointRankPolicy()}});export const invalidateStudentRankPromotionSnapshotCache=()=>{};`,
 };
 const moduleFor = (request) => {
@@ -167,6 +180,9 @@ const moduleFor = (request) => {
   if (value === "firebase/firestore") return "qa-firestore";
   if (/contexts\/AuthContext$/.test(value)) return "qa-auth";
   if (/lib\/firebase$/.test(value)) return "qa-firebase";
+  if (/lib\/weplayPreload$/.test(value)) return "qa-preload";
+  if (/lib\/appCheck$/.test(value)) return "qa-app-check";
+  if (/hooks\/useStudentWisStocks$/.test(value)) return "qa-stock-status";
   if (/performanceScores$/.test(value)) return "qa-scores";
   if (/lib\/notifications$/.test(value)) return "qa-notifications";
   if (/AppToastProvider$/.test(value)) return "qa-toast";
@@ -224,6 +240,15 @@ assert.equal(
     /node_modules[\\/](firebase|@firebase)[\\/]/.test(file),
   ).length,
   0,
+  JSON.stringify(
+    Object.entries(bundle.metafile.inputs)
+      .filter(([, input]) =>
+        input.imports.some(({ path }) =>
+          /node_modules[\\/](firebase|@firebase)[\\/]/.test(path),
+        ),
+      )
+      .map(([file]) => file),
+  ),
 );
 const css = (
   await Promise.all(
@@ -857,7 +882,12 @@ try {
         enteredScoreCount: 1,
         totalScore: 17,
         items: [
-          { name: "판단 글쓰기", score: 17, maxScore: 20, scoreEntered: true },
+          {
+            name: "판단 글쓰기",
+            score: 17,
+            maxScore: 20,
+            scoreEntered: true,
+          },
         ],
         updatedAt: { seconds: ++state.clock },
       });
@@ -1499,7 +1529,7 @@ try {
     "Warning consent remains required before any score request.",
   );
   await page.goto(origin + "?written");
-  assert.equal(await signAction(page).isEnabled(), true);
+  assert.equal(await signAction(page).isEnabled(), false);
   await page.getByRole("button", { name: "이의 신청", exact: true }).click();
   dialog = page.getByRole("dialog", {
     name: "정기시험 이의 신청",
@@ -1540,6 +1570,12 @@ try {
   );
   report.checks.push("Load failure and excluded roster block request UI.");
   const openWrittenSignatureReview = async (page) => {
+    const choices = page
+      .getByRole("navigation", { name: "정기시험 점수 목록 메뉴", exact: true })
+      .locator(".performance-score-tab > button");
+    for (let index = 0; index < (await choices.count()); index++)
+      await choices.nth(index).click();
+    assert.equal(await signAction(page).isEnabled(), true);
     await signAction(page).click();
     const signing = page.locator("section").filter({
       has: page.getByRole("heading", {
@@ -1567,6 +1603,217 @@ try {
     assert.equal(await submit.isEnabled(), true);
     return signing;
   };
+  for (const width of [320, 390, 768, 1280]) {
+    const detailPage = await createPage(width, "?written&all-details");
+    const navigation = detailPage.getByRole("navigation", {
+      name: "정기시험 점수 목록 메뉴",
+      exact: true,
+    });
+    await navigation.waitFor();
+    const readCount = () =>
+      detailPage.evaluate(
+        () =>
+          window.studentScoreQa.events.filter((event) =>
+            /Read$/.test(event.name),
+          ).length,
+      );
+    const initialReads = await readCount();
+    assert.equal(
+      await signAction(detailPage).isEnabled(),
+      false,
+      "Initial automatic detail display does not bypass explicit review",
+    );
+    await navigation
+      .getByRole("button", { name: "선택형", exact: true })
+      .click();
+    assert.equal(
+      await signAction(detailPage).isEnabled(),
+      false,
+      "Objective alone leaves essay scores and feedback unreviewed",
+    );
+    const metrics = await detailPage.evaluate(() => {
+      const nav = document.querySelector(
+        'nav[aria-label="정기시험 점수 목록 메뉴"]',
+      );
+      const header = document.querySelector(".ws-page-header");
+      const panel = document.querySelector(".written-exam-score-omr-panels");
+      return {
+        tabs: [...nav.querySelectorAll(".performance-score-tab > button")].map(
+          (el) => ({
+            fontSize: getComputedStyle(el).fontSize,
+            fontWeight: getComputedStyle(el).fontWeight,
+          }),
+        ),
+        navBackground: getComputedStyle(nav).backgroundColor,
+        headerBackground: getComputedStyle(header).backgroundColor,
+        omrPadding: getComputedStyle(
+          document.querySelector(".written-exam-score-omr"),
+        ).padding,
+        panelColumns:
+          getComputedStyle(panel).gridTemplateColumns.split(" ").length,
+        clippedChoices: [
+          ...panel.querySelectorAll('[aria-label*="번 문항"]'),
+        ].some((row) => {
+          const bounds = row.closest("section").getBoundingClientRect();
+          const choices = [
+            ...row.querySelector('[aria-hidden="true"]').children,
+          ].map((choice) => choice.getBoundingClientRect());
+          return choices.some(
+            (choice, index) =>
+              choice.width < 8 ||
+              choice.left < bounds.left ||
+              choice.right > bounds.right ||
+              (index > 0 && choice.left < choices[index - 1].right),
+          );
+        }),
+        overflow: document.documentElement.scrollWidth > innerWidth + 1,
+        navigationBottom: nav.getBoundingClientRect().bottom,
+        contentTop: document
+          .querySelector(".written-exam-score-omr")
+          .getBoundingClientRect().top,
+      };
+    });
+    assert(
+      metrics.tabs.every(
+        (tab) =>
+          parseFloat(tab.fontSize) >= 18 && Number(tab.fontWeight) >= 800,
+      ),
+    );
+    assert.equal(metrics.navBackground, "rgba(0, 0, 0, 0)");
+    assert.equal(metrics.headerBackground, "rgba(0, 0, 0, 0)");
+    if (width < 640) assert.equal(metrics.omrPadding, "8px");
+    assert.equal(
+      metrics.panelColumns,
+      2,
+      `${width}: OMR panels use two columns`,
+    );
+    assert.equal(
+      metrics.clippedChoices,
+      false,
+      `${width}: all five bubbles remain distinct and inside their panel`,
+    );
+    assert.equal(metrics.overflow, false);
+    assert(metrics.navigationBottom < metrics.contentTop);
+    await detailPage.screenshot({
+      path: `${out}/written-omr-tabs-${width}.png`,
+      fullPage: true,
+    });
+    report.screenshots.push(`written-omr-tabs-${width}.png`);
+    await navigation
+      .getByRole("button", { name: "논술형 1번", exact: true })
+      .click();
+    assert.equal(
+      await detailPage.locator(".performance-score-feedback").count(),
+      4,
+    );
+    assert.equal(
+      await signAction(detailPage).isEnabled(),
+      false,
+      "Every essay group is required",
+    );
+    await navigation
+      .getByRole("button", { name: "논술형 2번", exact: true })
+      .click();
+    assert.equal(
+      await signAction(detailPage).isEnabled(),
+      true,
+      "All scored groups enable signing; unentered third essay is excluded",
+    );
+    assert.equal(
+      await readCount(),
+      initialReads,
+      "Reviewing tabs adds no server reads",
+    );
+    assert.equal(
+      await detailPage.evaluate(() => window.studentScoreQa.confirmations.size),
+      0,
+    );
+    const review = await openWrittenSignatureReview(detailPage);
+    await detailPage.evaluate(() => {
+      const current = window.studentScoreQa.serverRecords.get("qa-essay-2");
+      current.items[0].feedback = "변경된 채점 사유를 다시 확인해 주세요.";
+    });
+    await review.getByRole("button", { name: "제출하기", exact: true }).click();
+    await review.waitFor({ state: "hidden" });
+    assert.equal(
+      await signAction(detailPage).isEnabled(),
+      false,
+      "Same-version changed feedback requires a new review",
+    );
+    assert.equal(
+      await detailPage.evaluate(() => window.studentScoreQa.confirmations.size),
+      0,
+      "Stale review writes no confirmations",
+    );
+    await navigation
+      .getByRole("button", { name: "논술형 2번", exact: true })
+      .click();
+    await detailPage
+      .getByText("변경된 채점 사유를 다시 확인해 주세요.", { exact: true })
+      .waitFor();
+    assert.equal(
+      await signAction(detailPage).isEnabled(),
+      true,
+      "Unchanged groups retain their review",
+    );
+    const retryReview = await openWrittenSignatureReview(detailPage);
+    await detailPage.evaluate(() => {
+      window.studentScoreQa.failSignatureCommit = true;
+    });
+    await retryReview
+      .getByRole("button", { name: "제출하기", exact: true })
+      .click();
+    await detailPage
+      .getByText(
+        "점수 확인 서명을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        { exact: true },
+      )
+      .waitFor();
+    assert.equal(
+      await detailPage.evaluate(() => window.studentScoreQa.confirmations.size),
+      0,
+    );
+    await detailPage.evaluate(() => {
+      window.studentScoreQa.failSignatureCommit = false;
+    });
+    await retryReview
+      .getByRole("button", { name: "제출하기", exact: true })
+      .click();
+    await detailPage
+      .getByRole("button", { name: "점수 확인 완료 3/3", exact: true })
+      .waitFor();
+    assert.equal(
+      await detailPage.evaluate(
+        () =>
+          window.studentScoreQa.events.filter(
+            (event) => event.name === "signature",
+          ).length,
+      ),
+      3,
+    );
+    report.checks.push({
+      writtenDetailReview: width,
+      initialReads,
+      metrics,
+      signatureWritesAfterFailureRetry: 3,
+    });
+    await detailPage.close();
+  }
+  const totalOnly = await createPage(390, "?written&total-only");
+  await totalOnly
+    .getByRole("navigation", { name: "정기시험 점수 목록 메뉴", exact: true })
+    .waitFor();
+  assert.equal(await signAction(totalOnly).isEnabled(), false);
+  await totalOnly
+    .getByRole("navigation", { name: "정기시험 점수 목록 메뉴", exact: true })
+    .locator(".performance-score-tab > button")
+    .click();
+  assert.equal(
+    await signAction(totalOnly).isEnabled(),
+    true,
+    "Legacy entered zero total requires its record tab and remains signable",
+  );
+  await totalOnly.close();
   for (const width of [390, 768, 1280]) {
     const writtenSigningPage = await createPage(width, "?written");
     await writtenSigningPage
