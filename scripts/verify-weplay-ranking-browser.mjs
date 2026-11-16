@@ -20,7 +20,10 @@ try {
       ),
   );
 }
-const evidence = path.join(root, "output/weplay-ranking-browser-20261116");
+const evidence = path.join(
+  root,
+  "output/weplay-ranking-weekly-browser-20261116",
+);
 await fs.mkdir(evidence, { recursive: true });
 const fixture = `
 import {useSyncExternalStore} from 'react';
@@ -33,7 +36,8 @@ export const useAuth=()=>useSyncExternalStore(fn=>{listeners.add(fn);return()=>l
 export const getHistoryDictionaryCallable=async name=>async data=>{
  qa.calls.push({name,data,uid:qa.auth.currentUser.uid});
  const classId=data.classId||'3_1';
- const value={gameId:data.gameId,category:data.category,rows:Array.from({length:18},(_,i)=>({rank:i+1,studentLabel:teacher?(classId==='3_1'?'김*생':'박*생'):(qa.auth.currentUser.uid==='student-a'?'김*생':'이*생'),score:1800-i*50,isMe:!teacher&&i===3})),updatedAtMs:Date.now(),scoreLabel:'점',trackingSinceMs:data.gameId==='history-rain'?undefined:1794783600000,...(teacher?{selectedClassId:classId,...(!data.classId?{classes:[{id:'3_1',label:'3학년 1반'},{id:'3_2',label:'3학년 2반'}]}:{})}:{})};
+ const period=window.rankingQA.service.getWeplayRankingWeek();
+ const value={gameId:data.gameId,category:data.category,view:data.view,period,rows:Array.from({length:qa.empty?0:18},(_,i)=>({rank:i+1,classLabel:classId==='3_1'?'3학년 1반':'3학년 2반',studentLabel:classId==='3_2'?'박*생':(qa.auth.currentUser.uid==='student-b'?'이*생':'김*생'),score:1800-i*50,isMe:!teacher&&i===3})),updatedAtMs:Date.now(),scoreLabel:'점',selectedClassId:data.classId||'',...(data.includeClasses?{classes:[{id:'3_1',label:'3학년 1반'},{id:'3_2',label:'3학년 2반'}]}:{})};
  if(qa.hold)await new Promise(resolve=>qa.pending.push(resolve));
  if(qa.fail)throw new Error('Synthetic network failure');
  return {data:value};
@@ -164,11 +168,48 @@ const errors = [],
   checks = [];
 const open = async (page) => {
   await page.getByRole("button", { name: "랭킹", exact: true }).click();
-  await page.locator(".weplay-ranking-rows > li").first().waitFor();
+  await page.locator(".weplay-ranking-rows > tr").first().waitFor();
+  await page.locator(".weplay-ranking-state").waitFor({ state: "detached" });
 };
 const close = async (page) => {
   await page.getByRole("button", { name: "랭킹 닫기" }).click();
   await page.locator('[role="dialog"]').waitFor({ state: "detached" });
+};
+const auditTable = async (page, name) => {
+  assert.equal(
+    await page.locator(".weplay-ranking-table thead th").count(),
+    4,
+    `${name}: persistent column headers`,
+  );
+  assert.equal(await page.locator(".weplay-ranking-table tbody").count(), 1);
+  const measure = await page
+    .locator(".weplay-ranking-close")
+    .evaluate((button) => {
+      const svg = button.querySelector("svg"),
+        b = button.getBoundingClientRect(),
+        s = svg.getBoundingClientRect(),
+        style = getComputedStyle(button);
+      return {
+        width: style.width,
+        height: style.height,
+        padding: style.padding,
+        dx: Math.abs((b.left + b.right - s.left - s.right) / 2),
+        dy: Math.abs((b.top + b.bottom - s.top - s.bottom) / 2),
+        svgWidth: getComputedStyle(svg).width,
+        svgHeight: getComputedStyle(svg).height,
+        dialogHeight: button.closest('[role="dialog"]').offsetHeight,
+      };
+    });
+  assert.equal(measure.width, "44px");
+  assert.equal(measure.height, "44px");
+  assert.equal(measure.padding, "0px");
+  assert.equal(measure.svgWidth, "20px");
+  assert.equal(measure.svgHeight, "20px");
+  assert(
+    measure.dx < 1 && measure.dy < 1,
+    `${name}: close SVG center ${JSON.stringify(measure)}`,
+  );
+  return measure;
 };
 try {
   for (const width of [390, 768, 1280])
@@ -224,10 +265,14 @@ try {
           "naval parchment contrast",
         );
       await open(page);
+      await auditTable(page, `${gameId}/${width}`);
       assert.equal(
-        await page.getByLabel("랭킹 학급", { exact: true }).count(),
-        0,
-        "student has no class picker",
+        await page
+          .getByLabel("랭킹 범위", { exact: true })
+          .locator("option")
+          .count(),
+        3,
+        "student can select overall and active classes",
       );
       assert.equal(
         await page.evaluate(() => window.rankingQA.calls.length),
@@ -266,7 +311,7 @@ try {
           layout.scroll,
       );
       assert.equal(
-        await page.locator(".weplay-ranking-rows li.is-me").count(),
+        await page.locator(".weplay-ranking-rows tr.is-me").count(),
         1,
       );
       await page.screenshot({
@@ -305,7 +350,10 @@ try {
         const count = await page.evaluate(() => window.rankingQA.calls.length);
         await page.evaluate(() => (window.rankingQA.fail = false));
         await page.getByRole("button", { name: "다시 불러오기" }).click();
-        await page.locator(".weplay-ranking-rows li").first().waitFor();
+        await page
+          .locator(".weplay-ranking-rows tr:not(:has(.weplay-ranking-state))")
+          .first()
+          .waitFor();
         assert.equal(
           await page.evaluate(() => window.rankingQA.calls.length),
           count + 1,
@@ -317,7 +365,7 @@ try {
         );
         await open(page);
         assert.match(
-          await page.locator(".weplay-ranking-rows li").first().innerText(),
+          await page.locator(".weplay-ranking-rows tr").first().innerText(),
           /이\*생/,
         );
         await close(page);
@@ -383,7 +431,7 @@ try {
   });
   await open(page);
   assert.match(
-    await page.locator(".weplay-ranking-rows li").first().innerText(),
+    await page.locator(".weplay-ranking-rows tr").first().innerText(),
     /이\*생/,
   );
   await page.close();
@@ -541,11 +589,11 @@ try {
         1,
         "teacher first class and list in one query",
       );
-      const picker = page.getByLabel("랭킹 학급", { exact: true });
-      assert.equal(await picker.inputValue(), "3_1");
-      assert.equal(await picker.locator("option").count(), 2);
+      const picker = page.getByLabel("랭킹 범위", { exact: true });
+      assert.equal(await picker.inputValue(), "");
+      assert.equal(await picker.locator("option").count(), 3);
       assert.equal(
-        await page.locator(".weplay-ranking-rows li.is-me").count(),
+        await page.locator(".weplay-ranking-rows tr.is-me").count(),
         0,
         "teacher has no student self row",
       );
@@ -560,7 +608,7 @@ try {
         await page.evaluate(() => window.rankingQA.calls.at(-1).data.classId),
         "3_2",
       );
-      await picker.selectOption("3_1");
+      await picker.selectOption("");
       await page.waitForFunction(() =>
         document
           .querySelector(".weplay-ranking-rows")
@@ -569,7 +617,7 @@ try {
       assert.equal(
         await page.evaluate(() => window.rankingQA.calls.length),
         2,
-        "return to initial class reuses aliased cache",
+        "return to overall reuses cache",
       );
       const box = await page.locator('[role="dialog"]').boundingBox();
       assert(
@@ -582,6 +630,7 @@ try {
       await page.screenshot({
         path: path.join(evidence, `teacher-${mode}-${width}-dialog.png`),
       });
+      await auditTable(page, `teacher ${mode}/${width}`);
       await close(page);
       await open(page);
       assert.equal(
@@ -622,6 +671,65 @@ try {
           ),
         ),
         "teacher preview never submits score",
+      );
+      const states = [];
+      for (const state of ["loading", "empty", "error"]) {
+        await page.evaluate(
+          ({ state, gameId }) => {
+            const qa = window.rankingQA;
+            qa.service.invalidateWeplayRanking(gameId, false);
+            qa.hold = state === "loading";
+            qa.empty = state === "empty";
+            qa.fail = state === "error";
+          },
+          {
+            state,
+            gameId:
+              mode === "naval"
+                ? "history-rain"
+                : mode === "yut"
+                  ? "joseon-yut"
+                  : "gungdeok-rock",
+          },
+        );
+        await page.getByRole("button", { name: "랭킹", exact: true }).click();
+        await page
+          .getByText(
+            state === "loading"
+              ? "랭킹을 불러오고 있습니다."
+              : state === "empty"
+                ? "이번 주 기록이 없습니다."
+                : "랭킹을 불러오지 못했습니다.",
+            { exact: true },
+          )
+          .waitFor();
+        const measure = await auditTable(page, `${mode}/${width}/${state}`);
+        if (mode !== "rhythm")
+          assert(
+            measure.dialogHeight < 420,
+            "empty/loading record book fits content without a tall blank area",
+          );
+        await page.screenshot({
+          path: path.join(evidence, `teacher-${mode}-${width}-${state}.png`),
+        });
+        states.push({ state, ...measure });
+        await close(page);
+        await page.evaluate(() => {
+          const qa = window.rankingQA;
+          qa.hold = false;
+          qa.empty = false;
+          qa.fail = false;
+          qa.pending.splice(0).forEach((resolve) => resolve());
+        });
+      }
+      await page.evaluate(
+        (gameId) =>
+          window.rankingQA.service.invalidateWeplayRanking(gameId, false),
+        mode === "naval"
+          ? "history-rain"
+          : mode === "yut"
+            ? "joseon-yut"
+            : "gungdeok-rock",
       );
       if (width === 1280) {
         await open(page);
@@ -696,9 +804,96 @@ try {
         classes: 2,
         lazyReads: 2,
         previewWrites: 0,
+        states,
       });
       await page.close();
     }
+  const weekly = await browser.newPage({
+    viewport: { width: 390, height: 800 },
+  });
+  await weekly.goto(base);
+  await weekly.locator(".weplay-ranking-launch").waitFor();
+  await weekly.evaluate(() => {
+    const qa = window.rankingQA;
+    const nextMonday = Date.parse("2026-11-22T15:00:00Z");
+    qa.offset = nextMonday - Date.now() - 500;
+  });
+  await open(weekly);
+  await weekly.waitForFunction(() => window.rankingQA.calls.length === 2);
+  assert.equal(
+    await weekly.evaluate(() => window.rankingQA.calls[0].data.includeClasses),
+    true,
+  );
+  assert.equal(
+    await weekly.evaluate(() => window.rankingQA.calls[1].data.includeClasses),
+    undefined,
+    "week rollover does not reread class metadata",
+  );
+  assert.match(
+    await weekly.locator(".weplay-ranking-metric").first().innerText(),
+    /11\. 23\./,
+    "visible weekly period rolls at KST Monday midnight",
+  );
+  await weekly.getByLabel("랭킹 범위").selectOption("3_2");
+  await weekly.waitForFunction(() => window.rankingQA.calls.length === 3);
+  assert.equal(
+    await weekly.evaluate(() => window.rankingQA.calls.at(-1).data.view),
+    "class",
+  );
+  assert.equal(
+    await weekly.evaluate(() => window.rankingQA.calls.at(-1).data.classId),
+    "3_2",
+    "student can read another active class",
+  );
+  await weekly.getByLabel("랭킹 범위").selectOption("");
+  await weekly.waitForFunction(() =>
+    document
+      .querySelector(".weplay-ranking-rows")
+      ?.textContent.includes("김*생"),
+  );
+  assert.equal(
+    await weekly.evaluate(() => window.rankingQA.calls.length),
+    3,
+    "student return to overall reuses cache",
+  );
+  await weekly.evaluate(() => {
+    const qa = window.rankingQA;
+    qa.hidden = true;
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => (qa.hidden ? "hidden" : "visible"),
+    });
+    qa.offset += 7 * 86400000;
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  assert.equal(
+    await weekly.evaluate(() => window.rankingQA.calls.length),
+    3,
+    "hidden dialog does not query on week change",
+  );
+  await weekly.evaluate(() => {
+    window.rankingQA.hidden = false;
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await weekly.waitForFunction(() => window.rankingQA.calls.length === 4);
+  assert.match(
+    await weekly.locator(".weplay-ranking-metric").first().innerText(),
+    /11\. 30\./,
+  );
+  const boundary = await weekly.evaluate(() => {
+    const monday = Date.parse("2026-11-22T15:00:00Z"),
+      get = window.rankingQA.service.getWeplayRankingWeek;
+    return { before: get(monday - 1), after: get(monday) };
+  });
+  assert.equal(boundary.before.endsAtMs, boundary.after.startsAtMs);
+  assert.equal(boundary.after.startsAtMs, Date.parse("2026-11-22T15:00:00Z"));
+  checks.push({
+    weeklyRollover: true,
+    hiddenNoRead: true,
+    studentClassSwitch: true,
+    calls: 4,
+  });
+  await weekly.close();
   assert.deepEqual(errors, []);
   assert.deepEqual(external, []);
   checks.push({ cache: counts, staleResponseDiscarded: true });

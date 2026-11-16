@@ -3,7 +3,7 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 const { assertStudentMenuVisible } = require('./studentMenuVisibility');
 const { readGameSettings } = require('./weplayCore');
-const { LIMIT, root, boardId, studentLabel, prepareRankingUpdate } = require('./weplayRankingStore');
+const { LIMIT, root, weeklyBoardId, weekAt, studentLabel, prepareRankingUpdate } = require('./weplayRankingStore');
 const { RHYTHM_SONGS } = require('./rhythmRankingCore/rhythmSongs');
 const { createChart, createScore, judgeInput, applyJudgement, HIT_WINDOW_SECONDS } = require('./rhythmRankingCore/rhythmCore');
 
@@ -87,7 +87,7 @@ function createWeplayRankingHandlers({ db, assertSession = assertScoreWorkflowSe
         && Array.isArray(profile.staffPermissions) && profile.staffPermissions.includes('lesson_read')));
     if (manager) return { uid, manager: true, revision: `teacher:${manifest.revision}` };
     if (profile.role !== 'student') fail('permission-denied', '게임을 이용할 권한이 없습니다.');
-    if (Object.hasOwn(request.data || {}, 'classId') || request.data?.includeClasses === true) fail('permission-denied', '본인 학급의 랭킹만 확인할 수 있습니다.');
+    if (!allowManager && (Object.hasOwn(request.data || {}, 'classId') || request.data?.includeClasses === true)) fail('permission-denied', '본인의 연주만 기록할 수 있습니다.');
     assertStudentMenuVisible(config, ['weplay', menuKeys[gameId]]);
     const slotId = `slot_${hash(`${scope.id}\n${uid}`).slice(0, 40)}`;
     const publicationPath = gameId === 'gungdeok-rock' ? `${root(scope)}/rhythm_publication/${gameId}` : `${root(scope)}/weplay_games/${gameId}`;
@@ -105,13 +105,15 @@ function createWeplayRankingHandlers({ db, assertSession = assertScoreWorkflowSe
     if (classroom.semesterId !== scope.id || classroom.status !== 'ACTIVE' || classroom.readOnly === true) fail('permission-denied', '현재 학급 정보를 확인해 주세요.');
     return { uid, classId: enrollment.classId, enrollmentId: slot.activeEnrollmentId, rankingLabel: studentLabel(profile, enrollment),
       classKey: classDetails(enrollment.classId, classroom, profile).classKey,
+      classLabel: classDetails(enrollment.classId, classroom, profile).label,
       revision: publication.revision ?? publication.version };
   };
-  const teacherClass = async (request, scope) => {
+  const rankingTarget = async (request, scope, view) => {
     const requested = request.data?.classId;
     if (requested !== undefined && !identifier(requested)) fail('invalid-argument', '학급을 다시 선택해 주세요.');
+    if (view === 'all' && requested !== undefined) fail('invalid-argument', '전체 또는 학급을 다시 선택해 주세요.');
     let classes, selected;
-    if (requested === undefined || request.data?.includeClasses === true) {
+    if ((view === 'class' && requested === undefined) || request.data?.includeClasses === true) {
       // Metadata only, limited on the server to this active semester. Detect an
       // oversized catalogue explicitly instead of silently dropping classrooms.
       const snapshot = await db.collection('semester_classes').where('semesterId', '==', scope.id).where('status', '==', 'ACTIVE')
@@ -119,10 +121,10 @@ function createWeplayRankingHandlers({ db, assertSession = assertScoreWorkflowSe
       if (snapshot.size > CLASS_LIMIT) fail('failed-precondition', '학급 목록이 너무 많습니다. 학급을 지정해 다시 확인해 주세요.');
       const available = snapshot.docs.filter(doc => doc.data().readOnly !== true).map(doc => classDetails(doc.id, doc.data()))
         .sort((a, b) => a.grade.localeCompare(b.grade, 'ko', { numeric: true }) || a.classNumber.localeCompare(b.classNumber, 'ko', { numeric: true }) || a.id.localeCompare(b.id));
-      selected = requested === undefined ? available[0] : available.find(value => value.id === requested);
+      selected = view === 'all' ? undefined : requested === undefined ? available[0] : available.find(value => value.id === requested);
       if (requested !== undefined && !selected) fail('permission-denied', '현재 학기의 학급을 선택해 주세요.');
       classes = available.map(({ id, label }) => ({ id, label }));
-    } else {
+    } else if (view === 'class') {
       const classroom = (await db.doc(`semester_classes/${requested}`).get()).data();
       if (!classroom || classroom.semesterId !== scope.id || classroom.status !== 'ACTIVE' || classroom.readOnly === true) fail('permission-denied', '현재 학기의 학급을 선택해 주세요.');
       selected = classDetails(requested, classroom);
@@ -134,35 +136,25 @@ function createWeplayRankingHandlers({ db, assertSession = assertScoreWorkflowSe
     const scope = scopeFrom(request.data), gameId = request.data?.gameId;
     if (!validGame(gameId)) fail('invalid-argument', '게임을 다시 선택해 주세요.');
     const category = request.data?.category;
+    const view = request.data?.view ?? (request.data?.classId === undefined ? 'all' : 'class');
+    if (!['all', 'class'].includes(view)) fail('invalid-argument', '전체 또는 학급을 다시 선택해 주세요.');
     if (gameId === 'history-rain' && !['mild', 'medium', 'spicy'].includes(category)) fail('invalid-argument', '난이도를 다시 선택해 주세요.');
     if (gameId === 'joseon-yut' && category !== 'wins') fail('invalid-argument', '랭킹을 다시 선택해 주세요.');
     if (gameId === 'gungdeok-rock') { const [songId, difficulty, extra] = String(category).split(':'); if (extra) fail('invalid-argument', '곡과 장단을 다시 선택해 주세요.'); rhythmChoice(songId, difficulty); }
     const actor = await authority(db, request, scope, gameId, true);
-    if (actor.manager) Object.assign(actor, await teacherClass(request, scope));
-    const boundary = `${scope.id}/${gameId}/${category}/${actor.classId}/${actor.revision}`;
+    const target = await rankingTarget(request, scope, view);
+    const week = weekAt(now());
+    const boundary = `${scope.id}/${week.id}/${gameId}/${category}/${view}/${target.classId}/${actor.revision}`;
     let payload;
-    if (!actor.classId) payload = { rows: [], updatedAtMs: now() };
-    else if (gameId === 'history-rain') {
-      const meta = (await db.doc(`${root(scope)}/weplay_meta/current`).get()).data();
-      if (!identifier(meta?.periodId)) payload = { rows: [], updatedAtMs: now() };
-      else {
-        const period = (await db.doc(`${root(scope)}/weplay_periods/${meta.periodId}`).get()).data();
-        if (!period || period.endsAtMs <= now()) payload = { rows: [], updatedAtMs: now() };
-        else payload = await cached(`${boundary}/${meta.periodId}/${actor.classKey}`, async () => {
-          const snapshot = actor.classKey ? await db.collection(`${root(scope)}/weplay_periods/${meta.periodId}/entries`)
-            .where('classKey', '==', actor.classKey).where('difficulty', '==', category)
-            .orderBy('score', 'desc').orderBy('achievedAtMs', 'asc').orderBy('uid', 'asc').limit(LIMIT)
-            .select('uid', 'studentLabel', 'score').get() : null;
-          return { rows: (snapshot?.docs || []).map(doc => doc.data()), updatedAtMs: now(), period: { startsAtMs: period.startsAtMs, endsAtMs: period.endsAtMs } };
-        }, request.data?.refresh === true);
-      }
-    } else payload = await cached(boundary, async () => {
-      const board = (await db.doc(`${root(scope)}/weplay_rankings/${boardId(gameId, category, actor.classId)}`).get()).data();
+    if (view === 'class' && !target.classId) payload = { rows: [], updatedAtMs: now() };
+    else payload = await cached(boundary, async () => {
+      const board = (await db.doc(`${root(scope)}/weplay_weekly_rankings/${weeklyBoardId(gameId, category, target.classId, week.id)}`).get()).data();
       return { rows: board?.rows || [], updatedAtMs: board?.updatedAtMs || now(), ...(board?.trackingSinceMs ? { trackingSinceMs: board.trackingSinceMs } : {}) };
     }, request.data?.refresh === true);
-    return { ...payload, gameId, category, limit: LIMIT, cacheTtlMs: CACHE_MS, scoreLabel: gameId === 'joseon-yut' ? '승' : '점',
-      ...(actor.manager ? { selectedClassId: actor.classId, ...(actor.classes ? { classes: actor.classes } : {}) } : {}),
-      rows: payload.rows.map((row, index) => ({ rank: index + 1, studentLabel: row.studentLabel, score: row.score, isMe: row.uid === actor.uid })) };
+    return { ...payload, gameId, category, week, period: { startsAtMs: week.startsAtMs, endsAtMs: week.endsAtMs }, view,
+      limit: LIMIT, cacheTtlMs: Math.min(CACHE_MS, Math.max(0, week.endsAtMs - now())), scoreLabel: gameId === 'joseon-yut' ? '승' : '점',
+      selectedClassId: target.classId, ...(target.classes ? { classes: target.classes } : {}),
+      rows: payload.rows.map((row, index) => ({ rank: index + 1, studentLabel: row.studentLabel, classLabel: row.classLabel || '', score: row.score, isMe: !actor.manager && row.uid === actor.uid })) };
   };
   const startRhythmRankingGame = async request => {
     await assertSession(request);
@@ -185,6 +177,7 @@ function createWeplayRankingHandlers({ db, assertSession = assertScoreWorkflowSe
     });
   };
   const finishRhythmRankingGame = async request => {
+    const receivedAtMs = now();
     await assertSession(request);
     const scope = scopeFrom(request.data), sessionId = request.data?.sessionId;
     if (typeof sessionId !== 'string' || !/^[a-f0-9]{64}$/.test(sessionId)) fail('invalid-argument', '연주 기록을 확인해 주세요.');
@@ -193,7 +186,7 @@ function createWeplayRankingHandlers({ db, assertSession = assertScoreWorkflowSe
       const runRef = db.doc(`${root(scope)}/rhythm_players/${actor.uid}`), run = (await transaction.get(runRef)).data();
       if (!run || run.sessionId !== sessionId || run.uid !== actor.uid || run.classId !== actor.classId || run.enrollmentId !== actor.enrollmentId) fail('failed-precondition', '현재 연주 기록을 확인하지 못했습니다. 다시 연주해 주세요.');
       if (run.status === 'finished') return run.result;
-      const atMs = now();
+      const atMs = receivedAtMs;
       if (atMs < run.startedAtMs + (run.duration - 1) * 1000 || atMs > run.expiresAtMs) fail('failed-precondition', '연주를 끝까지 마친 뒤 기록할 수 있습니다.');
       const choice = rhythmChoice(run.songId, run.difficulty), score = replayRhythm(choice.song, choice.difficulty, request.data?.events);
       const ranking = score.score > 0 ? await prepareRankingUpdate({ db, transaction, scope, gameId: 'gungdeok-rock', category: choice.category, actor, score: score.score, atMs }) : null;

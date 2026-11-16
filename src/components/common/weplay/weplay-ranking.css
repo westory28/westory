@@ -12,33 +12,59 @@ button.weplay-ranking-launch.weplay-ranking--rhythm { border: 3px solid #164c35;
 .weplay-ranking-overlay { position: absolute; inset: 0; z-index: 250; display: grid; place-items: center; padding: 16px; color: var(--rank-ink); background: #171e24b8; }
 .weplay-ranking-overlay *, .weplay-ranking-dialog { box-sizing: border-box; }
 .weplay-ranking-dialog { display: flex; flex-direction: column; width: min(520px, 100%); height: min(560px, 100%); min-height: 0; max-height: 100%; padding: 16px; border: 3px solid var(--rank-line); border-radius: 12px; background: var(--rank-paper); box-shadow: 0 8px 24px #0006; text-align: left; }
+.weplay-ranking--naval .weplay-ranking-dialog, .weplay-ranking--yut .weplay-ranking-dialog { height: auto; max-height: min(560px, 100%); }
 .weplay-ranking-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.weplay-ranking-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.weplay-ranking-emblem { display: flex; flex: none; color: var(--rank-accent); }
+.weplay-ranking-emblem svg { display: block; width: 32px; height: 32px; }
 .weplay-ranking-heading span { font-size: 14px; }
 .weplay-ranking-dialog .weplay-ranking-heading h2 { margin: 0; color: inherit; font-family: inherit; font-size: 24px; line-height: 1.25; }
 .weplay-ranking-overlay .weplay-ranking-dialog button, .weplay-ranking-overlay .weplay-ranking-dialog select { min-height: 44px; padding: 8px 12px; border: 1px solid var(--rank-line); border-radius: 8px; color: var(--rank-ink); background: var(--rank-paper); font: inherit; font-size: 16px; cursor: pointer; }
 .weplay-ranking-dialog button:focus-visible, .weplay-ranking-dialog select:focus-visible, button.weplay-ranking-launch:focus-visible { outline: 3px solid var(--rank-accent); outline-offset: 3px; }
-.weplay-ranking-dialog .weplay-ranking-heading > button { width: 44px; flex: none; font-size: 24px; }
+.weplay-ranking-overlay .weplay-ranking-dialog .weplay-ranking-close { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px; min-width: 44px; min-height: 44px; max-width: 44px; max-height: 44px; margin: 0; padding: 0; line-height: 1; box-shadow: none; }
+.weplay-ranking-dialog .weplay-ranking-close svg { display: block; flex: none; width: 20px; height: 20px; margin: 0; padding: 0; transform: none; }
 .weplay-ranking-options { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
-.weplay-ranking-filters { display: contents; }
-.weplay-ranking-filters.is-teacher { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-.weplay-ranking-filters.is-teacher > .weplay-ranking-options { margin-top: 0; }
-.weplay-ranking-dialog .weplay-ranking-filters.is-teacher label { white-space: nowrap; }
-.weplay-ranking-dialog .weplay-ranking-filters.is-teacher select { width: auto; }
+.weplay-ranking-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.weplay-ranking-filters > .weplay-ranking-options { margin-top: 0; }
+.weplay-ranking-dialog .weplay-ranking-filters label { white-space: nowrap; }
+.weplay-ranking-dialog .weplay-ranking-filters select { width: auto; }
 .weplay-ranking-options label { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
 .weplay-ranking-options select { min-width: 0; max-width: 100%; }
 .weplay-ranking-options button[aria-pressed="true"] { color: var(--rank-paper); background: var(--rank-accent); border-color: var(--rank-accent); font-weight: 700; }
 .weplay-ranking-dialog .weplay-ranking-metric { margin: 8px 0; color: inherit; font: inherit; font-size: 14px; }
-.weplay-ranking-content { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-.weplay-ranking-content > p, .weplay-ranking-content > div { padding: 16px 0; }
-.weplay-ranking-rows { display: block; margin: 0; padding: 0; list-style: none; }
-.weplay-ranking-rows > li { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 56px; padding: 8px; border-bottom: 1px solid var(--rank-line); font-size: 16px; }
-.weplay-ranking-rows > li.is-me { outline: 2px solid var(--rank-accent); outline-offset: -2px; }
-.weplay-ranking-rows > li > span { overflow-wrap: anywhere; }
-.weplay-ranking-place { color: var(--rank-accent); font-size: 24px; }
+.weplay-ranking-content { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.weplay-ranking-dialog .weplay-ranking-table { display: table; width: 100%; table-layout: fixed; margin: 0; border-collapse: collapse; color: var(--rank-ink); background: transparent; font: inherit; text-align: left; }
+.weplay-ranking-table thead { position: sticky; top: 0; z-index: 1; background: var(--rank-paper); }
+.weplay-ranking-dialog .weplay-ranking-table th, .weplay-ranking-dialog .weplay-ranking-table td { height: 48px; padding: 8px 4px; border: 0; border-bottom: 1px solid var(--rank-line); color: inherit; background: transparent; font-size: 14px; text-align: left; vertical-align: middle; overflow-wrap: anywhere; }
+.weplay-ranking-table th:first-child { width: 16%; }
+.weplay-ranking-table th:nth-child(2) { width: 30%; }
+.weplay-ranking-table th:last-child { width: 26%; }
+.weplay-ranking-dialog .weplay-ranking-table :is(th, td):last-child { text-align: right; }
+.weplay-ranking-rows > tr.is-me { outline: 2px solid var(--rank-accent); outline-offset: -2px; }
+.weplay-ranking-dialog .weplay-ranking-table .weplay-ranking-place { color: var(--rank-accent); font-size: 20px; font-weight: 700; }
+.weplay-ranking-dialog .weplay-ranking-table td.weplay-ranking-state { height: auto; padding: 24px 8px; text-align: center; }
+.weplay-ranking-dialog .weplay-ranking-state p { margin: 0; font: inherit; }
+.weplay-ranking-state button { margin-top: 16px; }
 .weplay-ranking-rows small { margin-left: 4px; font-size: 12px; font-weight: 400; }
 .weplay-ranking-rows em { margin-left: 8px; font-size: 12px; font-style: normal; }
 .weplay-ranking--rhythm .weplay-ranking-heading h2 { color: #c4442d; }
 .weplay-ranking--yut .weplay-ranking-dialog { border-width: 6px; border-color: #684729; }
+/* Reuse the game's HUD/sea and wooden menu/hanji surfaces inside the record book. */
+.weplay-ranking--naval .weplay-ranking-dialog { border: 2px solid #d8ae66; border-radius: 8px; background: #171e24; box-shadow: inset 0 0 0 2px #5b3927, 0 8px 24px #0006; }
+.weplay-ranking--naval .weplay-ranking-heading { padding: 8px; margin: -8px -8px 0; border-bottom: 1px solid #d8ae66; background: linear-gradient(#171e24c9, #171e24ed), url('/assets/weplay/naval/sea-battle.webp') center / cover; }
+.weplay-ranking--naval .weplay-ranking-heading h2 { color: #d8ae66; }
+.weplay-ranking--naval .weplay-ranking-table thead { background: #173644; }
+.weplay-ranking--naval .weplay-ranking-table th { color: #d8ae66; }
+.weplay-ranking--naval .weplay-ranking-rows > tr:nth-child(even) { background: #163c4e55; }
+.weplay-ranking--yut .weplay-ranking-dialog { border-radius: 5px; background-color: #f5e8c9; background-image: linear-gradient(#f5e5bdc9, #f5e5bdc9), url('/assets/weplay/yut/materials.webp'); background-size: 100% 100%, 200% 200%; background-position: center, right top; box-shadow: inset 0 0 0 1px #b18b51, 0 8px 24px #3b251a55; }
+.weplay-ranking--yut .weplay-ranking-heading { padding: 8px; margin: -8px -8px 0; border-bottom: 3px solid #c8a36b; color: #f5e4bd; background: linear-gradient(#39231038, #321c155c), url('/assets/weplay/yut/materials.webp') left top / 200% 200%; }
+.weplay-ranking--yut .weplay-ranking-emblem { color: #f5e4bd; }
+.weplay-ranking--yut .weplay-ranking-dialog :is(select, button) { border-radius: 3px; }
+.weplay-ranking--yut .weplay-ranking-dialog select { background: #fff4d685; border-color: #98733f; box-shadow: inset 0 1px 4px #72501d20; }
+.weplay-ranking--yut .weplay-ranking-dialog button { background: linear-gradient(#ead6a7, #c6a76f); border-color: #866238; color: #392819; }
+.weplay-ranking--yut .weplay-ranking-table thead { background: #536143; }
+.weplay-ranking--yut .weplay-ranking-table th { color: #fff2d2; }
+.weplay-ranking--yut .weplay-ranking-rows > tr:nth-child(even) { background: #fff3d25c; }
 @media (max-width: 480px), (max-height: 560px) {
   button.weplay-ranking-launch.weplay-ranking-launch { left: 8px; bottom: 8px; padding: 8px; }
   .weplay-ranking-overlay { padding: 8px; }

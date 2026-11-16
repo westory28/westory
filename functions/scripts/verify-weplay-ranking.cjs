@@ -16,7 +16,7 @@ const { getFirestore, Timestamp, DocumentReference } = require('firebase-admin/f
 const sourceRoot = process.env.WEPLAY_RANKING_SOURCE_ROOT ? path.resolve(process.env.WEPLAY_RANKING_SOURCE_ROOT) : path.resolve(__dirname, '..');
 const fromSource = file => require(path.join(sourceRoot, file));
 const { createWeplayRankingHandlers, replayRhythm } = fromSource('weplayRanking');
-const { prepareRankingUpdate, boardId } = fromSource('weplayRankingStore');
+const { prepareRankingUpdate, weeklyBoardId, weekAt } = fromSource('weplayRankingStore');
 const { createChart } = fromSource('rhythmRankingCore/rhythmCore');
 const { RHYTHM_SONGS } = fromSource('rhythmRankingCore/rhythmSongs');
 const db = getFirestore(), scope = { year: '2026', semester: '2' }, base = 'years/2026/semesters/2';
@@ -40,7 +40,7 @@ const wrapQuery = query => new Proxy(query, { get(target, key) {
 const wrapRef = ref => new Proxy(ref, { get(target, key) {
   if (key === 'get') return async () => {
     metrics.reads++;
-    if (failNextBoardRead && target.path.includes('/weplay_rankings/')) { failNextBoardRead = false; throw Object.assign(new Error('Synthetic unavailable read'), { code: 'unavailable' }); }
+    if (failNextBoardRead && target.path.includes('/weplay_weekly_rankings/')) { failNextBoardRead = false; throw Object.assign(new Error('Synthetic unavailable read'), { code: 'unavailable' }); }
     return target.get();
   };
   const value = target[key]; return typeof value === 'function' ? value.bind(target) : value;
@@ -59,6 +59,7 @@ const api = createWeplayRankingHandlers({ db: instrumented, now: () => atMs, ass
 const get = async name => (await db.doc(name).get()).data();
 const deny = (promise, code) => assert.rejects(promise, error => error.code === code);
 const counts = {};
+const weeklyPath = (gameId, category, classId = '', time = atMs) => `${base}/weplay_weekly_rankings/${weeklyBoardId(gameId, category, classId, weekAt(time).id)}`;
 async function seed() {
   assert.equal((await fetch(`http://${host}/emulator/v1/projects/${projectId}/databases/(default)/documents`, { method: 'DELETE' })).ok, true);
   const docs = {
@@ -81,6 +82,12 @@ async function seed() {
   }
   for (let i = 0; i < 60; i++) docs[`${base}/weplay_periods/period-one/entries/e${i}`] = { uid: i ? `synthetic-${i}` : 'a', classKey: '3-1', difficulty: 'mild', studentLabel: '합○○○', score: 10000 - i, achievedAtMs: atMs - 500 };
   docs[`${base}/weplay_periods/period-one/entries/other-class`] = { uid: 'other', classKey: '3-2', difficulty: 'mild', studentLabel: '타○○', score: 99999, achievedAtMs: atMs };
+  const week = weekAt(atMs);
+  const rows = Array.from({ length: 60 }, (_, i) => ({ uid: i ? `synthetic-${i}` : 'a', studentLabel: '합○○○', classId: 'class-one', classLabel: '3학년 1반', score: 10000 - i, achievedAtMs: atMs - 500 }));
+  const otherRow = { uid: 'other', studentLabel: '타○○', classId: 'class-two', classLabel: '3학년 2반', score: 99999, achievedAtMs: atMs };
+  for (const [classId, boardRows] of [['class-one', rows.slice(0, 50)], ['class-two', [otherRow]], ['', [otherRow, ...rows].slice(0, 50)]]) {
+    docs[weeklyPath('history-rain', 'mild', classId)] = { schemaVersion: 2, gameId: 'history-rain', category: 'mild', classId, week, rows: boardRows, updatedAtMs: atMs };
+  }
   const batch = db.batch(); for (const [name, data] of Object.entries(docs)) batch.set(db.doc(name), data); await batch.commit(); reset();
 }
 async function main() {
@@ -94,17 +101,19 @@ async function main() {
   const song = RHYTHM_SONGS[0], chart = createChart(song, 'easy');
   const events = chart.map(({ time, kind, hand }) => ({ time, kind, hand }));
   for (const bad of [[{ ...events[0], time: Infinity }], [...events].reverse(), Array(5001).fill(events[0]), [{ ...events[0], hand: 'forged' }]]) assert.throws(() => replayRhythm(song, 'easy', bad), error => error.code === 'invalid-argument');
-  const naval = { gameId: 'history-rain', category: 'mild' };
+  const naval = { gameId: 'history-rain', category: 'mild', view: 'class', classId: 'class-one' };
   await deny(api.getWeplayRanking(request('a', { gameId: '__proto__', category: 'wins' })), 'invalid-argument');
   reset(); const first = await api.getWeplayRanking(request('a', naval)); counts.navalCold = { ...metrics };
   assert.equal(first.rows.length, 50); assert.equal(first.rows[0].isMe, true); assert.equal(first.rows[0].score, 10000);
   assert.equal(JSON.stringify(first).includes('synthetic-'), false); assert.equal(JSON.stringify(first).includes('uid'), false);
-  assert.equal(metrics.reads, 60); assert.equal(metrics.queries, 1); assert.equal(metrics.writes, 0); assert.equal(metrics.guardReads, 3);
+  assert.equal(metrics.reads, 10); assert.equal(metrics.queries, 0); assert.equal(metrics.writes, 0); assert.equal(metrics.guardReads, 3);
   reset(); await Promise.all([api.getWeplayRanking(request('b', naval)), api.getWeplayRanking(request('a', naval))]); counts.navalWarmTwo = { ...metrics };
-  assert.equal(metrics.reads, 20); assert.equal(metrics.queries, 0); assert.equal(metrics.writes, 0); assert.equal(metrics.guardReads, 6);
-  const isolated = await api.getWeplayRanking(request('other', naval)); assert.equal(isolated.rows.length, 1); assert.equal(isolated.rows[0].score, 99999);
+  assert.equal(metrics.reads, 18); assert.equal(metrics.queries, 0); assert.equal(metrics.writes, 0); assert.equal(metrics.guardReads, 6);
+  const isolated = await api.getWeplayRanking(request('a', { ...naval, classId: 'class-two' })); assert.equal(isolated.rows.length, 1); assert.equal(isolated.rows[0].score, 99999);
+  const overall = await api.getWeplayRanking(request('a', { gameId: 'history-rain', category: 'mild', includeClasses: true }));
+  assert.equal(overall.view, 'all'); assert.equal(overall.selectedClassId, ''); assert.equal(overall.rows[0].classLabel, '3학년 2반'); assert.equal(overall.rows.length, 50); assert.equal(overall.classes.length, 2);
   reset(); await Promise.all([api.getWeplayRanking(request('a', { ...naval, category: 'medium' })), api.getWeplayRanking(request('b', { ...naval, category: 'medium' }))]);
-  counts.navalConcurrentCold = { ...metrics }; assert.equal(metrics.queries, 1, 'concurrent callers share the same pending query'); assert.equal(metrics.reads, 21);
+  counts.navalConcurrentCold = { ...metrics }; assert.equal(metrics.queries, 0); assert.equal(metrics.reads, 19, 'concurrent callers share one board read');
   await db.doc('site_settings/config').update({ studentMenuVisibility: { weplay: false } });
   await deny(api.getWeplayRanking(request('a', naval)), 'permission-denied');
   await db.doc('site_settings/config').set(scope);
@@ -118,7 +127,7 @@ async function main() {
   const finishReq = request('a', { sessionId: started.sessionId, events });
   await deny(api.finishRhythmRankingGame(finishReq), 'failed-precondition');
   atMs += Math.ceil(song.duration * 1000);
-  reset(); const finished = await api.finishRhythmRankingGame(finishReq); counts.rhythmFinish = { ...metrics }; assert.equal(metrics.writes, 3); assert.equal(finished.score, chart.length * 1000);
+  reset(); const finished = await api.finishRhythmRankingGame(finishReq); counts.rhythmFinish = { ...metrics }; assert.equal(metrics.writes, 4); assert.equal(finished.score, chart.length * 1000);
   reset(); assert.deepEqual(await api.finishRhythmRankingGame(finishReq), finished); counts.rhythmFinishRetry = { ...metrics }; assert.equal(metrics.writes, 0);
   const rhythmArgs = { gameId: 'gungdeok-rock', category: `${song.id}:easy` };
   reset(); const board = await api.getWeplayRanking(request('a', rhythmArgs)); counts.rhythmRankCold = { ...metrics }; assert.equal(metrics.reads, 9); assert.equal(board.rows[0].score, finished.score);
@@ -137,14 +146,14 @@ async function main() {
   await deny(api.finishRhythmRankingGame(request('a', { sessionId: newStart.sessionId, events })), 'failed-precondition');
   atMs += Math.ceil(song.duration * 1000);
   reset(); await api.finishRhythmRankingGame(request('a', { sessionId: replacement.sessionId, events: [] })); counts.zeroFinish = { ...metrics }; assert.equal(metrics.writes, 1);
-  assert.equal((await get(`${base}/weplay_rankings/${boardId('gungdeok-rock', `${song.id}:easy`, 'class-one')}`)).rows[0].score, finished.score);
+  assert.equal((await get(weeklyPath('gungdeok-rock', `${song.id}:easy`, 'class-one'))).rows[0].score, finished.score);
   // Atomic winner projection independently verifies bounded storage, increments,
   // class separation and no-op best records without scanning any collection.
   reset(); await instrumented.runTransaction(async transaction => {
-    const update = await prepareRankingUpdate({ db: instrumented, transaction, scope, gameId: 'joseon-yut', category: 'wins', actor: { uid: 'a', classId: 'class-one', rankingLabel: '합○○○' }, score: 1, increment: true, atMs }); update.apply();
-  }); counts.yutWinnerProjection = { ...metrics }; assert.deepEqual(metrics, { reads: 2, writes: 2, queries: 0, guardReads: 0 });
+    const update = await prepareRankingUpdate({ db: instrumented, transaction, scope, gameId: 'joseon-yut', category: 'wins', actor: { uid: 'a', classId: 'class-one', classLabel: '3학년 1반', rankingLabel: '합○○○' }, score: 1, increment: true, atMs }); update.apply();
+  }); counts.yutWinnerProjection = { ...metrics }; assert.deepEqual(metrics, { reads: 3, writes: 3, queries: 0, guardReads: 0 });
   for (let i = 0; i < 2; i++) await instrumented.runTransaction(async transaction => {
-    const update = await prepareRankingUpdate({ db: instrumented, transaction, scope, gameId: 'joseon-yut', category: 'wins', actor: { uid: 'a', classId: 'class-one', rankingLabel: '합○○○' }, score: 1, increment: true, atMs: atMs + i + 1 }); update.apply();
+    const update = await prepareRankingUpdate({ db: instrumented, transaction, scope, gameId: 'joseon-yut', category: 'wins', actor: { uid: 'a', classId: 'class-one', classLabel: '3학년 1반', rankingLabel: '합○○○' }, score: 1, increment: true, atMs: atMs + i + 1 }); update.apply();
   });
   assert.equal((await api.getWeplayRanking(request('a', { gameId: 'joseon-yut', category: 'wins' }))).rows[0].score, 3);
   const yutRoot = process.env.WEPLAY_YUT_SOURCE_ROOT ? path.resolve(process.env.WEPLAY_YUT_SOURCE_ROOT) : sourceRoot;
@@ -163,30 +172,36 @@ async function main() {
   atMs += 1000;
   const winningRequest = request('b', { action: 'move', requestKey: randomUUID(), roomId: room.id, expectedRevision: room.revision, pieceId: '1', route: 'outer' });
   const finishedRooms = await Promise.all([yut.commandYutRoom(winningRequest), yut.commandYutRoom(winningRequest)]);
-  assert.equal(finishedRooms[0].room.status, 'finished'); assert.equal(finishedRooms[0].room.rankingRecordedAtMs, atMs);
-  const yutBoard = await get(`${base}/weplay_rankings/${boardId('joseon-yut', 'wins', 'class-one')}`);
+  assert.equal(finishedRooms[0].room.status, 'finished'); assert.equal(finishedRooms[0].room.weeklyRankingRecordedAtMs, atMs); assert.equal(finishedRooms[0].room.rankingWeekId, weekAt(atMs).id);
+  const yutBoard = await get(weeklyPath('joseon-yut', 'wins', 'class-one'));
   assert.equal(yutBoard.rows.find(row => row.uid === 'b').score, 1, 'concurrent complete-command replay counts exactly one win');
   assert.equal(yutBoard.rows.find(row => row.uid === 'a').score, 3, 'losing player retains earlier count');
   assert.equal(finishedRooms[0].room.reward.status, 'not-awarded', 'ranking is independent of disabled financial rewards');
-  const boundedRef = db.doc(`${base}/weplay_rankings/${boardId('joseon-yut', 'wins', 'bounded-class')}`);
+  const completedRoom = finishedRooms[0].room;
+  await command('b', 'close', { roomId: completedRoom.id, expectedRevision: completedRoom.revision });
+  assert.equal((await get(`${base}/yut_rooms/${completedRoom.id}`)).rankingWeekId, completedRoom.rankingWeekId, 'closing preserves the weekly idempotency marker');
+  assert.equal((await get(weeklyPath('joseon-yut', 'wins', 'class-one'))).rows.find(row => row.uid === 'b').score, 1);
+  const boundedRef = db.doc(weeklyPath('joseon-yut', 'wins', 'bounded-class'));
+  const boundedAllRef = db.doc(weeklyPath('joseon-yut', 'wins'));
   const topRows = Array.from({ length: 50 }, (_, i) => ({ uid: `rank-${i}`, studentLabel: '합○○○', score: 100 - i, achievedAtMs: atMs }));
   await boundedRef.set({ schemaVersion: 1, rows: topRows, trackingSinceMs: atMs, updatedAtMs: atMs });
+  await boundedAllRef.set({ schemaVersion: 2, rows: topRows, trackingSinceMs: atMs, updatedAtMs: atMs });
   const boundedActor = { uid: 'outside', classId: 'bounded-class', rankingLabel: '합○○○' };
   const addWin = score => instrumented.runTransaction(async transaction => {
     const update = await prepareRankingUpdate({ db: instrumented, transaction, scope, gameId: 'joseon-yut', category: 'wins', actor: boundedActor, score, increment: true, atMs }); update.apply();
   });
   reset(); await addWin(1); assert.equal(metrics.writes, 1, 'outside top 50 changes only the player total');
   assert.deepEqual((await boundedRef.get()).data().rows, topRows);
-  reset(); await addWin(100); assert.equal(metrics.writes, 2); const promoted = (await boundedRef.get()).data().rows;
+  reset(); await addWin(100); assert.equal(metrics.writes, 3); const promoted = (await boundedRef.get()).data().rows;
   assert.equal(promoted.length, 50); assert.equal(promoted[0].uid, 'outside'); assert.equal(promoted[0].score, 101);
   assert.equal((await db.collection('semester_wis_ledger').get()).size, 0, 'rankings never pay Wis');
   const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
   const token = `${encode({ alg: 'none', typ: 'JWT' })}.${encode({ sub: 'a', user_id: 'a', email: 'a@yongshin-ms.ms.kr', email_verified: true,
     aud: projectId, iss: `https://securetoken.google.com/${projectId}`, iat: authTime, exp: authTime + 7200, auth_time: authTime, firebase: { sign_in_provider: 'google.com' } })}.`;
   for (const [documentPath, method] of [
-    [`${base}/weplay_rankings/${boardId('joseon-yut', 'wins', 'class-one')}`, 'GET'],
+    [weeklyPath('joseon-yut', 'wins', 'class-one'), 'GET'],
     [`${base}/rhythm_players/a`, 'GET'], [`${base}/rhythm_players/a`, 'PATCH'],
-    [`${base}/weplay_rankings/forged`, 'PATCH'],
+    [`${base}/weplay_weekly_rankings/forged`, 'PATCH'],
   ]) {
     const response = await fetch(`http://${host}/v1/projects/${projectId}/databases/(default)/documents/${documentPath}`, {
       method, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -195,6 +210,7 @@ async function main() {
     assert.equal(response.status, 403, `direct ${method} denied: ${documentPath}`);
   }
   await verifyTeacherRanking();
+  await verifyWeeklyTransitions();
   console.log(JSON.stringify({ passed: true, notes: 'Total reads = reads + guardReads; missing documents and empty queries each cost at least one read. Concurrent transaction retries may add reads.', counts }, null, 2));
 }
 async function verifyTeacherRanking() {
@@ -212,18 +228,18 @@ async function verifyTeacherRanking() {
   }
   await db.doc('site_settings/config').update({ studentMenuVisibility: { weplay: false, naval: false, yut: false, rhythm: false } });
   reset();
-  const initial = await api.getWeplayRanking(request('teacher', naval)); counts.teacherFirstOpen = { ...metrics };
+  const initial = await api.getWeplayRanking(request('teacher', { ...naval, view: 'class', includeClasses: true })); counts.teacherFirstOpen = { ...metrics };
   assert.deepEqual(initial.classes, [{ id: 'class-one', label: '3학년 1반' }, { id: 'class-two', label: '3학년 2반' }]);
   assert.equal(initial.selectedClassId, 'class-one'); assert.equal(initial.rows.length, 50);
   assert.equal(initial.rows.every(row => !row.isMe), true); assert.equal(metrics.writes, 0);
   // Catalog and the one selected ranking query only; no users/enrollments scan.
-  assert.equal(metrics.queries, 2); assert.equal(metrics.reads, 59); assert.equal(metrics.guardReads, 3);
+  assert.equal(metrics.queries, 1); assert.equal(metrics.reads, 8); assert.equal(metrics.guardReads, 3);
   reset();
   const second = await api.getWeplayRanking(request('teacher', { ...naval, classId: 'class-two' })); counts.teacherSelectedClass = { ...metrics };
   assert.equal(second.selectedClassId, 'class-two'); assert.equal(second.classes, undefined); assert.equal(second.rows[0].score, 99999);
-  assert.equal(metrics.reads, 8); assert.equal(metrics.queries, 1); assert.equal(metrics.writes, 0);
+  assert.equal(metrics.reads, 6); assert.equal(metrics.queries, 0); assert.equal(metrics.writes, 0);
   reset(); await api.getWeplayRanking(request('teacher', { ...naval, classId: 'class-two' })); counts.teacherSelectedWarm = { ...metrics };
-  assert.equal(metrics.reads, 7); assert.equal(metrics.queries, 0); assert.equal(metrics.guardReads, 3); assert.equal(metrics.writes, 0);
+  assert.equal(metrics.reads, 5); assert.equal(metrics.queries, 0); assert.equal(metrics.guardReads, 3); assert.equal(metrics.writes, 0);
   for (const actor of ['teacher', 'admin', 'staff-allowed']) for (const choice of [naval, hidden, { gameId: 'gungdeok-rock', category: 'arirang:easy' }]) {
     reset(); const result = await api.getWeplayRanking(request(actor, { ...choice, classId: 'class-one' }));
     assert.equal(result.selectedClassId, 'class-one'); assert.equal(result.rows.length > 0, true); assert.equal(metrics.writes, 0);
@@ -250,21 +266,109 @@ async function verifyTeacherRanking() {
   }
   await db.doc('site_settings/config').set(scope);
   for (const [documentPath, data] of originals) if (data) await db.doc(documentPath).set(data); else await db.doc(documentPath).delete();
-  // Explicit target/list spoofing is rejected even when student admission is open.
-  for (const extra of [{ classId: 'class-one' }, { classId: 'class-two' }, { includeClasses: true }]) await deny(api.getWeplayRanking(request('a', { ...hidden, ...extra })), 'permission-denied');
+  // Students may now select another active class or the overall ranking.
+  for (const extra of [{ classId: 'class-one' }, { classId: 'class-two' }, { includeClasses: true }]) {
+    reset(); await api.getWeplayRanking(request('a', { ...hidden, ...extra })); assert.equal(metrics.writes, 0);
+  }
+  for (const classId of ['class-old', 'class-inactive', 'class-readonly']) await deny(api.getWeplayRanking(request('a', { ...hidden, classId })), 'permission-denied');
   await db.doc('semester_classes/class-one').update({ status: 'ARCHIVED' });
   await db.doc('semester_classes/class-two').update({ status: 'ARCHIVED' });
-  reset(); const empty = await api.getWeplayRanking(request('teacher', hidden));
+  reset(); const empty = await api.getWeplayRanking(request('teacher', { ...hidden, view: 'class', includeClasses: true }));
   assert.deepEqual(empty.classes, []); assert.equal(empty.selectedClassId, ''); assert.deepEqual(empty.rows, []); assert.equal(metrics.queries, 1); assert.equal(metrics.writes, 0);
   await db.doc('semester_classes/class-one').update({ status: 'ACTIVE' });
   await db.doc('semester_classes/class-two').update({ status: 'ACTIVE' });
   const batch = db.batch();
   for (let i = 0; i < 100; i++) batch.set(db.doc(`semester_classes/bound-${i}`), { semesterId: '2026-2', status: 'ACTIVE', grade: '1', classNumber: String(i + 1) });
   await batch.commit();
-  reset(); await deny(api.getWeplayRanking(request('teacher', hidden)), 'failed-precondition');
+  reset(); await deny(api.getWeplayRanking(request('teacher', { ...hidden, includeClasses: true })), 'failed-precondition');
   assert.equal(metrics.queries, 1); assert.equal(metrics.writes, 0, 'catalog overflow fails explicitly without a partial list or writes');
   reset(); const bounded = await api.getWeplayRanking(request('teacher', { ...hidden, classId: 'class-one' }));
   assert.equal(bounded.selectedClassId, 'class-one'); assert.equal(metrics.queries, 0, 'selected-class lookup never scans the catalog'); assert.equal(metrics.writes, 0);
+}
+async function verifyWeeklyTransitions() {
+  const priorWeek = weekAt(atMs), rollover = priorWeek.endsAtMs;
+  assert.equal(weekAt(rollover - 1).id, priorWeek.id);
+  assert.equal(weekAt(rollover).startsAtMs, rollover);
+  assert.equal(weekAt(Date.parse('2026-11-15T14:59:59.999Z')).id, '2026-11-09');
+  assert.equal(weekAt(Date.parse('2026-11-15T15:00:00.000Z')).id, '2026-11-16');
+  // A mounted client/server cache must not return the previous week's rows.
+  atMs = rollover - 500;
+  const before = await api.getWeplayRanking(request('a', { gameId: 'history-rain', category: 'mild' }));
+  assert.equal(before.week.id, priorWeek.id); assert.equal(before.cacheTtlMs, 500);
+  const song = RHYTHM_SONGS[0];
+  const start = await api.startRhythmRankingGame(request('a', { songId: song.id, difficulty: 'easy', requestId: randomUUID() }));
+  atMs = rollover + Math.ceil(song.duration * 1000);
+  const after = await api.getWeplayRanking(request('a', { gameId: 'history-rain', category: 'mild' }));
+  assert.notEqual(after.week.id, priorWeek.id); assert.deepEqual(after.rows, []);
+  const event = createChart(song, 'easy')[0];
+  const finishRequest = request('a', { sessionId: start.sessionId, events: [{ time: event.time, kind: event.kind, hand: event.hand }] });
+  const score = await api.finishRhythmRankingGame(finishRequest);
+  assert.equal(score.score, 1000);
+  assert.equal((await get(weeklyPath('gungdeok-rock', `${song.id}:easy`))).rows[0].score, 1000, 'lower score in the new week replaces no historical best');
+  assert.equal((await get(weeklyPath('gungdeok-rock', `${song.id}:easy`, '', rollover - 1))).rows[0].score > 1000, true);
+  reset(); await api.finishRhythmRankingGame(finishRequest); assert.equal(metrics.writes, 0, 'cross-week finish replay writes nothing');
+  const actor = { uid: 'a', classId: 'class-one', classLabel: '3학년 1반', rankingLabel: '합○○○' };
+  const updateWins = (score, extra = {}, target = actor) => instrumented.runTransaction(async transaction => {
+    const value = await prepareRankingUpdate({ db: instrumented, transaction, scope, gameId: 'joseon-yut', category: 'wins', actor: target, score, increment: true, atMs, ...extra }); value.apply();
+  });
+  await updateWins(1);
+  assert.equal((await get(weeklyPath('joseon-yut', 'wins'))).rows[0].score, 1, 'prior-week wins never carry forward');
+  const legacySourceId = hash('verified-old-class-one-board');
+  await updateWins(3, { legacySourceId });
+  assert.equal((await get(weeklyPath('joseon-yut', 'wins'))).rows[0].score, 4, 'legacy baseline adds to native weekly wins');
+  reset(); await updateWins(3, { legacySourceId }); assert.equal(metrics.writes, 0, 'repeated migration baseline does not double-count');
+  await updateWins(1); await updateWins(4, { legacySourceId });
+  assert.equal((await get(weeklyPath('joseon-yut', 'wins'))).rows[0].score, 6, 'native writer preserves seed receipt and a later baseline imports its delta only');
+  await assert.rejects(updateWins(3, { legacySourceId }), /moved backwards/);
+  await updateWins(1, {}, { ...actor, classId: 'class-two', classLabel: '3학년 2반' });
+  assert.equal((await get(weeklyPath('joseon-yut', 'wins'))).rows[0].score, 7);
+  assert.equal((await get(weeklyPath('joseon-yut', 'wins', 'class-one'))).rows[0].score, 6);
+  assert.equal((await get(weeklyPath('joseon-yut', 'wins', 'class-two'))).rows[0].score, 1);
+  await verifyNavalDelayedSettlement(rollover);
+}
+async function verifyNavalDelayedSettlement(rollover) {
+  const navalRoot = process.env.WEPLAY_NAVAL_SOURCE_ROOT ? path.resolve(process.env.WEPLAY_NAVAL_SOURCE_ROOT) : sourceRoot;
+  const { FieldValue } = require('firebase-admin/firestore');
+  const { HttpsError } = require('firebase-functions/v2/https');
+  const naval = require(path.join(navalRoot, 'weplay')).createWeplayFunctions({
+    db: instrumented, onCall: (options, handler) => Object.assign(handler, { runtimeOptions: options }), onSchedule: (options, handler) => Object.assign(handler, { runtimeOptions: options }),
+    HttpsError, FieldValue, REGION: 'asia-northeast3', assertAllowedWestoryUser: req => ({ uid: req.auth.uid }),
+    getUserProfile: async uid => ({ profile: await get(`users/${uid}`) }),
+    canonicalWallet: { read: async () => ({ wallet: { balance: 0, classId: 'class-one' } }) },
+    markWisHallOfFameDirtySafely: async () => {},
+  });
+  assert.equal(naval.finishWeplayGame.runtimeOptions.maxInstances, 20);
+  assert.deepEqual(naval.settleWeplayOnSchedule.runtimeOptions, { schedule: 'every 5 minutes', region: 'asia-northeast3', timeZone: 'Asia/Seoul', timeoutSeconds: 540, memory: '512MiB', maxInstances: 20 });
+  const seedSession = async (id, endedAt, correctCount) => {
+    const words = Array.from({ length: correctCount }, (_, i) => ({ id: `word-${i}`, kind: 'normal', answer: '왕', unitId: 'unit', lessonTitle: '합성' }));
+    await db.doc(`${base}/weplay_sessions/${id}`).set({ id, uid: 'b', mode: 'challenge', difficulty: 'medium', status: 'active',
+      startsAtMs: endedAt - 90000, endsAtMs: endedAt, words, acceptedWordIds: words.map(word => word.id), battleVersion: 1,
+      acceptedEvents: words.map((word, i) => ({ wordId: word.id, elapsedMs: 1000 + i * 100 })), classId: 'class-one',
+      classKey: '3-1', classLabel: '3학년 1반', studentLabel: '합○○○', policy: { version: 0, challengeCost: 2, resultRewards: [{ minCorrect: 0, amount: 0 }] }, periodId: 'monthly-period' });
+    await db.doc(`${base}/weplay_players/b`).set({ activeSessionId: id });
+    await db.doc(`weplay_session_queue/${id}`).set({ ...scope, sessionId: id, dueAtMs: endedAt + 5000 });
+  };
+  await db.doc(`${base}/weplay_periods/monthly-period`).set({ id: 'monthly-period', status: 'open', startsAtMs: rollover - 30 * 86400000, endsAtMs: rollover + 30 * 86400000 });
+  const realNow = Date.now;
+  Date.now = () => atMs;
+  try {
+    await seedSession('weekly-delayed-old', rollover - 10000, 2);
+    await naval.settleWeplayOnSchedule();
+    assert.equal((await get(weeklyPath('history-rain', 'medium', '', rollover - 1))).rows[0].score, 200, 'delayed scheduler uses completed week, not settlement week');
+    assert.equal(await get(weeklyPath('history-rain', 'medium')), undefined);
+    reset(); await naval.finishWeplayGame(request('b', { sessionId: 'weekly-delayed-old' }));
+    assert.equal(metrics.writes, 0, 'settled naval session replay never touches weekly boards');
+    await seedSession('weekly-current-lower', atMs - 10000, 1);
+    await naval.finishWeplayGame(request('b', { sessionId: 'weekly-current-lower' }));
+    assert.equal((await get(weeklyPath('history-rain', 'medium'))).rows[0].score, 100, 'monthly reward best does not replace lower current-week best');
+    const period = await get(`${base}/weplay_periods/monthly-period`);
+    assert.equal(period.status, 'open'); assert.equal(period.startsAtMs, rollover - 30 * 86400000);
+    await seedSession('weekly-legacy-rain', atMs - 10000, 2);
+    await db.doc(`${base}/weplay_sessions/weekly-legacy-rain`).update({ battleVersion: FieldValue.delete(), difficulty: 'spicy' });
+    await naval.finishWeplayGame(request('b', { sessionId: 'weekly-legacy-rain' }));
+    assert.equal(await get(weeklyPath('history-rain', 'spicy')), undefined, 'retired rain scoring never mixes with the naval leaderboard');
+    assert.equal((await db.collection('semester_wis_ledger').get()).size, 0);
+  } finally { Date.now = realNow; }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => {
   DocumentReference.prototype.get = originalGet;

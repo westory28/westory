@@ -8,6 +8,7 @@ const {
 const { simulateWeplayBattle } = require('./weplayBattle');
 const { randomUUID } = require('node:crypto');
 const { readStudentMenuAccess } = require('./studentMenuVisibility');
+const { prepareRankingUpdate } = require('./weplayRankingStore');
 
 // The existing point wallet, transaction, permission, and rank helpers are injected
 // so games use exactly the same semester ledger as the rest of Westory.
@@ -321,15 +322,34 @@ function createWeplayFunctions(deps) {
       const cost = session.mode === 'challenge' ? session.policy.challengeCost : 0;
       let balance = Number(loaded.wallet.balance || 0);
       if (rewardSnap.exists) throw new HttpsError('failed-precondition', '정산 기록을 확인해 주세요.');
+      const finalScore = battle ? battle.score : correctCount * 100;
+      const finishedAtMs = endedEarly ? settledAtMs : battle?.defeatAtMs !== null && battle?.defeatAtMs !== undefined ? session.startsAtMs + battle.defeatAtMs : session.endsAtMs;
+      const rankingClassId = session.classId || loaded.wallet.classId;
+      const weeklyEligible = eligible && session.battleVersion === 1 && session.mode === 'challenge' && finalScore > 0 && rankingClassId;
+      // Sessions opened before weekly snapshots use the already-validated
+      // current wallet class. Read its label once rather than mixing an old
+      // profile classKey with the student's new canonical classroom.
+      const fallbackClass = weeklyEligible && !session.classId
+        ? (await transaction.get(db.doc(`semester_classes/${rankingClassId}`))).data() : null;
+      const rankingClassLabel = fallbackClass
+        ? (fallbackClass.grade && fallbackClass.classNumber ? `${String(fallbackClass.grade).replace(/학년$/, '').trim()}학년 ${String(fallbackClass.classNumber).replace(/반$/, '').trim()}반` : String(fallbackClass.displayName || '학급'))
+        : session.classLabel || String(session.classKey || '').replace(/^(\d+)-(\d+)$/, '$1학년 $2반');
+      const weeklyRanking = weeklyEligible
+        ? await prepareRankingUpdate({ db, transaction, scope, gameId: GAME_ID, category: session.difficulty,
+          actor: { uid: session.uid, classId: rankingClassId, rankingLabel: session.studentLabel,
+            classLabel: rankingClassLabel },
+          score: finalScore, atMs: finishedAtMs }) : null;
       if (reward > 0) balance = await writePointChange(transaction, scope, session.uid, currentProfile, reward, 'weplay_reward', sessionId, `${session.battleVersion === 1 ? '내가 충무공이라고?!' : '역사가 내려와'} 도전 정산`, session.policy.version, loaded);
       const resultData = {
-        sessionId, mode: session.mode, difficulty: session.difficulty, correctCount, totalWords: battle ? session.words.filter((word) => word.kind !== 'special').length : TOTAL_WORDS, score: battle ? battle.score : correctCount * 100,
-        reward, cost, netWis: reward - cost, balance, finishedAtMs: endedEarly ? settledAtMs : battle?.defeatAtMs !== null && battle?.defeatAtMs !== undefined ? session.startsAtMs + battle.defeatAtMs : session.endsAtMs,
+        sessionId, mode: session.mode, difficulty: session.difficulty, correctCount, totalWords: battle ? session.words.filter((word) => word.kind !== 'special').length : TOTAL_WORDS, score: finalScore,
+        reward, cost, netWis: reward - cost, balance, finishedAtMs,
         missedWords: session.words.filter((word) => word.kind !== 'special' && !accepted.has(word.id)),
         ...(endedEarly ? { endedEarly: true } : {}),
         ...(battle ? { battleVersion: 1, battle, rewardCorrectCount } : {}),
       };
-      transaction.update(sessionRef, { status: 'finished', result: resultData, settledAt: FieldValue.serverTimestamp() });
+      weeklyRanking?.apply();
+      transaction.update(sessionRef, { status: 'finished', result: resultData, settledAt: FieldValue.serverTimestamp(),
+        ...(weeklyRanking ? { rankingWeekId: weeklyRanking.week.id } : {}) });
       if (eligible) transaction.set(playerRef.collection('records').doc(sessionId), resultData);
       if (eligible && player.activeSessionId === sessionId) transaction.set(playerRef, { activeSessionId: null }, { merge: true });
       transaction.delete(db.doc(`weplay_session_queue/${sessionId}`));
@@ -520,6 +540,8 @@ function createWeplayFunctions(deps) {
         id: sessionId, uid, mode, difficulty, difficultySettings, status: 'active', startsAtMs: now + START_DELAY_MS, endsAtMs: now + START_DELAY_MS + difficultySettings.durationSeconds * 1000,
         words, acceptedWordIds: [], battleVersion: 1, acceptedEvents: [], answerEvents: {}, answerEventCount: 0, policy, gameSettingsVersion: gameSettings.version,
         profile: profileSnapshot, classKey: key, studentLabel: studentLabel(profile),
+        ...(loaded.wallet.classId ? { classId: loaded.wallet.classId,
+          classLabel: loaded.wallet.grade && loaded.wallet.classNumber ? `${loaded.wallet.grade}학년 ${loaded.wallet.classNumber}반` : String(key).replace(/^(\d+)-(\d+)$/, '$1학년 $2반') } : {}),
         periodId: period?.id || null, result: null, createdAt: FieldValue.serverTimestamp(),
       };
       if (mode === 'challenge' && policy.challengeCost > 0) await writePointChange(transaction, scope, uid, profile, -policy.challengeCost, 'weplay_cost', sessionId, '내가 충무공이라고?! 도전 비용', policy.version, loaded);
@@ -572,7 +594,7 @@ function createWeplayFunctions(deps) {
     });
   });
 
-  const finishWeplayGame = onCall({ region: REGION }, async (request) => {
+  const finishWeplayGame = onCall({ region: REGION, maxInstances: 20 }, async (request) => {
     const { uid } = await student(request);
     if (request.data?.exitEarly !== undefined && typeof request.data.exitEarly !== 'boolean') invalid('중도 종료 여부를 확인해 주세요.');
     return settleSession(scopeFrom(request.data), identifier(request.data?.sessionId, '게임 번호'), uid, request.data?.exitEarly === true);
@@ -642,7 +664,7 @@ function createWeplayFunctions(deps) {
     if (changed) await markWisHallOfFameDirtySafely(scope.year, scope.semester);
   }
 
-  const settleWeplayOnSchedule = onSchedule({ schedule: 'every 5 minutes', region: REGION, timeZone: 'Asia/Seoul', timeoutSeconds: 540, memory: '512MiB' }, async () => {
+  const settleWeplayOnSchedule = onSchedule({ schedule: 'every 5 minutes', region: REGION, timeZone: 'Asia/Seoul', timeoutSeconds: 540, memory: '512MiB', maxInstances: 20 }, async () => {
     const dueSessions = await db.collection('weplay_session_queue').where('dueAtMs', '<=', Date.now()).limit(200).get();
     for (const doc of dueSessions.docs) {
       const data = doc.data();

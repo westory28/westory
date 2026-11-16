@@ -5,7 +5,13 @@ import type { WeplayConfig, WeplayGameId } from "./weplay";
 export interface WeplayRanking {
   gameId: WeplayGameId;
   category: string;
-  rows: { rank: number; studentLabel: string; score: number; isMe: boolean }[];
+  rows: {
+    rank: number;
+    classLabel?: string;
+    studentLabel: string;
+    score: number;
+    isMe: boolean;
+  }[];
   updatedAtMs: number;
   scoreLabel: string;
   limit?: number;
@@ -13,6 +19,27 @@ export interface WeplayRanking {
   trackingSinceMs?: number;
   classes?: { id: string; label: string }[];
   selectedClassId?: string;
+  view?: "all" | "class";
+  week?: { id: string; startsAtMs: number; endsAtMs: number };
+}
+
+export function getWeplayRankingWeek(now = Date.now()) {
+  const kst = new Date(now + 9 * 60 * 60 * 1000);
+  const mondayOffset = (kst.getUTCDay() + 6) % 7;
+  const startsAtMs =
+    Date.UTC(
+      kst.getUTCFullYear(),
+      kst.getUTCMonth(),
+      kst.getUTCDate() - mondayOffset,
+    ) -
+    9 * 60 * 60 * 1000;
+  return { startsAtMs, endsAtMs: startsAtMs + 7 * 24 * 60 * 60 * 1000 };
+}
+
+export interface WeplayRankingSelection {
+  view: "all" | "class";
+  classId?: string;
+  includeClasses?: boolean;
 }
 
 const CACHE_MS = 60_000;
@@ -44,7 +71,7 @@ export function getWeplayRanking(
   scope: string,
   gameId: WeplayGameId,
   category: string,
-  classId?: string,
+  selection: WeplayRankingSelection = { view: "all" },
 ) {
   if (activeScope !== scope) {
     activeScope = scope;
@@ -52,27 +79,34 @@ export function getWeplayRanking(
     cache.clear();
     pending.clear();
   }
-  const key = `${gameId}/${category}/${classId || "self"}`;
+  const week = getWeplayRankingWeek();
+  const key = `${gameId}/${category}/${week.startsAtMs}/${selection.view}/${selection.classId || "default"}`;
   const saved = cache.get(key);
-  if (saved && saved.expires > Date.now()) return Promise.resolve(saved.value);
+  if (
+    saved &&
+    saved.expires > Date.now() &&
+    (!selection.includeClasses || saved.value.classes)
+  )
+    return Promise.resolve(saved.value);
   const existing = pending.get(key);
   if (existing) return existing;
   const startedGeneration = generation;
   const request = call<WeplayRanking>("getWeplayRanking", config, {
     gameId,
     category,
-    ...(classId ? { classId } : {}),
+    ...selection,
     refresh: invalidated.has(gameId),
   })
     .then((value) => {
       if (startedGeneration === generation) {
-        cache.set(key, { value, expires: Date.now() + CACHE_MS });
-        if (!classId && value.selectedClassId) {
-          cache.set(`${gameId}/${category}/${value.selectedClassId}`, {
-            value,
-            expires: Date.now() + CACHE_MS,
-          });
-        }
+        cache.set(key, {
+          value,
+          expires: Math.min(
+            Date.now() + CACHE_MS,
+            week.endsAtMs,
+            value.period?.endsAtMs ?? week.endsAtMs,
+          ),
+        });
         while (cache.size > MAX_CACHED_RANKINGS)
           cache.delete(cache.keys().next().value!);
         invalidated.delete(gameId);

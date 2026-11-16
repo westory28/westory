@@ -8,6 +8,7 @@ import {
 } from "../../../lib/permissions";
 import {
   getWeplayRanking,
+  getWeplayRankingWeek,
   invalidateWeplayRanking,
   type WeplayRanking as RankingData,
 } from "../../../lib/weplayRanking";
@@ -132,8 +133,8 @@ export default function WeplayRanking({
   const [error, setError] = useState(false);
   const [retry, setRetry] = useState(0);
   const [classId, setClassId] = useState("");
-  const [resolvedClassId, setResolvedClassId] = useState("");
-  const resolvedClass = useRef("");
+  const [week, setWeek] = useState(getWeplayRankingWeek);
+  const classesLoaded = useRef(false);
   const [classOptions, setClassOptions] = useState<
     { id: string; label: string }[]
   >([]);
@@ -158,29 +159,44 @@ export default function WeplayRanking({
   useEffect(() => () => invalidateWeplayRanking(gameId, false), [gameId]);
   useEffect(() => {
     setClassId("");
-    setResolvedClassId("");
-    resolvedClass.current = "";
+    classesLoaded.current = false;
     setClassOptions([]);
   }, [scope]);
+  useEffect(() => {
+    if (!open || !ready) return;
+    const syncWeek = () => {
+      if (document.visibilityState === "hidden") return;
+      const next = getWeplayRankingWeek();
+      setWeek((previous) =>
+        previous.startsAtMs === next.startsAtMs ? previous : next,
+      );
+    };
+    const timer = window.setTimeout(
+      syncWeek,
+      Math.max(0, week.endsAtMs - Date.now()) + 50,
+    );
+    document.addEventListener("visibilitychange", syncWeek);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", syncWeek);
+    };
+  }, [open, ready, week.endsAtMs]);
   useEffect(() => {
     if (!open || !ready) return;
     let active = true;
     setData(null);
     setError(false);
-    void getWeplayRanking(
-      config,
-      scope,
-      gameId,
-      category,
-      teacher ? classId || resolvedClass.current || undefined : undefined,
-    )
+    void getWeplayRanking(config, scope, gameId, category, {
+      view: classId ? "class" : "all",
+      ...(classId ? { classId } : {}),
+      ...(!classesLoaded.current ? { includeClasses: true } : {}),
+    })
       .then((value) => {
         if (active) {
           setData(value);
-          if (teacher && value.classes) setClassOptions(value.classes);
-          if (teacher && value.selectedClassId) {
-            setResolvedClassId(value.selectedClassId);
-            resolvedClass.current = value.selectedClassId;
+          if (value.classes) {
+            setClassOptions(value.classes);
+            classesLoaded.current = true;
           }
         }
       })
@@ -201,6 +217,7 @@ export default function WeplayRanking({
     config?.semester,
     teacher,
     classId,
+    week.startsAtMs,
   ]);
   useEffect(() => {
     if (open)
@@ -209,6 +226,13 @@ export default function WeplayRanking({
         ?.focus({ preventScroll: true });
   }, [open]);
   const [songId, difficulty] = category.split(":");
+  const period = data?.week || data?.period || week;
+  const formatDate = (time: number) =>
+    new Date(time).toLocaleDateString("ko-KR", {
+      timeZone: "Asia/Seoul",
+      month: "numeric",
+      day: "numeric",
+    });
   if (teacher && !teacherAllowed) return null;
   return (
     <>
@@ -221,6 +245,7 @@ export default function WeplayRanking({
         aria-expanded={open}
         onClick={() => {
           setCategory(initialCategory || category);
+          setWeek(getWeplayRankingWeek());
           onOpen?.();
           setOpenScope(scope);
         }}
@@ -268,38 +293,61 @@ export default function WeplayRanking({
               aria-labelledby={titleId}
             >
               <div className="weplay-ranking-heading">
-                <div>
-                  <span>
-                    {teacher ? "학급 랭킹" : "우리 반 랭킹"} · 상위{" "}
-                    {data?.limit || 50}위
-                  </span>
-                  <h2 id={titleId}>{titles[gameId]}</h2>
+                <div className="weplay-ranking-title">
+                  {gameId !== "gungdeok-rock" && (
+                    <span className="weplay-ranking-emblem">
+                      <RankIcon gameId={gameId} />
+                    </span>
+                  )}
+                  <div>
+                    <span>이번 주 · 상위 {data?.limit || 50}위</span>
+                    <h2 id={titleId}>{titles[gameId]}</h2>
+                  </div>
                 </div>
-                <button type="button" onClick={close} aria-label="랭킹 닫기">
-                  ×
+                <button
+                  className="weplay-ranking-close"
+                  type="button"
+                  onClick={close}
+                  aria-label="랭킹 닫기"
+                >
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 20 20"
+                    aria-hidden="true"
+                    fill="none"
+                  >
+                    <path
+                      d="m5 5 10 10M15 5 5 15"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                  </svg>
                 </button>
               </div>
-              <div
-                className={`weplay-ranking-filters${teacher ? " is-teacher" : ""}`}
-              >
-                {teacher && classOptions.length > 0 && (
-                  <div className="weplay-ranking-options">
-                    <label>
-                      학급
-                      <select
-                        aria-label="랭킹 학급"
-                        value={classId || resolvedClassId}
-                        onChange={(event) => setClassId(event.target.value)}
-                      >
-                        {classOptions.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                )}
+              <div className="weplay-ranking-filters">
+                <div className="weplay-ranking-options">
+                  <label>
+                    범위
+                    <select
+                      aria-label="랭킹 범위"
+                      value={classId}
+                      onChange={(event) => setClassId(event.target.value)}
+                    >
+                      <option value="">전체</option>
+                      {classOptions.length > 0 && (
+                        <optgroup label="학급별">
+                          {classOptions.map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  </label>
+                </div>
                 {gameId === "history-rain" && (
                   <div
                     className="weplay-ranking-options"
@@ -358,65 +406,97 @@ export default function WeplayRanking({
               </div>
               <p className="weplay-ranking-metric">
                 {gameId === "joseon-yut"
-                  ? "현재 학기 · 온라인 완주 우승"
+                  ? "온라인 완주 우승"
                   : gameId === "history-rain"
                     ? "도전 최고 점수"
                     : "곡·장단별 최고 점수"}
-                {data?.period &&
-                  ` · ${new Date(data.period.startsAtMs).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}–${new Date(data.period.endsAtMs - 1).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}`}
+                {` · ${formatDate(period.startsAtMs)}–${formatDate(period.endsAtMs - 1)}`}
               </p>
-              {data?.trackingSinceMs && (
-                <p className="weplay-ranking-metric">
-                  {new Date(data.trackingSinceMs).toLocaleDateString("ko-KR")}
-                  부터 기록
-                </p>
-              )}
+              {data?.trackingSinceMs &&
+                data.trackingSinceMs > period.startsAtMs && (
+                  <p className="weplay-ranking-metric">
+                    {new Date(data.trackingSinceMs).toLocaleDateString("ko-KR")}
+                    부터 기록
+                  </p>
+                )}
               <div
                 className="weplay-ranking-content"
                 aria-live="polite"
                 aria-busy={!data && !error}
               >
-                {error ? (
-                  <div role="alert">
-                    <p>랭킹을 불러오지 못했습니다.</p>
-                    <button
-                      type="button"
-                      onClick={() => setRetry((value) => value + 1)}
-                    >
-                      다시 불러오기
-                    </button>
-                  </div>
-                ) : !data ? (
-                  <p role="status">랭킹을 불러오고 있습니다.</p>
-                ) : !data.rows.length ? (
-                  <p>
-                    {teacher && !classOptions.length
-                      ? "조회할 학급이 없습니다."
-                      : "아직 기록이 없습니다."}
-                  </p>
-                ) : (
-                  <ol className="weplay-ranking-rows">
-                    {data.rows.map((row, index) => (
-                      <li
-                        key={`${row.rank}/${index}`}
-                        className={row.isMe ? "is-me" : ""}
-                      >
-                        <b className="weplay-ranking-place">
-                          {row.rank}
-                          <small>위</small>
-                        </b>
-                        <span>
-                          {row.studentLabel}
-                          {row.isMe && <em>나</em>}
-                        </span>
-                        <strong>
-                          {row.score.toLocaleString()}
-                          <small>{gameId === "joseon-yut" ? "승" : "점"}</small>
-                        </strong>
-                      </li>
-                    ))}
-                  </ol>
-                )}
+                <table
+                  className="weplay-ranking-table"
+                  aria-label="이번 주 랭킹"
+                >
+                  <thead>
+                    <tr>
+                      <th scope="col">순위</th>
+                      <th scope="col">학급</th>
+                      <th scope="col">이름</th>
+                      <th scope="col">
+                        {gameId === "joseon-yut" ? "승수" : "점수"}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="weplay-ranking-rows">
+                    {error ? (
+                      <tr>
+                        <td colSpan={4} className="weplay-ranking-state">
+                          <div role="alert">
+                            <p>랭킹을 불러오지 못했습니다.</p>
+                            <button
+                              type="button"
+                              onClick={() => setRetry((value) => value + 1)}
+                            >
+                              다시 불러오기
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : !data ? (
+                      <tr>
+                        <td colSpan={4} className="weplay-ranking-state">
+                          <p role="status">랭킹을 불러오고 있습니다.</p>
+                        </td>
+                      </tr>
+                    ) : !data.rows.length ? (
+                      <tr>
+                        <td colSpan={4} className="weplay-ranking-state">
+                          <p>이번 주 기록이 없습니다.</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      data.rows.map((row, index) => (
+                        <tr
+                          key={`${row.rank}/${index}`}
+                          className={row.isMe ? "is-me" : ""}
+                        >
+                          <td className="weplay-ranking-place">
+                            {row.rank}
+                            <small>위</small>
+                          </td>
+                          <td>
+                            {row.classLabel ||
+                              classOptions.find(
+                                (option) => option.id === classId,
+                              )?.label ||
+                              "—"}
+                          </td>
+                          <td>
+                            {row.studentLabel}
+                            {row.isMe && <em>나</em>}
+                          </td>
+                          <td>
+                            {row.score.toLocaleString()}
+                            <small>
+                              {gameId === "joseon-yut" ? "승" : "점"}
+                            </small>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>,
