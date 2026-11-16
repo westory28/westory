@@ -284,6 +284,38 @@ assert.deepEqual(
 );
 assert.equal(calls[0].payload.expectedRevision, 3);
 
+// WebP and Safari's PNG fallback both keep the same idempotency key on an
+// explicit retry. Only an uncertain duplicate response adds one recovery read.
+for (const mime of ["webp", "png"]) {
+  reset();
+  const thumbnail = `data:image/${mime};base64,c3ludGhldGljLWZpeHR1cmU=`;
+  responses.set("saveStudentAvatar", async () => {
+    throw { code: "functions/unavailable" };
+  });
+  await assert.rejects(service.saveStudentAvatar(avatar.look, 3, thumbnail));
+  assert.equal(calls.length, 1);
+  const firstId = calls[0].payload.requestId;
+  responses.set("saveStudentAvatar", async () => ({
+    ...avatar,
+    duplicate: true,
+  }));
+  responses.set("getStudentAvatar", async () => avatar);
+  assert.equal(
+    await service.saveStudentAvatar(avatar.look, 3, thumbnail),
+    avatar,
+  );
+  assert.equal(calls[1].payload.requestId, firstId);
+  assert.equal(calls[1].payload.thumbnailWebp, thumbnail);
+  assert.deepEqual(
+    calls.map(({ name }) => name),
+    ["saveStudentAvatar", "saveStudentAvatar", "getStudentAvatar"],
+  );
+}
+assert.match(
+  service.avatarErrorMessage({ code: "AVATAR_THUMBNAIL_FAILED" }),
+  /이미지를 만들지.*현재 선택/,
+);
+
 // Hashing a thumbnail yields; switching users during that work must not save the previous look as the new user.
 for (const change of [
   () => {
@@ -352,8 +384,10 @@ await service.updateAvatarCatalogPricing({
 assert.equal(calls.at(-1).payload.metadata, editedMetadata);
 assert.deepEqual(Object.keys(calls.at(-1).payload.prices), ["top:test"]);
 const latestCatalog = { ...pricing, revision: 4, metadata: editedMetadata };
-const genderFailure = {details:{reason:"AVATAR_GENDER_MISMATCH",pricing:latestCatalog}};
-assert.equal(service.avatarPricingFromError(genderFailure),latestCatalog);
+const genderFailure = {
+  details: { reason: "AVATAR_GENDER_MISMATCH", pricing: latestCatalog },
+};
+assert.equal(service.avatarPricingFromError(genderFailure), latestCatalog);
 assert.match(service.avatarErrorMessage(genderFailure), /성별 설정/);
 assert.equal(
   service.avatarPricingFromError({

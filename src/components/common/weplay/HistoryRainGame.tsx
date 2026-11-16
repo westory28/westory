@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import NavalBattleGame from "./NavalBattleGame";
+import WeplayRanking from "./WeplayRanking";
 import WeplayExitDialog from "./WeplayExitDialog";
 import { DEFAULT_WEPLAY_GAME_TITLE } from "../../../lib/weplayTitle";
 import {
@@ -31,6 +32,7 @@ export interface HistoryRainGameProps {
   config: WeplayConfig;
   onComplete: (result: WeplayResult) => void;
   preview?: boolean;
+  showRanking?: boolean;
   transport?: HistoryRainTransport;
   onShowGuide?: () => void;
   guideDemo?: boolean;
@@ -54,6 +56,7 @@ function LegacyHistoryRainGame({
   config,
   onComplete,
   preview = false,
+  showRanking = false,
   transport,
 }: HistoryRainGameProps) {
   const [now, setNow] = useState(session.serverNowMs);
@@ -263,7 +266,11 @@ function LegacyHistoryRainGame({
       input.current?.focus();
   };
   return (
-    <section className="weplay-game" aria-label={`${gameTitle} 게임`}>
+    <section
+      className="weplay-game"
+      style={{ position: "relative" }}
+      aria-label={`${gameTitle} 게임`}
+    >
       <div className="weplay-game-meta">
         <strong>
           {preview
@@ -374,6 +381,13 @@ function LegacyHistoryRainGame({
         </div>
       </form>
       <div className="weplay-game-footer">
+        {showRanking && !preview && (
+          <WeplayRanking
+            gameId="history-rain"
+            initialCategory={session.difficulty}
+            disabled={finishing || exitOpen || exitRequested}
+          />
+        )}
         <button
           className="weplay-exit-button"
           type="button"

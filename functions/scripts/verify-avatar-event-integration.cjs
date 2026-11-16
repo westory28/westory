@@ -70,6 +70,43 @@ module.exports = async function verifyAvatarEvent(h) {
     assert.equal((await query('b', 'avatar-event')).participated, false);
     assert.equal((await query('teacher', 'detail', { questionId: value.question.id })).question.avatarEvent.description, submission.description);
   });
+  await check('avatar event: Safari PNG wardrobe save, storage failure retry and teacher inbox use the actual server-saved snapshot', async () => {
+    await seedEvent();
+    await db.doc('student_avatars/a').delete();
+    await db.doc(settingsPath).update({ teacherQuestionNotifications: true });
+    const { memoryBucket } = require('./verify-student-avatar.cjs');
+    const saveSource = process.env.AVATAR_SAVE_SOURCE_ROOT || require('node:path').resolve(__dirname, '..');
+    const { createStudentAvatarHandlers } = require(require('node:path').join(saveSource, 'studentAvatar'));
+    const bucket = memoryBucket();
+    const wardrobe = createStudentAvatarHandlers({ db: instrumented, bucket, now });
+    const png = await require('sharp')({ create: { width: 384, height: 512, channels: 4, background: { r: 240, g: 180, b: 120, alpha: 0.5 } } }).png().toBuffer();
+    const saveRequest = request('a', { look: defaultLook(), expectedRevision: 0, requestId: randomUUID(), thumbnailWebp: `data:image/png;base64,${png.toString('base64')}` });
+    delete saveRequest.data.semesterId;
+    bucket.fail = true; resetMetrics();
+    await assert.rejects(wardrobe.saveStudentAvatar(saveRequest), reason('AVATAR_STORAGE_UNAVAILABLE'));
+    assert.equal(metrics().writes, 0); assert.equal(bucket.objects.size, 0);
+    counts.avatarPngFailedSave = { ...metrics() };
+    bucket.fail = false; resetMetrics();
+    const saved = await wardrobe.saveStudentAvatar(saveRequest);
+    counts.avatarPngSave = { ...metrics() };
+    assert.equal(saved.revision, 1); assert.equal(bucket.objects.size, 1);
+    assert.equal([...bucket.objects.values()][0].contentType, 'image/webp');
+    resetMetrics();
+    assert.equal((await wardrobe.saveStudentAvatar(saveRequest)).duplicate, true);
+    assert.equal(metrics().writes, 0); assert.equal(bucket.objects.size, 1);
+    counts.avatarPngSaveReplay = { ...metrics() };
+    const submitted = await command('a', 'submitAvatar', { ...submission, expectedAvatarRevision: saved.revision });
+    assert.equal(submitted.avatarEvent.submission.thumbnailUrl, saved.thumbnailUrl);
+    assert.deepEqual(submitted.avatarEvent.submission.look, saved.look);
+    assert.equal(submitted.avatarEvent.submission.avatarRevision, saved.revision);
+    for (const filter of ['all', 'waiting']) {
+      const list = await query('teacher', 'questions', { filter });
+      assert.equal(list.items.length, 1);
+      assert.equal(list.items[0].avatarEvent.thumbnailUrl, saved.thumbnailUrl);
+    }
+    assert.equal((await db.collection(`${root}/notification_inboxes/teacher/items`).get()).size, 1);
+    assert.equal((await get(accountPath)).balance, 500); assert.equal(await ledgerCount(), 0);
+  });
   await check('avatar event: twenty concurrent different request IDs create exactly one lifetime submission', async () => {
     await seedEvent();
     const values = await Promise.all(Array.from({ length: 20 }, () => command('a', 'submitAvatar', submission)));

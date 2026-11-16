@@ -161,8 +161,8 @@ async function call<T>(
   });
   return (await fn({ ...getYearSemester(config), ...data })).data;
 }
-export const getWeplayLobby = (config: WeplayConfig) =>
-  call<WeplayLobby>("getWeplayLobby", config);
+export const getWeplayLobby = (config: WeplayConfig, includeRankings = true) =>
+  call<WeplayLobby>("getWeplayLobby", config, { includeRankings });
 export const getWeplayPolicy = (config: WeplayConfig) =>
   call<WeplayPolicyResponse>("getWeplayPolicy", config);
 export const saveWeplayPolicy = (config: WeplayConfig, policy: WeplayPolicy) =>

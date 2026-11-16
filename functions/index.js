@@ -5490,6 +5490,12 @@ Object.assign(exports, require('./weplay').createWeplayFunctions({
   buildWalletRankState, createTransactionPayload, markWisHallOfFameDirtySafely,
 }));
 
+const weplayRankingHandlers = require('./weplayRanking').createWeplayRankingHandlers({ db });
+const weplayRankingOptions = { region: REGION, maxInstances: 10, memory: '256MiB', timeoutSeconds: 60 };
+exports.getWeplayRanking = onCall(weplayRankingOptions, weplayRankingHandlers.getWeplayRanking);
+exports.startRhythmRankingGame = onCall(weplayRankingOptions, weplayRankingHandlers.startRhythmRankingGame);
+exports.finishRhythmRankingGame = onCall(weplayRankingOptions, weplayRankingHandlers.finishRhythmRankingGame);
+
 const yutHandlers = require('./yut').createYutHandlers({ db });
 exports.getYutPublication = onCall({ region: REGION, maxInstances: 10 }, yutHandlers.getYutPublication);
 exports.getYutLobby = onCall({ region: REGION, maxInstances: 10 }, yutHandlers.getYutLobby);

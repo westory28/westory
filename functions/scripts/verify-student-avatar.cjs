@@ -391,7 +391,7 @@ test('submitted avatar image is retained across later saves and cleanup removes 
   assert.deepEqual(state.documents.get(markerPath), { schemaVersion: 1, deleted: true, participated: true, rewarded: true });
 });
 test('URL, SVG, malformed, animated and oversized image inputs cannot become public image payloads', async () => {
-  for (const value of ['https://evil.test/a.webp', 'data:image/svg+xml;base64,PHN2Zz4=', 'data:image/webp;base64,YWJj', `data:image/webp;base64,${'A'.repeat(180000)}`]) {
+  for (const value of ['https://evil.test/a.webp', 'data:image/svg+xml;base64,PHN2Zz4=', 'data:image/webp;base64,YWJj', 'data:image/png;base64,YWJj', `data:image/webp;base64,${'A'.repeat(180000)}`]) {
     await assert.rejects(encodeThumbnail(value), reason('AVATAR_INPUT_INVALID'));
   }
   const big = await sharp({ create: { width: 513, height: 512, channels: 3, background: '#fff' } }).webp().toBuffer();
@@ -400,6 +400,36 @@ test('URL, SVG, malformed, animated and oversized image inputs cannot become pub
   const animated = await sharp(frames, { raw: { width: 16, height: 32, channels: 3, pageHeight: 16 } }).webp().toBuffer();
   assert.equal((await sharp(animated, { animated: true }).metadata()).pages, 2);
   await assert.rejects(encodeThumbnail(`data:image/webp;base64,${animated.toString('base64')}`), reason('AVATAR_INPUT_INVALID'));
+  const png = await sharp({ create: { width: 384, height: 512, channels: 4, background: '#fff' } }).png().toBuffer();
+  const bigPng = await sharp({ create: { width: 513, height: 512, channels: 4, background: '#fff' } }).png().toBuffer();
+  await assert.rejects(encodeThumbnail(`data:image/png;base64,${bigPng.toString('base64')}`), reason('AVATAR_INPUT_INVALID'));
+  await assert.rejects(encodeThumbnail(`data:image/webp;base64,${png.toString('base64')}`), reason('AVATAR_INPUT_INVALID'));
+  await assert.rejects(encodeThumbnail((await thumbnail).replace('image/webp', 'image/png')), reason('AVATAR_INPUT_INVALID'));
+  const animation = Buffer.alloc(20); animation.writeUInt32BE(8, 0); animation.write('acTL', 4); animation.writeUInt32BE(2, 8);
+  const apng = Buffer.concat([png.subarray(0, 33), animation, png.subarray(33)]);
+  await assert.rejects(encodeThumbnail(`data:image/png;base64,${apng.toString('base64')}`), reason('AVATAR_INPUT_INVALID'));
+});
+
+test('Safari PNG fallback saves an immutable WebP and produces the saved snapshot used by the event', async () => {
+  const state = fixture();
+  const source = await sharp({ create: { width: 384, height: 512, channels: 4, background: { r: 240, g: 180, b: 120, alpha: 0.5 } } }).png().toBuffer();
+  const input = await save({ thumbnailWebp: `data:image/png;base64,${source.toString('base64')}` });
+  const saved = await state.api.saveStudentAvatar(input);
+  const stored = [...state.bucket.objects.values()][0];
+  assert.equal(stored.contentType, 'image/webp');
+  assert.equal((await sharp(stored.bytes).metadata()).format, 'webp');
+  assert.ok(stored.bytes.length <= 64 * 1024);
+  const { readSavedAvatarSnapshot } = require('../avatarEvent');
+  const snapshot = await state.db.runTransaction(tx => readSavedAvatarSnapshot(state.db, tx, uid, saved.revision));
+  assert.equal(snapshot.thumbnailUrl, saved.thumbnailUrl);
+  assert.equal(snapshot.avatarRevision, 1);
+  assert.deepEqual(snapshot.look, saved.look);
+  state.reads.length = 0; state.writes.length = 0;
+  const duplicate = await state.api.saveStudentAvatar(input);
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(state.writes.length, 0);
+  assert.equal(state.bucket.objects.size, 1);
+  assert.equal(state.reads.some(path => path.startsWith('semester_wis_')), false);
 });
 test('public sanitizer rejects invalid hashes/URLs, unsupported catalog and altered or missing slots', () => {
   const look = defaultLook(), value = { schemaVersion: 1, catalogVersion: catalog.version, look, lookHash: lookHash(look), revision: 1 };
@@ -431,12 +461,14 @@ test('thumbnail normalization preserves exact pixel colors, transparent cells an
     const color = palette[(Math.floor(x / 8) + Math.floor(y / 8)) % palette.length];
     color.forEach((value, channel) => { pixels[(y * width + x) * 4 + channel] = value; });
   }
-  const source = await sharp(pixels, { raw: { width, height, channels: 4 } }).webp({ lossless: true }).toBuffer();
-  const encoded = await encodeThumbnail(`data:image/webp;base64,${source.toString('base64')}`);
-  const actual = await sharp(encoded).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  const expected = await sharp(source).resize({ width: 384, height: 512, fit: 'inside', withoutEnlargement: true, kernel: 'nearest' }).ensureAlpha().raw().toBuffer();
-  assert.equal(actual.info.width, 384); assert.equal(actual.info.height, 384);
-  assert.deepEqual(actual.data, expected); assert.ok(encoded.length <= 64 * 1024);
+  for (const format of ['webp', 'png']) {
+    const source = await sharp(pixels, { raw: { width, height, channels: 4 } }).toFormat(format, { lossless: true }).toBuffer();
+    const encoded = await encodeThumbnail(`data:image/${format};base64,${source.toString('base64')}`);
+    const actual = await sharp(encoded).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const expected = await sharp(source).resize({ width: 384, height: 512, fit: 'inside', withoutEnlargement: true, kernel: 'nearest' }).ensureAlpha().raw().toBuffer();
+    assert.equal(actual.info.width, 384); assert.equal(actual.info.height, 384);
+    assert.deepEqual(actual.data, expected); assert.ok(encoded.length <= 64 * 1024);
+  }
 });
 test('ranking preview and full hall reuse existing profile batches and expose only sanitized avatar fields', async () => {
   const { setup, publicId } = require('./verify-wis-ranking-preview.cjs');

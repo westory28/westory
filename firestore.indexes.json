@@ -1,6 +1,17 @@
 {
   "indexes": [
     {
+      "collectionGroup": "entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "classKey", "order": "ASCENDING"},
+        {"fieldPath": "difficulty", "order": "ASCENDING"},
+        {"fieldPath": "score", "order": "DESCENDING"},
+        {"fieldPath": "achievedAtMs", "order": "ASCENDING"},
+        {"fieldPath": "uid", "order": "ASCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "wis_stock_orders",
       "queryScope": "COLLECTION_GROUP",
       "fields": [

@@ -15,6 +15,7 @@ import {
 import type { HistoryRainGameProps } from "./HistoryRainGame";
 import WeplayExitDialog from "./WeplayExitDialog";
 import WeplayGameLoading from "./WeplayGameLoading";
+import WeplayRanking from "./WeplayRanking";
 import { DEFAULT_WEPLAY_GAME_TITLE } from "../../../lib/weplayTitle";
 import NavalSpecialAttack, { NAVAL_SPECIAL_TIMING } from "./NavalSpecialAttack";
 import NavalCannonShot from "./NavalCannonShot";
@@ -92,6 +93,7 @@ export default function NavalBattleGame({
   onShowGuide,
   guideDemo = false,
   guideInteractive,
+  showRanking = false,
 }: HistoryRainGameProps) {
   const uniqueInputId = useId();
   const inputId = guideDemo
@@ -1260,6 +1262,13 @@ export default function NavalBattleGame({
           </div>
         </form>
         <div className="naval-footer">
+          {showRanking && !preview && !guideDemo && (
+            <WeplayRanking
+              gameId="history-rain"
+              initialCategory={session.difficulty}
+              disabled={finishing || exitOpen || exitRequested}
+            />
+          )}
           <button
             className="weplay-exit-button"
             data-weplay-guide="exit"

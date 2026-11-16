@@ -2,6 +2,7 @@ const { createHash, randomInt, randomUUID } = require('node:crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 const { assertStudentMenuVisible } = require('./studentMenuVisibility');
+const { prepareRankingUpdate, studentLabel } = require('./weplayRankingStore');
 
 const ADMIN_EMAIL = 'westoria28@gmail.com';
 const alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -91,7 +92,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     if (enrollment.studentUid !== uid || enrollment.semesterId !== scope.id || enrollment.enrollmentStatus !== 'ACTIVE' || enrollment.readOnly === true || !identifier(enrollment.classId)) fail('permission-denied', '현재 학기의 수강 정보를 확인해 주세요.');
     const classroom = await readClass(reader, scope, enrollment.classId);
     return { uid, manager: false, settings, classId: enrollment.classId, enrollmentId: slot.activeEnrollmentId, slotId, classroom,
-      name: studentDisplayName(profile, enrollment, classroom) };
+      name: studentDisplayName(profile, enrollment, classroom), rankingLabel: studentLabel(profile, enrollment) };
   };
   // Refresh old room labels from the same canonical records used for access.
   // This changes only display synchronization, never the gameplay revision/clock.
@@ -460,7 +461,13 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
       // Only the authoritative move that completes the board, or its winner's
       // pending settlement retry, can mint a reward. Forfeit/close never enter.
       if ((action === 'move' && room.status === 'finished') || action === 'claimReward') {
+        // The board-completing server move is the only winner signal. A room
+        // receipt makes command retries and reward recovery zero-write for rank.
+        const ranking = !actor.manager && room.finishReason === 'completion' && room.winnerUid === actor.uid && !room.rankingRecordedAtMs
+          ? await prepareRankingUpdate({ db, transaction, scope, gameId: 'joseon-yut', category: 'wins', actor, score: 1, increment: true, atMs: receivedAt }) : null;
         const reward = await rewards.prepare(transaction, scope, room, actor, receivedAt);
+        ranking?.apply();
+        if (ranking) room.rankingRecordedAtMs = receivedAt;
         reward.apply();
         room.reward = reward.reward;
         if (action === 'claimReward') {

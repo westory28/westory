@@ -36,6 +36,8 @@ import YutGameEntry from "../../components/common/weplay/YutGameEntry";
 import RhythmGameEntry from "../../components/common/weplay/rhythm/RhythmGameEntry";
 import WeplayStudioIntro from "../../components/common/weplay/WeplayStudioIntro";
 import WeplayGameFrame from "../../components/common/weplay/WeplayGameFrame";
+import WeplayRanking from "../../components/common/weplay/WeplayRanking";
+import { invalidateWeplayRanking } from "../../lib/weplayRanking";
 import { withWeplayRequestTimeout } from "../../components/common/weplay/requestTimeout";
 
 const signed = (value: number) => `${value > 0 ? "+" : ""}${value}`;
@@ -141,7 +143,9 @@ function NavalWeplay({ groupTitle }: { groupTitle: string }) {
       setLoading(true);
       setError("");
       try {
-        const next = await withWeplayRequestTimeout(getWeplayLobby(config));
+        const next = await withWeplayRequestTimeout(
+          getWeplayLobby(config, false),
+        );
         if (request !== generation.current || scopeRef.current !== scope)
           return;
         setLobby(next);
@@ -283,6 +287,7 @@ function NavalWeplay({ groupTitle }: { groupTitle: string }) {
     }
   };
   const complete = (next: WeplayResult) => {
+    invalidateWeplayRanking("history-rain");
     if (next.mode === "challenge") notifyPointsUpdated();
     setMode(next.mode);
     setDifficulty(next.difficulty);
@@ -335,15 +340,6 @@ function NavalWeplay({ groupTitle }: { groupTitle: string }) {
                 : "";
   const recordsActions = lobby && (
     <nav className="weplay-lobby-actions" aria-label="게임 기록">
-      <button
-        type="button"
-        disabled={starting}
-        aria-haspopup="dialog"
-        onClick={() => setRecordsView("ranking")}
-      >
-        <WeplayLobbyIcon name="ranking" />
-        우리 반 랭킹
-      </button>
       <button
         type="button"
         disabled={starting}
@@ -455,6 +451,7 @@ function NavalWeplay({ groupTitle }: { groupTitle: string }) {
             onComplete={complete}
             onShowGuide={guide.openGuide}
             gameTitle={gameTitle}
+            showRanking
           />
         ) : (
           <>
@@ -576,6 +573,13 @@ function NavalWeplay({ groupTitle }: { groupTitle: string }) {
               />
             )}
           </>
+        )}
+        {!session && introComplete && lobby && (
+          <WeplayRanking
+            gameId="history-rain"
+            initialCategory={difficulty}
+            disabled={starting}
+          />
         )}
       </WeplayGameFrame>
       <WeplayGuide

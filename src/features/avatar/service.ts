@@ -129,6 +129,8 @@ export const avatarErrorMessage = (error: unknown) => {
     details?: { reason?: string };
   };
   const reason = `${e.details?.reason || ""} ${e.code || ""}`;
+  if (/AVATAR_THUMBNAIL_FAILED/.test(reason))
+    return "아바타 이미지를 만들지 못했습니다. 현재 선택을 유지한 채 다시 저장해 주세요.";
   if (/AVATAR_PRICE_CHANGED/.test(reason))
     return "아이템 정보가 변경되었습니다. 이름과 가격을 확인한 뒤 다시 구매해 주세요.";
   if (/AVATAR_GENDER_MISMATCH/.test(reason))
@@ -344,26 +346,45 @@ const saveAvatar = async (
 };
 
 export const makeAvatarThumbnail = async (dataUrl: string): Promise<string> => {
-  const bitmap = await createImageBitmap(await (await fetch(dataUrl)).blob());
+  const thumbnailFailure = () =>
+    Object.assign(new Error("아바타 이미지를 만들지 못했습니다."), {
+      code: "AVATAR_THUMBNAIL_FAILED",
+    });
+  let source: HTMLImageElement;
+  try {
+    // Safari can decode WebP without providing a canvas WebP encoder. Loading
+    // through Image also supports browsers without createImageBitmap.
+    source = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(thumbnailFailure());
+      image.src = dataUrl;
+    });
+  } catch {
+    throw thumbnailFailure();
+  }
   try {
     const canvas = document.createElement("canvas");
     canvas.width = 384;
     canvas.height = 512;
     const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("미리보기를 만들지 못했습니다.");
+    if (!ctx || !source.width || !source.height) throw thumbnailFailure();
     ctx.imageSmoothingEnabled = false;
     // Preserve the renderer's alpha so the saved avatar can stand on a podium.
-    const scale = Math.min(384 / bitmap.width, 512 / bitmap.height);
-    const w = bitmap.width * scale,
-      h = bitmap.height * scale;
-    ctx.drawImage(bitmap, (384 - w) / 2, (512 - h) / 2, w, h);
-    for (const quality of [1]) {
-      const webp = canvas.toDataURL("image/webp", quality);
-      if (webp.startsWith("data:image/webp;base64,") && webp.length < 86_000)
-        return webp;
-    }
-    throw new Error("미리보기의 용량이 너무 큽니다. 다시 시도해 주세요.");
-  } finally {
-    bitmap.close();
+    const scale = Math.min(384 / source.width, 512 / source.height);
+    const w = source.width * scale,
+      h = source.height * scale;
+    ctx.drawImage(source, (384 - w) / 2, (512 - h) / 2, w, h);
+    // Unsupported encoders return PNG. The server validates either raster
+    // format and always stores a bounded, re-encoded WebP thumbnail.
+    const thumbnail = canvas.toDataURL("image/webp", 1);
+    if (
+      /^data:image\/(webp|png);base64,/.test(thumbnail) &&
+      thumbnail.length <= 175_000
+    )
+      return thumbnail;
+    throw thumbnailFailure();
+  } catch {
+    throw thumbnailFailure();
   }
 };

@@ -7,6 +7,13 @@ import {
   type CSSProperties,
 } from "react";
 import RhythmHelp from "./RhythmHelp";
+import { useAuth } from "../../../../contexts/AuthContext";
+import {
+  startRhythmRankingGame,
+  finishRhythmRankingGame,
+  type RhythmRankingEvent,
+} from "../../../../lib/weplayRanking";
+import WeplayRanking from "../WeplayRanking";
 import RhythmDrum from "./RhythmDrum";
 import {
   RhythmBrand,
@@ -76,6 +83,18 @@ export default function RhythmGame({
   preview?: boolean;
   playable?: boolean;
 }) {
+  const { config } = useAuth();
+  const rankingRun = useRef<{
+    requestId: string;
+    songId: string;
+    difficulty: string;
+    sessionId?: string;
+    events: RhythmRankingEvent[];
+  } | null>(null);
+  const rankingSaveBusy = useRef(false);
+  const [rankingSave, setRankingSave] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
   const [songId, setSongId] = useState(RHYTHM_SONGS[0].id);
   const [difficulty, setDifficulty] = useState<RhythmDifficulty>("normal");
   const [phase, setPhase] = useState<Phase>("ready");
@@ -213,6 +232,7 @@ export default function RhythmGame({
       portraitRef.current
     )
       return;
+    const newRun = phaseRef.current !== "ready";
     const token = ++generation.current;
     audio.current?.dispose();
     const player = new RhythmAudio();
@@ -231,8 +251,41 @@ export default function RhythmGame({
     setEffects([]);
     setError("");
     setGamePhase("starting");
+    setRankingSave("idle");
+    if (
+      !preview &&
+      (newRun ||
+        !rankingRun.current ||
+        rankingRun.current.songId !== songId ||
+        rankingRun.current.difficulty !== difficulty)
+    ) {
+      rankingRun.current = {
+        requestId: crypto.randomUUID(),
+        songId,
+        difficulty,
+        events: [],
+      };
+    }
     try {
-      await player.start(song, muted ? 0 : 0.65);
+      await player.start(
+        song,
+        muted ? 0 : 0.65,
+        preview
+          ? undefined
+          : async () => {
+              const run = rankingRun.current!;
+              const saved = await startRhythmRankingGame(config, {
+                requestId: run.requestId,
+                songId: run.songId,
+                difficulty: run.difficulty,
+              });
+              if (token !== generation.current || rankingRun.current !== run)
+                return false;
+              run.sessionId = saved.sessionId;
+              run.events = [];
+              return playableRef.current;
+            },
+      );
       if (token !== generation.current) {
         player.dispose();
         return;
@@ -253,7 +306,7 @@ export default function RhythmGame({
       player.dispose();
       setGamePhase("ready");
       setError(
-        "소리를 시작하지 못했습니다. 소리 설정을 확인한 뒤 다시 시작해 주세요.",
+        "연주를 시작하지 못했습니다. 연결 상태와 소리 설정을 확인한 뒤 다시 시작해 주세요.",
       );
     }
   };
@@ -297,11 +350,29 @@ export default function RhythmGame({
       }
     }
   };
+  const saveRanking = useCallback(async () => {
+    const run = rankingRun.current;
+    if (preview || !run?.sessionId || rankingSaveBusy.current) return;
+    rankingSaveBusy.current = true;
+    setRankingSave("saving");
+    try {
+      await finishRhythmRankingGame(config, {
+        sessionId: run.sessionId,
+        events: run.events,
+      });
+      if (rankingRun.current === run) setRankingSave("saved");
+    } catch {
+      if (rankingRun.current === run) setRankingSave("error");
+    } finally {
+      rankingSaveBusy.current = false;
+    }
+  }, [preview, config?.year, config?.semester]);
   const finish = useCallback(() => {
     audio.current?.stop();
     setGamePhase("result");
     setFeedback("");
-  }, [setGamePhase]);
+    void saveRanking();
+  }, [setGamePhase, saveRanking]);
   useEffect(() => {
     if (phase !== "playing") return;
     let raf = 0;
@@ -348,6 +419,12 @@ export default function RhythmGame({
       )
         return;
       const now = audio.current.currentTime;
+      if (rankingRun.current?.sessionId)
+        rankingRun.current.events.push({
+          time: now - offset / 1000,
+          kind,
+          hand,
+        });
       audio.current.hit(kind);
       const id = ++strikeId.current;
       setLastStrike({ kind, at: now, id });
@@ -490,6 +567,8 @@ export default function RhythmGame({
     setEffects([]);
     setCollected([]);
     setHandStrikes({});
+    rankingRun.current = null;
+    setRankingSave("idle");
   };
   const active =
     phase === "playing" || phase === "paused" || phase === "starting";
@@ -528,6 +607,16 @@ export default function RhythmGame({
       aria-label="덩기덕 쿵더Rock 경기장"
     >
       <div className="rhythm-canvas" ref={canvasRef}>
+        {!preview && (
+          <WeplayRanking
+            gameId="gungdeok-rock"
+            initialCategory={`${songId}:${difficulty}`}
+            disabled={
+              !playable || phase === "starting" || rankingSave === "saving"
+            }
+            onOpen={pause}
+          />
+        )}
         {stage.portrait ? (
           <div className="rhythm-orientation-gate" role="status">
             <RhythmMascot />
@@ -752,18 +841,34 @@ export default function RhythmGame({
                       type="button"
                       className="rhythm-tool"
                       onClick={reset}
+                      disabled={rankingSave === "saving"}
                     >
                       곡 고르기
                     </button>
                     <button
                       type="button"
                       className="rhythm-primary"
-                      disabled={!playable}
+                      disabled={!playable || rankingSave === "saving"}
                       onClick={() => void start()}
                     >
                       한 번 더
                     </button>
                   </div>
+                  {!preview && rankingSave === "saving" && (
+                    <p role="status">기록을 저장하고 있습니다.</p>
+                  )}
+                  {!preview && rankingSave === "error" && (
+                    <div role="alert">
+                      <p>기록을 저장하지 못했습니다.</p>
+                      <button
+                        type="button"
+                        className="rhythm-tool"
+                        onClick={() => void saveRanking()}
+                      >
+                        기록 다시 저장
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="rhythm-confetti" aria-hidden="true">
                   {Array.from({ length: 12 }, (_, index) => (

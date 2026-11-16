@@ -40,6 +40,10 @@ export const getYutLobby=()=>request('lobby');
 export const commandYutRoom=(_config,data)=>request('command',data);
 export function subscribeYutRoom(_config,roomId,onRoom,onError){let stopped=false,last=-1;const read=async()=>{try{const response=await fetch('/qa/state?uid='+uid);const value=await response.json();const revision=value.room?.syncRevision??value.room?.revision??-2;if(!stopped&&revision!==last){last=revision;onRoom(value.room);}}catch(error){if(!stopped)onError(error);}};read();const timer=setInterval(read,100);return()=>{stopped=true;clearInterval(timer);};}
 export const yutErrorMessage=error=>error?.message||'다시 시도해 주세요.';
+export const getHistoryDictionaryCallable=async name=>async data=>{
+ if(name==='getWeplayRanking')return {data:{gameId:data.gameId,category:data.category,rows:[],updatedAtMs:Date.now(),scoreLabel:'승'}};
+ throw new Error('Unexpected callable '+name);
+};
 `;
 const harness = `
 import React,{useState} from 'react';import {createRoot} from 'react-dom/client';import {MemoryRouter} from 'react-router-dom';
@@ -80,7 +84,7 @@ const bundled = await build({
           external: true,
         }));
         plugin.onResolve(
-          { filter: /(?:^|\/)contexts\/AuthContext$|(?:^|\/)lib\/yut$/ },
+          { filter: /(?:^|\/)contexts\/AuthContext$|(?:^|\/)lib\/yut$|(?:^|\/)historyDictionarySession$/ },
           () => ({ path: "service", namespace: "fixture" }),
         );
         plugin.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({

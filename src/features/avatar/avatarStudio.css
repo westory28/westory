@@ -23,11 +23,17 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
-.avatar-studio .avatar-primary {
+.avatar-studio button.avatar-primary {
   background: var(--ws-primary, #2563eb);
   color: #fff;
   border-color: var(--ws-primary, #2563eb);
   font-weight: 700;
+}
+.avatar-studio button.avatar-primary:disabled {
+  background: var(--ws-border, #e5e7eb);
+  color: var(--ws-text-muted, #4b5563);
+  border-color: var(--ws-border, #e5e7eb);
+  opacity: 1;
 }
 .avatar-studio-heading {
   display: flex;

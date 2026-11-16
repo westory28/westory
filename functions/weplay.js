@@ -423,7 +423,7 @@ function createWeplayFunctions(deps) {
       readCatalog(scope),
       (async () => {
         const [period] = await Promise.all([ensurePeriod(scope), recovery]);
-        const rankingSnap = key ? await ref(scope, 'weplay_periods', period.id).collection('entries').where('classKey', '==', key).get() : null;
+        const rankingSnap = key && request.data?.includeRankings !== false ? await ref(scope, 'weplay_periods', period.id).collection('entries').where('classKey', '==', key).get() : null;
         return { period, entries: (rankingSnap?.docs || []).map((doc) => doc.data()) };
       })(),
     ]);

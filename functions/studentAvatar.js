@@ -67,13 +67,26 @@ const readAvatarShopAccess = async (tx, db) => {
 };
 
 async function encodeThumbnail(input) {
-  if (typeof input !== 'string' || input.length > 175000 || !/^data:image\/webp;base64,[A-Za-z0-9+/]+={0,2}$/.test(input)) invalid();
-  const bytes = Buffer.from(input.slice(23), 'base64');
-  if (bytes.length < 20 || bytes.length > 128 * 1024 || bytes.toString('ascii', 0, 4) !== 'RIFF'
-    || bytes.toString('ascii', 8, 12) !== 'WEBP') invalid();
+  if (typeof input !== 'string' || input.length > 175000) invalid();
+  const match = /^data:image\/(webp|png);base64,([A-Za-z0-9+/]+={0,2})$/.exec(input);
+  if (!match) invalid();
+  const format = match[1], bytes = Buffer.from(match[2], 'base64');
+  if (bytes.length < 20 || bytes.length > 128 * 1024
+    || (format === 'webp' && (bytes.toString('ascii', 0, 4) !== 'RIFF' || bytes.toString('ascii', 8, 12) !== 'WEBP'))
+    || (format === 'png' && bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a')) invalid();
+  if (format === 'png') {
+    // Some decoders expose only APNG's first frame. Reject its animation chunk
+    // explicitly rather than depending on decoder support for page metadata.
+    for (let offset = 8; offset < bytes.length;) {
+      if (offset + 12 > bytes.length) invalid();
+      const length = bytes.readUInt32BE(offset);
+      if (length > bytes.length - offset - 12 || bytes.toString('ascii', offset + 4, offset + 8) === 'acTL') invalid();
+      offset += length + 12;
+    }
+  }
   try {
     const meta = await sharp(bytes, { limitInputPixels: 512 * 512, animated: true }).metadata();
-    if (meta.format !== 'webp' || !meta.width || !meta.height || meta.width > 512 || meta.height > 512 || (meta.pages || 1) !== 1) invalid();
+    if (meta.format !== format || !meta.width || !meta.height || meta.width > 512 || meta.height > 512 || (meta.pages || 1) !== 1) invalid();
     const result = await sharp(bytes, { limitInputPixels: 512 * 512 }).rotate()
       .resize({ width: 384, height: 512, fit: 'inside', withoutEnlargement: true, kernel: 'nearest' })
       .webp({ lossless: true, effort: 4 }).toBuffer();

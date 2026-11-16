@@ -54,6 +54,8 @@ import YutVictoryCast from "./YutVictoryCast";
 import YutStackChoice from "./YutStackChoice";
 import { YutEntryScene } from "./YutEntryScene";
 import WeplayGameLoading from "../WeplayGameLoading";
+import WeplayRanking from "../WeplayRanking";
+import { invalidateWeplayRanking } from "../../../../lib/weplayRanking";
 import useYutSoundEffects from "../useYutSoundEffects";
 import useYutFullscreenGestures from "./useYutFullscreenGestures";
 import { acquirePageScrollLock } from "../../../../lib/pageScrollLock";
@@ -1595,6 +1597,7 @@ export default function YutGame({
     const key = `${room.id}:${room.winnerUid}`;
     if (applauded.current.has(key)) return;
     applauded.current.add(key);
+    if (!local) invalidateWeplayRanking("joseon-yut");
     if (!hidden && !portrait) sounds.applause();
   }, [
     room?.id,
@@ -2779,6 +2782,12 @@ export default function YutGame({
                 )}
             </div>
           </div>
+        )}
+        {portal === "student" && !preview && (
+          <WeplayRanking
+            gameId="joseon-yut"
+            disabled={suspended || initialLoading || !!dialog || !!stackChoice}
+          />
         )}
         {!portrait && (
           <button

@@ -30,7 +30,7 @@ import {useSyncExternalStore} from 'react';
 const authListeners=new Set();
 const query=new URLSearchParams(location.search),teacher=query.has('teacher');
 const qa=window.rhythmQA={
- hidden:false,online:true,hold:false,pending:[],failure:false,reads:[],saves:[],toasts:[],
+ hidden:false,online:true,hold:false,pending:[],failure:false,reads:[],saves:[],toasts:[],rankingCalls:[],
  publication:{enabled:query.has('open'),revision:query.has('open')?1:0},audio:[],hits:[],time:null,saveFailure:false,
  auth:{config:{year:'2026',semester:'2',showQuiz:true,showScore:true,showLesson:true},menuConfig:{student:[],teacher:[]},configReady:true,menuConfigReady:true,authGeneration:1,authPhase:'ready',
  currentUser:{uid:teacher?'qa-teacher':'qa-student',email:teacher?'teacher@yongshin-ms.ms.kr':'2630001@yongshin-ms.ms.kr'},
@@ -59,6 +59,13 @@ export async function saveRhythmPublication(config,enabled,expectedRevision){
  return {enabled,revision:qa.publication.revision};
 }
 export const useAppToast=()=>({showToast:value=>qa.toasts.push(value)});
+export const getHistoryDictionaryCallable=async name=>async data=>{
+ qa.rankingCalls.push({name,data:structuredClone(data)});
+ if(name==='startRhythmRankingGame')return {data:{sessionId:data.requestId}};
+ if(name==='finishRhythmRankingGame')return {data:{score:0}};
+ if(name==='getWeplayRanking')return {data:{gameId:data.gameId,category:data.category,rows:[],updatedAtMs:Date.now(),scoreLabel:'점'}};
+ throw new Error('Unexpected callable '+name);
+};
 `;
 const harness = `
 import React from 'react';import{createRoot}from'react-dom/client';import{MemoryRouter}from'react-router-dom';
@@ -105,7 +112,7 @@ const bundled = await build({
         plugin.onResolve(
           {
             filter:
-              /(?:^|\/)contexts\/AuthContext$|(?:^|\/)lib\/rhythmPublication$|(?:^|\/)AppToastProvider$/,
+              /(?:^|\/)contexts\/AuthContext$|(?:^|\/)lib\/rhythmPublication$|(?:^|\/)AppToastProvider$|(?:^|\/)historyDictionarySession$/,
           },
           () => ({ path: "service", namespace: "fixture" }),
         );
@@ -131,7 +138,7 @@ assert(
 const js = bundled.outputFiles.find((file) => file.path.endsWith(".js")).text;
 const css = bundled.outputFiles
   .find((file) => file.path.endsWith(".css"))
-  .text.replace(/@import\s+[^;]+;/g, "");
+  .text.replace(/^@import .*;$/gm, "");
 const server = http.createServer(async (req, res) => {
   const pathname = new URL(req.url, "http://127.0.0.1").pathname;
   if (pathname === "/qa.js") {
@@ -290,6 +297,7 @@ const shot = async (page, name) => {
   await page.screenshot({
     path: path.join(evidence, `${name}.png`),
     fullPage: true,
+    timeout: 30000,
   });
 };
 const imageCheck = async (page) => {
@@ -903,6 +911,19 @@ try {
     }
     await imageCheck(page);
     await localFontCheck(page, ".rhythm-song-panel", /Yeon Sung/);
+    const rankingLauncher = page.getByRole("button", { name: "랭킹", exact: true });
+    await rankingLauncher.click();
+    await page.getByText("아직 기록이 없습니다.").waitFor();
+    const rankingBounds = await page.locator('.weplay-ranking-dialog').boundingBox();
+    assert(rankingBounds && rankingBounds.x >= 0 && rankingBounds.y >= 0 && rankingBounds.x + rankingBounds.width <= width + 1 && rankingBounds.y + rankingBounds.height <= height + 1, `${label}: ranking remains inside rotated/native game`);
+    await shot(page, `${label}-ranking`);
+    await page.getByRole('button', { name: '랭킹 닫기' }).click();
+    assert.equal(await page.evaluate(() => window.rhythmQA.rankingCalls.filter(call => call.name === 'getWeplayRanking').length), 1);
+    await rankingLauncher.click();
+    await page.getByText('아직 기록이 없습니다.').waitFor();
+    assert.equal(await page.evaluate(() => window.rhythmQA.rankingCalls.filter(call => call.name === 'getWeplayRanking').length), 1, 'reopen reuses ranking');
+    await page.keyboard.press('Escape');
+    if (portrait) assert.equal(await page.locator('.rhythm-game--rotated').count(), 1, 'ranking Escape preserves fullscreen');
     await shot(page, `${label}-lobby`);
     await helpCheck(page, label);
     assert.equal(await page.locator(".rhythm-song").count(), 4);
@@ -1058,6 +1079,16 @@ try {
       "outside pointer closes calibration",
     );
     await start(page);
+    await rankingLauncher.click();
+    await phase(page, 'paused');
+    await page.getByText('아직 기록이 없습니다.').waitFor();
+    const hitsBeforeRankingKey = await hitCount(page);
+    await page.getByLabel('랭킹 장단', { exact: true }).focus();
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await hitCount(page), hitsBeforeRankingKey, 'ranking keys do not hit drum');
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: '계속 연주' }).click();
+    await phase(page, 'playing');
     const layout = await assertLayout(page, label);
     await imageCheck(page);
     const focusGeometry = () =>

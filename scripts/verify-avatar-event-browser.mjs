@@ -12,7 +12,7 @@ const root = process.cwd(),
     path.join(root, "output/avatar-polish-20261114/event-student");
 await fs.mkdir(evidence, { recursive: true });
 const require = createRequire(import.meta.url);
-const { chromium } = require(
+const playwright = require(
   process.env.PLAYWRIGHT_MODULE_PATH ||
     path.join(
       os.homedir(),
@@ -48,8 +48,8 @@ export async function callWithApplicationSession(name,input){
 `;
 const entry = `import React,{useState} from 'react';import {createRoot} from 'react-dom/client';import AvatarEventSubmission from './src/features/avatar/AvatarEventSubmission';import {AvatarStudio} from './src/features/avatar/AvatarStudio';import {AppToastProvider} from './src/components/common/AppToastProvider';import {defaultAvatarLook} from './src/features/avatar/catalog';import {useAuth} from './src/contexts/AuthContext';import {useGongsinAvailability} from './src/lib/gongsinmoongo';import './src/features/avatar/avatarStudio.css';
 const studio=new URLSearchParams(location.search).has('studio'),qa=window.eventQa;
-qa.studioLoads=0;qa.studioSaves=[];qa.studioAvatar={schemaVersion:1,catalogVersion:2,look:defaultAvatarLook(),revision:0,lookHash:'test',ownedItemIds:[]};
-const adapter={load:async()=>{qa.studioLoads++;return{avatar:qa.studioAvatar,balance:0,pricing:{revision:0,prices:{}}}},purchase:async()=>{throw Error('Unexpected purchase')},save:async(look,revision,thumbnailUrl)=>{if(revision!==qa.studioAvatar.revision)throw Error('Stale avatar save');qa.studioAvatar={...qa.studioAvatar,look,revision:revision+1,thumbnailUrl,requiresThumbnailRefresh:false};qa.studioSaves.push({revision:revision+1,thumbnailUrl});return qa.studioAvatar}};
+qa.studioLoads=0;qa.studioSaves=[];qa.saveAttempts=[];qa.failSave=false;qa.studioAvatar={schemaVersion:1,catalogVersion:2,look:defaultAvatarLook(),revision:0,lookHash:'test',ownedItemIds:[]};
+const adapter={load:async()=>{qa.studioLoads++;return{avatar:qa.studioAvatar,balance:0,pricing:{revision:0,prices:{}}}},purchase:async()=>{throw Error('Unexpected purchase')},save:async(look,revision,thumbnailUrl)=>{qa.saveAttempts.push({look,revision,thumbnailUrl});if(qa.failSave){qa.failSave=false;throw Object.assign(Error('Save unavailable'),{code:'functions/unavailable'})}if(revision!==qa.studioAvatar.revision)throw Error('Stale avatar save');qa.studioAvatar={...qa.studioAvatar,look,revision:revision+1,thumbnailUrl,requiresThumbnailRefresh:false};qa.studioSaves.push({revision:revision+1,thumbnailUrl});return qa.studioAvatar}};
 function App(){const auth=useAuth();useGongsinAvailability();const[ready,setReady]=useState(true);window.eventQa.setReady=setReady;const avatar={schemaVersion:1,catalogVersion:2,look:defaultAvatarLook(),revision:1,lookHash:'test',ownedItemIds:[],thumbnailUrl:${JSON.stringify(thumbnail)}};return <AppToastProvider>{studio?<AvatarStudio key={auth.user.uid+auth.authGeneration} adapter={adapter} mode="wardrobe" studentAvatarEvent/>:<main className="avatar-studio"><AvatarEventSubmission key={auth.user.uid+auth.authGeneration} readyForSubmission={ready} avatar={avatar} refreshAvatar={async()=>{window.eventQa.refreshes++;return {...avatar,revision:2}}}/></main>}</AppToastProvider>};createRoot(document.getElementById('root')).render(<App/>);`;
 const result = await build({
   stdin: { contents: entry, loader: "tsx", resolveDir: root },
@@ -120,8 +120,11 @@ const server = http.createServer(async (req, res) => {
 });
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const origin = `http://127.0.0.1:${server.address().port}`,
-  browser = await chromium.launch({
-    channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge",
+  browserName = process.env.AVATAR_EVENT_BROWSER || "chromium",
+  browser = await playwright[browserName].launch({
+    ...(browserName === "chromium"
+      ? { channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge" }
+      : {}),
   });
 let errors = [],
   requests = [];
@@ -149,9 +152,19 @@ try {
       "shared availability listener",
     );
     await page.evaluate(() => window.eventQa.setReady(false));
+    await page.waitForFunction(
+      () =>
+        document.querySelector(".avatar-event-entry > button")?.disabled ===
+        true,
+    );
     assert(await open.isDisabled());
     await page.getByText("아바타를 저장한 뒤 보내주세요.").waitFor();
     await page.evaluate(() => window.eventQa.setReady(true));
+    await page.waitForFunction(
+      () =>
+        document.querySelector(".avatar-event-entry > button")?.disabled ===
+        false,
+    );
     await page.evaluate(() => (window.eventQa.failRead = true));
     await open.click();
     await page.locator('.avatar-event-dialog p[role="alert"]').waitFor();
@@ -177,6 +190,9 @@ try {
     );
     await page.screenshot({ path: path.join(evidence, `dialog-${width}.png`) });
     await page.evaluate(() => window.eventQa.gate(false));
+    await page.waitForFunction(
+      () => document.querySelector(".gongsin-drum-button")?.disabled === true,
+    );
     assert(await send.isDisabled());
     await page.evaluate(() => window.eventQa.gate(true));
     await page.evaluate(() => {
@@ -328,6 +344,9 @@ try {
     .getByRole("button", { name: "다시 확인하기", exact: true })
     .click();
   await recovery.waitForFunction(() => window.eventQa.subscriptions === 3);
+  await recovery.waitForFunction(
+    () => document.querySelector(".gongsin-drum-button")?.disabled === false,
+  );
   assert(
     await recovery
       .getByRole("button", { name: "공부의 神문고로 보내기", exact: true })
@@ -370,8 +389,21 @@ try {
     0,
   );
   await recovery.close();
-  for (const width of [390, 1280]) {
+  for (const width of [320, 390, 768, 1280]) {
     const page = await browser.newPage({ viewport: { width, height: 1000 } });
+    if (process.env.AVATAR_EVENT_PNG_FALLBACK === "1") {
+      await page.addInitScript(() => {
+        const encode = HTMLCanvasElement.prototype.toDataURL;
+        HTMLCanvasElement.prototype.toDataURL = function (type, ...args) {
+          return encode.call(
+            this,
+            type === "image/webp" ? "image/png" : type,
+            ...args,
+          );
+        };
+        window.createImageBitmap = undefined;
+      });
+    }
     page.on("pageerror", (error) => errors.push(error.message));
     await page.route("**/*", (route) =>
       /^(data|blob):/.test(route.request().url()) ||
@@ -404,13 +436,72 @@ try {
         document.querySelector(".avatar-studio")?.dataset.rendererReady ===
         "true",
     );
+    const saveButton = page.getByRole("button", {
+      name: "아바타 저장",
+      exact: true,
+    });
+    const saveStyle = await saveButton.evaluate((element) => {
+      const style = getComputedStyle(element),
+        bounds = element.getBoundingClientRect();
+      return {
+        color: style.color,
+        background: style.backgroundColor,
+        height: bounds.height,
+        width: bounds.width,
+      };
+    });
+    assert.equal(saveStyle.color, "rgb(255, 255, 255)");
+    assert.equal(
+      saveStyle.background,
+      "rgb(37, 99, 235)",
+      "Primary save must not be white on white",
+    );
+    assert(saveStyle.height >= 44 && saveStyle.width >= 44);
+    await saveButton.scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: path.join(evidence, `studio-save-${width}.png`),
+    });
+    await page.evaluate(() => {
+      window.eventQa.failSave = true;
+    });
+    await saveButton.click();
     await page
-      .getByRole("button", { name: "아바타 저장", exact: true })
-      .click();
+      .getByText(
+        "처리를 완료하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.",
+        { exact: true },
+      )
+      .waitFor();
+    assert.equal(
+      await page.evaluate(() => window.eventQa.studioSaves.length),
+      0,
+    );
+    assert(await opener.isDisabled());
+    await saveButton.click();
     await page.waitForFunction(() => window.eventQa.studioSaves.length === 1);
+    await page.waitForFunction(
+      () =>
+        document.querySelector(".avatar-event-entry > button")?.disabled ===
+        false,
+    );
     assert(
       await opener.isEnabled(),
       "Saving enables submission without refreshing the page",
+    );
+    const savedStyle = await saveButton.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        color: style.color,
+        background: style.backgroundColor,
+        opacity: style.opacity,
+        disabled: element.disabled,
+      };
+    });
+    assert.equal(savedStyle.disabled, true);
+    assert.equal(savedStyle.opacity, "1");
+    assert.notEqual(
+      savedStyle.color,
+      savedStyle.background,
+      "Disabled save remains readable",
     );
     assert.equal(await page.evaluate(() => window.eventQa.studioLoads), 1);
     assert.equal(await page.evaluate(() => window.eventQa.reads.length), 0);
@@ -434,6 +525,19 @@ try {
     );
     assert.equal(submission.writes[0].semesterId, "2026-2");
     assert.equal(submission.reads.length, 1);
+    const thumbnailMime = submission.saves[0].thumbnailUrl.match(
+      /^data:image\/([^;]+);/,
+    )[1];
+    assert(["png", "webp"].includes(thumbnailMime));
+    if (process.env.AVATAR_EVENT_PNG_FALLBACK === "1")
+      assert.equal(thumbnailMime, "png");
+    const attempts = await page.evaluate(() => window.eventQa.saveAttempts);
+    assert.equal(attempts.length, 2);
+    assert.deepEqual(
+      attempts[0],
+      attempts[1],
+      "Failed save preserves look, revision and thumbnail for retry",
+    );
     await page.screenshot({
       path: path.join(evidence, `studio-submitted-${width}.png`),
     });
@@ -441,9 +545,14 @@ try {
       width,
       studioIntegration: true,
       avatarSaves: 1,
+      saveAttempts: 2,
       eventReads: 1,
       submitCalls: 1,
       rewardWrites: 0,
+      browser: browserName,
+      thumbnailMime,
+      saveStyle,
+      savedStyle,
     });
     await page.close();
   }

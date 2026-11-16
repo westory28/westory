@@ -1,0 +1,48 @@
+.weplay-ranking--naval { --rank-ink: #f4e5c5; --rank-paper: #173644; --rank-accent: #d8ae66; --rank-line: #b28c4d; font-family: "Noto Serif KR", serif; }
+.weplay-ranking--yut { --rank-ink: #362619; --rank-paper: #f5e8c9; --rank-accent: #536143; --rank-line: #b28c4d; font-family: "Noto Serif KR", serif; }
+.weplay-ranking--rhythm { --rank-ink: #352c26; --rank-paper: #f5e8bc; --rank-accent: #164c35; --rank-line: #c4442d; font-family: "Rhythm Yeon Sung", "Noto Sans KR", sans-serif; }
+/* Keep the themed controls above the portal's generic button rules. */
+button.weplay-ranking-launch.weplay-ranking-launch { position: absolute; left: 16px; bottom: 16px; z-index: 35; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 16px; border: 2px solid var(--rank-line); border-radius: 8px; color: var(--rank-ink); background: var(--rank-paper); box-shadow: 0 4px 0 #362619; font-size: 16px; font-weight: 700; line-height: 1.25; cursor: pointer; }
+button.weplay-ranking-launch svg { width: 24px; height: 24px; flex: none; }
+button.weplay-ranking-launch:disabled { opacity: .6; cursor: default; }
+.naval-game .naval-footer button.weplay-ranking-launch,
+.weplay-game .weplay-game-footer button.weplay-ranking-launch { position: static; flex: none; gap: 4px; padding: 8px; box-shadow: none; }
+button.weplay-ranking-launch.weplay-ranking--yut { background: #51331d url('/assets/weplay/yut/materials.webp') left top / 200% 200%; color: #f5e8c9; }
+button.weplay-ranking-launch.weplay-ranking--rhythm { border: 3px solid #164c35; border-bottom-color: #c4442d; }
+.weplay-ranking-overlay { position: absolute; inset: 0; z-index: 250; display: grid; place-items: center; padding: 16px; color: var(--rank-ink); background: #171e24b8; }
+.weplay-ranking-overlay *, .weplay-ranking-dialog { box-sizing: border-box; }
+.weplay-ranking-dialog { display: flex; flex-direction: column; width: min(520px, 100%); height: min(560px, 100%); min-height: 0; max-height: 100%; padding: 16px; border: 3px solid var(--rank-line); border-radius: 12px; background: var(--rank-paper); box-shadow: 0 8px 24px #0006; text-align: left; }
+.weplay-ranking-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.weplay-ranking-heading span { font-size: 14px; }
+.weplay-ranking-dialog .weplay-ranking-heading h2 { margin: 0; color: inherit; font-family: inherit; font-size: 24px; line-height: 1.25; }
+.weplay-ranking-overlay .weplay-ranking-dialog button, .weplay-ranking-overlay .weplay-ranking-dialog select { min-height: 44px; padding: 8px 12px; border: 1px solid var(--rank-line); border-radius: 8px; color: var(--rank-ink); background: var(--rank-paper); font: inherit; font-size: 16px; cursor: pointer; }
+.weplay-ranking-dialog button:focus-visible, .weplay-ranking-dialog select:focus-visible, button.weplay-ranking-launch:focus-visible { outline: 3px solid var(--rank-accent); outline-offset: 3px; }
+.weplay-ranking-dialog .weplay-ranking-heading > button { width: 44px; flex: none; font-size: 24px; }
+.weplay-ranking-options { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.weplay-ranking-options label { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
+.weplay-ranking-options select { min-width: 0; max-width: 100%; }
+.weplay-ranking-options button[aria-pressed="true"] { color: var(--rank-paper); background: var(--rank-accent); border-color: var(--rank-accent); font-weight: 700; }
+.weplay-ranking-dialog .weplay-ranking-metric { margin: 8px 0; color: inherit; font: inherit; font-size: 14px; }
+.weplay-ranking-content { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.weplay-ranking-content > p, .weplay-ranking-content > div { padding: 16px 0; }
+.weplay-ranking-rows { display: block; margin: 0; padding: 0; list-style: none; }
+.weplay-ranking-rows > li { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 56px; padding: 8px; border-bottom: 1px solid var(--rank-line); font-size: 16px; }
+.weplay-ranking-rows > li.is-me { outline: 2px solid var(--rank-accent); outline-offset: -2px; }
+.weplay-ranking-rows > li > span { overflow-wrap: anywhere; }
+.weplay-ranking-place { color: var(--rank-accent); font-size: 24px; }
+.weplay-ranking-rows small { margin-left: 4px; font-size: 12px; font-weight: 400; }
+.weplay-ranking-rows em { margin-left: 8px; font-size: 12px; font-style: normal; }
+.weplay-ranking--rhythm .weplay-ranking-heading h2 { color: #c4442d; }
+.weplay-ranking--yut .weplay-ranking-dialog { border-width: 6px; border-color: #684729; }
+@media (max-width: 480px), (max-height: 560px) {
+  button.weplay-ranking-launch.weplay-ranking-launch { left: 8px; bottom: 8px; padding: 8px; }
+  .weplay-ranking-overlay { padding: 8px; }
+  .weplay-ranking-dialog { padding: 8px; }
+  .weplay-ranking-dialog .weplay-ranking-heading h2 { font-size: 20px; }
+  .weplay-ranking-options { margin-top: 8px; }
+}
+@container naval-game (max-width: 480px) {
+  .naval-game .naval-footer button.weplay-ranking-launch { width: 44px; flex-direction: column; gap: 0; padding: 4px; }
+  .naval-footer .weplay-ranking-launch svg { width: 20px; height: 20px; }
+  .naval-footer .weplay-ranking-launch > span { font-size: 10px; line-height: 12px; }
+}
