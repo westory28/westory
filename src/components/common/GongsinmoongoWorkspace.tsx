@@ -168,6 +168,48 @@ function SourceLink({
     <span className="gsm-source">{label}</span>
   );
 }
+function QuestionMessage({
+  teacher,
+  selected,
+  createdAt,
+  children,
+}: {
+  teacher: boolean;
+  selected: boolean;
+  createdAt: number;
+  children: ReactNode;
+}) {
+  if (!teacher) return <div className="gsm-message is-mine">{children}</div>;
+  return (
+    <div className="gsm-message gsm-question-message">
+      <div
+        className={`gsm-bubble gsm-question-bubble${selected ? " is-selected" : ""}`}
+      >
+        {children}
+      </div>
+      <time
+        className="gsm-question-time"
+        dateTime={new Date(createdAt).toISOString()}
+      >
+        <span>
+          {new Intl.DateTimeFormat("ko-KR", {
+            timeZone: "Asia/Seoul",
+            month: "long",
+            day: "numeric",
+          }).format(createdAt)}
+        </span>
+        <span>
+          {new Intl.DateTimeFormat("ko-KR", {
+            timeZone: "Asia/Seoul",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }).format(createdAt)}
+        </span>
+      </time>
+    </div>
+  );
+}
 
 export default function GongsinmoongoWorkspace({
   teacher = false,
@@ -938,11 +980,15 @@ export default function GongsinmoongoWorkspace({
                   data-question={item.id}
                   className="gsm-thread"
                 >
-                  <div className={`gsm-message ${teacher ? "" : "is-mine"}`}>
+                  <QuestionMessage
+                    teacher={teacher}
+                    selected={selected?.id === item.id}
+                    createdAt={item.createdAt}
+                  >
                     <SourceLink source={item.source} teacher={teacher} />
                     {teacher ? (
                       <button
-                        className={`gsm-bubble gsm-question${selected?.id === item.id ? " is-selected" : ""}`}
+                        className="gsm-question-select"
                         disabled={busy}
                         onClick={() => setSelected(item)}
                         aria-label={`이 질문에 답변하기: ${item.question}`}
@@ -954,7 +1000,7 @@ export default function GongsinmoongoWorkspace({
                         {item.question}
                       </div>
                     )}
-                    <time>{timeText(item.createdAt)}</time>
+                    {!teacher && <time>{timeText(item.createdAt)}</time>}
                     {item.source.kind === "avatar" &&
                       item.avatarEvent &&
                       (!teacher || selected?.id === item.id) && (
@@ -1004,7 +1050,7 @@ export default function GongsinmoongoWorkspace({
                           </div>
                         </section>
                       )}
-                  </div>
+                  </QuestionMessage>
                   {item.reply ? (
                     <div className={`gsm-message ${teacher ? "is-mine" : ""}`}>
                       <div className="gsm-bubble gsm-reply">
