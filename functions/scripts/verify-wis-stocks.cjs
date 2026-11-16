@@ -439,6 +439,41 @@ test('VALUE sustained downward pressure pauses once, resumes at a bounded price 
   assert.equal(nextDay.stocks[0].history.at(-1).atMs, first + 24 * 3600000);
 });
 
+test('saved market limit changes scale scheduled prices without extra I/O or duplicate ticks', async () => {
+  const f = fixture();
+  await f.api.saveWisStock(saveInput({ ...initial(), initialPrice: 10000, maximumPrice: 1000000, automatic: true }));
+  const original = structuredClone(f.documents.get(marketPath(scope)));
+  f.advance();
+  let rises = 0, falls = 0;
+  for (let seed = 0; seed < 24; seed++) {
+    const deltas = [];
+    for (const limit of [1000, 2000, 6000]) {
+      const market = structuredClone(original);
+      market.priceSeed = createHash('sha256').update(`market-scale-${seed}`).digest('hex');
+      market.rules.dailyPriceLimitBps = limit;
+      market.rules.circuitBreakerBps = limit;
+      f.documents.set(marketPath(scope), market);
+      f.reads.length = 0; f.writes.length = 0;
+      await f.api.advanceWisStockPrices();
+      const updated = f.documents.get(marketPath(scope));
+      assert.equal(f.reads.length, 4);
+      assert.equal(f.writes.length, updated.stocks[0].price === 10000 ? 0 : 1);
+      assert.equal(updated.stocks[0].haltedUntilMs || 0, 0);
+      assert(updated.stocks[0].price >= 10000 - limit && updated.stocks[0].price <= 10000 + limit);
+      deltas.push(updated.stocks[0].price - 10000);
+      const writes = f.writes.length;
+      assert.equal((await f.api.advanceWisStockPrices()).changed, false);
+      assert.equal(f.writes.length, writes);
+      assert.deepEqual(updated.stocks[0].settings, original.stocks[0].settings);
+    }
+    if (deltas[0] > 0) rises++;
+    if (deltas[0] < 0) falls++;
+    assert(Math.abs(deltas[1] - deltas[0] * 2) <= 2);
+    assert(Math.abs(deltas[2] - deltas[0] * 6) <= 4);
+  }
+  assert(rises > 0 && falls > 0);
+});
+
 function fullMarket(count, descriptionLength) {
   const settings = normalizeSettings({ ...initial(), name: '가'.repeat(60), description: '가'.repeat(descriptionLength),
     period: '가'.repeat(80), initialPrice: 1000000, maximumPrice: 1000000 });

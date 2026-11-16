@@ -37,6 +37,52 @@ test('regimes persist, returns are correlated, volatility clusters and shocks ar
   const strong = steps.filter(step => Math.abs(step.shockBps) > 400).length;
   assert(strong > 5 && strong < steps.length * 0.08);
 });
+
+test('market limits scale both directions before rounding while preserving the default path and VALUE reference', () => {
+  for (const growthProfile of ['HISTORICAL', 'VALUE']) {
+    const s = stock({ growthProfile }), before = JSON.stringify(s), sampler = shaSampler('market-scale');
+    let rises = 0, falls = 0;
+    for (let slot = 0; slot < 240; slot++) {
+      const base = sampleWisStockPriceStep(s, '2026-2', slot, '', sampler);
+      assert.deepEqual(sampleWisStockPriceStep(s, '2026-2', slot, '', sampler, 1000), base);
+      if (base.movementBps > 0) rises++;
+      if (base.movementBps < 0) falls++;
+      for (const limit of [1, 500, 2000, 3000, 6000]) {
+        const scale = limit / 1000;
+        const step = sampleWisStockPriceStep(s, '2026-2', slot, '', sampler, limit);
+        assert(Math.abs(step.movementBps - base.movementBps * scale) <= 0.5 * scale + 0.5);
+        assert.equal(step.referencePrice, base.referencePrice);
+        assert.equal(step.regime, base.regime);
+        assert.equal(step.shockBps, base.shockBps * scale);
+        assert.equal(nextWisStockModelPrice(s, '2026-2', slot, '', sampler, limit), 10000 + step.movementBps);
+      }
+    }
+    assert(rises > 10 && falls > 10);
+    assert.equal(JSON.stringify(s), before);
+  }
+});
+
+test('market scaling preserves explicit manual drift, validates its range, and bounds extreme moves', () => {
+  for (const growthProfile of ['HISTORICAL', 'VALUE']) {
+    for (const trendBps of [-300, 0, 300]) for (const limit of [1, 500, 1000, 6000]) {
+      assert.equal(nextWisStockModelPrice(stock({ growthProfile, volatilityBps: 0, trendBps }), '2026-2', 0, '', undefined, limit), 10000 + trendBps);
+    }
+  }
+  for (const limit of [0, 6001, 1.5, NaN, Infinity, null]) {
+    assert.throws(() => nextWisStockModelPrice(stock({ volatilityBps: 0 }), '2026-2', 0, '', undefined, limit), RangeError);
+  }
+  for (const side of [0, 0.9]) {
+    const sampler = key => key.endsWith(':occurs') ? 0 : key.endsWith(':side') ? side : 0.999;
+    for (const limit of [500, 1000, 2000, 6000]) {
+      const s = stock({ volatilityBps: 1000 }), cap = Math.min(6000, 3000 * limit / 1000);
+      const step = sampleWisStockPriceStep(s, '2026-2', 100, '', sampler, limit);
+      assert.equal(Math.abs(step.movementBps), cap);
+      assert.equal(Math.sign(step.movementBps), side ? 1 : -1);
+      assert.equal(nextWisStockModelPrice({ ...s, price: 999999 }, '2026-2', 100, '', sampler, limit) <= 1000000, true);
+      assert.equal(nextWisStockModelPrice({ ...s, price: 1 }, '2026-2', 100, '', sampler, limit) >= 1, true);
+    }
+  }
+});
 test('a single news impulse decays across five slots without an automatic opposite spike', () => {
   const sampler = key => key === 'shock:100:occurs' ? 0 : key.endsWith(':occurs') ? 0.9 : 0.6;
   const effects = Array.from({ length: 7 }, (_, age) => sampleWisStockPriceStep(stock(), '2026-2', 100 + age, '', sampler).shockBps);

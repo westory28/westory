@@ -190,6 +190,8 @@ export function getWisStockPlanHistory(
         "wispi-teacher-plan",
         session.atMs / HOUR,
         "wispi-plan-80-v1",
+        undefined,
+        dailyPriceLimitBps,
       );
       const bounds = wisStockDailyBounds(dayOpenPrice, dailyPriceLimitBps);
       stock.price = Math.max(

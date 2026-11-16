@@ -142,7 +142,7 @@ for (const stock of stocks) {
       if (delta > 0) up++;
       if (delta) changeCount++;
       assert(
-        Math.abs(delta) <= Math.ceil(previous * 0.3) + 1,
+        Math.abs(delta) <= Math.ceil(previous * 0.6) + 1,
         "bounded model movement",
       );
     }
@@ -151,7 +151,7 @@ for (const stock of stocks) {
   if (entry.week === 0) {
     const gain = active.at(-1).price / active[0].price - 1;
     valueReturns.push({ id: entry.sourceId, gain, up, down });
-    assert(gain > 0, entry.sourceId + " illustrative long-term growth");
+    assert(up > 0, entry.sourceId + " includes rises without guaranteeing a return");
     assert(down > 0, entry.sourceId + " includes corrections");
   }
   all[0].price = -5;
@@ -160,7 +160,7 @@ for (const stock of stocks) {
 stocks[0].history[0].price = -10;
 assert.notEqual(stocksFor()[0].history[0].price, -10);
 checks.push(
-  "210 weekday 09:00–15:00 KST sessions; delayed listing and exit nulls; bounded multi-session trends; stable cached histories; all VALUE examples rise over six weeks with down moves.",
+  "210 weekday 09:00–15:00 KST sessions; delayed listing and exit nulls; bounded multi-session trends; stable cached histories; VALUE examples include rises and corrections without a guaranteed six-week gain.",
 );
 
 const originalHistories = stocksFor().map((stock) => stock.history);
@@ -168,6 +168,20 @@ const constrained = stocksFor(1000), expanded = stocksFor(6000);
 assert(constrained.some((stock, index) =>
   JSON.stringify(stock.history) !== JSON.stringify(expanded[index].history),
 ), "Changing the saved daily rule recalculates the planning chart");
+const doubled = stocksFor(2000);
+let scaledRises = 0, scaledFalls = 0;
+for (let index = 0; index < constrained.length; index++) {
+  const initial = constrained[index].history[0].price;
+  const base = constrained[index].history[1].price - initial;
+  const wider = doubled[index].history[1].price - initial;
+  const widest = expanded[index].history[1].price - initial;
+  // First movement uses the same anchor and sampler, before paths diverge.
+  assert(Math.abs(wider - base * 2) <= 2, '20% preview scales the 10% movement');
+  assert(Math.abs(widest - base * 6) <= 4, '60% preview scales the 10% movement');
+  if (base > 0) scaledRises++;
+  if (base < 0) scaledFalls++;
+}
+assert(scaledRises > 0 && scaledFalls > 0);
 for (const limit of [1, 1000, 3000, 6000]) {
   for (const entry of catalog) {
     const active = historyFor(entry.id, limit).filter((point) => point.price !== null);

@@ -24,7 +24,7 @@ export interface WisStockPriceModelInput {
 export type WisStockPriceSampler = (key: string) => number;
 export function wisStockPriceModelAnchor(stock: WisStockPriceModelInput): WisStockPriceModelAnchor;
 export function sampleWisStockPriceStep(stock: WisStockPriceModelInput, semesterId: string, slot: number,
-  priceSeed?: string, sampler?: WisStockPriceSampler): {
+  priceSeed?: string, sampler?: WisStockPriceSampler, dailyPriceLimitBps?: number): {
   movementBps: number;
   regime: 'MANUAL' | 'SIDEWAYS' | 'RISING' | 'FALLING' | 'CORRECTION';
   volatilityScale: number;
@@ -33,4 +33,4 @@ export function sampleWisStockPriceStep(stock: WisStockPriceModelInput, semester
 };
 /** Integer price with instrument bounds; market session/daily/circuit rules remain the caller's responsibility. */
 export function nextWisStockModelPrice(stock: WisStockPriceModelInput, semesterId: string, slot: number,
-  priceSeed?: string, sampler?: WisStockPriceSampler): number;
+  priceSeed?: string, sampler?: WisStockPriceSampler, dailyPriceLimitBps?: number): number;
