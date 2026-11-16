@@ -4,6 +4,7 @@ const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 const { nextWisStockModelPrice, wisStockPriceModelAnchor } = require('./wisStockPriceModel');
 const { normalizeWisStockMarketRules, normalizeWisStockTradingSettings,
   isWisStockTradingSession, wisStockKstSession, wisStockDailyBounds } = require('./wisStockMarketRules');
+const { normalizeCatalogPlan, catalogScheduleState, applyDueCatalogListings } = require('./wisStockCatalogSchedule');
 
 // Teacher market administration. Student orders remain separate server commands.
 const MAX_STOCKS = 100;
@@ -56,6 +57,15 @@ function assertMarketCapacity(market, scope) {
     fail('resource-exhausted', '가격 기록을 보관할 공간이 부족합니다. 종목 설명을 줄이거나 등록할 종목 수를 조정해 주세요.', 'WIS_STOCK_STORAGE_CAPACITY');
   }
 }
+function assertCatalogCapacity(market, scope) {
+  const plan = normalizeCatalogPlan(market.catalogPlan);
+  const reserved = plan ? applyDueCatalogListings({ ...market, studentOpen: true,
+    rules: { ...market.rules, halted: false, tradingDays: [0, 1, 2, 3, 4, 5, 6], openMinuteKst: 0, closeMinuteKst: 1440 } },
+  plan.startsAtMs + 42 * 24 * HOUR).market : market;
+  if (reserved.stocks.length > MAX_STOCKS)
+    fail('resource-exhausted', '상장 예정 종목을 포함하면 등록 한도를 초과합니다.', 'WIS_STOCK_CAPACITY');
+  assertMarketCapacity(reserved, scope);
+}
 const TRADING_SETTINGS = ['issuedShares', 'lotSize', 'tradingStatus'];
 const SETTINGS = ['name', 'description', 'period', 'initialPrice', 'minimumPrice', 'maximumPrice', 'volatilityBps', 'trendBps', 'intervalHours', 'automatic', ...TRADING_SETTINGS, 'growthProfile'];
 const ruleInput = value => {
@@ -90,7 +100,7 @@ function readMarket(snapshot, scope) {
       && stock.history.every(point => safeInt(point.atMs, 0, Number.MAX_SAFE_INTEGER) && safeInt(point.price, 1, MAX_PRICE));
   };
   let rules;
-  try { rules = normalizeWisStockMarketRules(value.rules); } catch { rules = null; }
+  try { rules = normalizeWisStockMarketRules(value.rules); normalizeCatalogPlan(value.catalogPlan); } catch { rules = null; }
   if (value.schemaVersion !== 1 || value.semesterId !== scope.semesterId || typeof value.studentOpen !== 'boolean'
     || !rules || (value.priceSeed !== undefined && !/^[a-f0-9]{64}$/.test(value.priceSeed))
     || !safeInt(value.tradingEpoch ?? 0, 0, Number.MAX_SAFE_INTEGER - 1)
@@ -116,7 +126,8 @@ function readMarket(snapshot, scope) {
   return { ...value, rules, stocks, tradingEpoch: value.tradingEpoch ?? 0,
     publicationRevision: value.publicationRevision ?? 0, publicationUpdatedAtMs: value.publicationUpdatedAtMs ?? 0 };
 }
-const state = market => ({ semesterId: market.semesterId, revision: market.revision, studentOpen: market.studentOpen,
+const state = (market, atMs) => ({ semesterId: market.semesterId, revision: market.revision, studentOpen: market.studentOpen,
+  catalogSchedule: catalogScheduleState(market, atMs),
   tradingEpoch: market.tradingEpoch ?? 0,
   rules: market.rules,
   maxStocks: MAX_STOCKS, historyLimit: HISTORY_LIMIT, updatedAtMs: market.updatedAtMs,
@@ -186,6 +197,7 @@ function advanceMarket(market, atMs) {
   return changed ? { ...market, rules, stocks, revision: market.revision + 1, updatedAtMs: atMs } : market;
 }
 function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession, now = Date.now }) {
+  const managementState = market => state(market, now());
   const identity = async (request, write = false) => {
     const session = await assertSession(request, write ? { highRisk: true, recentAuth: true } : {});
     const uid = request.auth?.uid;
@@ -221,7 +233,7 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
     return db.runTransaction(async tx => {
       await authority(tx, actor, false);
       await activeScope(tx, scope);
-      return state(readMarket(await tx.get(db.doc(marketPath(scope))), scope));
+      return managementState(readMarket(await tx.get(db.doc(marketPath(scope))), scope));
     }, { readOnly: true });
   };
   const saveWisStock = async request => {
@@ -254,7 +266,7 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
           && !Object.hasOwn(saved.settings, 'growthProfile') && /^stock_[a-f0-9]{24}$/.test(saved.stockId || '')
           && saved.payloadHash === preProfilePayloadHash;
         if (saved.payloadHash !== payloadHash && !legacyReplay && !preProfileReplay) fail('already-exists', '같은 저장 요청의 내용이 달라졌습니다. 화면을 다시 열어 주세요.', 'WIS_STOCK_REQUEST_CONFLICT');
-        return { ...state(market), savedStockId: receipt.data().stockId, duplicate: true, changed: false };
+        return { ...managementState(market), savedStockId: receipt.data().stockId, duplicate: true, changed: false };
       }
       if (market.revision !== input.expectedRevision) fail('aborted', '가격이나 종목 설정이 변경되었습니다. 새로고침 후 다시 저장해 주세요.', 'WIS_STOCK_REVISION_CONFLICT');
       const previous = market.stocks.find(stock => stock.id === input.stockId);
@@ -268,7 +280,7 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
         fail('failed-precondition', '처음 개장한 뒤에는 발행 수량과 거래 단위를 변경할 수 없습니다.', 'WIS_STOCK_SUPPLY_LOCKED');
       }
       if (previous && JSON.stringify(previous.settings) === JSON.stringify(settings)) {
-        return { ...state(market), savedStockId: previous.id, duplicate: false, changed: false };
+        return { ...managementState(market), savedStockId: previous.id, duplicate: false, changed: false };
       }
       if (!previous && market.stocks.length >= MAX_STOCKS) fail('resource-exhausted', `종목은 학기당 ${MAX_STOCKS}개까지 등록할 수 있습니다.`, 'WIS_STOCK_CAPACITY');
       const id = previous?.id || `stock_${hash(`${scope.semesterId}\n${actor.uid}\n${input.requestId}`).slice(0, 24)}`;
@@ -285,12 +297,12 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       const updated = { ...market, priceSeed: market.priceSeed || newPriceSeed,
         stocks: previous ? market.stocks.map(item => item.id === id ? stock : item) : [...market.stocks, stock],
         revision: market.revision + 1, updatedAtMs: atMs };
-      assertMarketCapacity(updated, scope);
+      assertCatalogCapacity(updated, scope);
       tx.set(marketRef, updated);
       publishStudentMarket(tx, db, scope, market, updated);
       tx.create(receiptRef, { schemaVersion: 1, semesterId: scope.semesterId, actorUid: actor.uid, stockId: id,
         payloadHash, revision: updated.revision, previousSettings: previous?.settings || null, settings, createdAtMs: atMs });
-      return { ...state(updated), savedStockId: id, duplicate: false, changed: true };
+      return { ...managementState(updated), savedStockId: id, duplicate: false, changed: true };
     });
   };
   const saveWisStockMarketRules = async request => {
@@ -309,20 +321,20 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       const market = readMarket(snapshot, scope);
       if (receipt.exists) {
         if (receipt.data().payloadHash !== payloadHash) fail('already-exists', '같은 저장 요청의 내용이 달라졌습니다. 화면을 다시 열어 주세요.', 'WIS_STOCK_REQUEST_CONFLICT');
-        return { ...state(market), duplicate: true, changed: false };
+        return { ...managementState(market), duplicate: true, changed: false };
       }
       if (market.revision !== input.expectedRevision) fail('aborted', '가격이나 시장 규칙이 변경되었습니다. 새로고침 후 다시 저장해 주세요.', 'WIS_STOCK_REVISION_CONFLICT');
       // General rule saves (including old clients) never change the emergency
       // switch. Only the dedicated stop/resume command owns this flag.
       const effectiveRules = { ...rules, halted: market.rules.halted };
-      if (JSON.stringify(market.rules) === JSON.stringify(effectiveRules)) return { ...state(market), duplicate: false, changed: false };
+      if (JSON.stringify(market.rules) === JSON.stringify(effectiveRules)) return { ...managementState(market), duplicate: false, changed: false };
       const updated = { ...market, rules: effectiveRules, priceSeed: market.priceSeed || newPriceSeed,
         revision: market.revision + 1, updatedAtMs: atMs };
       tx.set(marketRef, updated);
       publishStudentMarket(tx, db, scope, market, updated);
       tx.create(receiptRef, { schemaVersion: 1, commandType: 'saveWisStockMarketRules', semesterId: scope.semesterId,
         actorUid: actor.uid, payloadHash, revision: updated.revision, previousRules: market.rules, rules: effectiveRules, createdAtMs: atMs });
-      return { ...state(updated), duplicate: false, changed: true };
+      return { ...managementState(updated), duplicate: false, changed: true };
     });
   };
   const setWisStockMarketHalted = async request => {
@@ -341,7 +353,7 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       if (receipt.exists) {
         if (receipt.data().commandType !== 'setWisStockMarketHalted' || receipt.data().payloadHash !== payloadHash)
           fail('already-exists', '같은 거래 정지 요청의 내용이 달라졌습니다. 화면을 다시 열어 주세요.', 'WIS_STOCK_REQUEST_CONFLICT');
-        return { ...state(market), duplicate: true, changed: false };
+        return { ...managementState(market), duplicate: true, changed: false };
       }
       // Stopping must survive concurrent price/rule writes. Resuming requires
       // the observed revision so a delayed resume cannot override a new stop.
@@ -350,21 +362,68 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       // A NEW stop is also a fence against any resume that observed the old
       // revision, even when trading was already stopped. Only the receipt
       // replay above is a zero-write stop; an unchanged resume remains a no-op.
-      if (!input.halted && market.studentOpen && !market.rules.halted) return { ...state(market), duplicate: false, changed: false };
-      const updated = { ...market, studentOpen: market.studentOpen || !input.halted,
+      if (!input.halted && market.studentOpen && !market.rules.halted) return { ...managementState(market), duplicate: false, changed: false };
+      const resumed = { ...market, studentOpen: market.studentOpen || !input.halted,
         rules: { ...market.rules, halted: input.halted }, revision: market.revision + 1, updatedAtMs: atMs,
         tradingEpoch: market.tradingEpoch + (input.halted ? 1 : 0),
         publicationRevision: market.publicationRevision + 1, publicationUpdatedAtMs: atMs,
         ...(!input.halted && !market.priceSeed ? { priceSeed: randomBytes(32).toString('hex') } : {}) };
+      const { market: updated, addedIds } = applyDueCatalogListings(resumed, atMs);
+      if (addedIds.length) assertCatalogCapacity(updated, scope);
       if (snapshot.exists) tx.update(marketRef, { 'rules.halted': input.halted, studentOpen: updated.studentOpen,
         tradingEpoch: updated.tradingEpoch, publicationRevision: updated.publicationRevision, publicationUpdatedAtMs: atMs,
-        ...(updated.priceSeed ? { priceSeed: updated.priceSeed } : {}), revision: updated.revision, updatedAtMs: atMs });
+        ...(updated.priceSeed ? { priceSeed: updated.priceSeed } : {}),
+        ...(addedIds.length ? { stocks: updated.stocks } : {}), revision: updated.revision, updatedAtMs: atMs });
       else tx.set(marketRef, updated);
       publishStudentMarket(tx, db, scope, market, updated);
       tx.create(receiptRef, { schemaVersion: 1, commandType: 'setWisStockMarketHalted', semesterId: scope.semesterId,
         actorUid: actor.uid, payloadHash, revision: updated.revision, previousHalted: market.rules.halted,
-        halted: input.halted, studentOpen: updated.studentOpen, tradingEpoch: updated.tradingEpoch, createdAtMs: atMs });
-      return { ...state(updated), duplicate: false, changed: true };
+        halted: input.halted, studentOpen: updated.studentOpen, tradingEpoch: updated.tradingEpoch,
+        ...(addedIds.length ? { addedIds } : {}), createdAtMs: atMs });
+      return { ...managementState(updated), duplicate: false, changed: true };
+    });
+  };
+  const activateWisStockCatalogPlan = async request => {
+    const actor = await identity(request, true), input = request.data;
+    if (!allowed(input, ['year', 'semester', '_session', 'requestId', 'expectedRevision', 'startsAtMs'])
+      || !safeInt(input.expectedRevision, 0, Number.MAX_SAFE_INTEGER - 1)
+      || typeof input.requestId !== 'string' || !/^[A-Za-z0-9_-]{16,80}$/.test(input.requestId)) invalid();
+    const scope = scopeInput(input), atMs = now();
+    let plan;
+    try { plan = normalizeCatalogPlan({ version: 1, startsAtMs: input.startsAtMs }); }
+    catch (error) { fail('invalid-argument', error.message, 'WIS_STOCK_CATALOG_PLAN_INVALID'); }
+    if (String(new Date(plan.startsAtMs + 9 * HOUR).getUTCFullYear()) !== scope.year) invalid();
+    const payloadHash = hash(JSON.stringify(['activateWisStockCatalogPlan', scope.semesterId, input.expectedRevision, plan]));
+    return db.runTransaction(async tx => {
+      await authority(tx, actor, true);
+      await activeScope(tx, scope);
+      const marketRef = db.doc(marketPath(scope)), receiptRef = db.doc(receiptPath(scope, actor.uid, input.requestId));
+      const [snapshot, receipt] = await Promise.all([tx.get(marketRef), tx.get(receiptRef)]);
+      const market = readMarket(snapshot, scope);
+      if (receipt.exists) {
+        if (receipt.data().commandType !== 'activateWisStockCatalogPlan' || receipt.data().payloadHash !== payloadHash)
+          fail('already-exists', '같은 일정 적용 요청의 내용이 달라졌습니다.', 'WIS_STOCK_REQUEST_CONFLICT');
+        return { ...managementState(market), duplicate: true, changed: false };
+      }
+      if (market.revision !== input.expectedRevision)
+        fail('aborted', '시장 상태가 변경되었습니다. 최신 자료를 확인해 주세요.', 'WIS_STOCK_REVISION_CONFLICT');
+      if (market.catalogPlan) {
+        if (JSON.stringify(normalizeCatalogPlan(market.catalogPlan)) !== JSON.stringify(plan))
+          fail('failed-precondition', '이미 적용한 상장 일정의 시작일은 변경할 수 없습니다.', 'WIS_STOCK_CATALOG_PLAN_LOCKED');
+        return { ...managementState(market), duplicate: false, changed: false };
+      }
+      const planned = { ...market, catalogPlan: plan };
+      // Reserve the complete plan before accepting it. This in-memory projection
+      // is only a capacity check; future stocks/history are never persisted.
+      assertCatalogCapacity(planned, scope);
+      const { market: listed, addedIds } = applyDueCatalogListings(planned, atMs);
+      const updated = { ...listed, priceSeed: market.priceSeed || randomBytes(32).toString('hex'),
+        revision: market.revision + 1, updatedAtMs: atMs };
+      tx.set(marketRef, updated);
+      publishStudentMarket(tx, db, scope, market, updated);
+      tx.create(receiptRef, { schemaVersion: 1, commandType: 'activateWisStockCatalogPlan', semesterId: scope.semesterId,
+        actorUid: actor.uid, payloadHash, plan, addedIds, revision: updated.revision, createdAtMs: atMs });
+      return { ...managementState(updated), duplicate: false, changed: true };
     });
   };
   const advanceWisStockPrices = async () => db.runTransaction(async tx => {
@@ -377,13 +436,23 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
     ]);
     if (!snapshot.exists || !pointer.exists || pointer.data().semesterId !== scope.semesterId
       || !manifest.exists || manifest.data().status !== 'ACTIVE') return { changed: false };
-    const current = readMarket(snapshot, scope), updated = advanceMarket(current, now());
+    const current = readMarket(snapshot, scope), atMs = now();
+    const { market: listed, addedIds } = applyDueCatalogListings(current, atMs);
+    const priced = advanceMarket(listed, atMs);
+    const updated = addedIds.length ? { ...priced, revision: current.revision + 1, updatedAtMs: atMs } : priced;
     if (updated === current) return { changed: false };
+    if (updated.stocks.length > MAX_STOCKS) fail('resource-exhausted', '종목 등록 한도를 초과합니다.', 'WIS_STOCK_CAPACITY');
+    assertMarketCapacity(updated, scope);
     tx.set(db.doc(marketPath(scope)), updated);
     publishStudentMarket(tx, db, scope, current, updated);
+    if (addedIds.length) tx.create(db.doc(receiptPath(scope, 'scheduler',
+      hash(JSON.stringify([current.catalogPlan, addedIds])))), {
+      schemaVersion: 1, commandType: 'applyWisStockCatalogListings', semesterId: scope.semesterId,
+      actorUid: 'scheduler', plan: current.catalogPlan, addedIds, revision: updated.revision, createdAtMs: atMs,
+    });
     return { changed: true, revision: updated.revision };
   });
-  return { getWisStockManagement, saveWisStock, saveWisStockMarketRules, setWisStockMarketHalted, advanceWisStockPrices };
+  return { getWisStockManagement, saveWisStock, saveWisStockMarketRules, setWisStockMarketHalted, activateWisStockCatalogPlan, advanceWisStockPrices };
 }
 module.exports = { createWisStockHandlers, MAX_STOCKS, HISTORY_LIMIT, MAX_PRICE, marketPath, receiptPath,
   publicStockPath, publicStockStatus, publicStockMarket, publicStockSettings, readMarket,

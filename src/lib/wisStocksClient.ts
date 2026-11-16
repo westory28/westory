@@ -45,6 +45,14 @@ export interface WisStockManagement {
   updatedAtMs: number;
   stocks: WisStock[];
   rules: WisStockMarketRules;
+  catalogSchedule?: {
+    plan: { version: 1; startsAtMs: number } | null;
+    totalCount: number;
+    listedCount: number;
+    pendingCount: number;
+    dueCount: number;
+    nextListingAtMs: number | null;
+  };
 }
 type SaveResult = WisStockManagement & {
   savedStockId: string;
@@ -123,6 +131,15 @@ export async function setWisStockMarketHalted(
   return saveManagement<
     WisStockManagement & { changed: boolean; duplicate: boolean }
   >("setWisStockMarketHalted", config, expectedRevision, { halted });
+}
+export async function activateWisStockCatalogPlan(
+  config: WisStockConfig,
+  expectedRevision: number,
+  startsAtMs: number,
+) {
+  return saveManagement<
+    WisStockManagement & { changed: boolean; duplicate: boolean }
+  >("activateWisStockCatalogPlan", config, expectedRevision, { startsAtMs });
 }
 async function saveManagement<T>(
   name: string,

@@ -543,3 +543,113 @@ test('dedicated WisPI interface guard is independent of other menus and never im
   for (const value of [false, 1, 'true', null]) assert.throws(() => assertStudentWispiMenuVisible({ studentMenuVisibility: { wispi: value } }), reason('STUDENT_MENU_HIDDEN'));
   for (const studentMenuVisibility of [null, [], false]) assert.throws(() => assertStudentWispiMenuVisible({ studentMenuVisibility }), reason('STUDENT_MENU_HIDDEN'));
 });
+
+const catalogStart = Date.parse('2026-11-16T09:00:00+09:00');
+const catalogCommand = (expectedRevision, requestId = 'catalog-activation-0001', startsAtMs = catalogStart) =>
+  req({ expectedRevision, requestId, startsAtMs });
+
+test('catalog activation lists only due stocks with six reads and three atomic writes; replay and unchanged plan write zero', async () => {
+  const f = fixture();
+  const opened = await f.api.setWisStockMarketHalted(req({ halted: false, expectedRevision: 0, requestId: 'catalog-open-market01' }));
+  const input = catalogCommand(opened.revision), signal = structuredClone(f.documents.get(publicStockPath(scope, 'current')));
+  f.reads.length = 0; f.writes.length = 0;
+  const activated = await f.api.activateWisStockCatalogPlan(input);
+  assert.equal(activated.stocks.length, 11); assert.equal(activated.revision, opened.revision + 1);
+  assert.equal(f.reads.length, 6); assert.equal(f.writes.length, 3);
+  assert.equal(activated.catalogSchedule.pendingCount, 69);
+  assert.equal(activated.catalogSchedule.nextListingAtMs, catalogStart + 3600000);
+  assert(activated.stocks.every(stock => stock.history.length === 1 && stock.history[0].atMs === catalogStart));
+  assert.deepEqual(f.documents.get(publicStockPath(scope, 'current')), signal);
+  const publicMarket = f.documents.get(publicStockPath(scope, 'market'));
+  assert.equal(publicMarket.stocks.length, 11); assert.equal(publicMarket.catalogPlan, undefined);
+  assert.equal(publicMarket.catalogSchedule, undefined); assert.equal(publicMarket.priceSeed, undefined);
+  f.reads.length = 0;
+  assert.equal((await f.api.activateWisStockCatalogPlan(input)).duplicate, true);
+  assert.equal(f.reads.length, 6); assert.equal(f.writes.length, 3);
+  assert.equal((await f.api.activateWisStockCatalogPlan(catalogCommand(activated.revision, 'catalog-fresh-noop001'))).changed, false);
+  assert.equal(f.writes.length, 3);
+  await assert.rejects(f.api.activateWisStockCatalogPlan(catalogCommand(activated.revision, input.data.requestId, catalogStart + 7 * 86400000)), reason('WIS_STOCK_REQUEST_CONFLICT'));
+  await assert.rejects(f.api.activateWisStockCatalogPlan(catalogCommand(activated.revision, 'catalog-plan-locked01', catalogStart + 7 * 86400000)), reason('WIS_STOCK_CATALOG_PLAN_LOCKED'));
+  assert.equal(f.writes.length, 3);
+});
+
+test('catalog activation preserves teacher permission, session, revision and active-semester boundaries', async () => {
+  const f = fixture();
+  await assert.rejects(f.api.activateWisStockCatalogPlan(catalogCommand(1)), reason('WIS_STOCK_REVISION_CONFLICT'));
+  for (const startsAtMs of [catalogStart + 1, catalogStart + 3600000, catalogStart + 86400000, '2026-11-16']) {
+    await assert.rejects(f.api.activateWisStockCatalogPlan(catalogCommand(0, 'catalog-invalid-time1', startsAtMs)), reason('WIS_STOCK_CATALOG_PLAN_INVALID'));
+  }
+  await assert.rejects(f.api.activateWisStockCatalogPlan(catalogCommand(0, 'catalog-other-year01', Date.parse('2027-01-04T09:00:00+09:00'))), reason('WIS_STOCK_INPUT_INVALID'));
+  const initialProfile = structuredClone(f.documents.get('users/manager'));
+  for (const profile of [{ role: 'student', teacherPortalEnabled: true, staffPermissions: ['point_manage'] },
+    { role: 'staff', teacherPortalEnabled: true, staffPermissions: ['point_read'] }, { role: 'teacher', disabled: true }]) {
+    f.documents.set('users/manager', profile);
+    await assert.rejects(f.api.activateWisStockCatalogPlan(catalogCommand(0)), reason('WIS_STOCK_TEACHER_REQUIRED'));
+  }
+  f.documents.set('users/manager', initialProfile);
+  await assert.rejects(f.api.activateWisStockCatalogPlan(req({ ...catalogCommand(0).data, semester: '1' })), reason('WIS_STOCK_SCOPE_CHANGED'));
+  f.documents.set('site_settings/semester_active', { semesterId: '2027-1' });
+  await assert.rejects(f.api.activateWisStockCatalogPlan(catalogCommand(0)), reason('WIS_STOCK_SCOPE_CHANGED'));
+  assert.equal(f.writes.length, 0);
+  const failure = new Error('session rejected');
+  const denied = createWisStockHandlers({ db: { runTransaction: () => assert.fail('Session denial must precede I/O') },
+    assertSession: async (_request, options) => { assert.deepEqual(options, { highRisk: true, recentAuth: true }); throw failure; } });
+  await assert.rejects(denied.activateWisStockCatalogPlan(catalogCommand(0)), failure);
+});
+
+test('catalog scheduler registers the next due stock once with four reads and three writes while preserving the menu signal', async () => {
+  const f = fixture();
+  const opened = await f.api.setWisStockMarketHalted(req({ halted: false, expectedRevision: 0, requestId: 'catalog-tick-open001' }));
+  const activated = await f.api.activateWisStockCatalogPlan(catalogCommand(opened.revision));
+  const signal = structuredClone(f.documents.get(publicStockPath(scope, 'current')));
+  f.reads.length = 0; f.writes.length = 0; f.advance();
+  assert.equal((await f.api.advanceWisStockPrices()).changed, true);
+  assert.equal(f.reads.length, 4); assert.equal(f.writes.length, 3);
+  const actual = f.documents.get(marketPath(scope));
+  assert.equal(actual.stocks.length, 12); assert.equal(actual.revision, activated.revision + 1);
+  assert.equal(f.documents.get(publicStockPath(scope, 'market')).stocks.length, 12);
+  assert.deepEqual(f.documents.get(publicStockPath(scope, 'current')), signal);
+  const added = actual.stocks.find(stock => !activated.stocks.some(old => old.id === stock.id));
+  assert.deepEqual(added.history, [{ atMs: catalogStart + 3600000, price: added.settings.initialPrice }]);
+  assert(f.writes.some(write => write.data.commandType === 'applyWisStockCatalogListings'));
+  for (let retry = 0; retry < 8; retry++) assert.equal((await f.api.advanceWisStockPrices()).changed, false);
+  assert.equal(f.writes.length, 3);
+  assert(f.reads.every(path => !/wis_accounts|wis_ledger|point_wallet|wis_balance/.test(path)));
+});
+
+test('activation and reopening preserve manually registered template settings and defer private or halted markets', async () => {
+  const catalog = require('../wisStockCatalog.json');
+  const f = fixture(), created = await f.api.saveWisStock(saveInput({ ...initial(), name: catalog[0].name }));
+  const manual = structuredClone(created.stocks[0]);
+  const planned = await f.api.activateWisStockCatalogPlan(catalogCommand(created.revision));
+  assert.equal(planned.studentOpen, false); assert.equal(planned.stocks.length, 1);
+  const writes = f.writes.length;
+  assert.equal((await f.api.advanceWisStockPrices()).changed, false); assert.equal(f.writes.length, writes);
+  const opened = await f.api.setWisStockMarketHalted(req({ halted: false, expectedRevision: planned.revision, requestId: 'catalog-due-open-001' }));
+  assert.equal(opened.stocks.length, 11);
+  assert.deepEqual(opened.stocks.find(stock => stock.id === manual.id), manual);
+  assert.equal(opened.stocks.filter(stock => stock.settings.name === manual.settings.name).length, 1);
+  const stopped = await f.api.setWisStockMarketHalted(req({ halted: true, expectedRevision: 0, requestId: 'catalog-due-stop-001' }));
+  f.advance(); const stopWrites = f.writes.length;
+  assert.equal((await f.api.advanceWisStockPrices()).changed, false); assert.equal(f.writes.length, stopWrites);
+  const resumed = await f.api.setWisStockMarketHalted(req({ halted: false, expectedRevision: stopped.revision, requestId: 'catalog-due-resume01' }));
+  assert.equal(resumed.stocks.length, 12);
+  assert.equal(f.documents.get(publicStockPath(scope, 'market')).stocks.length, 12);
+});
+
+test('catalog activation reserves future count and subsequent manual registrations cannot consume reserved slots', async () => {
+  const f = fixture(), created = await f.api.saveWisStock(saveInput());
+  const original = structuredClone(f.documents.get(marketPath(scope)));
+  const stocks = Array.from({ length: 21 }, (_, index) => ({ ...structuredClone(created.stocks[0]),
+    id: `stock_${index.toString(16).padStart(24, '0')}`, settings: { ...created.stocks[0].settings, name: `개별 종목 ${index}` } }));
+  f.documents.set(marketPath(scope), { ...original, stocks });
+  f.writes.length = 0;
+  await assert.rejects(f.api.activateWisStockCatalogPlan(catalogCommand(created.revision)), reason('WIS_STOCK_CAPACITY'));
+  assert.equal(f.writes.length, 0); assert.equal(f.documents.get(marketPath(scope)).catalogPlan, undefined);
+  f.documents.set(marketPath(scope), { ...original, stocks: stocks.slice(0, 20) });
+  const planned = await f.api.activateWisStockCatalogPlan(catalogCommand(created.revision));
+  assert.equal(planned.stocks.length, 20, 'Private market must reserve but not publish future stocks');
+  const before = f.writes.length;
+  await assert.rejects(f.api.saveWisStock(saveInput({ ...initial(), name: '예약 한도 초과 종목' }, planned.revision, '', 'catalog-reservation21')), reason('WIS_STOCK_CAPACITY'));
+  assert.equal(f.writes.length, before);
+});

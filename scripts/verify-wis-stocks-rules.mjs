@@ -12,14 +12,15 @@ const projectId = 'demo-westory-wis-stocks';
 assert.equal(process.env.GCLOUD_PROJECT, projectId);
 assert.equal(process.env.FIRESTORE_EMULATOR_HOST, '127.0.0.1:18256');
 const auditedSources = ['functions/wisStocks.js', 'functions/wisStockMarketRules.mjs', 'functions/wisStockOrderLifecycle.mjs',
-  'functions/wisStockOrderLifecycle.js', 'functions/wisStockAccount.mjs', 'firestore.rules', 'scripts/verify-wis-stocks-rules.mjs'];
+  'functions/wisStockOrderLifecycle.js', 'functions/wisStockAccount.mjs', 'functions/wisStockCatalogSchedule.js',
+  'functions/wisStockCatalog.json', 'firestore.rules', 'scripts/verify-wis-stocks-rules.mjs'];
 const hashAuditedSources = () => Object.fromEntries(auditedSources
   .map(file => [file, createHash('sha256').update(readFileSync(new URL(`../${file}`, import.meta.url))).digest('hex')]));
 const initialSourceHashes = hashAuditedSources();
 const require = createRequire(new URL('../functions/package.json', import.meta.url));
 const { initializeApp, deleteApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
-const { createWisStockHandlers } = require('./wisStocks');
+const { createWisStockHandlers, publicStockMarket, publicStockStatus } = require('./wisStocks');
 const { accountIdFor } = require('./studentWisWallet');
 const { inspectWisLedger } = require('./wisLedgerIntegrity');
 const { DEFAULT_WIS_STOCK_MARKET_RULES, normalizeWisStockMarketRules, quoteWisStockOrder } = require('./wisStockMarketRules');
@@ -442,12 +443,12 @@ try {
   const reassertStop = request({ halted: true, expectedRevision: 0, requestId: 'reassert-already-halted01' });
   const fenceResult = await api.setWisStockMarketHalted(reassertStop);
   assert.equal(fenceResult.revision, haltedBeforeHeldResume.revision + 1); assert.equal(fenceResult.rules.halted, true);
-  assert.equal(totalWrites(), beforeFenceWrites + 2);
+  assert.equal(totalWrites(), beforeFenceWrites + 4);
   releaseResume(); await rejectedHeldResume;
   assert.equal((await api.getWisStockManagement(request({}))).rules.halted, true);
   assert.equal((await api.setWisStockMarketHalted(reassertStop)).duplicate, true);
-  assert.equal(totalWrites(), beforeFenceWrites + 2);
-  checks.push('Held old resume against an already halted market is rejected after a distinct new stop commits its fence; market stays halted, new stop costs two writes, receipt retry costs zero');
+  assert.equal(totalWrites(), beforeFenceWrites + 4);
+  checks.push('Held old resume against an already halted market is rejected after a distinct new stop commits its fence; the already opened market stays halted, market/public prices/public status/receipt cost four writes, receipt retry costs zero');
   const receiptId = (await db.collection(`${root}/wis_stock_receipts`).limit(1).get()).docs[0].id;
   for (const uid of ['manager', 'student', 'admin']) {
     const client = env.authenticatedContext(uid, { email: uid === 'admin' ? 'westoria28@gmail.com' : `${uid}@yongshin-ms.ms.kr`, auth_time: authTime }).firestore();
@@ -464,7 +465,7 @@ try {
   const deniedWrites = totalWrites();
   await db.doc('users/reader').set({ role: 'staff', teacherPortalEnabled: true, staffPermissions: ['point_read'] });
   const reader = { ...request({}), auth: { uid: 'reader', token: { email: 'reader@yongshin-ms.ms.kr' } } };
-  assert.equal((await api.getWisStockManagement(reader)).studentOpen, false);
+  assert.equal((await api.getWisStockManagement(reader)).studentOpen, true);
   await assert.rejects(api.saveWisStock({ ...command, auth: reader.auth }), error => error.details?.reason === 'WIS_STOCK_TEACHER_REQUIRED');
   await assert.rejects(api.saveWisStockMarketRules({ ...rulesCommand, auth: reader.auth }), error => error.details?.reason === 'WIS_STOCK_TEACHER_REQUIRED');
   await assert.rejects(api.setWisStockMarketHalted({ ...stopCommand, auth: reader.auth }), error => error.details?.reason === 'WIS_STOCK_TEACHER_REQUIRED');
@@ -478,16 +479,95 @@ try {
   assert.equal(totalWrites(), deniedWrites, 'Read-only staff and inactive scope cannot cause writes, including receipt replay');
   await db.doc('site_settings/semester_active').set({ semesterId: '2026-2' });
   checks.push('point_read staff can view but cannot save either command; wrong or switched semester blocks reads, writes and receipt replay; inactive scheduler writes zero');
+
+  // Exercise the actual Firestore transaction retries for scheduled listings.
+  // This is synthetic market setup; protected account and ledger docs stay put.
+  const catalog = require('./wisStockCatalog.json');
+  const catalogStart = Date.parse('2026-11-16T09:00:00+09:00');
+  clock = catalogStart + 3600000;
+  const oldMarket = (await db.doc(`${root}/wis_stock_markets/current`).get()).data();
+  const manual = { ...oldMarket.stocks[0], settings: { ...oldMarket.stocks[0].settings,
+    name: catalog[0].name, automatic: false, description: '교사가 저장한 설명' } };
+  const scheduleMarket = { ...oldMarket, studentOpen: true, stocks: [manual],
+    rules: normalizeWisStockMarketRules({ automaticPrices: false }) };
+  await db.doc(`${root}/wis_stock_markets/current`).set(scheduleMarket);
+  await db.doc(`${root}/wis_stock_public/current`).set(publicStockStatus(scheduleMarket));
+  await db.doc(`${root}/wis_stock_public/market`).set(publicStockMarket(scheduleMarket));
+  const menuSignal = (await db.doc(`${root}/wis_stock_public/current`).get()).data();
+  const catalogCommand = request({ expectedRevision: scheduleMarket.revision,
+    requestId: 'concurrent-catalog-plan01', startsAtMs: catalogStart });
+  const beforeCatalogWrites = totalWrites(), beforeCatalogCommits = commits.length;
+  const scheduled = await Promise.all(Array.from({ length: 8 }, () => api.activateWisStockCatalogPlan(catalogCommand)));
+  assert.equal(scheduled.filter(result => result.changed).length, 1);
+  assert(scheduled.every(result => result.stocks.length === 12));
+  assert.equal(totalWrites() - beforeCatalogWrites, 3, 'Eight identical activations commit market, public prices and one receipt');
+  assert(commits.slice(beforeCatalogCommits).every(commit => commit.reads === commit.attempts * 6));
+  assert.deepEqual(scheduled[0].stocks.find(stock => stock.id === manual.id), manual);
+  assert.equal(scheduled[0].stocks.filter(stock => stock.settings.name === manual.settings.name).length, 1);
+  assert(scheduled[0].stocks.filter(stock => stock.id !== manual.id).every(stock =>
+    stock.history.length === 1 && stock.history[0].atMs === clock));
+  const scheduledMarket = (await db.doc(`${root}/wis_stock_markets/current`).get()).data();
+  assert.equal(scheduledMarket.stocks.length, 12);
+  assert.equal((await db.doc(`${root}/wis_stock_public/market`).get()).data().stocks.length, 12);
+  assert.deepEqual((await db.doc(`${root}/wis_stock_public/current`).get()).data(), menuSignal);
+  const catalogWrites = totalWrites();
+  assert.equal((await api.activateWisStockCatalogPlan(catalogCommand)).duplicate, true);
+  assert.equal((await api.activateWisStockCatalogPlan(request({ ...catalogCommand.data,
+    expectedRevision: scheduledMarket.revision, requestId: 'catalog-unchanged-plan01' }))).changed, false);
+  await assert.rejects(api.activateWisStockCatalogPlan(request({ ...catalogCommand.data,
+    requestId: 'catalog-stale-revision01' })), error => error.details?.reason === 'WIS_STOCK_REVISION_CONFLICT');
+  for (const auth of [reader.auth, { uid: 'student', token: { email: 'student@yongshin-ms.ms.kr' } }])
+    await assert.rejects(api.activateWisStockCatalogPlan({ ...catalogCommand, auth }), error => error.details?.reason === 'WIS_STOCK_TEACHER_REQUIRED');
+  await assert.rejects(api.activateWisStockCatalogPlan(request({ ...catalogCommand.data, semester: '1' })), error => error.details?.reason === 'WIS_STOCK_SCOPE_CHANGED');
+  await db.doc('site_settings/semester_active').set({ semesterId: '2026-1' });
+  await assert.rejects(api.activateWisStockCatalogPlan(catalogCommand), error => error.details?.reason === 'WIS_STOCK_SCOPE_CHANGED');
+  assert.equal((await api.advanceWisStockPrices()).changed, false);
+  await db.doc('site_settings/semester_active').set({ semesterId: '2026-2' });
+  assert.equal(totalWrites(), catalogWrites);
+  checks.push('8 concurrent catalog activations: exactly one market/public-price/receipt commit, six reads per attempt, manual matching-name stock preserved, future listings absent; fresh no-op/replay/stale revision/role/scope denials write zero');
+
+  clock += 3600000;
+  const beforeListingCommits = commits.length, beforeListingWrites = totalWrites();
+  const listings = await Promise.all(Array.from({ length: 8 }, () => api.advanceWisStockPrices()));
+  assert.equal(listings.filter(result => result.changed).length, 1);
+  assert(commits.slice(beforeListingCommits).every(commit => commit.reads === commit.attempts * 4));
+  assert.equal(totalWrites() - beforeListingWrites, 3, 'Concurrent due listing writes market, public prices and scheduler receipt once');
+  const listedMarket = (await db.doc(`${root}/wis_stock_markets/current`).get()).data();
+  assert.equal(listedMarket.revision, scheduledMarket.revision + 1);
+  assert.equal(listedMarket.stocks.length, 13);
+  const newListing = listedMarket.stocks.find(stock => !scheduledMarket.stocks.some(old => old.id === stock.id));
+  assert.deepEqual(newListing.history, [{ atMs: clock, price: newListing.settings.initialPrice }]);
+  assert.deepEqual((await db.doc(`${root}/wis_stock_public/current`).get()).data(), menuSignal);
+  const afterListingWrites = totalWrites();
+  await Promise.all(Array.from({ length: 8 }, () => api.advanceWisStockPrices()));
+  assert.equal(totalWrites(), afterListingWrites);
+  checks.push('8 concurrent due workers: one listing with actual-time observation, one revision and three committed writes; four reads per attempt; repeated workers zero writes and menu status unchanged');
+
+  const crowded = { ...scheduleMarket, stocks: Array.from({ length: 21 }, (_, index) => ({
+    ...manual, id: `stock_${index.toString(16).padStart(24, '0')}`,
+    settings: { ...manual.settings, name: `예약 용량 검증 ${index}` },
+  })) };
+  await db.doc(`${root}/wis_stock_markets/current`).set(crowded);
+  const capacityWrites = totalWrites();
+  await assert.rejects(api.activateWisStockCatalogPlan(request({ ...catalogCommand.data,
+    requestId: 'catalog-capacity-denial1' })), error => error.details?.reason === 'WIS_STOCK_CAPACITY');
+  assert.equal(totalWrites(), capacityWrites);
+  assert.equal((await db.doc(`${root}/wis_stock_markets/current`).get()).data().catalogPlan, undefined);
+  await db.doc(`${root}/wis_stock_markets/current`).set(listedMarket);
+  checks.push('Full 80-stock plan capacity is reserved before activation: a 21-stock manual market rejects atomically with zero writes');
+
   const beforeDenied = await db.doc(`${root}/wis_stock_markets/current`).get();
   await db.doc('users/manager').set({ role: 'teacher', disabled: true });
   await assert.rejects(api.getWisStockManagement(request({})), error => error.details?.reason === 'WIS_STOCK_TEACHER_REQUIRED');
   await assert.rejects(api.saveWisStock(command), error => error.details?.reason === 'WIS_STOCK_TEACHER_REQUIRED');
   await assert.rejects(api.saveWisStockMarketRules(rulesCommand), error => error.details?.reason === 'WIS_STOCK_TEACHER_REQUIRED');
   await assert.rejects(api.setWisStockMarketHalted(stopCommand), error => error.details?.reason === 'WIS_STOCK_TEACHER_REQUIRED');
+  await assert.rejects(api.activateWisStockCatalogPlan(catalogCommand), error => error.details?.reason === 'WIS_STOCK_TEACHER_REQUIRED');
   assert.deepEqual((await db.doc(`${root}/wis_stock_markets/current`).get()).data(), beforeDenied.data());
   for (const [path, data] of protectedDocuments) assert.deepEqual((await db.doc(path).get()).data(), data, `${path} unchanged`);
   assert(commits.flatMap(commit => commit.writes).every(write =>
-    write.path === `${root}/wis_stock_markets/current` || write.path.startsWith(`${root}/wis_stock_receipts/`)), 'Only market/receipt paths can be written');
+    write.path === `${root}/wis_stock_markets/current` || write.path.startsWith(`${root}/wis_stock_receipts/`)
+    || [`${root}/wis_stock_public/current`, `${root}/wis_stock_public/market`].includes(write.path)), 'Only market/receipt/public-projection paths can be written');
   assert(reads.every(path => !/^semester_wis_(accounts|balances|rankings|ledger|economies)\//.test(path)
     && !/\/point_(wallets|transactions)\//.test(path)), 'Stock management never reads actual wallets or ledgers');
   checks.push('Student/disabled teacher API denial; direct client get/list/create/update/delete denied to students, teachers and administrator');

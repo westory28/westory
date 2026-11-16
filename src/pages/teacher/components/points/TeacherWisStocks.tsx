@@ -13,6 +13,7 @@ import WisStockChartPreview from "./WisStockChartPreview";
 import WisStockMarketRules from "./WisStockMarketRules";
 import WisStockInvestmentBoard from "./WisStockInvestmentBoard";
 import { getYearSemester } from "../../../../lib/semesterScope";
+import { watchWisStockListings } from "../../../../lib/wisStockListingSubscription";
 import {
   wisStockCatalog,
   wisStockCatalogWeeks,
@@ -22,6 +23,7 @@ import {
   getWisStockManagement,
   saveWisStock,
   setWisStockMarketHalted,
+  activateWisStockCatalogPlan,
   wisStockErrorMessage,
   isWisStockRevisionConflict,
   type WisStock,
@@ -56,6 +58,12 @@ const date = (value: number) =>
     minute: "2-digit",
     timeZone: "Asia/Seoul",
   }).format(value);
+const planStartDate = (year: string, semester: string) => {
+  if (year === "2026" && semester === "2") return "2026-11-16";
+  const first = new Date(Date.UTC(Number(year), semester === "1" ? 2 : 7, 1));
+  first.setUTCDate(first.getUTCDate() + ((8 - first.getUTCDay()) % 7));
+  return first.toISOString().slice(0, 10);
+};
 export default function TeacherWisStocks({
   config,
   canManage,
@@ -100,6 +108,8 @@ export default function TeacherWisStocks({
   const haltIntent = useRef(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [templateId, setTemplateId] = useState("");
+  const [startsOn, setStartsOn] = useState(() => planStartDate(year, semester));
+  const planFlight = useRef(false);
   const [draft, setDraft] = useState<WisStockSettings>(emptySettings);
   const [loading, setLoading] = useState(false),
     [saving, setSaving] = useState(false),
@@ -142,6 +152,8 @@ export default function TeacherWisStocks({
     setMarket(null);
     setSelectedId(null);
     setTemplateId("");
+    setStartsOn(planStartDate(year, semester));
+    planFlight.current = false;
     setDraft(emptySettings());
     setError("");
     setSaving(false);
@@ -165,6 +177,91 @@ export default function TeacherWisStocks({
       document.removeEventListener("visibilitychange", start);
     };
   }, [load]);
+  const schedule = market?.catalogSchedule;
+  const watchListings =
+    tab === "stocks" &&
+    Boolean(schedule?.plan && schedule.pendingCount > 0) &&
+    market?.studentOpen === true &&
+    !market.rules.halted &&
+    !saving &&
+    !loading &&
+    !error;
+  useEffect(() => {
+    if (!watchListings) return;
+    let stop: (() => void) | undefined;
+    let reloading = false;
+    const connect = () => {
+      stop?.();
+      stop = undefined;
+      if (document.hidden) return;
+      stop = watchWisStockListings(
+        { year, semester },
+        (ids) => {
+          if (reloading || owner.current !== ownerKey) return;
+          const currentIds = latestMarket.current.value?.stocks
+            .map((stock) => stock.id)
+            .sort();
+          if (JSON.stringify(currentIds) === JSON.stringify(ids)) return;
+          reloading = true;
+          void load();
+        },
+        (failure) => {
+          if (owner.current === ownerKey)
+            setError(wisStockErrorMessage(failure));
+        },
+      );
+    };
+    connect();
+    document.addEventListener("visibilitychange", connect);
+    return () => {
+      stop?.();
+      document.removeEventListener("visibilitychange", connect);
+    };
+  }, [watchListings, ownerKey, year, semester, load]);
+  const activatePlan = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (
+      !market ||
+      !canManage ||
+      saving ||
+      loading ||
+      conflict ||
+      planFlight.current
+    )
+      return;
+    const startsAtMs = Date.parse(`${startsOn}T09:00:00+09:00`);
+    if (
+      !Number.isFinite(startsAtMs) ||
+      new Date(startsAtMs).getUTCDay() !== 1
+    ) {
+      setError("상장 시작일은 월요일로 선택해 주세요.");
+      return;
+    }
+    const expectedOwner = ownerKey;
+    planFlight.current = true;
+    setSaving(true);
+    setError("");
+    try {
+      const result = await activateWisStockCatalogPlan(
+        { year, semester },
+        market.revision,
+        startsAtMs,
+      );
+      if (owner.current !== expectedOwner) return;
+      applyMarket(result);
+      showToast({ title: "상장 일정을 적용했습니다.", tone: "success" });
+    } catch (failure) {
+      if (owner.current === expectedOwner) {
+        setError(wisStockErrorMessage(failure));
+        setConflict(isWisStockRevisionConflict(failure));
+      }
+    } finally {
+      if (owner.current === expectedOwner) {
+        planFlight.current = false;
+        setSaving(false);
+      }
+    }
+  };
   const set = <K extends keyof WisStockSettings>(
     key: K,
     value: WisStockSettings[K],
@@ -359,6 +456,55 @@ export default function TeacherWisStocks({
         </div>
       )}
       {market && tab === "stocks" && (
+        <form
+          className="wis-stocks__summary wis-stocks__schedule"
+          onSubmit={activatePlan}
+          aria-label="6주 상장 일정"
+        >
+          <strong>6주 상장 일정</strong>
+          <InfoHelp label="6주 상장 일정">
+            <p>
+              시작일 오전 9시부터 기존 80개 기획 종목의 상장 순서를 적용합니다.
+              시장이 열려 있는 거래 시간에 도래한 종목만 등록하며, 기존 종목
+              설정은 유지합니다. 적용한 시작일은 바꿀 수 없습니다. 합병·퇴장은
+              자동 실행하지 않습니다.
+            </p>
+          </InfoHelp>
+          {schedule?.plan ? (
+            <>
+              <span>시작 {date(schedule.plan.startsAtMs)}</span>
+              <span>
+                상장 {schedule.listedCount} · 예정 {schedule.pendingCount}
+              </span>
+              {schedule.nextListingAtMs !== null && (
+                <span>다음 상장 {date(schedule.nextListingAtMs)}</span>
+              )}
+            </>
+          ) : canManage ? (
+            <>
+              <label>
+                시작일{" "}
+                <input
+                  aria-label="상장 시작일"
+                  type="date"
+                  value={startsOn}
+                  min={`${year}-01-01`}
+                  max={`${year}-12-31`}
+                  required
+                  disabled={saving || loading}
+                  onChange={(event) => setStartsOn(event.target.value)}
+                />
+              </label>
+              <button type="submit" disabled={saving || loading || conflict}>
+                {saving ? "적용 중…" : "상장 일정 적용"}
+              </button>
+            </>
+          ) : (
+            <span>미적용</span>
+          )}
+        </form>
+      )}
+      {market && tab === "stocks" && (
         <div className="wis-stocks__summary">
           <span>
             등록 {stats.count} / {market.maxStocks}
@@ -467,8 +613,8 @@ export default function TeacherWisStocks({
                         <p>
                           6주 기획안에서 한 종목의 이름·설명을 가져옵니다.
                           작성한 내용은 선택한 초안으로 바뀌며, 아래 종목 등록을
-                          눌러야 저장됩니다. 기획안의 상장·등락·퇴장 일정은 자동
-                          실행되지 않습니다.
+                          눌러야 저장됩니다. 기획 종목의 자동 상장은 6주 상장
+                          일정에서 별도로 적용합니다.
                         </p>
                       </InfoHelp>
                     </span>

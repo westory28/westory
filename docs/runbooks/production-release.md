@@ -1,5 +1,9 @@
 # 운영 배포 절차
 
+## 위스피 6주 상장 일정 연결 (2026-11-16)
+
+기존 80개 기획 종목의 상장 시각을 현재 학기의 서버 일정으로 연결한다. 교사의 `상장 일정 적용`은 인증·권한·학기·revision·영수증을 검사하고, 도래분만 시장·학생 공개 가격·감사 기록에 함께 반영한다. 기존 종목과 학생 계좌는 보존하며 합병·퇴장 시나리오는 실행하지 않는다. [상장 일정 검증 기록](../reviews/wis-stock-schedule-20261116.md)을 따른다. `prepare-wis-stock-schedule-release.mjs`가 보존한 운영 원본에서 기존 주식 5함수와 신규 `activateWisStockCatalogPlan`만 배포하고 `verify-wis-stock-schedule-release.mjs --after`로 전체 소스·자원·정각 scheduler를 확인한다. 프론트엔드의 같은 main 커밋을 운영에 승격한 뒤 교사 화면에서 사용자가 승인한 2026-11-16 09:00 KST 시작 일정을 적용한다. 다른 진행 중인 위플레이·아바타 변경을 이 배포에 섞지 않는다.
+
 ## 정기시험 원안지 저장 권한 복구 (2026-11-15 후속)
 
 Storage 규칙의 Firestore 두 문서 조회 한도를 넘던 업로드·읽기·실패 정리를 전용 서버 함수로 옮긴다. [복구 기록](../reviews/written-exam-storage-repair-20261115.md)에 권한·분할 전송·cleanup 게시 차단을 구분한다. 운영 보안 helper를 보존한 `prepare-written-exam-assets-release.mjs`의 신규 `manageWrittenExamAsset` 하나만 배포하고, `verify-written-exam-assets-release.mjs`로 전체 소스와 익명 차단을 확인한다. 실제 규칙 검사 후 Firestore cleanup 삭제 경계와 Storage 직접 차단을 반영한다. 같은 main의 Vercel 배포를 승격하고 실제 원안지 등록·문항 이미지 열람까지 확인한다. 학생 성적·서명·이의 상태는 검증 목적으로 변경하지 않는다.

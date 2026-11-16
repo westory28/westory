@@ -10,6 +10,8 @@
 .wis-stocks button:disabled { opacity: .5; cursor: default; }
 .wis-stocks :is(button,input,select,textarea):focus-visible { outline: 2px solid var(--ws-ring, #3b82f6); outline-offset: 2px; }
 .wis-stocks__summary { margin: 16px 0; font-size: 14px; color: var(--ws-text-muted, #6b7280); }
+.wis-stocks__schedule label { display: inline-flex; align-items: center; gap: 8px; }
+.wis-stocks__schedule input { min-width: 0; min-height: 44px; padding: 8px; border: 1px solid var(--ws-border, #e5e7eb); border-radius: 8px; background: var(--ws-surface, #fff); color: inherit; font: inherit; }
 .wis-stocks__workspace { display: grid; gap: 24px; margin-top: 16px; min-width: 0; }
 .wis-stocks__workspace.is-editing { grid-template-columns: minmax(240px, 1fr) minmax(0, 2fr); align-items: start; }
 .wis-stocks__list { min-width: 0; }

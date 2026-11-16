@@ -1,4 +1,4 @@
-import catalog from "../data/wisStockCatalog.json";
+import catalog from "../../functions/wisStockCatalog.json";
 import { nextWisStockModelPrice } from "../../functions/wisStockPriceModel.mjs";
 import { wisStockDailyBounds } from "../../functions/wisStockMarketRules.mjs";
 import type { WisStock, WisStockSettings } from "./wisStocksClient";
