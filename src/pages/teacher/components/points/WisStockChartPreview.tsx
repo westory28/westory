@@ -45,7 +45,10 @@ export default function WisStockChartPreview({
   revision: number;
   semesterId: string;
 }) {
-  const planStocks = useMemo(createWisStockPlanStocks, []);
+  const planStocks = useMemo(
+    () => createWisStockPlanStocks(rules.dailyPriceLimitBps),
+    [rules.dailyPriceLimitBps],
+  );
   const [source, setSource] = useState(stocks.length ? "registered" : "plan");
   const isPlan = source === "plan" || !stocks.length;
   const available = isPlan ? planStocks : stocks;
@@ -90,12 +93,18 @@ export default function WisStockChartPreview({
         <span className="wis-stocks__closed">
           {isPlan ? "6주 기획안 · 가상 시세" : "등록 종목"}
         </span>
+        {isPlan && (
+          <span className="wis-stocks__closed">
+            하루 ±{rules.dailyPriceLimitBps / 100}%
+          </span>
+        )}
         <InfoHelp label="미리보기 자료">
           <p>
             등록 종목은 저장된 관측 가격을 표시합니다. 6주 기획안은 역사 종목
             70개와 장기 가치 종목 10개의 가상 시나리오이며, 날짜·등락·퇴장은
-            실제 운영 일정이 아닙니다. 계좌 이체와 주문은 미리보기 안에서만
-            처리합니다.
+            실제 운영 일정이 아닙니다. 저장된 하루 가격 제한폭을 적용하며,
+            제한폭을 늘려도 종목의 변동성 자체는 커지지 않습니다. 계좌 이체와
+            주문은 미리보기 안에서만 처리합니다.
           </p>
         </InfoHelp>
       </div>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { animate, createScope } from "animejs";
 import InfoHelp from "../../../../components/common/InfoHelp";
+import { topWisStockHoldingReturns } from "./wisStockInvestmentReturns";
 import {
   watchWisStockInvestmentBoard,
   type WisStockBoardConnection,
@@ -13,6 +14,12 @@ const money = (value: number | undefined) =>
 const signed = (value: number) => `${value > 0 ? "+" : ""}${money(value)}`;
 const direction = (value: number | undefined) =>
   !value ? "flat" : value > 0 ? "up" : "down";
+const studentName = (name: string, masked: boolean) =>
+  masked
+    ? `${name.slice(0, 1)}${"•".repeat(Math.min(3, Math.max(1, name.length - 1)))}`
+    : name;
+const returnLabel = (value: number) =>
+  `${value > 0 ? "+" : ""}${value.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}%`;
 const time = new Intl.DateTimeFormat("ko-KR", {
   month: "numeric",
   day: "numeric",
@@ -144,6 +151,20 @@ export default function WisStockInvestmentBoard({
   const totals = data?.totals;
   const ready = data?.status === "READY";
   const live = !error && ready && connection === "CONNECTED";
+  const topReturns = useMemo(
+    () => (live ? topWisStockHoldingReturns(data?.rows || []) : []),
+    [data, live],
+  );
+  const returnMinimum = Math.min(
+    0,
+    ...topReturns.map((row) => row.returnPercent),
+  );
+  const returnMaximum = Math.max(
+    0,
+    ...topReturns.map((row) => row.returnPercent),
+  );
+  const returnRange = returnMaximum - returnMinimum || 1;
+  const zeroPosition = (-returnMinimum / returnRange) * 100;
   const status = error
     ? "연결 오류"
     : connection === "PAUSED"
@@ -282,6 +303,80 @@ export default function WisStockInvestmentBoard({
           </div>
         ))}
       </div>
+      {live && (
+        <section
+          className="wis-investment-board__returns"
+          aria-label="보유 수익률 상위 5명"
+        >
+          <div className="wis-investment-board__returns-heading">
+            <h3>보유 수익률 상위 5명</h3>
+            <InfoHelp label="보유 수익률 기준">
+              <p>
+                현재 보유 주식의 평가손익을 매수 수수료가 포함된 보유 원가로
+                나눈 비율입니다. 계좌 현금과 이미 매도한 주식의 실현손익은
+                제외합니다. 선택한 학급에서 보유 원가가 있는 학생만 비교하며,
+                같은 비율은 학급·번호 순으로 표시합니다.
+              </p>
+            </InfoHelp>
+          </div>
+          {topReturns.length ? (
+            <>
+              <div
+                className="wis-investment-board__returns-axis"
+                aria-hidden="true"
+              >
+                <span>학생</span>
+                <div>
+                  <span style={{ left: `${zeroPosition}%` }}>0%</span>
+                </div>
+                <span>수익률</span>
+              </div>
+              <ol className="wis-investment-board__returns-list">
+                {topReturns.map((row, index) => (
+                  <li key={row.studentKey}>
+                    <div className="wis-investment-board__returns-student">
+                      <span>{index + 1}</span>
+                      <div>
+                        <strong>
+                          {studentName(row.displayName, maskNames)}
+                        </strong>
+                        <small>
+                          {row.grade}-{row.classNumber} · {row.studentNumber}번
+                        </small>
+                      </div>
+                    </div>
+                    <div
+                      className="wis-investment-board__returns-track"
+                      aria-hidden="true"
+                    >
+                      <span
+                        className="wis-investment-board__returns-zero"
+                        style={{ left: `${zeroPosition}%` }}
+                      />
+                      <span
+                        className={`wis-investment-board__returns-bar is-${direction(row.returnPercent)}`}
+                        style={{
+                          left: `${((Math.min(0, row.returnPercent) - returnMinimum) / returnRange) * 100}%`,
+                          width: `${(Math.abs(row.returnPercent) / returnRange) * 100}%`,
+                        }}
+                      />
+                    </div>
+                    <strong
+                      className={`wis-investment-board__returns-value is-${direction(row.returnPercent)}`}
+                    >
+                      {returnLabel(row.returnPercent)}
+                    </strong>
+                  </li>
+                ))}
+              </ol>
+            </>
+          ) : (
+            <p className="wis-investment-board__returns-empty">
+              보유 주식이 있는 학생이 없습니다.
+            </p>
+          )}
+        </section>
+      )}
       <div className="wis-investment-board__list-heading">
         <span>
           {ready ? `${rows.length.toLocaleString()}명` : "학생별 투자 현황"}
@@ -335,11 +430,7 @@ export default function WisStockInvestmentBoard({
                     {row.grade}-{row.classNumber}
                   </td>
                   <td>{row.studentNumber}</td>
-                  <td>
-                    {maskNames
-                      ? `${row.displayName.slice(0, 1)}${"•".repeat(Math.min(3, Math.max(1, row.displayName.length - 1)))}`
-                      : row.displayName}
-                  </td>
+                  <td>{studentName(row.displayName, maskNames)}</td>
                   <td>{money(row.stockCash)}</td>
                   <td>{money(row.reservedCash)}</td>
                   <td>{row.holdingCount}개</td>

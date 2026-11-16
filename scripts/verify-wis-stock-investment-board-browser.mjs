@@ -18,13 +18,14 @@ const { chromium } = require(
       ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright",
     ),
 );
-const output = path.join(root, "output/wispi-board-20261115/board");
+const output = path.join(root, "output/wispi-top5-20261116/board");
 await fs.mkdir(output, { recursive: true });
 const imp = (file) =>
   JSON.stringify(path.join(root, file).replaceAll("\\", "/"));
 const audited = [
   "src/pages/teacher/components/points/WisStockInvestmentBoard.tsx",
   "src/pages/teacher/components/points/WisStockInvestmentBoard.css",
+  "src/pages/teacher/components/points/wisStockInvestmentReturns.ts",
   "functions/wisStockInvestmentBoard.mjs",
 ];
 const hashes = async () =>
@@ -44,10 +45,11 @@ import {normalizeWisStockInvestmentBoardScope as normalize,buildWisStockInvestme
  parseWisStockInvestmentBoardSnapshot as parse} from ${imp("functions/wisStockInvestmentBoard.mjs")};
 const listeners=[];
 export const qa=window.boardQa={subscriptions:0,stops:0,scopes:[],last:null};
-const rows=Array.from({length:50},(_,i)=>({studentKey:'student_'+(i+1).toString(16).padStart(24,'0'),
+let rows=Array.from({length:50},(_,i)=>({studentKey:'student_'+(i+1).toString(16).padStart(24,'0'),
  grade:'3',classNumber:i<25?'1':'2',studentNumber:String(i%25+1),displayName:'검증학생'+String(i+1).padStart(2,'0'),
  stockCash:1000+(i+1)*10,reservedCash:100+i+1,holdingCount:1,holdingValue:500+(i+1)*20,
  holdingCostBasis:600+(i+1)*5,realizedPnl:(i+1-25)*3}));
+qa.setRows=next=>{rows=next};
 qa.push=(mode='READY',revision=1)=>{for(const listener of listeners.filter(item=>item.active)){
  const scope=listener.scope;let raw=null;
  if(mode!=='NOT_READY')raw=build({scope,revision,asOfMs:1794787200000+revision*1000,sourceRevision:revision,priceRevision:revision,
@@ -171,6 +173,7 @@ async function assertBlank(page) {
       document.querySelectorAll(".wis-investment-board tbody tr").length === 0,
   );
   assert.equal(await rows(page).count(), 0);
+  assert.equal(await page.locator(".wis-investment-board__returns").count(), 0);
   assert.equal(
     await stats(page).locator("strong").filter({ hasText: "—" }).count(),
     6,
@@ -183,6 +186,10 @@ try {
     await push(page);
     assert.equal(await rows(page).count(), 20);
     assert.equal(await firstName(page), "검증학생01");
+    assert.equal(await page.locator(".wis-investment-board__returns-list > li").count(), 5);
+    assert.equal(await page.locator(".wis-investment-board__returns-student strong").first().innerText(), "검증학생50");
+    assert.equal(await page.locator(".wis-investment-board__returns-value").first().innerText(), "+76.47%");
+    assert.equal(await page.locator(".wis-investment-board__returns-heading").evaluate(element => getComputedStyle(element).backgroundColor), "rgba(0, 0, 0, 0)");
     const summary = await page.evaluate(() => ({
       raw: window.boardQa.last.totals,
       shown: [
@@ -304,11 +311,14 @@ try {
   );
   await push(page);
   assert.equal(await firstName(page), "검증학생25");
+  assert.equal(await page.locator(".wis-investment-board__returns-student strong").first().innerText(), "검증학생25");
   assert.match(await stats(page).innerText(), /25 명/);
   await page.getByRole("button", { name: "다음", exact: true }).click();
   assert.equal(await rows(page).count(), 5);
   await page.getByLabel("이름 숨김", { exact: true }).check();
   assert.equal(await firstName(page), "검•••");
+  assert.equal(await page.locator(".wis-investment-board__returns-student strong").first().innerText(), "검•••");
+  assert.equal(await page.locator(".wis-investment-board__returns").innerText().then(text => /검증학생/.test(text)), false);
   await page.getByLabel("이름 숨김", { exact: true }).uncheck();
   assert.equal(await firstName(page), "검증학생05");
   await page.getByRole("button", { name: "전광판 보기", exact: true }).click();
@@ -341,7 +351,7 @@ try {
   await assertBlank(page);
   assert.match(
     await page.locator(".wis-investment-board__empty").innerText(),
-    /아직 연결되지/,
+    /아직 집계된 투자 현황/,
   );
   await push(page, "EMPTY", 3);
   assert.match(
@@ -353,6 +363,7 @@ try {
     0,
   );
   assert.match(await stats(page).innerText(), /0 명/);
+  assert.match(await page.locator(".wis-investment-board__returns-empty").innerText(), /보유 주식이 있는 학생이 없습니다/);
   await page.evaluate(() => window.boardQa.fail());
   await page.getByRole("alert").waitFor();
   await assertBlank(page);
@@ -443,6 +454,37 @@ try {
   checks.push(
     "Reduced-motion first feed and revision update keep number opacity at 1; no animated text movement.",
   );
+  const mixed = await open(390);
+  await push(mixed);
+  await mixed.evaluate(() => window.boardQa.setRows(window.boardQa.last.rows.slice(0, 4).map((row, index) => ({
+    ...row, holdingCount: 1, holdingCostBasis: 1000, holdingValue: [1500, 1000, 750, 0][index],
+  }))));
+  await push(mixed, "READY", 2);
+  assert.deepEqual(await mixed.locator(".wis-investment-board__returns-value").allTextContents(), ["+50%", "0%", "-25%", "-100%"]);
+  const barLayout = await mixed.locator(".wis-investment-board__returns-track").evaluateAll(elements => elements.map(element => {
+    const track = element.getBoundingClientRect(), bar = element.querySelector(".wis-investment-board__returns-bar").getBoundingClientRect();
+    return { trackLeft: track.left, trackRight: track.right, barLeft: bar.left, barRight: bar.right,
+      zero: Number.parseFloat(element.querySelector(".wis-investment-board__returns-zero").style.left) };
+  }));
+  assert(barLayout.every(item => item.barLeft >= item.trackLeft - 1 && item.barRight <= item.trackRight + 1));
+  assert(barLayout.every(item => Math.abs(item.zero - 66.6666666667) < 0.001));
+  const returnsHelp = mixed.getByRole("button", { name: "보유 수익률 기준", exact: true });
+  await returnsHelp.focus();
+  await mixed.getByRole("tooltip").waitFor();
+  assert.match(await mixed.getByRole("tooltip").innerText(), /실현손익은 제외/);
+  await returnsHelp.press("Escape");
+  await mixed.screenshot({ path: path.join(output, "board-mixed-returns-390.png"), fullPage: true });
+  await mixed.evaluate(() => window.boardQa.setRows(window.boardQa.last.rows.map((row, index) => ({ ...row, holdingValue: 900 - index * 100 }))));
+  await push(mixed, "READY", 3);
+  assert.deepEqual(await mixed.locator(".wis-investment-board__returns-value").allTextContents(), ["-10%", "-20%", "-30%", "-40%"]);
+  assert.equal(await mixed.locator(".wis-investment-board__returns-zero").first().evaluate(element => element.style.left), "100%");
+  await mixed.evaluate(() => window.boardQa.setRows(window.boardQa.last.rows.map(row => ({ ...row, holdingCount: 0, holdingCostBasis: 0, holdingValue: 0 }))));
+  await push(mixed, "READY", 4);
+  assert.equal(await mixed.locator(".wis-investment-board__returns-list > li").count(), 0);
+  assert.match(await mixed.locator(".wis-investment-board__returns-empty").innerText(), /보유 주식이 있는 학생이 없습니다/);
+  assert.equal(await mixed.evaluate(() => window.boardQa.subscriptions), 1);
+  await mixed.close();
+  checks.push("Holding-return top five use exact ranking, current class and masked names; positive/zero/negative bars share a visible zero line, all-negative and no-holdings states are valid, no extra subscription.");
   for (const [width, mode] of [
     [320, "rejected"],
     [390, "rejected"],

@@ -12,6 +12,10 @@ import PortalSubNavigation from "../../../../components/common/PortalSubNavigati
 import WisStockChartPreview from "./WisStockChartPreview";
 import WisStockMarketRules from "./WisStockMarketRules";
 import WisStockInvestmentBoard from "./WisStockInvestmentBoard";
+import WisStockMarketOverview, {
+  WisStockSparkline,
+} from "./WisStockMarketOverview";
+import WisStockPriceChart from "../../../../components/common/WisStockPriceChart";
 import { getYearSemester } from "../../../../lib/semesterScope";
 import { watchWisStockListings } from "../../../../lib/wisStockListingSubscription";
 import {
@@ -107,6 +111,10 @@ export default function TeacherWisStocks({
   const [haltConflict, setHaltConflict] = useState(false);
   const haltIntent = useRef(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [growthFilter, setGrowthFilter] = useState<
+    "ALL" | "HISTORICAL" | "VALUE"
+  >("ALL");
+  const [periodFilter, setPeriodFilter] = useState<string | null>(null);
   const [templateId, setTemplateId] = useState("");
   const [startsOn, setStartsOn] = useState(() => planStartDate(year, semester));
   const planFlight = useRef(false);
@@ -151,6 +159,8 @@ export default function TeacherWisStocks({
   useEffect(() => {
     setMarket(null);
     setSelectedId(null);
+    setGrowthFilter("ALL");
+    setPeriodFilter(null);
     setTemplateId("");
     setStartsOn(planStartDate(year, semester));
     planFlight.current = false;
@@ -180,7 +190,6 @@ export default function TeacherWisStocks({
   const schedule = market?.catalogSchedule;
   const watchListings =
     tab === "stocks" &&
-    Boolean(schedule?.plan && schedule.pendingCount > 0) &&
     market?.studentOpen === true &&
     !market.rules.halted &&
     !saving &&
@@ -196,12 +205,17 @@ export default function TeacherWisStocks({
       if (document.hidden) return;
       stop = watchWisStockListings(
         { year, semester },
-        (ids) => {
+        (ids, revision) => {
           if (reloading || owner.current !== ownerKey) return;
           const currentIds = latestMarket.current.value?.stocks
             .map((stock) => stock.id)
             .sort();
-          if (JSON.stringify(currentIds) === JSON.stringify(ids)) return;
+          if (
+            JSON.stringify(currentIds) === JSON.stringify(ids) &&
+            (revision === undefined ||
+              revision <= (latestMarket.current.value?.revision ?? 0))
+          )
+            return;
           reloading = true;
           void load();
         },
@@ -366,6 +380,37 @@ export default function TeacherWisStocks({
     }),
     [market],
   );
+  const typeStocks = useMemo(
+    () =>
+      (market?.stocks || []).filter(
+        (stock) =>
+          growthFilter === "ALL" ||
+          (stock.settings.growthProfile || "HISTORICAL") === growthFilter,
+      ),
+    [market, growthFilter],
+  );
+  const periods = useMemo(
+    () => [...new Set(typeStocks.map((stock) => stock.settings.period.trim()))],
+    [typeStocks],
+  );
+  const selectedPeriod =
+    periodFilter !== null && periods.includes(periodFilter)
+      ? periodFilter
+      : null;
+  useEffect(() => {
+    setPeriodFilter((current) =>
+      current !== null && !periods.includes(current) ? null : current,
+    );
+  }, [periods]);
+  const visibleStocks = useMemo(
+    () =>
+      selectedPeriod === null
+        ? typeStocks
+        : typeStocks.filter(
+            (stock) => stock.settings.period.trim() === selectedPeriod,
+          ),
+    [typeStocks, selectedPeriod],
+  );
   const marketOpen = market?.studentOpen === true && !market.rules.halted;
   return (
     <section className="wis-stocks" aria-label="위스피(WsPI) 관리">
@@ -505,6 +550,9 @@ export default function TeacherWisStocks({
         </form>
       )}
       {market && tab === "stocks" && (
+        <WisStockMarketOverview index={market.marketIndex} />
+      )}
+      {market && tab === "stocks" && (
         <div className="wis-stocks__summary">
           <span>
             등록 {stats.count} / {market.maxStocks}
@@ -534,16 +582,65 @@ export default function TeacherWisStocks({
         </div>
       )}
       {loading && <p role="status">주식 자료를 불러오는 중입니다.</p>}
+      {market && tab === "stocks" && (
+        <div className="wis-stocks__filters" aria-label="종목 필터">
+          <label className="wis-stocks__type-filter">
+            유형
+            <select
+              aria-label="종목 유형"
+              value={growthFilter}
+              onChange={(event) =>
+                setGrowthFilter(event.target.value as typeof growthFilter)
+              }
+            >
+              <option value="ALL">전체 유형</option>
+              <option value="HISTORICAL">역사 종목</option>
+              <option value="VALUE">가치 종목</option>
+            </select>
+          </label>
+          <div
+            className="wis-stocks__period-filters"
+            role="group"
+            aria-label="시대·주제 필터"
+          >
+            <span>시대·주제</span>
+            <button
+              type="button"
+              aria-pressed={selectedPeriod === null}
+              onClick={() => setPeriodFilter(null)}
+            >
+              전체
+            </button>
+            {periods.map((period) => (
+              <button
+                type="button"
+                key={period}
+                aria-pressed={selectedPeriod === period}
+                onClick={() => setPeriodFilter(period)}
+              >
+                {period || "시대 미지정"}
+              </button>
+            ))}
+          </div>
+          <span className="wis-stocks__filter-count" aria-live="polite">
+            전체 {market.stocks.length}개 중 {visibleStocks.length}개
+          </span>
+        </div>
+      )}
       {market && (
         <div
           className={`wis-stocks__workspace${selectedId !== null ? " is-editing" : ""}`}
           hidden={tab !== "stocks"}
         >
           <div className="wis-stocks__list">
-            {market.stocks.length === 0 ? (
-              <p className="wis-stocks__empty">등록된 종목이 없습니다.</p>
+            {visibleStocks.length === 0 ? (
+              <p className="wis-stocks__empty">
+                {market.stocks.length === 0
+                  ? "등록된 종목이 없습니다."
+                  : "선택한 유형의 종목이 없습니다."}
+              </p>
             ) : (
-              market.stocks.map((stock) => (
+              visibleStocks.map((stock) => (
                 <button
                   type="button"
                   key={stock.id}
@@ -570,6 +667,11 @@ export default function TeacherWisStocks({
                   <span className="wis-stocks__row-name">
                     <strong>{stock.settings.name}</strong>
                     <span>{stock.settings.period || "시대 미지정"}</span>
+                    {stock.settings.description && (
+                      <span className="wis-stocks__row-description">
+                        {stock.settings.description}
+                      </span>
+                    )}
                   </span>
                   <span className="wis-stocks__row-price">
                     <strong>{stock.price.toLocaleString()} 위스</strong>
@@ -579,6 +681,7 @@ export default function TeacherWisStocks({
                         : "자동 변동 정지"}
                     </span>
                   </span>
+                  <WisStockSparkline stock={stock} />
                 </button>
               ))
             )}
@@ -604,6 +707,14 @@ export default function TeacherWisStocks({
                   닫기
                 </button>
               </div>
+              {selected && tab === "stocks" && (
+                <div className="wis-stocks__selected-chart">
+                  {selected.settings.description && (
+                    <p>{selected.settings.description}</p>
+                  )}
+                  <WisStockPriceChart stock={selected} days={Infinity} />
+                </div>
+              )}
               <fieldset disabled={!canManage || saving || loading}>
                 {!selected && (
                   <label className="wis-stocks__wide">

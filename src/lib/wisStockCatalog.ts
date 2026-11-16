@@ -130,13 +130,22 @@ function phaseFor(
   return "steady";
 }
 
-const histories = new Map<string, readonly WisStockSyntheticPoint[]>();
+// One cached scenario per catalog entry; changing the rule replaces its history.
+const histories = new Map<
+  string,
+  { limitBps: number; points: readonly WisStockSyntheticPoint[] }
+>();
 
 /** Reproducible synthetic data, kept separate from the management API history. */
-export function getWisStockPlanHistory(id: string): WisStockSyntheticPoint[] {
+export function getWisStockPlanHistory(
+  id: string,
+  dailyPriceLimitBps = WIS_STOCK_PLAN_DAILY_LIMIT_BPS,
+): WisStockSyntheticPoint[] {
   const entry = findEntry(id);
+  wisStockDailyBounds(entry.basePrice, dailyPriceLimitBps);
   const cached = histories.get(id);
-  if (cached) return cached.map((point) => ({ ...point }));
+  if (cached?.limitBps === dailyPriceLimitBps)
+    return cached.points.map((point) => ({ ...point }));
   const settings = getWisStockTemplateSettings(id);
   const first = wisStockPlanSessions[entry.listingSession - 1];
   const stock: WisStock = {
@@ -182,10 +191,7 @@ export function getWisStockPlanHistory(id: string): WisStockSyntheticPoint[] {
         session.atMs / HOUR,
         "wispi-plan-80-v1",
       );
-      const bounds = wisStockDailyBounds(
-        dayOpenPrice,
-        WIS_STOCK_PLAN_DAILY_LIMIT_BPS,
-      );
+      const bounds = wisStockDailyBounds(dayOpenPrice, dailyPriceLimitBps);
       stock.price = Math.max(
         bounds.minimum,
         Math.min(bounds.maximum, candidate),
@@ -195,18 +201,20 @@ export function getWisStockPlanHistory(id: string): WisStockSyntheticPoint[] {
     stock.history.push({ atMs: session.atMs, price: stock.price });
     return { ...session, phase, price: stock.price };
   });
-  histories.set(
-    id,
-    points.map((point) => Object.freeze(point)),
-  );
+  histories.set(id, {
+    limitBps: dailyPriceLimitBps,
+    points: points.map((point) => Object.freeze(point)),
+  });
   return points.map((point) => ({ ...point }));
 }
 
 /** Teacher planning preview only. No API, wallet access, registration or timer. */
-export function createWisStockPlanStocks(): WisStock[] {
+export function createWisStockPlanStocks(
+  dailyPriceLimitBps = WIS_STOCK_PLAN_DAILY_LIMIT_BPS,
+): WisStock[] {
   return wisStockCatalog.map((entry) => {
     const settings = getWisStockTemplateSettings(entry.id);
-    const history = getWisStockPlanHistory(entry.id)
+    const history = getWisStockPlanHistory(entry.id, dailyPriceLimitBps)
       .filter(
         (point): point is WisStockSyntheticPoint & { price: number } =>
           point.price !== null,

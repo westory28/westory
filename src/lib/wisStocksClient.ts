@@ -45,6 +45,7 @@ export interface WisStockManagement {
   updatedAtMs: number;
   stocks: WisStock[];
   rules: WisStockMarketRules;
+  marketIndex?: WisStockMarketIndex;
   catalogSchedule?: {
     plan: { version: 1; startsAtMs: number } | null;
     totalCount: number;
@@ -53,6 +54,14 @@ export interface WisStockManagement {
     dueCount: number;
     nextListingAtMs: number | null;
   };
+}
+export interface WisStockMarketIndex {
+  baseValue: 1000;
+  baseAtMs: number;
+  value: number;
+  previousClose: number;
+  updatedAtMs: number;
+  history: { atMs: number; value: number }[];
 }
 type SaveResult = WisStockManagement & {
   savedStockId: string;

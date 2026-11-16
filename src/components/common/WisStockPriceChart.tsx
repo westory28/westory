@@ -12,7 +12,10 @@ const DAY = 86_400_000;
 const money = (value: number) => value.toLocaleString("ko-KR");
 // Keep observed times and prices. Invalid or repeated observations must never
 // create NaN coordinates, fabricated prices, or an equal-spacing time axis.
-export function stockObservations(stock: Pick<WisStockPriceSeries, "history">) {
+export function stockObservations(
+  stock: Pick<WisStockPriceSeries, "history">,
+  fractional = false,
+) {
   const points = new Map<number, number>();
   for (const point of Array.isArray(stock.history) ? stock.history : [])
     if (
@@ -20,7 +23,9 @@ export function stockObservations(stock: Pick<WisStockPriceSeries, "history">) {
       Number.isSafeInteger(point.atMs) &&
       point.atMs >= 0 &&
       point.atMs <= 8_640_000_000_000_000 &&
-      Number.isSafeInteger(point.price) &&
+      (fractional
+        ? Number.isFinite(point.price) && point.price <= Number.MAX_SAFE_INTEGER
+        : Number.isSafeInteger(point.price)) &&
       point.price > 0
     )
       points.set(point.atMs, point.price);
@@ -56,11 +61,11 @@ const axisPrice = (value: number) =>
         maximumFractionDigits: 1,
       }).format(value)
     : money(value);
-function priceAxis(low: number, high: number) {
+function priceAxis(low: number, high: number, minimumStep = 1) {
   const pad = high === low ? Math.max(1, Math.round(high * 0.05)) : 0;
   const minimum = Math.max(0, low - pad),
     maximum = Math.min(Number.MAX_SAFE_INTEGER, high + pad);
-  const rough = Math.max(1, (maximum - minimum) / 4);
+  const rough = Math.max(minimumStep, (maximum - minimum) / 4);
   const magnitude = 10 ** Math.floor(Math.log10(rough));
   const step =
     ([1, 2, 5, 10].find((value) => value * magnitude >= rough) || 10) *
@@ -79,10 +84,18 @@ function priceAxis(low: number, high: number) {
 export default function WisStockPriceChart({
   stock,
   days,
+  kind = "price",
 }: {
   stock: WisStockPriceSeries;
   days: number;
+  kind?: "price" | "index";
 }) {
+  const label = kind === "index" ? "지수" : "가격";
+  const unit = kind === "index" ? "pt" : "위스";
+  const formatValue = (value: number) =>
+    kind === "index"
+      ? value.toLocaleString("ko-KR", { maximumFractionDigits: 2 })
+      : money(value);
   const root = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
   const id = useId().replace(/:/g, "");
@@ -91,7 +104,10 @@ export default function WisStockPriceChart({
     key: string;
     index: number;
   } | null>(null);
-  const observations = useMemo(() => stockObservations(stock), [stock]);
+  const observations = useMemo(
+    () => stockObservations(stock, kind === "index"),
+    [stock, kind],
+  );
   const visible = useMemo(() => {
     const end = observations.at(-1)?.atMs || 0;
     return observations.filter((point) => point.atMs >= end - days * DAY);
@@ -104,7 +120,7 @@ export default function WisStockPriceChart({
       ? stock.price
       : 0;
   const high = prices.length ? Math.max(...prices) : low;
-  const domain = priceAxis(low, high);
+  const domain = priceAxis(low, high, kind === "index" ? 0.01 : 1);
   const start = visible[0]?.atMs || 0,
     end = visible.at(-1)?.atMs || start;
   const span = end - start;
@@ -191,16 +207,16 @@ export default function WisStockPriceChart({
   return (
     <div ref={root} className="wis-stock-chart wispi-price-chart">
       <p id={`${id}-help`} className="wispi-price-chart__instructions">
-        차트에 마우스를 올리거나 터치하면 기록된 가격을 확인합니다. 키보드 좌우
+        차트에 마우스를 올리거나 터치하면 기록된 값을 확인합니다. 키보드 좌우
         방향키로 기록을 이동하고 Home과 End로 처음과 마지막 기록을 확인합니다.
-        Escape로 가격 말풍선을 닫습니다.
+        Escape로 말풍선을 닫습니다.
       </p>
       <div
         ref={canvas}
         className="wispi-price-chart__canvas"
         tabIndex={visible.length ? 0 : -1}
         role="group"
-        aria-label={`${stock.settings.name} 가격 차트`}
+        aria-label={`${stock.settings.name} ${label} 차트`}
         aria-describedby={`${id}-help${active ? ` ${id}-value` : ""}`}
         onFocus={() => {
           if (points.length) select(points.length - 1);
@@ -263,7 +279,7 @@ export default function WisStockPriceChart({
           width={width}
           height={height}
           role="img"
-          aria-label={`${stock.settings.name} 가격 변동, 기록 ${visible.length}건${visible.length ? `, 최고 ${money(high)} 위스, 최저 ${money(low)} 위스` : ""}`}
+          aria-label={`${stock.settings.name} ${label} 변동, 기록 ${visible.length}건${visible.length ? `, 최고 ${formatValue(high)} ${unit}, 최저 ${formatValue(low)} ${unit}` : ""}`}
         >
           <defs>
             <pattern
@@ -320,7 +336,7 @@ export default function WisStockPriceChart({
           />
           <g className="wispi-price-chart__axes">
             <text x="12" y="22" className="wispi-price-chart__caption">
-              가격 (위스)
+              {label} ({unit})
             </text>
             <line x1={left} y1={top} x2={left} y2={bottom} />
             <line x1={left} y1={bottom} x2={right} y2={bottom} />
@@ -328,7 +344,7 @@ export default function WisStockPriceChart({
               <g key={price}>
                 <line x1={left - 4} y1={y(price)} x2={left} y2={y(price)} />
                 <text x={left - 9} y={y(price)} dy=".35em" textAnchor="end">
-                  {axisPrice(price)}
+                  {kind === "index" ? formatValue(price) : axisPrice(price)}
                 </text>
               </g>
             ))}
@@ -381,7 +397,9 @@ export default function WisStockPriceChart({
           )}
         </svg>
         {!visible.length && (
-          <p className="wispi-price-chart__empty">아직 가격 기록이 없습니다.</p>
+          <p className="wispi-price-chart__empty">
+            아직 {label} 기록이 없습니다.
+          </p>
         )}
         {active && (
           <div
@@ -415,7 +433,9 @@ export default function WisStockPriceChart({
                 ? `.${String(active.atMs % 1000).padStart(3, "0")}`
                 : ""}
             </time>
-            <strong>{money(active.price)} 위스</strong>
+            <strong>
+              {formatValue(active.price)} {unit}
+            </strong>
           </div>
         )}
       </div>

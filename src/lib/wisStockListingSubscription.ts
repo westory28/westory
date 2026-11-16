@@ -6,10 +6,10 @@ import { watchStudentWisStockSession } from "./studentWisStockSession";
 import type { WisStockConfig } from "./wisStocksClient";
 
 /** Only the active, visible management view watches this safe public document.
- * Price-only snapshots never trigger a management read. No persistent cache. */
+ * Repeated revisions are ignored. No persistent cache or polling. */
 export function watchWisStockListings(
   config: WisStockConfig,
-  next: (ids: string[]) => void,
+  next: (ids: string[], revision?: number) => void,
   failed: (error: unknown) => void,
 ) {
   const owner = auth.currentUser;
@@ -90,10 +90,13 @@ export function watchWisStockListings(
               fail(new Error("상장 현황을 확인하지 못했습니다."));
               return;
             }
-            const key = JSON.stringify(ids);
+            const revision = Number.isSafeInteger(value.revision)
+              ? (value.revision as number)
+              : undefined;
+            const key = JSON.stringify([ids, revision]);
             if (lastIds === key) return;
             lastIds = key;
-            next(ids);
+            next(ids, revision);
           },
           fail,
         );

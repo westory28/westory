@@ -101,7 +101,7 @@ await check("switching accounts during reauthentication stops mutations before a
   await assert.rejects(client.saveWisStockMarketRules(scope, 1, DEFAULT_WIS_STOCK_MARKET_RULES), /로그인 계정/);
   assert.equal(qa.calls.length, 0);
 });
-await check("listing watch uses one safe document, ignores price/cache snapshots, and disconnects on session/auth changes", async () => {
+await check("listing watch uses one safe document, reports new revisions once, ignores duplicate/cache snapshots, and disconnects on session/auth changes", async () => {
   const built = await build({ entryPoints: [path.join(root, 'src/lib/wisStockListingSubscription.ts')], bundle: true, format: 'esm', write: false,
     plugins: [{name:'listing-fixture',setup(plugin) {
       plugin.onResolve({filter:/^firebase\/(auth|firestore)$|^\.\/(firebase|semesterScope|studentWisStockSession)$/},()=>({path:'fixture',namespace:'listing'}));
@@ -120,13 +120,17 @@ await check("listing watch uses one safe document, ignores price/cache snapshots
     const module=await import(`data:text/javascript;base64,${Buffer.from(built.outputFiles[0].text+`\n// ${sequence++}`).toString('base64')}`);
     const stop=module.watchWisStockListings(scope,ids=>q.values.push(ids),error=>q.errors.push(error));
     while(!q.next) await new Promise(resolve=>setTimeout(resolve,0));
-    const emit=(ids,fromCache=false)=>q.next({exists:()=>true,metadata:{fromCache,hasPendingWrites:false},data:()=>({semesterId:'2026-2',stocks:ids.map(id=>({id}))})});
+    const emit=(ids,fromCache=false,revision)=>q.next({exists:()=>true,metadata:{fromCache,hasPendingWrites:false},data:()=>({semesterId:'2026-2',stocks:ids.map(id=>({id})),revision})});
     return {q,stop,emit};
   };
   const {q,stop,emit}=await make(), id='stock_000000000000000000000001';
   assert.deepEqual(q.paths,['years/2026/semesters/2/wis_stock_public/market']);
   emit([id],true);assert.equal(q.values.length,0);emit([id]);emit([id]);assert.equal(q.values.length,1);
   emit([id,'stock_000000000000000000000002']);assert.equal(q.values.length,2);
+  emit([id,'stock_000000000000000000000002'],false,2);assert.equal(q.values.length,3);
+  emit([id,'stock_000000000000000000000002'],false,2);assert.equal(q.values.length,3);
+  emit([id,'stock_000000000000000000000002'],true,3);assert.equal(q.values.length,3);
+  emit([id,'stock_000000000000000000000002'],false,3);assert.equal(q.values.length,4);
   q.session.paused();assert.equal(q.marketStops,1);q.session.allowed();assert.equal(q.subscriptions,2);
   q.session.denied(Error('expired'));assert.equal(q.errors.length,1);assert.equal(q.marketStops,2);assert.equal(q.sessionStops,1);assert.equal(q.authStops,1);
   stop();assert.equal(q.marketStops,2);

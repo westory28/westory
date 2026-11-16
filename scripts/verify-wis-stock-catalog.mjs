@@ -163,6 +163,33 @@ checks.push(
   "210 weekday 09:00–15:00 KST sessions; delayed listing and exit nulls; bounded multi-session trends; stable cached histories; all VALUE examples rise over six weeks with down moves.",
 );
 
+const originalHistories = stocksFor().map((stock) => stock.history);
+const constrained = stocksFor(1000), expanded = stocksFor(6000);
+assert(constrained.some((stock, index) =>
+  JSON.stringify(stock.history) !== JSON.stringify(expanded[index].history),
+), "Changing the saved daily rule recalculates the planning chart");
+for (const limit of [1, 1000, 3000, 6000]) {
+  for (const entry of catalog) {
+    const active = historyFor(entry.id, limit).filter((point) => point.price !== null);
+    let day = "", openPrice = entry.basePrice;
+    active.forEach((point, index) => {
+      const pointDay = `${point.week}-${point.dayIndex}`;
+      if (day !== pointDay) {
+        day = pointDay;
+        openPrice = index ? active[index - 1].price : entry.basePrice;
+      }
+      const lower = Number((BigInt(openPrice) * BigInt(10000 - limit) + 9999n) / 10000n);
+      const upper = Number(BigInt(openPrice) * BigInt(10000 + limit) / 10000n);
+      assert(Number.isSafeInteger(point.price) && point.price >= Math.max(1, lower) && point.price <= upper);
+      assert(point.price <= 1000000, "Instrument maximum still applies");
+    });
+  }
+}
+assert.deepEqual(stocksFor().map((stock) => stock.history), originalHistories,
+  "Changing a cached rule cannot leak a different limit into later previews");
+for (const invalid of [0, 6001, 6000.5, NaN]) assert.throws(() => stocksFor(invalid));
+checks.push("Planning charts use the selected daily rule from 0.01% through 60%; price bounds, cache replacement, deterministic recomputation and invalid-rule rejection verified.");
+
 const sourceFlag = process.argv.indexOf("--source");
 if (sourceFlag !== -1) {
   const source = JSON.parse(

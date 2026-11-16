@@ -22,7 +22,7 @@ export const WIS_STOCK_RULE_LIMITS = Object.freeze({
   maxOrderQuantity: [1, 1000000], maxOrderAmount: [1, 1000000000000], maxHoldingQuantity: [1, 1000000000],
   maxConcentrationBps: [1, 10000], minimumCashReserve: [0, 1000000000000], dailyBuyLimit: [1, 1000000000000],
   dailyOrderLimit: [1, 10000], cooldownSeconds: [0, 3600], quoteTtlSeconds: [1, 300], maxSlippageBps: [0, 1000],
-  dailyPriceLimitBps: [1, 3000], circuitBreakerBps: [1, 3000], circuitBreakerMinutes: [1, 1440],
+  dailyPriceLimitBps: [1, 6000], circuitBreakerBps: [1, 6000], circuitBreakerMinutes: [1, 1440],
 });
 export function normalizeWisStockMarketRules(input = {}) {
   const invalid = () => reject('WIS_STOCK_RULES_INVALID', '시장 규칙의 입력 범위와 제한 간 관계를 확인해 주세요.');
@@ -63,7 +63,7 @@ const safe = value => {
 const multiply = (a, b) => safe(BigInt(a) * BigInt(b));
 const feeFor = (gross, bps) => safe((BigInt(gross) * BigInt(bps) + BPS - 1n) / BPS);
 export function wisStockDailyBounds(openPrice, limitBps) {
-  if (!int(openPrice, 1, 1000000) || !int(limitBps, 1, 3000)) reject('WIS_STOCK_RULES_INVALID', '당일 기준가와 가격 제한을 확인해 주세요.');
+  if (!int(openPrice, 1, 1000000) || !int(limitBps, ...WIS_STOCK_RULE_LIMITS.dailyPriceLimitBps)) reject('WIS_STOCK_RULES_INVALID', '당일 기준가와 가격 제한을 확인해 주세요.');
   return { minimum: Math.max(1, safe((BigInt(openPrice) * (BPS - BigInt(limitBps)) + BPS - 1n) / BPS)),
     maximum: safe(BigInt(openPrice) * (BPS + BigInt(limitBps)) / BPS) };
 }

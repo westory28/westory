@@ -5,6 +5,7 @@ const { nextWisStockModelPrice, wisStockPriceModelAnchor } = require('./wisStock
 const { normalizeWisStockMarketRules, normalizeWisStockTradingSettings,
   isWisStockTradingSession, wisStockKstSession, wisStockDailyBounds } = require('./wisStockMarketRules');
 const { normalizeCatalogPlan, catalogScheduleState, applyDueCatalogListings } = require('./wisStockCatalogSchedule');
+const { INDEX_HISTORY_LIMIT, emptyIndex, validWisStockIndex, updateWisStockIndex, wisStockIndexState } = require('./wisStockIndex');
 
 // Teacher market administration. Student orders remain separate server commands.
 const MAX_STOCKS = 100;
@@ -42,10 +43,13 @@ const fieldBytes = value => {
   return Infinity;
 };
 function reservedMarketBytes(market, scope) {
-  const { stocks, ...fields } = market;
+  const { stocks, marketIndex, ...fields } = market;
+  const reservedIndex = { ...emptyIndex(), ...(marketIndex || {}), dayKey: '0000-00-00', history: [] };
+  const indexBytes = fieldBytes('marketIndex') + fieldBytes(reservedIndex)
+    + INDEX_HISTORY_LIMIT * fieldBytes({ atMs: Number.MAX_SAFE_INTEGER, value: 1000 });
   const pointSize = fieldBytes({ atMs: Number.MAX_SAFE_INTEGER, price: MAX_PRICE });
   return marketPath(scope).split('/').reduce((sum, part) => sum + fieldBytes(part), 16)
-    + fieldBytes(fields) + fieldBytes('stocks') + stocks.reduce((sum, stock) => {
+    + fieldBytes(fields) + indexBytes + fieldBytes('stocks') + stocks.reduce((sum, stock) => {
       const { history, ...data } = stock;
       // Also reserve the model anchor for seedless legacy instruments.
       if (!data.priceModel) data.priceModel = { version: 1, anchorAtMs: 0, anchorPrice: MAX_PRICE };
@@ -103,6 +107,7 @@ function readMarket(snapshot, scope) {
   try { rules = normalizeWisStockMarketRules(value.rules); normalizeCatalogPlan(value.catalogPlan); } catch { rules = null; }
   if (value.schemaVersion !== 1 || value.semesterId !== scope.semesterId || typeof value.studentOpen !== 'boolean'
     || !rules || (value.priceSeed !== undefined && !/^[a-f0-9]{64}$/.test(value.priceSeed))
+    || (value.marketIndex !== undefined && !validWisStockIndex(value.marketIndex))
     || !safeInt(value.tradingEpoch ?? 0, 0, Number.MAX_SAFE_INTEGER - 1)
     || !safeInt(value.publicationRevision ?? 0, 0, Number.MAX_SAFE_INTEGER - 1)
     || !safeInt(value.publicationUpdatedAtMs ?? 0, 0, Number.MAX_SAFE_INTEGER)
@@ -128,6 +133,7 @@ function readMarket(snapshot, scope) {
 }
 const state = (market, atMs) => ({ semesterId: market.semesterId, revision: market.revision, studentOpen: market.studentOpen,
   catalogSchedule: catalogScheduleState(market, atMs),
+  marketIndex: wisStockIndexState(market, atMs),
   tradingEpoch: market.tradingEpoch ?? 0,
   rules: market.rules,
   maxStocks: MAX_STOCKS, historyLimit: HISTORY_LIMIT, updatedAtMs: market.updatedAtMs,
@@ -294,9 +300,9 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       if (previous && previous.settings.growthProfile !== settings.growthProfile) {
         stock.priceModel = { version: 1, anchorAtMs: atMs, anchorPrice: previous.price };
       }
-      const updated = { ...market, priceSeed: market.priceSeed || newPriceSeed,
+      const updated = updateWisStockIndex(market, { ...market, priceSeed: market.priceSeed || newPriceSeed,
         stocks: previous ? market.stocks.map(item => item.id === id ? stock : item) : [...market.stocks, stock],
-        revision: market.revision + 1, updatedAtMs: atMs };
+        revision: market.revision + 1, updatedAtMs: atMs }, atMs);
       assertCatalogCapacity(updated, scope);
       tx.set(marketRef, updated);
       publishStudentMarket(tx, db, scope, market, updated);
@@ -368,12 +374,13 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
         tradingEpoch: market.tradingEpoch + (input.halted ? 1 : 0),
         publicationRevision: market.publicationRevision + 1, publicationUpdatedAtMs: atMs,
         ...(!input.halted && !market.priceSeed ? { priceSeed: randomBytes(32).toString('hex') } : {}) };
-      const { market: updated, addedIds } = applyDueCatalogListings(resumed, atMs);
+      const { market: listed, addedIds } = applyDueCatalogListings(resumed, atMs);
+      const updated = addedIds.length ? updateWisStockIndex(market, listed, atMs) : listed;
       if (addedIds.length) assertCatalogCapacity(updated, scope);
       if (snapshot.exists) tx.update(marketRef, { 'rules.halted': input.halted, studentOpen: updated.studentOpen,
         tradingEpoch: updated.tradingEpoch, publicationRevision: updated.publicationRevision, publicationUpdatedAtMs: atMs,
         ...(updated.priceSeed ? { priceSeed: updated.priceSeed } : {}),
-        ...(addedIds.length ? { stocks: updated.stocks } : {}), revision: updated.revision, updatedAtMs: atMs });
+        ...(addedIds.length ? { stocks: updated.stocks, marketIndex: updated.marketIndex } : {}), revision: updated.revision, updatedAtMs: atMs });
       else tx.set(marketRef, updated);
       publishStudentMarket(tx, db, scope, market, updated);
       tx.create(receiptRef, { schemaVersion: 1, commandType: 'setWisStockMarketHalted', semesterId: scope.semesterId,
@@ -417,8 +424,8 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       // is only a capacity check; future stocks/history are never persisted.
       assertCatalogCapacity(planned, scope);
       const { market: listed, addedIds } = applyDueCatalogListings(planned, atMs);
-      const updated = { ...listed, priceSeed: market.priceSeed || randomBytes(32).toString('hex'),
-        revision: market.revision + 1, updatedAtMs: atMs };
+      const updated = updateWisStockIndex(market, { ...listed, priceSeed: market.priceSeed || randomBytes(32).toString('hex'),
+        revision: market.revision + 1, updatedAtMs: atMs }, atMs);
       tx.set(marketRef, updated);
       publishStudentMarket(tx, db, scope, market, updated);
       tx.create(receiptRef, { schemaVersion: 1, commandType: 'activateWisStockCatalogPlan', semesterId: scope.semesterId,
@@ -439,8 +446,9 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
     const current = readMarket(snapshot, scope), atMs = now();
     const { market: listed, addedIds } = applyDueCatalogListings(current, atMs);
     const priced = advanceMarket(listed, atMs);
-    const updated = addedIds.length ? { ...priced, revision: current.revision + 1, updatedAtMs: atMs } : priced;
-    if (updated === current) return { changed: false };
+    const changed = addedIds.length ? { ...priced, revision: current.revision + 1, updatedAtMs: atMs } : priced;
+    if (changed === current) return { changed: false };
+    const updated = updateWisStockIndex(current, changed, atMs);
     if (updated.stocks.length > MAX_STOCKS) fail('resource-exhausted', '종목 등록 한도를 초과합니다.', 'WIS_STOCK_CAPACITY');
     assertMarketCapacity(updated, scope);
     tx.set(db.doc(marketPath(scope)), updated);

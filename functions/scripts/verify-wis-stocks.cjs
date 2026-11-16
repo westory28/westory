@@ -9,7 +9,7 @@ const initial = () => ({ name: '합성 역사 종목', description: '시험용 �
 const req = data => ({ auth: { uid: 'manager', token: { email: 'manager@yongshin-ms.ms.kr' } }, data: { year: scope.year, semester: scope.semester, ...data } });
 const saveInput = (settings = initial(), expectedRevision = 0, stockId = '', requestId = 'stock-request-00000001') => req({ settings, expectedRevision, stockId, requestId });
 const reason = value => error => error.details?.reason === value;
-function fixture() {
+function fixture({ optimisticRetries = false } = {}) {
   let clock = Date.parse('2026-11-16T00:00:00Z'); // Monday 09:00 KST.
   const documents = new Map([
     ['users/manager', { role: 'teacher', teacherPortalEnabled: true, staffPermissions: ['point_manage'] }],
@@ -17,25 +17,31 @@ function fixture() {
     ['semester_manifests/2026-2', { status: 'ACTIVE' }],
   ]);
   const reads = [], writes = [], sessions = [];
+  let transactionVersion = 0;
   const db = { doc: path => ({ path }), runTransaction: async callback => {
-    const changes = [];
-    const result = await callback({
-      get: async ref => { reads.push(ref.path); return { exists: documents.has(ref.path), data: () => structuredClone(documents.get(ref.path)) }; },
-      set: (ref, data) => changes.push({ path: ref.path, data: structuredClone(data) }),
-      update: (ref, patch) => {
-        assert(documents.has(ref.path));
-        const data = structuredClone(documents.get(ref.path));
-        for (const [key, value] of Object.entries(patch)) {
-          const parts = key.split('.'); let target = data;
-          for (const part of parts.slice(0, -1)) target = target[part] ||= {};
-          target[parts.at(-1)] = value;
-        }
-        changes.push({ path: ref.path, data });
-      },
-      create: (ref, data) => { assert(!documents.has(ref.path)); changes.push({ path: ref.path, data: structuredClone(data) }); },
-    });
-    changes.forEach(change => { documents.set(change.path, change.data); writes.push(change); });
-    return result;
+    for (;;) {
+      const observedVersion = transactionVersion;
+      const changes = [];
+      const result = await callback({
+        get: async ref => { reads.push(ref.path); return { exists: documents.has(ref.path), data: () => structuredClone(documents.get(ref.path)) }; },
+        set: (ref, data) => changes.push({ path: ref.path, data: structuredClone(data) }),
+        update: (ref, patch) => {
+          assert(documents.has(ref.path));
+          const data = structuredClone(documents.get(ref.path));
+          for (const [key, value] of Object.entries(patch)) {
+            const parts = key.split('.'); let target = data;
+            for (const part of parts.slice(0, -1)) target = target[part] ||= {};
+            target[parts.at(-1)] = value;
+          }
+          changes.push({ path: ref.path, data });
+        },
+        create: (ref, data) => { assert(!documents.has(ref.path)); changes.push({ path: ref.path, data: structuredClone(data) }); },
+      });
+      if (optimisticRetries && observedVersion !== transactionVersion) continue;
+      changes.forEach(change => { documents.set(change.path, change.data); writes.push(change); });
+      if (changes.length) transactionVersion++;
+      return result;
+    }
   } };
   const api = createWisStockHandlers({ db, assertSession: async (request, options) => { sessions.push(options); return { uid: request.auth?.uid, email: request.auth?.token?.email }; }, now: () => clock });
   return { api, documents, reads, writes, sessions, advance: (ms = 3600000) => clock += ms };
@@ -51,6 +57,53 @@ test('management requires point authority, forbids students even with portal fla
     await assert.rejects(f.api.getWisStockManagement(req({})), reason('WIS_STOCK_TEACHER_REQUIRED'));
     await assert.rejects(f.api.saveWisStock(saveInput()), reason('WIS_STOCK_TEACHER_REQUIRED'));
   }
+});
+
+test('index reconstruction remains read-only, while actual stock updates atomically persist it with no additional document access', async () => {
+  const f = fixture(), created = await f.api.saveWisStock(saveInput());
+  const raw = f.documents.get(marketPath(scope));
+  delete raw.marketIndex;
+  const legacy = JSON.stringify(raw);
+  f.reads.length = 0; f.writes.length = 0;
+  const read = await f.api.getWisStockManagement(req({}));
+  assert.equal(read.marketIndex.value, 1000); assert.equal(read.marketIndex.history.length, 1);
+  assert.equal(f.reads.length, 5); assert.equal(f.writes.length, 0);
+  assert.equal(JSON.stringify(f.documents.get(marketPath(scope))), legacy);
+  const stockId = created.stocks[0].id;
+  await f.api.saveWisStock(saveInput(initial(), 1, stockId, 'index-noop-request-01'));
+  assert.equal(f.writes.length, 0); assert.equal(f.documents.get(marketPath(scope)).marketIndex, undefined);
+  f.reads.length = 0;
+  await f.api.saveWisStock(saveInput({ ...initial(), description: '실제 설명 수정' }, 1, stockId, 'index-edit-request-01'));
+  assert.equal(f.reads.length, 6); assert.equal(f.writes.length, 2);
+  assert.deepEqual(f.documents.get(marketPath(scope)).marketIndex.history, read.marketIndex.history);
+  assert.equal(Object.hasOwn(publicStockMarket(f.documents.get(marketPath(scope))), 'marketIndex'), false);
+});
+
+test('concurrent scheduler transactions retry against the committed index and apply a return once', async () => {
+  const f = fixture({ optimisticRetries: true });
+  await f.api.saveWisStock(saveInput({ ...initial(), automatic: true, volatilityBps: 0, trendBps: 300 }));
+  f.advance(); f.reads.length = 0; f.writes.length = 0;
+  const results = await Promise.all([f.api.advanceWisStockPrices(), f.api.advanceWisStockPrices()]);
+  assert.equal(results.filter(result => result.changed).length, 1);
+  assert.equal(f.writes.length, 1);
+  assert.equal(f.reads.length, 12); // Two initial four-read attempts, one retry.
+  const market = f.documents.get(marketPath(scope));
+  assert.equal(market.stocks[0].price, 103);
+  assert.equal(market.marketIndex.value, 1030);
+  assert.equal(market.marketIndex.history.length, 2);
+  assert.equal((await f.api.advanceWisStockPrices()).changed, false);
+  assert.equal(f.writes.length, 1);
+});
+
+test('invalid persisted index rejects reads and writes without touching balances or public prices', async () => {
+  const f = fixture();
+  await f.api.saveWisStock(saveInput());
+  f.documents.get(marketPath(scope)).marketIndex.value = 0;
+  const writes = f.writes.length;
+  await assert.rejects(f.api.getWisStockManagement(req({})), reason('WIS_STOCK_MARKET_INVALID'));
+  f.advance();
+  await assert.rejects(f.api.advanceWisStockPrices(), reason('WIS_STOCK_MARKET_INVALID'));
+  assert.equal(f.writes.length, writes);
 });
 test('teacher role alone retains read and management authority while disabled and deleted teachers remain blocked', async () => {
   const f = fixture();

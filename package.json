@@ -15,7 +15,7 @@
     "verify:entry-map-motion": "node scripts/verify-entry-map-motion.mjs",
     "verify:app-toasts": "node scripts/verify-app-toasts.mjs",
     "typecheck": "tsc --noEmit",
-    "verify:wis-investments": "node functions/scripts/verify-wis-stock-investment-board.cjs && node scripts/verify-wis-stock-investment-board-client.mjs",
+    "verify:wis-investments": "node functions/scripts/verify-wis-stock-investment-board.cjs && node scripts/verify-wis-stock-investment-board-client.mjs && node scripts/verify-wis-stock-investment-returns.mjs",
     "verify:communication": "node scripts/verify-teacher-curriculum-cache.mjs && node scripts/verify-lesson-loading.mjs && node scripts/verify-teacher-student-roster-client.mjs && node scripts/verify-assessment-request-sharing.mjs",
     "verify:student-profile-emoji": "node scripts/verify-student-profile-emoji.mjs",
     "build": "vite build",

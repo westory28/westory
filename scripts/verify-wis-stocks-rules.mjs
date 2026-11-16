@@ -11,7 +11,7 @@ import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc } from '
 const projectId = 'demo-westory-wis-stocks';
 assert.equal(process.env.GCLOUD_PROJECT, projectId);
 assert.equal(process.env.FIRESTORE_EMULATOR_HOST, '127.0.0.1:18256');
-const auditedSources = ['functions/wisStocks.js', 'functions/wisStockMarketRules.mjs', 'functions/wisStockOrderLifecycle.mjs',
+const auditedSources = ['functions/wisStocks.js', 'functions/wisStockIndex.js', 'functions/wisStockMarketRules.mjs', 'functions/wisStockOrderLifecycle.mjs',
   'functions/wisStockOrderLifecycle.js', 'functions/wisStockAccount.mjs', 'functions/wisStockCatalogSchedule.js',
   'functions/wisStockCatalog.json', 'firestore.rules', 'scripts/verify-wis-stocks-rules.mjs'];
 const hashAuditedSources = () => Object.fromEntries(auditedSources
@@ -483,7 +483,9 @@ try {
   // Exercise the actual Firestore transaction retries for scheduled listings.
   // This is synthetic market setup; protected account and ledger docs stay put.
   const catalog = require('./wisStockCatalog.json');
-  const catalogStart = Date.parse('2026-11-16T09:00:00+09:00');
+  // Keep this second scenario after the earlier price observations, rather
+  // than rewinding the clock behind a persisted cumulative index.
+  const catalogStart = Date.parse('2026-11-23T09:00:00+09:00');
   clock = catalogStart + 3600000;
   const oldMarket = (await db.doc(`${root}/wis_stock_markets/current`).get()).data();
   const manual = { ...oldMarket.stocks[0], settings: { ...oldMarket.stocks[0].settings,

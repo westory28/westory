@@ -38,6 +38,46 @@ test('KST weekdays and half-open session boundaries are independent of the host 
   assert.deepEqual(wisStockDailyBounds(101, 1000), { minimum: 91, maximum: 111 });
 });
 
+test('daily limits and circuit thresholds accept 60 percent and reject values beyond the exact boundary', () => {
+  const expanded = rules({ dailyPriceLimitBps: 6000, circuitBreakerBps: 6000 });
+  assert.equal(expanded.dailyPriceLimitBps, 6000);
+  assert.equal(expanded.circuitBreakerBps, 6000);
+  assert.equal(rules().dailyPriceLimitBps, 1000, 'Existing defaults do not change');
+  for (const patch of [{ dailyPriceLimitBps: 6001 }, { dailyPriceLimitBps: 6000.5 },
+    { dailyPriceLimitBps: 6000, circuitBreakerBps: 6001 },
+    { dailyPriceLimitBps: 3000, circuitBreakerBps: 6000 }]) assert.throws(() => rules(patch));
+  for (const price of [1, 2, 101, 999999, 1000000]) {
+    assert.deepEqual(wisStockDailyBounds(price, 6000), {
+      minimum: Number((BigInt(price) * 4000n + 9999n) / 10000n),
+      maximum: Number(BigInt(price) * 16000n / 10000n),
+    });
+  }
+  assert.throws(() => wisStockDailyBounds(100, 6001));
+  assert.throws(() => wisStockDailyBounds(100, 6000.1));
+  const value = input(), baseline = quote(value);
+  value.rules = expanded;
+  assert.deepEqual(quote(value), baseline, 'A limit change leaves account and fee calculations unchanged');
+});
+
+test('actual hourly pricing passes the old 30 percent cap and stops at the configured 60 percent daily cap', () => {
+  const { advanceMarket, normalizeSettings } = require('../wisStocks');
+  const started = Date.parse('2026-11-16T15:00:00Z'); // Tuesday midnight KST.
+  const settings = normalizeSettings({ name: '가격 범위 검사', description: '', period: '', initialPrice: 100,
+    minimumPrice: 1, maximumPrice: 1000000, volatilityBps: 0, trendBps: 300,
+    intervalHours: 1, automatic: true });
+  const initial = { schemaVersion: 1, semesterId: '2026-2', revision: 1, updatedAtMs: started,
+    rules: rules({ dailyPriceLimitBps: 6000, circuitBreakerBps: 6000, openMinuteKst: 0, closeMinuteKst: 1440 }),
+    stocks: [{ id, settings, price: 100, dayKey: '2026-11-17', dayOpenPrice: 100, haltedUntilMs: 0,
+      updatedAtMs: started, nextTickAtMs: started + 3600000, history: [{ atMs: started, price: 100 }] }] };
+  let market = initial;
+  for (let hour = 1; hour <= 23; hour++) market = advanceMarket(market, started + hour * 3600000);
+  assert.equal(market.stocks[0].price, 160);
+  assert(market.stocks[0].history.some(point => point.price > 130));
+  assert(market.stocks[0].history.every(point => point.price >= 40 && point.price <= 160));
+  assert.equal(advanceMarket(market, started + 23 * 3600000), market, 'A flat tick remains a no-op');
+  assert.equal(initial.stocks[0].price, 100, 'Pricing does not mutate its input');
+});
+
 test('a buy separately reports gross, ceil fee, cash debit and cost basis with zero earned/rank effects', () => {
   const value = input(), before = structuredClone(value), result = quote(value);
   assert.equal(result.gross, 1000); assert.equal(result.fee, 10); assert.equal(result.cashDebit, 1010);

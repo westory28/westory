@@ -46,6 +46,24 @@ const assertClickable=async locator=>{await locator.scrollIntoViewIfNeeded();ass
 const choose=async page=>page.locator('.wis-stocks__row').filter({hasText:'합성'}).first().press('Enter');
 const assertLayout=async(page,width)=>{const layout=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,width:innerWidth,titleBackground:getComputedStyle(document.querySelector('.teacher-settings-heading')).backgroundColor,tabsBackground:getComputedStyle(document.querySelector('.teacher-settings-navigation')).backgroundColor,headers:document.querySelectorAll('.wis-stocks header').length}));assert(layout.scroll<=width,JSON.stringify(layout));assert.equal(layout.titleBackground,'rgba(0, 0, 0, 0)');assert.equal(layout.tabsBackground,'rgba(0, 0, 0, 0)');assert.equal(layout.headers,0);assert.equal(await page.locator('.teacher-settings-sections.ws-page-tabs').evaluate(element=>getComputedStyle(element).borderBottomWidth),'0px');for(const section of await page.locator('.wis-stock-rules__section').all())assert.equal(await section.evaluate(element=>getComputedStyle(element).borderTopWidth),'0px');};
 try {
+  for (const width of [320,390,768,1280,1440]) {
+    const overview=await open(width);
+    await overview.evaluate(()=>{const q=window.stockQa;const at=1794787200000;q.market.marketIndex={baseValue:1000,baseAtMs:at,value:1023.456,previousClose:1000,updatedAtMs:at+3600000,history:[{atMs:at,value:1000},{atMs:at+3600000,value:1023.456}]};q.market.stocks[0].settings.description='곡물과 도구를 생산하고 교역하며 성장하는 역사 기업입니다.';for(let i=1;i<6;i++){const s=structuredClone(q.market.stocks[0]);s.id='stock_'+String(i+1).padStart(24,'0');s.settings.name='합성 기업 '+i;q.market.stocks.push(s)}});
+    await enter(overview);await overview.getByRole('heading',{name:'전체 위스피',exact:true}).waitFor();
+    assert.equal(await overview.locator('.wis-stocks__sparkline').count(),6);
+    assert.equal(await overview.locator('.wis-stocks__row-description').count(),6);
+    assert((await overview.locator('.wis-stocks__index-quote').innerText()).includes('1,023.46'));
+    const index=overview.getByRole('group',{name:'전체 위스피 지수 차트',exact:true});await index.focus();await index.press('End');
+    assert.equal(await index.getByRole('tooltip').getAttribute('data-price'),'1023.456');assert((await index.getByRole('tooltip').innerText()).includes('1,023.46 pt'));
+    await index.press('Escape');await index.evaluate(el=>el.blur());await assertLayout(overview,width);
+    await overview.screenshot({path:path.join(evidence,'overview-'+width+'.png'),fullPage:true});
+    await choose(overview);await overview.getByLabel('종목명',{exact:true}).fill('실시간 갱신 중 유지할 초안');
+    await overview.evaluate(()=>{const q=window.stockQa;q.market.revision++;q.market.marketIndex.value=1040.125;q.market.marketIndex.history.push({atMs:1794794400000,value:1040.125});q.listingNext(q.market.stocks.map(s=>s.id).sort(),q.market.revision)});
+    await overview.waitForFunction(()=>window.stockQa.completedReads===2);assert.equal(await overview.getByLabel('종목명',{exact:true}).inputValue(),'실시간 갱신 중 유지할 초안');assert((await overview.locator('.wis-stocks__index-quote').innerText()).includes('1,040.13'));
+    await overview.evaluate(()=>{const q=window.stockQa;q.listingNext(q.market.stocks.map(s=>s.id).sort(),q.market.revision)});assert.equal(await overview.evaluate(()=>window.stockQa.reads),2);await overview.close();
+  }
+  checks.push('Five widths: market index preserves fractional observations and pt tooltips; stock descriptions and real sparklines; one reload per new price revision without losing draft, duplicate revisions cause zero reads.');
+  const limit=await open(1280);await enter(limit);await tab(limit,'시장 규칙');const daily=limit.getByLabel('하루 가격 제한폭 (%)',{exact:true});assert.equal(await daily.getAttribute('max'),'60');await daily.fill('60.01');assert.equal(await daily.evaluate(el=>el.validity.valid),false);await daily.fill('60');await limit.getByRole('button',{name:'규칙 저장',exact:true}).click();await limit.waitForFunction(()=>window.stockQa.market.rules.dailyPriceLimitBps===6000);await tab(limit,'주식 차트 관리');await limit.getByRole('button',{name:'6주 기획안',exact:true}).click();await limit.getByText('하루 ±60%',{exact:true}).waitFor();await tab(limit,'시장 규칙');await daily.fill('10');await limit.getByRole('button',{name:'규칙 저장',exact:true}).click();await limit.waitForFunction(()=>window.stockQa.market.rules.dailyPriceLimitBps===1000);await tab(limit,'주식 차트 관리');await limit.getByRole('button',{name:'6주 기획안',exact:true}).click();await limit.getByText('하루 ±10%',{exact:true}).waitFor();await limit.close();checks.push('60% accepted, values above 60% rejected, saved price limit immediately updates six-week forecast.');
   for (const width of [390,768,1280]) {
     const scheduled=await open(width);await enter(scheduled);
     assert.equal(await scheduled.getByLabel('상장 시작일',{exact:true}).inputValue(),'2026-11-16');

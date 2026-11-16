@@ -358,7 +358,13 @@ export default function WisStockMarketRules({
               />
               시장 자동 가격 변동
             </label>
-            {input("dailyPriceLimitBps", "하루 가격 제한폭", "%", 100)}
+            {input(
+              "dailyPriceLimitBps",
+              "하루 가격 제한폭",
+              "%",
+              100,
+              "당일 기준가에서 위·아래로 허용하는 폭입니다. 최대 60%까지 설정할 수 있으며, 종목별 최저·최고 가격도 함께 적용합니다.",
+            )}
             {input(
               "circuitBreakerBps",
               "일시 정지 기준",
