@@ -11,9 +11,12 @@ export interface WeplayRanking {
   limit?: number;
   period?: { startsAtMs: number; endsAtMs: number };
   trackingSinceMs?: number;
+  classes?: { id: string; label: string }[];
+  selectedClassId?: string;
 }
 
 const CACHE_MS = 60_000;
+const MAX_CACHED_RANKINGS = 48;
 const cache = new Map<string, { value: WeplayRanking; expires: number }>();
 const pending = new Map<string, Promise<WeplayRanking>>();
 const invalidated = new Set<WeplayGameId>();
@@ -41,6 +44,7 @@ export function getWeplayRanking(
   scope: string,
   gameId: WeplayGameId,
   category: string,
+  classId?: string,
 ) {
   if (activeScope !== scope) {
     activeScope = scope;
@@ -48,7 +52,7 @@ export function getWeplayRanking(
     cache.clear();
     pending.clear();
   }
-  const key = `${gameId}/${category}`;
+  const key = `${gameId}/${category}/${classId || "self"}`;
   const saved = cache.get(key);
   if (saved && saved.expires > Date.now()) return Promise.resolve(saved.value);
   const existing = pending.get(key);
@@ -57,11 +61,20 @@ export function getWeplayRanking(
   const request = call<WeplayRanking>("getWeplayRanking", config, {
     gameId,
     category,
+    ...(classId ? { classId } : {}),
     refresh: invalidated.has(gameId),
   })
     .then((value) => {
       if (startedGeneration === generation) {
         cache.set(key, { value, expires: Date.now() + CACHE_MS });
+        if (!classId && value.selectedClassId) {
+          cache.set(`${gameId}/${category}/${value.selectedClassId}`, {
+            value,
+            expires: Date.now() + CACHE_MS,
+          });
+        }
+        while (cache.size > MAX_CACHED_RANKINGS)
+          cache.delete(cache.keys().next().value!);
         invalidated.delete(gameId);
       }
       return value;

@@ -381,9 +381,10 @@ function LegacyHistoryRainGame({
         </div>
       </form>
       <div className="weplay-game-footer">
-        {showRanking && !preview && (
+        {showRanking && (
           <WeplayRanking
             gameId="history-rain"
+            portal={preview ? "teacher" : "student"}
             initialCategory={session.difficulty}
             disabled={finishing || exitOpen || exitRequested}
           />

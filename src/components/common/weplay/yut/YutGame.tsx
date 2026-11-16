@@ -2783,9 +2783,10 @@ export default function YutGame({
             </div>
           </div>
         )}
-        {portal === "student" && !preview && (
+        {(portal === "teacher" || !preview) && (
           <WeplayRanking
             gameId="joseon-yut"
+            portal={portal}
             disabled={suspended || initialLoading || !!dialog || !!stackChoice}
           />
         )}

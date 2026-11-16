@@ -2,6 +2,11 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "../../../contexts/AuthContext";
 import {
+  canAccessTeacherPortal,
+  canReadLessonManagement,
+  isAdminUser,
+} from "../../../lib/permissions";
+import {
   getWeplayRanking,
   invalidateWeplayRanking,
   type WeplayRanking as RankingData,
@@ -81,15 +86,24 @@ export default function WeplayRanking({
   initialCategory,
   disabled = false,
   onOpen,
+  portal = "student",
 }: {
   gameId: WeplayGameId;
   initialCategory?: string;
   disabled?: boolean;
   onOpen?: () => void;
+  portal?: "student" | "teacher";
 }) {
   const auth = useAuth();
   const { currentUser, config, userData, authGeneration, authPhase } = auth;
+  const teacher = portal === "teacher";
+  const teacherAllowed =
+    isAdminUser(userData, currentUser?.email) ||
+    (userData?.role === "staff" &&
+      canAccessTeacherPortal(userData, currentUser?.email) &&
+      canReadLessonManagement(userData, currentUser?.email));
   const scope = JSON.stringify([
+    portal,
     currentUser?.uid,
     authGeneration,
     authPhase,
@@ -117,10 +131,20 @@ export default function WeplayRanking({
   const [data, setData] = useState<RankingData | null>(null);
   const [error, setError] = useState(false);
   const [retry, setRetry] = useState(0);
+  const [classId, setClassId] = useState("");
+  const [resolvedClassId, setResolvedClassId] = useState("");
+  const resolvedClass = useRef("");
+  const [classOptions, setClassOptions] = useState<
+    { id: string; label: string }[]
+  >([]);
   const button = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const titleId = useId();
-  const ready = !!currentUser && authPhase === "ready" && !disabled;
+  const ready =
+    !!currentUser &&
+    authPhase === "ready" &&
+    !disabled &&
+    (!teacher || teacherAllowed);
   const close = () => {
     setOpenScope("");
     button.current?.focus({ preventScroll: true });
@@ -129,17 +153,36 @@ export default function WeplayRanking({
     setOpenScope("");
     setData(null);
     setError(false);
-    if (disabled) invalidateWeplayRanking(gameId, false);
+    invalidateWeplayRanking(gameId, false);
   }, [scope, disabled, gameId]);
   useEffect(() => () => invalidateWeplayRanking(gameId, false), [gameId]);
+  useEffect(() => {
+    setClassId("");
+    setResolvedClassId("");
+    resolvedClass.current = "";
+    setClassOptions([]);
+  }, [scope]);
   useEffect(() => {
     if (!open || !ready) return;
     let active = true;
     setData(null);
     setError(false);
-    void getWeplayRanking(config, scope, gameId, category)
+    void getWeplayRanking(
+      config,
+      scope,
+      gameId,
+      category,
+      teacher ? classId || resolvedClass.current || undefined : undefined,
+    )
       .then((value) => {
-        if (active) setData(value);
+        if (active) {
+          setData(value);
+          if (teacher && value.classes) setClassOptions(value.classes);
+          if (teacher && value.selectedClassId) {
+            setResolvedClassId(value.selectedClassId);
+            resolvedClass.current = value.selectedClassId;
+          }
+        }
       })
       .catch(() => {
         if (active) setError(true);
@@ -156,6 +199,8 @@ export default function WeplayRanking({
     retry,
     config?.year,
     config?.semester,
+    teacher,
+    classId,
   ]);
   useEffect(() => {
     if (open)
@@ -164,6 +209,7 @@ export default function WeplayRanking({
         ?.focus({ preventScroll: true });
   }, [open]);
   const [songId, difficulty] = category.split(":");
+  if (teacher && !teacherAllowed) return null;
   return (
     <>
       <button
@@ -223,68 +269,93 @@ export default function WeplayRanking({
             >
               <div className="weplay-ranking-heading">
                 <div>
-                  <span>우리 반 랭킹 · 상위 {data?.limit || 50}위</span>
+                  <span>
+                    {teacher ? "학급 랭킹" : "우리 반 랭킹"} · 상위{" "}
+                    {data?.limit || 50}위
+                  </span>
                   <h2 id={titleId}>{titles[gameId]}</h2>
                 </div>
                 <button type="button" onClick={close} aria-label="랭킹 닫기">
                   ×
                 </button>
               </div>
-              {gameId === "history-rain" && (
-                <div
-                  className="weplay-ranking-options"
-                  aria-label="랭킹 난이도"
-                >
-                  {Object.entries(WEPLAY_DIFFICULTY_LABELS).map(
-                    ([id, label]) => (
-                      <button
-                        key={id}
-                        type="button"
-                        aria-pressed={category === id}
-                        onClick={() => setCategory(id)}
+              <div
+                className={`weplay-ranking-filters${teacher ? " is-teacher" : ""}`}
+              >
+                {teacher && classOptions.length > 0 && (
+                  <div className="weplay-ranking-options">
+                    <label>
+                      학급
+                      <select
+                        aria-label="랭킹 학급"
+                        value={classId || resolvedClassId}
+                        onChange={(event) => setClassId(event.target.value)}
                       >
-                        {label}
-                      </button>
-                    ),
-                  )}
-                </div>
-              )}
-              {gameId === "gungdeok-rock" && (
-                <div className="weplay-ranking-options">
-                  <label>
-                    곡
-                    <select
-                      aria-label="랭킹 곡"
-                      value={songId}
-                      onChange={(event) =>
-                        setCategory(`${event.target.value}:${difficulty}`)
-                      }
-                    >
-                      {RHYTHM_SONGS.map((song) => (
-                        <option key={song.id} value={song.id}>
-                          {song.title}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    장단
-                    <select
-                      aria-label="랭킹 장단"
-                      value={difficulty}
-                      onChange={(event) =>
-                        setCategory(`${songId}:${event.target.value}`)
-                      }
-                    >
-                      {rhythms.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-              )}
+                        {classOptions.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                )}
+                {gameId === "history-rain" && (
+                  <div
+                    className="weplay-ranking-options"
+                    aria-label="랭킹 난이도"
+                  >
+                    {Object.entries(WEPLAY_DIFFICULTY_LABELS).map(
+                      ([id, label]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          aria-pressed={category === id}
+                          onClick={() => setCategory(id)}
+                        >
+                          {label}
+                        </button>
+                      ),
+                    )}
+                  </div>
+                )}
+                {gameId === "gungdeok-rock" && (
+                  <div className="weplay-ranking-options">
+                    <label>
+                      곡
+                      <select
+                        aria-label="랭킹 곡"
+                        value={songId}
+                        onChange={(event) =>
+                          setCategory(`${event.target.value}:${difficulty}`)
+                        }
+                      >
+                        {RHYTHM_SONGS.map((song) => (
+                          <option key={song.id} value={song.id}>
+                            {song.title}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      장단
+                      <select
+                        aria-label="랭킹 장단"
+                        value={difficulty}
+                        onChange={(event) =>
+                          setCategory(`${songId}:${event.target.value}`)
+                        }
+                      >
+                        {rhythms.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                )}
+              </div>
               <p className="weplay-ranking-metric">
                 {gameId === "joseon-yut"
                   ? "현재 학기 · 온라인 완주 우승"
@@ -318,7 +389,11 @@ export default function WeplayRanking({
                 ) : !data ? (
                   <p role="status">랭킹을 불러오고 있습니다.</p>
                 ) : !data.rows.length ? (
-                  <p>아직 기록이 없습니다.</p>
+                  <p>
+                    {teacher && !classOptions.length
+                      ? "조회할 학급이 없습니다."
+                      : "아직 기록이 없습니다."}
+                  </p>
                 ) : (
                   <ol className="weplay-ranking-rows">
                     {data.rows.map((row, index) => (

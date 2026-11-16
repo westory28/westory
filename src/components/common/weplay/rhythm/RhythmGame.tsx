@@ -607,16 +607,15 @@ export default function RhythmGame({
       aria-label="덩기덕 쿵더Rock 경기장"
     >
       <div className="rhythm-canvas" ref={canvasRef}>
-        {!preview && (
-          <WeplayRanking
-            gameId="gungdeok-rock"
-            initialCategory={`${songId}:${difficulty}`}
-            disabled={
-              !playable || phase === "starting" || rankingSave === "saving"
-            }
-            onOpen={pause}
-          />
-        )}
+        <WeplayRanking
+          gameId="gungdeok-rock"
+          portal={preview ? "teacher" : "student"}
+          initialCategory={`${songId}:${difficulty}`}
+          disabled={
+            !playable || phase === "starting" || rankingSave === "saving"
+          }
+          onOpen={pause}
+        />
         {stage.portrait ? (
           <div className="rhythm-orientation-gate" role="status">
             <RhythmMascot />

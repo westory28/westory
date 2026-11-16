@@ -25,13 +25,15 @@ await fs.mkdir(evidence, { recursive: true });
 const fixture = `
 import {useSyncExternalStore} from 'react';
 const listeners=new Set();
-const qa=window.rankingQA={calls:[],hold:false,pending:[],fail:false,offset:0,auth:{config:{year:'2026',semester:'2'},currentUser:{uid:'student-a'},userData:{role:'student',grade:'3',class:'1',enrollmentStatus:'active',registrationApprovalStatus:'APPROVED'},authGeneration:1,authPhase:'ready'}};
+const teacher=new URLSearchParams(location.search).has('teacher');
+const qa=window.rankingQA={calls:[],hold:false,pending:[],fail:false,offset:0,auth:{config:{year:'2026',semester:'2'},currentUser:{uid:teacher?'teacher-a':'student-a'},userData:{role:teacher?'teacher':'student',grade:'3',class:'1',enrollmentStatus:'active',registrationApprovalStatus:'APPROVED'},authGeneration:1,authPhase:'ready'}};
 const dateNow=Date.now;Date.now=()=>dateNow()+qa.offset;
 qa.update=value=>{qa.auth={...qa.auth,...value};listeners.forEach(fn=>fn())};
 export const useAuth=()=>useSyncExternalStore(fn=>{listeners.add(fn);return()=>listeners.delete(fn)},()=>qa.auth);
 export const getHistoryDictionaryCallable=async name=>async data=>{
  qa.calls.push({name,data,uid:qa.auth.currentUser.uid});
- const value={gameId:data.gameId,category:data.category,rows:Array.from({length:18},(_,i)=>({rank:i+1,studentLabel:qa.auth.currentUser.uid==='student-a'?'김*생':'이*생',score:1800-i*50,isMe:i===3})),updatedAtMs:Date.now(),scoreLabel:'점',trackingSinceMs:data.gameId==='history-rain'?undefined:1794783600000};
+ const classId=data.classId||'3_1';
+ const value={gameId:data.gameId,category:data.category,rows:Array.from({length:18},(_,i)=>({rank:i+1,studentLabel:teacher?(classId==='3_1'?'김*생':'박*생'):(qa.auth.currentUser.uid==='student-a'?'김*생':'이*생'),score:1800-i*50,isMe:!teacher&&i===3})),updatedAtMs:Date.now(),scoreLabel:'점',trackingSinceMs:data.gameId==='history-rain'?undefined:1794783600000,...(teacher?{selectedClassId:classId,...(!data.classId?{classes:[{id:'3_1',label:'3학년 1반'},{id:'3_2',label:'3학년 2반'}]}:{})}:{})};
  if(qa.hold)await new Promise(resolve=>qa.pending.push(resolve));
  if(qa.fail)throw new Error('Synthetic network failure');
  return {data:value};
@@ -49,6 +51,8 @@ import Ranking from './src/components/common/weplay/WeplayRanking';
 import * as service from './src/lib/weplayRanking';
 import Naval from './src/components/common/weplay/HistoryRainGame';
 import Yut from './src/components/common/weplay/yut/YutGame';
+import Rhythm from './src/components/common/weplay/rhythm/RhythmGame';
+import {RhythmAudio} from './src/components/common/weplay/rhythm/rhythmAudio';
 import Frame from './src/components/common/weplay/WeplayGameFrame';
 import {createWeplayPreviewTransport} from './src/lib/weplayPreview';
 import './src/assets/index.css';import './assets/css/style.css';
@@ -58,11 +62,14 @@ import './src/components/common/weplay/yut/yut.css';
 import './src/components/common/weplay/yut/yut-menu-controls.css';
 import './src/components/common/weplay/rhythm/rhythm.css';
 window.rankingQA.service=service;
-function Fixture(){const[disabled,setDisabled]=useState(false);window.rankingQA.disable=setDisabled;const gameId=new URLSearchParams(location.search).get('game')||'history-rain';return <main><div className='stage' style={{position:'relative',height:560,background:gameId==='history-rain'?'#173644':gameId==='joseon-yut'?'#51331d':'#f5e8bc'}}><Ranking gameId={gameId} disabled={disabled}/></div></main>}
+const params=new URLSearchParams(location.search),teacher=params.has('teacher');
+const originalTime=Object.getOwnPropertyDescriptor(RhythmAudio.prototype,'currentTime').get;
+Object.defineProperty(RhythmAudio.prototype,'currentTime',{get(){return window.rankingQA.time??originalTime.call(this)}});
+function Fixture(){const[disabled,setDisabled]=useState(false);window.rankingQA.disable=setDisabled;const gameId=params.get('game')||'history-rain';return <main><div className='stage' style={{position:'relative',height:560,background:gameId==='history-rain'?'#173644':gameId==='joseon-yut'?'#51331d':'#f5e8bc'}}><Ranking gameId={gameId} portal={teacher?'teacher':'student'} disabled={disabled}/></div></main>}
 const now=Date.now(),session={id:'ranking-visual',difficulty:'mild',mode:'practice',status:'active',startsAtMs:now-1000,endsAtMs:now+89000,serverNowMs:now,battleVersion:1,words:Array.from({length:30},(_,i)=>({id:'word-'+i,text:'조선',unitId:'qa',lessonTitle:'수업',context:'',stage:1,spawnAtMs:i*2000,fallDurationMs:12000})),acceptedWordIds:[],acceptedEvents:[],correctCount:0,policy:{enabled:true,challengeCost:0,dailyChallengeLimit:5,resultRewards:[],rankingPeriod:'weekly',rankingRewards:{}},result:null};
 const transport=createWeplayPreviewTransport(session),music={muted:true,toggle:()=>{},start:()=>{},enabled:false,failed:false,loading:false,playing:false};
 const mode=new URLSearchParams(location.search).get('actual');
-createRoot(document.getElementById('root')).render(mode==='naval'?<main className='weplay-page'><Frame><Naval session={session} config={window.rankingQA.auth.config} transport={transport} onComplete={()=>{}} onShowGuide={()=>{}} showRanking/></Frame></main>:mode==='yut'?<main><Frame theme='yut'><Yut portal='student' onBack={()=>{}} music={music} onMusicActiveChange={()=>{}}/></Frame></main>:<StrictMode><Fixture/></StrictMode>);
+createRoot(document.getElementById('root')).render(mode==='naval'?<main className='weplay-page'><Frame><Naval session={session} preview={teacher} config={window.rankingQA.auth.config} transport={transport} onComplete={()=>{}} onShowGuide={()=>{}} showRanking/></Frame></main>:mode==='yut'?<main><Frame theme='yut'><Yut portal={teacher?'teacher':'student'} onBack={()=>{}} music={music} onMusicActiveChange={()=>{}}/></Frame></main>:mode==='rhythm'?<main><Frame theme='rhythm'><Rhythm preview={teacher}/></Frame></main>:<StrictMode><Fixture/></StrictMode>);
 `;
 const bundled = await build({
   stdin: { contents: harness, loader: "tsx", resolveDir: root },
@@ -217,6 +224,11 @@ try {
           "naval parchment contrast",
         );
       await open(page);
+      assert.equal(
+        await page.getByLabel("랭킹 학급", { exact: true }).count(),
+        0,
+        "student has no class picker",
+      );
       assert.equal(
         await page.evaluate(() => window.rankingQA.calls.length),
         1,
@@ -477,6 +489,214 @@ try {
       );
       await close(page);
       checks.push({ actual: mode, width, collisions });
+      await page.close();
+    }
+  for (const mode of ["naval", "yut", "rhythm"])
+    for (const [width, height] of [
+      [390, 844],
+      [768, 1024],
+      [1280, 800],
+    ]) {
+      const page = await browser.newPage({
+        viewport: { width, height },
+        hasTouch: width < 1000,
+      });
+      page.on("pageerror", (error) => errors.push(error.message));
+      await page.route("**/*", (route) =>
+        new URL(route.request().url()).origin === base
+          ? route.continue()
+          : route.abort(),
+      );
+      await page.addInitScript(() => {
+        HTMLElement.prototype.requestFullscreen = undefined;
+      });
+      await page.goto(`${base}/?actual=${mode}&teacher`);
+      await page.locator(".weplay-ranking-launch").waitFor();
+      assert.equal(
+        await page.locator(".weplay-ranking-launch").count(),
+        1,
+        "exactly one teacher launcher",
+      );
+      assert.equal(
+        await page.evaluate(() => window.rankingQA.calls.length),
+        0,
+        "teacher initial state has no ranking query",
+      );
+      if (mode !== "naval" && width < 1000) {
+        await page
+          .getByRole("button", { name: /전체 화면/ })
+          .first()
+          .click();
+        await page
+          .locator(
+            mode === "yut"
+              ? ".yut-game--rotated-fullscreen"
+              : ".rhythm-game--rotated",
+          )
+          .waitFor();
+      }
+      await open(page);
+      assert.equal(
+        await page.evaluate(() => window.rankingQA.calls.length),
+        1,
+        "teacher first class and list in one query",
+      );
+      const picker = page.getByLabel("랭킹 학급", { exact: true });
+      assert.equal(await picker.inputValue(), "3_1");
+      assert.equal(await picker.locator("option").count(), 2);
+      assert.equal(
+        await page.locator(".weplay-ranking-rows li.is-me").count(),
+        0,
+        "teacher has no student self row",
+      );
+      await picker.selectOption("3_2");
+      await page.waitForFunction(() =>
+        document
+          .querySelector(".weplay-ranking-rows")
+          ?.textContent.includes("박*생"),
+      );
+      assert.equal(await page.evaluate(() => window.rankingQA.calls.length), 2);
+      assert.equal(
+        await page.evaluate(() => window.rankingQA.calls.at(-1).data.classId),
+        "3_2",
+      );
+      await picker.selectOption("3_1");
+      await page.waitForFunction(() =>
+        document
+          .querySelector(".weplay-ranking-rows")
+          ?.textContent.includes("김*생"),
+      );
+      assert.equal(
+        await page.evaluate(() => window.rankingQA.calls.length),
+        2,
+        "return to initial class reuses aliased cache",
+      );
+      const box = await page.locator('[role="dialog"]').boundingBox();
+      assert(
+        box.x >= -1 &&
+          box.y >= -1 &&
+          box.x + box.width <= width + 1 &&
+          box.y + box.height <= height + 1,
+        `teacher ${mode}/${width} dialog fits`,
+      );
+      await page.screenshot({
+        path: path.join(evidence, `teacher-${mode}-${width}-dialog.png`),
+      });
+      await close(page);
+      await open(page);
+      assert.equal(
+        await page.evaluate(() => window.rankingQA.calls.length),
+        2,
+        "teacher reopen no query",
+      );
+      await close(page);
+      if (mode === "yut") {
+        await page.getByRole("button", { name: /대기실부터 체험하기/ }).click();
+        await page.locator(".yut-waiting").waitFor();
+        await open(page);
+        await close(page);
+        await page
+          .getByRole("button", { name: "게임 시작", exact: true })
+          .click();
+        await page.locator(".yut-match").waitFor();
+        await open(page);
+        await close(page);
+      }
+      if (mode === "rhythm") {
+        await page.getByRole("button", { name: /연주 시작/ }).click();
+        await page
+          .getByRole("button", { name: "일시정지", exact: true })
+          .waitFor();
+        await open(page);
+        await close(page);
+        await page.getByRole("button", { name: /계속 연주/ }).click();
+        await page.evaluate(() => (window.rankingQA.time = 1000));
+        await page.locator(".rhythm-result").waitFor();
+        await open(page);
+        await close(page);
+      }
+      assert(
+        await page.evaluate(() =>
+          window.rankingQA.calls.every(
+            (call) => call.name === "getWeplayRanking",
+          ),
+        ),
+        "teacher preview never submits score",
+      );
+      if (width === 1280) {
+        await open(page);
+        await page.evaluate(() => {
+          window.rankingQA.savedUserData = window.rankingQA.auth.userData;
+        });
+        await page.evaluate(() =>
+          window.rankingQA.update({
+            userData: {
+              role: "staff",
+              teacherPortalEnabled: false,
+              staffPermissions: ["lesson_read"],
+            },
+          }),
+        );
+        await page
+          .locator(".weplay-ranking-launch")
+          .waitFor({ state: "detached" });
+        assert.equal(
+          await page.locator('[role="dialog"]').count(),
+          0,
+          "revoked permission closes cached ranking",
+        );
+        await page.evaluate(() =>
+          window.rankingQA.update({
+            userData: {
+              role: "student",
+              teacherPortalEnabled: true,
+              staffPermissions: ["lesson_read"],
+            },
+          }),
+        );
+        assert.equal(
+          await page.locator(".weplay-ranking-launch").count(),
+          0,
+          "student cannot enter teacher ranking by permission-shaped fields",
+        );
+        const beforeRestore = await page.evaluate(
+          () => window.rankingQA.calls.length,
+        );
+        await page.evaluate(() =>
+          window.rankingQA.update({ userData: window.rankingQA.savedUserData }),
+        );
+        await page.locator(".weplay-ranking-launch").waitFor();
+        await open(page);
+        assert.equal(
+          await page.evaluate(() => window.rankingQA.calls.length),
+          beforeRestore + 1,
+          "returning to the same permission scope must reauthorize after revocation",
+        );
+        await close(page);
+        await page.evaluate(() =>
+          window.rankingQA.update({
+            userData: {
+              role: "staff",
+              teacherPortalEnabled: true,
+              staffPermissions: ["lesson_read"],
+            },
+          }),
+        );
+        await page.locator(".weplay-ranking-launch").waitFor();
+        await open(page);
+        assert.equal(
+          await page.evaluate(() => window.rankingQA.calls.at(-1).data.classId),
+          undefined,
+          "new role reloads its authorized class list",
+        );
+      }
+      checks.push({
+        teacher: mode,
+        width,
+        classes: 2,
+        lazyReads: 2,
+        previewWrites: 0,
+      });
       await page.close();
     }
   assert.deepEqual(errors, []);

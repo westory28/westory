@@ -47,6 +47,7 @@ import RhythmGameEntry from "../../components/common/weplay/rhythm/RhythmGameEnt
 import WeplayStudioIntro from "../../components/common/weplay/WeplayStudioIntro";
 import { prepareWeplayIntroAudio } from "../../components/common/weplay/weplayIntroAudio";
 import WeplayGameFrame from "../../components/common/weplay/WeplayGameFrame";
+import WeplayRanking from "../../components/common/weplay/WeplayRanking";
 import { withWeplayRequestTimeout } from "../../components/common/weplay/requestTimeout";
 
 export default function ManageWeplay() {
@@ -553,6 +554,15 @@ function NavalWeplayManagement() {
                           transport={preview.transport}
                           preview
                           onComplete={setResult}
+                          showRanking
+                        />
+                      )}
+                      {introComplete && (!preview || result) && (
+                        <WeplayRanking
+                          portal="teacher"
+                          gameId="history-rain"
+                          initialCategory={difficulty}
+                          disabled={starting}
                         />
                       )}
                     </WeplayGameFrame>

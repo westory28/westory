@@ -12,8 +12,17 @@ const fail = (code, message) => { throw new HttpsError(code, message); };
 const identifier = value => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(value);
 const CACHE_MS = 60_000;
 const SESSION_MS = 2 * 60 * 60_000;
+const ADMIN_EMAIL = 'westoria28@gmail.com';
+const CLASS_LIMIT = 100;
 const menuKeys = { 'history-rain': 'naval', 'joseon-yut': 'yut', 'gungdeok-rock': 'rhythm' };
 const validGame = gameId => typeof gameId === 'string' && Object.hasOwn(menuKeys, gameId);
+const classDetails = (classId, classroom, profile = {}) => {
+  const grade = String(classroom.grade || profile.studentGrade || profile.grade || '').replace(/학년$/, '').trim();
+  const classNumber = String(classroom.classNumber || profile.studentClass || profile.class || '').replace(/반$/, '').trim();
+  const classKey = /^\d{1,3}$/.test(grade) && /^\d{1,3}$/.test(classNumber) ? `${Number(grade)}-${Number(classNumber)}` : '';
+  return { id: classId, classKey, grade, classNumber,
+    label: classKey ? `${Number(grade)}학년 ${Number(classNumber)}반` : String(classroom.displayName || '학급').slice(0, 60) };
+};
 const scopeFrom = data => {
   if (typeof data?.year !== 'string' || !/^\d{4}$/.test(data.year) || !['1', '2'].includes(data.semester)) fail('invalid-argument', '현재 학기를 확인해 주세요.');
   return { year: data.year, semester: data.semester, id: `${data.year}-${data.semester}` };
@@ -58,22 +67,31 @@ function createWeplayRankingHandlers({ db, assertSession = assertScoreWorkflowSe
     cache.set(key, item);
     return item.promise;
   };
-  const authority = async (reader, request, scope, gameId) => {
+  const authority = async (reader, request, scope, gameId, allowManager = false) => {
     const read = reference => reader === db ? reference.get() : reader.get(reference);
     const uid = request.auth?.uid, email = String(request.auth?.token?.email || '').toLowerCase();
     if (!uid) fail('unauthenticated', '로그인 후 이용해 주세요.');
-    if (!/@yongshin-ms\.ms\.kr$/.test(email) || !validGame(gameId)) fail('permission-denied', '학생 계정으로 이용해 주세요.');
-    const slotId = `slot_${hash(`${scope.id}\n${uid}`).slice(0, 40)}`;
-    const publicationPath = gameId === 'gungdeok-rock' ? `${root(scope)}/rhythm_publication/${gameId}` : `${root(scope)}/weplay_games/${gameId}`;
-    const [userSnap, configSnap, pointerSnap, manifestSnap, publicationSnap, slotSnap] = await reader.getAll(
+    if ((!/@yongshin-ms\.ms\.kr$/.test(email) && !(allowManager && email === ADMIN_EMAIL)) || !validGame(gameId)) fail('permission-denied', '위스토리 계정으로 이용해 주세요.');
+    const [userSnap, configSnap, pointerSnap, manifestSnap] = await reader.getAll(
       db.doc(`users/${uid}`), db.doc('site_settings/config'), db.doc('site_settings/semester_active'),
-      db.doc(`semester_manifests/${scope.id}`), db.doc(publicationPath), db.doc(`semester_enrollment_slots/${slotId}`));
+      db.doc(`semester_manifests/${scope.id}`));
     const profile = userSnap.data() || {}, config = configSnap.data() || {}, pointer = pointerSnap.data() || {}, manifest = manifestSnap.data() || {};
-    if (profile.role !== 'student' || profile.isDeleted || profile.deletedAt || profile.weplayDeletionPending
-      || (Object.hasOwn(profile, 'registrationApprovalStatus') && profile.registrationApprovalStatus !== 'APPROVED')) fail('permission-denied', '학생 계정으로 이용해 주세요.');
+    if (profile.isDeleted || profile.deletedAt || profile.weplayDeletionPending
+      || (Object.hasOwn(profile, 'registrationApprovalStatus') && profile.registrationApprovalStatus !== 'APPROVED')) fail('permission-denied', '이 계정으로 랭킹을 이용할 수 없습니다.');
     if (String(config.year) !== scope.year || String(config.semester) !== scope.semester || pointer.semesterId !== scope.id
       || manifest.status !== 'ACTIVE' || manifest.readOnly === true || !Number.isSafeInteger(manifest.revision) || manifest.revision < 1 || pointer.revision !== manifest.revision) fail('failed-precondition', '현재 운영 중인 학기에서 이용해 주세요.');
+    // Same read authority as Weplay/Yut management. Only this read handler passes
+    // allowManager; teacher preview must never create a rhythm session or score.
+    const manager = allowManager && (email === ADMIN_EMAIL || profile.role === 'teacher'
+      || (profile.role === 'staff' && profile.teacherPortalEnabled === true
+        && Array.isArray(profile.staffPermissions) && profile.staffPermissions.includes('lesson_read')));
+    if (manager) return { uid, manager: true, revision: `teacher:${manifest.revision}` };
+    if (profile.role !== 'student') fail('permission-denied', '게임을 이용할 권한이 없습니다.');
+    if (Object.hasOwn(request.data || {}, 'classId') || request.data?.includeClasses === true) fail('permission-denied', '본인 학급의 랭킹만 확인할 수 있습니다.');
     assertStudentMenuVisible(config, ['weplay', menuKeys[gameId]]);
+    const slotId = `slot_${hash(`${scope.id}\n${uid}`).slice(0, 40)}`;
+    const publicationPath = gameId === 'gungdeok-rock' ? `${root(scope)}/rhythm_publication/${gameId}` : `${root(scope)}/weplay_games/${gameId}`;
+    const [publicationSnap, slotSnap] = await reader.getAll(db.doc(publicationPath), db.doc(`semester_enrollment_slots/${slotId}`));
     const publication = gameId === 'history-rain' ? readGameSettings(publicationSnap.data()) : publicationSnap.data();
     if (publication?.enabled !== true || (gameId === 'gungdeok-rock'
       ? publication.schemaVersion !== 1 || !Number.isSafeInteger(publication.revision) || publication.revision < 1
@@ -85,11 +103,31 @@ function createWeplayRankingHandlers({ db, assertSession = assertScoreWorkflowSe
       || enrollment.readOnly === true || !identifier(enrollment.classId)) fail('permission-denied', '현재 학기의 수강 정보를 확인해 주세요.');
     const classroom = (await read(db.doc(`semester_classes/${enrollment.classId}`))).data() || {};
     if (classroom.semesterId !== scope.id || classroom.status !== 'ACTIVE' || classroom.readOnly === true) fail('permission-denied', '현재 학급 정보를 확인해 주세요.');
-    const grade = String(classroom.grade || profile.studentGrade || profile.grade || '').replace(/학년$/, '').trim();
-    const classNumber = String(classroom.classNumber || profile.studentClass || profile.class || '').replace(/반$/, '').trim();
     return { uid, classId: enrollment.classId, enrollmentId: slot.activeEnrollmentId, rankingLabel: studentLabel(profile, enrollment),
-      classKey: /^\d{1,3}$/.test(grade) && /^\d{1,3}$/.test(classNumber) ? `${Number(grade)}-${Number(classNumber)}` : '',
+      classKey: classDetails(enrollment.classId, classroom, profile).classKey,
       revision: publication.revision ?? publication.version };
+  };
+  const teacherClass = async (request, scope) => {
+    const requested = request.data?.classId;
+    if (requested !== undefined && !identifier(requested)) fail('invalid-argument', '학급을 다시 선택해 주세요.');
+    let classes, selected;
+    if (requested === undefined || request.data?.includeClasses === true) {
+      // Metadata only, limited on the server to this active semester. Detect an
+      // oversized catalogue explicitly instead of silently dropping classrooms.
+      const snapshot = await db.collection('semester_classes').where('semesterId', '==', scope.id).where('status', '==', 'ACTIVE')
+        .select('semesterId', 'status', 'readOnly', 'grade', 'classNumber', 'displayName').limit(CLASS_LIMIT + 1).get();
+      if (snapshot.size > CLASS_LIMIT) fail('failed-precondition', '학급 목록이 너무 많습니다. 학급을 지정해 다시 확인해 주세요.');
+      const available = snapshot.docs.filter(doc => doc.data().readOnly !== true).map(doc => classDetails(doc.id, doc.data()))
+        .sort((a, b) => a.grade.localeCompare(b.grade, 'ko', { numeric: true }) || a.classNumber.localeCompare(b.classNumber, 'ko', { numeric: true }) || a.id.localeCompare(b.id));
+      selected = requested === undefined ? available[0] : available.find(value => value.id === requested);
+      if (requested !== undefined && !selected) fail('permission-denied', '현재 학기의 학급을 선택해 주세요.');
+      classes = available.map(({ id, label }) => ({ id, label }));
+    } else {
+      const classroom = (await db.doc(`semester_classes/${requested}`).get()).data();
+      if (!classroom || classroom.semesterId !== scope.id || classroom.status !== 'ACTIVE' || classroom.readOnly === true) fail('permission-denied', '현재 학기의 학급을 선택해 주세요.');
+      selected = classDetails(requested, classroom);
+    }
+    return { classId: selected?.id || '', classKey: selected?.classKey || '', ...(classes ? { classes } : {}) };
   };
   const getWeplayRanking = async request => {
     await assertSession(request);
@@ -99,10 +137,12 @@ function createWeplayRankingHandlers({ db, assertSession = assertScoreWorkflowSe
     if (gameId === 'history-rain' && !['mild', 'medium', 'spicy'].includes(category)) fail('invalid-argument', '난이도를 다시 선택해 주세요.');
     if (gameId === 'joseon-yut' && category !== 'wins') fail('invalid-argument', '랭킹을 다시 선택해 주세요.');
     if (gameId === 'gungdeok-rock') { const [songId, difficulty, extra] = String(category).split(':'); if (extra) fail('invalid-argument', '곡과 장단을 다시 선택해 주세요.'); rhythmChoice(songId, difficulty); }
-    const actor = await authority(db, request, scope, gameId);
+    const actor = await authority(db, request, scope, gameId, true);
+    if (actor.manager) Object.assign(actor, await teacherClass(request, scope));
     const boundary = `${scope.id}/${gameId}/${category}/${actor.classId}/${actor.revision}`;
     let payload;
-    if (gameId === 'history-rain') {
+    if (!actor.classId) payload = { rows: [], updatedAtMs: now() };
+    else if (gameId === 'history-rain') {
       const meta = (await db.doc(`${root(scope)}/weplay_meta/current`).get()).data();
       if (!identifier(meta?.periodId)) payload = { rows: [], updatedAtMs: now() };
       else {
@@ -121,6 +161,7 @@ function createWeplayRankingHandlers({ db, assertSession = assertScoreWorkflowSe
       return { rows: board?.rows || [], updatedAtMs: board?.updatedAtMs || now(), ...(board?.trackingSinceMs ? { trackingSinceMs: board.trackingSinceMs } : {}) };
     }, request.data?.refresh === true);
     return { ...payload, gameId, category, limit: LIMIT, cacheTtlMs: CACHE_MS, scoreLabel: gameId === 'joseon-yut' ? '승' : '점',
+      ...(actor.manager ? { selectedClassId: actor.classId, ...(actor.classes ? { classes: actor.classes } : {}) } : {}),
       rows: payload.rows.map((row, index) => ({ rank: index + 1, studentLabel: row.studentLabel, score: row.score, isMe: row.uid === actor.uid })) };
   };
   const startRhythmRankingGame = async request => {

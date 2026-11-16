@@ -23,7 +23,7 @@ const db = getFirestore(), scope = { year: '2026', semester: '2' }, base = 'year
 const hash = value => createHash('sha256').update(value).digest('hex');
 const authTime = Math.floor(Date.now() / 1000) - 10;
 const proof = { authorityGeneration: 'w1r2-2026-08-09', protocolVersion: 2, revision: 'a'.repeat(64) };
-const request = (uid, data = {}) => ({ auth: { uid, token: { email: `${uid}@yongshin-ms.ms.kr`, auth_time: authTime } }, data: { ...scope, _session: proof, ...data } });
+const request = (uid, data = {}) => ({ auth: { uid, token: { email: uid === 'admin' ? 'westoria28@gmail.com' : `${uid}@yongshin-ms.ms.kr`, auth_time: authTime } }, data: { ...scope, _session: proof, ...data } });
 let atMs = Date.now(), metrics = { reads: 0, writes: 0, queries: 0, guardReads: 0 }, failNextBoardRead = false;
 const reset = () => { metrics = { reads: 0, writes: 0, queries: 0, guardReads: 0 }; };
 const guardContext = new AsyncLocalStorage();
@@ -72,8 +72,9 @@ async function seed() {
     [`${base}/weplay_meta/current`]: { periodId: 'period-one' },
     [`${base}/weplay_periods/period-one`]: { startsAtMs: atMs - 1000, endsAtMs: atMs + 3600000 },
   };
-  for (const uid of ['a', 'b', 'other', 'teacher']) {
-    docs[`users/${uid}`] = { role: uid === 'teacher' ? 'teacher' : 'student', name: '합성학생', studentNumber: '1', registrationApprovalStatus: 'APPROVED' };
+  for (const uid of ['a', 'b', 'other', 'teacher', 'admin', 'staff-allowed', 'staff-denied', 'staff-no-portal']) {
+    docs[`users/${uid}`] = { role: ['teacher', 'admin'].includes(uid) ? 'teacher' : uid.startsWith('staff-') ? 'staff' : 'student', name: '합성학생', studentNumber: '1', registrationApprovalStatus: 'APPROVED',
+      ...(uid.startsWith('staff-') ? { teacherPortalEnabled: uid !== 'staff-no-portal', staffPermissions: uid === 'staff-denied' ? ['point_read'] : ['lesson_read'] } : {}) };
     docs[`application_sessions/${uid}/sessions/${authTime}`] = { status: 'active', authTime, schemaVersion: 2, authorityGeneration: proof.authorityGeneration, protocolVersion: 2, sessionRevision: proof.revision, authorityModeAtOpen: 'ENFORCE', generalExpiresAt: Timestamp.fromMillis(Date.now() + 3600000) };
     docs[`semester_enrollment_slots/slot_${hash('2026-2\n' + uid).slice(0, 40)}`] = { semesterId: '2026-2', studentUid: uid, activeEnrollmentId: `en-${uid}`, status: 'ACTIVE' };
     docs[`semester_enrollments/en-${uid}`] = { semesterId: '2026-2', studentUid: uid, classId: uid === 'other' ? 'class-two' : 'class-one', enrollmentStatus: 'ACTIVE' };
@@ -107,7 +108,6 @@ async function main() {
   await db.doc('site_settings/config').update({ studentMenuVisibility: { weplay: false } });
   await deny(api.getWeplayRanking(request('a', naval)), 'permission-denied');
   await db.doc('site_settings/config').set(scope);
-  await deny(api.getWeplayRanking(request('teacher', naval)), 'permission-denied');
   await deny(api.getWeplayRanking(request('a', { ...naval, year: '2025' })), 'failed-precondition');
   await db.doc(`application_sessions/a/sessions/${authTime}`).update({ status: 'revoked' });
   await deny(api.getWeplayRanking(request('a', naval)), 'unauthenticated');
@@ -194,7 +194,77 @@ async function main() {
     });
     assert.equal(response.status, 403, `direct ${method} denied: ${documentPath}`);
   }
+  await verifyTeacherRanking();
   console.log(JSON.stringify({ passed: true, notes: 'Total reads = reads + guardReads; missing documents and empty queries each cost at least one read. Concurrent transaction retries may add reads.', counts }, null, 2));
+}
+async function verifyTeacherRanking() {
+  const naval = { gameId: 'history-rain', category: 'mild' };
+  const hidden = { gameId: 'joseon-yut', category: 'wins' };
+  await db.doc('semester_classes/class-old').set({ semesterId: '2025-2', status: 'ACTIVE', grade: '3', classNumber: '1' });
+  await db.doc('semester_classes/class-inactive').set({ semesterId: '2026-2', status: 'ARCHIVED', grade: '2', classNumber: '1' });
+  await db.doc('semester_classes/class-readonly').set({ semesterId: '2026-2', status: 'ACTIVE', readOnly: true, grade: '2', classNumber: '2' });
+  const originals = new Map();
+  for (const gameId of ['history-rain', 'joseon-yut', 'gungdeok-rock']) {
+    const ref = db.doc(`${base}/${gameId === 'gungdeok-rock' ? 'rhythm_publication' : 'weplay_games'}/${gameId}`);
+    originals.set(ref.path, (await ref.get()).data());
+    await ref.set(gameId === 'history-rain' ? { ...fromSource('weplayCore').DEFAULT_GAME_SETTINGS, enabled: false, version: 1 }
+      : { ...(originals.get(ref.path) || {}), enabled: false });
+  }
+  await db.doc('site_settings/config').update({ studentMenuVisibility: { weplay: false, naval: false, yut: false, rhythm: false } });
+  reset();
+  const initial = await api.getWeplayRanking(request('teacher', naval)); counts.teacherFirstOpen = { ...metrics };
+  assert.deepEqual(initial.classes, [{ id: 'class-one', label: '3학년 1반' }, { id: 'class-two', label: '3학년 2반' }]);
+  assert.equal(initial.selectedClassId, 'class-one'); assert.equal(initial.rows.length, 50);
+  assert.equal(initial.rows.every(row => !row.isMe), true); assert.equal(metrics.writes, 0);
+  // Catalog and the one selected ranking query only; no users/enrollments scan.
+  assert.equal(metrics.queries, 2); assert.equal(metrics.reads, 59); assert.equal(metrics.guardReads, 3);
+  reset();
+  const second = await api.getWeplayRanking(request('teacher', { ...naval, classId: 'class-two' })); counts.teacherSelectedClass = { ...metrics };
+  assert.equal(second.selectedClassId, 'class-two'); assert.equal(second.classes, undefined); assert.equal(second.rows[0].score, 99999);
+  assert.equal(metrics.reads, 8); assert.equal(metrics.queries, 1); assert.equal(metrics.writes, 0);
+  reset(); await api.getWeplayRanking(request('teacher', { ...naval, classId: 'class-two' })); counts.teacherSelectedWarm = { ...metrics };
+  assert.equal(metrics.reads, 7); assert.equal(metrics.queries, 0); assert.equal(metrics.guardReads, 3); assert.equal(metrics.writes, 0);
+  for (const actor of ['teacher', 'admin', 'staff-allowed']) for (const choice of [naval, hidden, { gameId: 'gungdeok-rock', category: 'arirang:easy' }]) {
+    reset(); const result = await api.getWeplayRanking(request(actor, { ...choice, classId: 'class-one' }));
+    assert.equal(result.selectedClassId, 'class-one'); assert.equal(result.rows.length > 0, true); assert.equal(metrics.writes, 0);
+  }
+  for (const actor of ['staff-denied', 'staff-no-portal', 'a']) {
+    reset(); await deny(api.getWeplayRanking(request(actor, { ...hidden, classId: 'class-two', includeClasses: true })), 'permission-denied');
+    assert.equal(metrics.queries, 0); assert.equal(metrics.writes, 0);
+  }
+  for (const choice of [naval, hidden, { gameId: 'gungdeok-rock', category: 'arirang:easy' }]) await deny(api.getWeplayRanking(request('a', choice)), 'permission-denied');
+  for (const classId of ['class-old', 'class-inactive', 'class-readonly', 'missing-class']) {
+    reset(); await deny(api.getWeplayRanking(request('teacher', { ...hidden, classId })), 'permission-denied');
+    assert.equal(metrics.queries, 0); assert.equal(metrics.writes, 0);
+  }
+  await deny(api.getWeplayRanking(request('teacher', { ...hidden, year: '2025', classId: 'class-old' })), 'failed-precondition');
+  const refreshed = await api.getWeplayRanking(request('teacher', { ...naval, classId: 'class-two', includeClasses: true }));
+  assert.deepEqual(refreshed.classes, initial.classes); assert.equal(refreshed.selectedClassId, 'class-two');
+  await db.doc('users/staff-allowed').update({ staffPermissions: [] });
+  await deny(api.getWeplayRanking(request('staff-allowed', { ...naval, classId: 'class-two' })), 'permission-denied');
+  await db.doc('users/staff-allowed').update({ staffPermissions: ['lesson_read'] });
+  for (const actor of ['teacher', 'admin', 'staff-allowed']) {
+    reset(); await deny(api.startRhythmRankingGame(request(actor, { songId: 'arirang', difficulty: 'easy', requestId: randomUUID() })), 'permission-denied');
+    await deny(api.finishRhythmRankingGame(request(actor, { sessionId: 'a'.repeat(64), events: [] })), 'permission-denied');
+    assert.equal(metrics.writes, 0);
+  }
+  await db.doc('site_settings/config').set(scope);
+  for (const [documentPath, data] of originals) if (data) await db.doc(documentPath).set(data); else await db.doc(documentPath).delete();
+  // Explicit target/list spoofing is rejected even when student admission is open.
+  for (const extra of [{ classId: 'class-one' }, { classId: 'class-two' }, { includeClasses: true }]) await deny(api.getWeplayRanking(request('a', { ...hidden, ...extra })), 'permission-denied');
+  await db.doc('semester_classes/class-one').update({ status: 'ARCHIVED' });
+  await db.doc('semester_classes/class-two').update({ status: 'ARCHIVED' });
+  reset(); const empty = await api.getWeplayRanking(request('teacher', hidden));
+  assert.deepEqual(empty.classes, []); assert.equal(empty.selectedClassId, ''); assert.deepEqual(empty.rows, []); assert.equal(metrics.queries, 1); assert.equal(metrics.writes, 0);
+  await db.doc('semester_classes/class-one').update({ status: 'ACTIVE' });
+  await db.doc('semester_classes/class-two').update({ status: 'ACTIVE' });
+  const batch = db.batch();
+  for (let i = 0; i < 100; i++) batch.set(db.doc(`semester_classes/bound-${i}`), { semesterId: '2026-2', status: 'ACTIVE', grade: '1', classNumber: String(i + 1) });
+  await batch.commit();
+  reset(); await deny(api.getWeplayRanking(request('teacher', hidden)), 'failed-precondition');
+  assert.equal(metrics.queries, 1); assert.equal(metrics.writes, 0, 'catalog overflow fails explicitly without a partial list or writes');
+  reset(); const bounded = await api.getWeplayRanking(request('teacher', { ...hidden, classId: 'class-one' }));
+  assert.equal(bounded.selectedClassId, 'class-one'); assert.equal(metrics.queries, 0, 'selected-class lookup never scans the catalog'); assert.equal(metrics.writes, 0);
 }
 main().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => {
   DocumentReference.prototype.get = originalGet;

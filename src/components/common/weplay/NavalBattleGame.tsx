@@ -1262,9 +1262,10 @@ export default function NavalBattleGame({
           </div>
         </form>
         <div className="naval-footer">
-          {showRanking && !preview && !guideDemo && (
+          {showRanking && !guideDemo && (
             <WeplayRanking
               gameId="history-rain"
+              portal={preview ? "teacher" : "student"}
               initialCategory={session.difficulty}
               disabled={finishing || exitOpen || exitRequested}
             />
