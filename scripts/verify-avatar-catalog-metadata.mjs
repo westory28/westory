@@ -44,6 +44,16 @@ for (const item of client.AVATAR_ITEMS) {
   assert.equal(configured.id, item.id);
   assert.equal(configured.slot, item.slot);
   assert.equal(configured.value, item.value);
+  assert.equal(configured.minPurchaseTier, item.minPurchaseTier ?? "tier_1");
+  const restricted = client.applyAvatarCatalogSettings(item, {
+    prices: { [item.id]: 435 },
+    purchaseTiers: { [item.id]: "tier_4" },
+  });
+  assert.equal(restricted.minPurchaseTier, restricted.price === 0 ? "tier_1" : "tier_4");
+  for (const allowed of [null, undefined, [], ["tier_1"], ["tier_1", "tier_2", "tier_3"]])
+    assert.equal(client.canPurchaseAvatarItem(restricted, allowed), restricted.price === 0);
+  for (const allowed of [["tier_4"], ["tier_1", "tier_2", "tier_3", "tier_4", "tier_5"]])
+    assert.equal(client.canPurchaseAvatarItem(restricted, allowed), true);
   assert.equal(
     configured.characters,
     item.characters,
@@ -64,11 +74,15 @@ for (const item of client.AVATAR_ITEMS) {
   );
 }
 const owned = [client.AVATAR_ITEMS.find((item) => item.price > 0).id];
+for (const invalid of [undefined, null, "tier_5", ["tier_6"], ["tier_1", "invalid"]])
+  assert.equal(client.normalizeAvatarPurchaseTiers(invalid), null);
+assert.deepEqual(plain(client.normalizeAvatarPurchaseTiers(["tier_1", "tier_4", "tier_1"])), ["tier_1", "tier_4"]);
 const ownedBase = client.AVATAR_ITEMS.find((item) => item.id === owned[0]);
 assert.equal(
   client.ownsAvatarItem(
     client.applyAvatarCatalogSettings(ownedBase, {
       prices: { [ownedBase.id]: 999 },
+      purchaseTiers: { [ownedBase.id]: "tier_5" },
       metadata: {
         [ownedBase.id]: { label: "이름 변경", gender: "girl", description: "" },
       },

@@ -8,7 +8,11 @@ import {
   AVATAR_CATALOG_VERSION,
   type AvatarLook,
   type AvatarItemMetadata,
+  type AvatarPurchaseTier,
   type AvatarState,
+  isAvatarPurchaseTier,
+  normalizeAvatarPurchaseTiers,
+  avatarPurchaseTierLabel,
 } from "./catalog";
 import { notifyAvatarUpdated } from "./events";
 
@@ -17,6 +21,7 @@ export interface AvatarCatalogPricingState {
   revision: number;
   prices: Record<string, number>;
   metadata?: Record<string, AvatarItemMetadata>;
+  purchaseTiers?: Record<string, AvatarPurchaseTier>;
   catalogVersion?: number;
   policyVersion?: number;
 }
@@ -25,6 +30,8 @@ export interface AvatarStudioState {
   balance: number;
   pricing: AvatarCatalogPricingState;
   wallet?: AvatarPurchaseResult["wallet"];
+  purchaseTierCode?: string;
+  allowedPurchaseTiers?: AvatarPurchaseTier[];
 }
 export interface TeacherProfileEmoji {
   id: string;
@@ -48,6 +55,8 @@ export interface AvatarPurchaseResult {
   duplicate: boolean;
   avatar: AvatarState;
   pricing?: AvatarCatalogPricingState;
+  purchaseTierCode?: string;
+  allowedPurchaseTiers?: AvatarPurchaseTier[];
   wallet: {
     balance: number;
     earnedTotal: number;
@@ -126,17 +135,21 @@ export const avatarErrorMessage = (error: unknown) => {
   const e = error as {
     code?: string;
     message?: string;
-    details?: { reason?: string };
+    details?: { reason?: string; minPurchaseTier?: AvatarPurchaseTier };
   };
   const reason = `${e.details?.reason || ""} ${e.code || ""}`;
   if (/AVATAR_THUMBNAIL_FAILED/.test(reason))
     return "아바타 이미지를 만들지 못했습니다. 현재 선택을 유지한 채 다시 저장해 주세요.";
   if (/AVATAR_PRICE_CHANGED/.test(reason))
-    return "아이템 정보가 변경되었습니다. 이름과 가격을 확인한 뒤 다시 구매해 주세요.";
+    return "아이템 정보가 변경되었습니다. 이름과 가격, 구매 등급을 확인한 뒤 다시 구매해 주세요.";
+  if (/AVATAR_TIER_LOCKED/.test(reason))
+    return isAvatarPurchaseTier(e.details?.minPurchaseTier)
+      ? `${avatarPurchaseTierLabel(e.details.minPurchaseTier)}만 구매할 수 있습니다.`
+      : "이 아이템을 구매할 수 있는 등급을 확인해 주세요.";
   if (/AVATAR_GENDER_MISMATCH/.test(reason))
     return "아이템의 성별 설정이 변경되었습니다. 선택한 아바타에 맞는 아이템을 확인한 뒤 다시 저장해 주세요.";
   if (/AVATAR_PRICING_INPUT_INVALID/.test(reason))
-    return "아이템 이름, 가격, 성별, 설명을 확인해 주세요.";
+    return "아이템 이름, 가격, 성별, 구매 등급, 설명을 확인해 주세요.";
   if (/AVATAR_PRICING_REVISION_CONFLICT/.test(reason))
     return "다른 변경이 먼저 저장되었습니다. 최신 내용을 확인한 뒤 다시 저장해 주세요.";
   if (/AVATAR_PRICING_INVALID/.test(reason))
@@ -169,10 +182,18 @@ export const avatarPricingFromError = (
   return (details?.reason === "AVATAR_PRICE_CHANGED" ||
     details?.reason === "AVATAR_ITEM_NOT_OWNED" ||
     details?.reason === "AVATAR_GENDER_MISMATCH" ||
+    details?.reason === "AVATAR_TIER_LOCKED" ||
     details?.reason === "AVATAR_PRICING_REVISION_CONFLICT") &&
     details.pricing
     ? details.pricing
     : null;
+};
+export const avatarPurchaseTiersFromError = (
+  error: unknown,
+): AvatarPurchaseTier[] | null => {
+  const value = (error as { details?: { allowedPurchaseTiers?: unknown } })
+    ?.details?.allowedPurchaseTiers;
+  return normalizeAvatarPurchaseTiers(value);
 };
 const scopedReadKey = async (config: Scope) => {
   const user = auth.currentUser;
@@ -223,6 +244,7 @@ export const updateAvatarCatalogPricing = (input: {
   expectedRevision: number;
   prices: Record<string, number>;
   metadata?: Record<string, AvatarItemMetadata>;
+  purchaseTiers?: Record<string, AvatarPurchaseTier>;
 }) => service<AvatarCatalogPricingState>("updateAvatarCatalogPricing", input);
 export const getStudentAvatar = async (): Promise<AvatarState> => {
   const user = auth.currentUser;
@@ -267,6 +289,8 @@ export const purchaseAvatarItem = async (
       const current = await getAvatarStudioState(config);
       result.avatar = current.avatar;
       result.pricing = current.pricing;
+      result.purchaseTierCode = current.purchaseTierCode;
+      result.allowedPurchaseTiers = current.allowedPurchaseTiers;
       result.wallet = current.wallet || {
         ...result.wallet,
         balance: current.balance,

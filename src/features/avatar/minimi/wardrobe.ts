@@ -18,11 +18,64 @@ export type TopCut =
   | "dopo"
   | "royal-hanbok"
   | "dangui"
-  | "scholar";
+  | "scholar"
+  | "joseon-gonryongpo"
+  | "joseon-dangui"
+  | "joseon-hakchangui"
+  | "joseon-durumagi"
+  | "joseon-silk-jeogori"
+  | "joseon-cotton-jeogori"
+  | "joseon-hemp-jeoksam"
+  | "joseon-plain-jeogori";
 export const TOPS: Record<
   string,
   { palette: PixelPalette; cut: TopCut; long: boolean }
 > = {
+  "mm-hanbok-gonryongpo": {
+    palette: ["#e78369", "#b63d40", "#832936", "#542432"],
+    cut: "joseon-gonryongpo",
+    long: true,
+  },
+  "mm-hanbok-court-dangui": {
+    palette: ["#b6c991", "#6f986b", "#4c704f", "#304e3d"],
+    cut: "joseon-dangui",
+    long: true,
+  },
+  "mm-hanbok-hakchangui": {
+    palette: ["#fffced", "#e6e3d4", "#b9beb7", "#6c7778"],
+    cut: "joseon-hakchangui",
+    long: true,
+  },
+  "mm-hanbok-silk-durumagi": {
+    palette: ["#c9dfdf", "#91b5bd", "#668d9b", "#426375"],
+    cut: "joseon-durumagi",
+    long: true,
+  },
+  "mm-hanbok-white-durumagi": {
+    palette: ["#fffdf1", "#e8e5d7", "#c1c3b7", "#858e89"],
+    cut: "joseon-durumagi",
+    long: true,
+  },
+  "mm-hanbok-silk-jeogori": {
+    palette: ["#ffeabb", "#e6c98c", "#bea36d", "#82634e"],
+    cut: "joseon-silk-jeogori",
+    long: true,
+  },
+  "mm-hanbok-cotton-jeogori": {
+    palette: ["#fff8e5", "#e5dbc3", "#c0b39b", "#887a69"],
+    cut: "joseon-cotton-jeogori",
+    long: true,
+  },
+  "mm-hanbok-hemp-jeoksam": {
+    palette: ["#eee0ba", "#cbbb90", "#a3936e", "#786950"],
+    cut: "joseon-hemp-jeoksam",
+    long: true,
+  },
+  "mm-hanbok-plain-jeogori": {
+    palette: ["#ece3c9", "#cfc3a5", "#aba083", "#776f5a"],
+    cut: "joseon-plain-jeogori",
+    long: true,
+  },
   "mm-sailor-mint": {
     palette: ["#e9fff5", "#b2ded4", "#73a6a0", "#3c656b"],
     cut: "sailor",
@@ -122,6 +175,21 @@ export const BOTTOMS: Record<
     detail: string;
   }
 > = {
+  "mm-hanbok-silk-chima": {
+    palette: ["#e3acaa", "#bb707e", "#934b64", "#60354d"],
+    cut: "chima",
+    detail: "plain-silk",
+  },
+  "mm-hanbok-hemp-chima": {
+    palette: ["#ded8bd", "#b9b295", "#918c75", "#676552"],
+    cut: "chima",
+    detail: "plain-hemp",
+  },
+  "mm-hanbok-plain-baji": {
+    palette: ["#f0e9d2", "#d6cbb0", "#afa287", "#7b705d"],
+    cut: "baji",
+    detail: "plain",
+  },
   "mm-pleated-rose": {
     palette: ["#f5ccd6", "#ce8ca4", "#a55f7e", "#693e59"],
     cut: "skirt",

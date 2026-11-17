@@ -56,6 +56,15 @@ for(const character of V.character)for(const hairStyle of V.hairStyle)for(const 
  if(brim){drawMinimi(ctx,look,{itemOnly:'accessory'});const hat=ctx.getImageData(0,0,W,H).data;for(let y=0;y<brim;y++)for(let x=0;x<W;x++){const n=(y*W+x)*4;assert(full.slice(n,n+4).every((v,i)=>v===hat[n+i]),'Hair protrudes above hat: '+JSON.stringify(look));}}
  headwearChecks++;
 }
+// Historical headwear sits above the full-size head, with strings outside the face.
+let joseonFitChecks=0;
+for(const accessory of ['mm-hanbok-wide-gat','mm-hanbok-narrow-gat','mm-hanbok-ikseongwan','mm-hanbok-waryonggwan','mm-hanbok-tanggeon','mm-hanbok-gache','mm-hanbok-headcloth']){
+ drawMinimi(ctx,{...defaultAvatarLook(),accessory},{itemOnly:'accessory'});const data=ctx.getImageData(0,0,W,H).data;
+ for(let y=28;y<=43;y++)for(let x=25;x<=55;x++)assert(data[(y*W+x)*4+3]===0,'Headwear or string crosses the face: '+accessory);
+ const band=Array.from({length:W},(_,x)=>data[(19*W+x)*4+3]).filter(Boolean).length;
+ assert(band>=34,'Headwear too narrow for the head: '+accessory);
+ assert(hanbokHatHairLine(accessory)<=16,'Headwear presses down the crown: '+accessory);joseonFitChecks++;
+}
 let isolatedChecks=0;
 for (const item of AVATAR_ITEMS.filter(item=>['top','bottom','shoes','accessory'].includes(item.slot) && item.value !== 'mm-none')) for(const pose of V.pose) {
  const base={...defaultAvatarLook(),pose,[item.slot]:item.value};
@@ -125,7 +134,7 @@ const sheet=document.createElement('canvas');sheet.width=6*180;sheet.height=Math
 samples.forEach((look,i)=>{drawMinimi(ctx,look);const x=i%6*180,y=Math.floor(i/6)*256;sheetCtx.drawImage(sprite,x+10,y,160,224);sheetCtx.fillStyle='#334155';sheetCtx.font='10px sans-serif';sheetCtx.fillText(look.character+' / '+look.top.replace('mm-',''),x+6,y+238);sheetCtx.fillText(look.pose.replace('mm-',''),x+6,y+252)});
 const poseSheet=sheet.toDataURL('image/png');
 const hanbokTops=V.top.filter(v=>v.startsWith('mm-hanbok-')&&v!=='mm-hanbok-sky'),hanbokBottoms=V.bottom.filter(v=>v.startsWith('mm-hanbok-')),hanbokShoes=V.shoes.filter(v=>v.startsWith('mm-hanbok-'));
-const hanbokLooks=[];for(const character of V.character)for(let i=0;i<hanbokTops.length;i++)for(const pose of V.pose)hanbokLooks.push({...defaultAvatarLook(character),top:hanbokTops[i],bottom:hanbokBottoms[i%hanbokBottoms.length],shoes:hanbokShoes[i%hanbokShoes.length],accessory:HANBOK_ACCESSORIES[i],hairStyle:V.hairStyle[(i*2+3)%V.hairStyle.length],hairTone:V.hairTone[i%V.hairTone.length],pose});
+const hanbokLooks=[];for(const character of V.character)for(let i=0;i<hanbokTops.length;i++)for(const pose of V.pose)hanbokLooks.push({...defaultAvatarLook(character),top:hanbokTops[i],bottom:hanbokBottoms[i%hanbokBottoms.length],shoes:hanbokShoes[i%hanbokShoes.length],accessory:HANBOK_ACCESSORIES[i%HANBOK_ACCESSORIES.length],hairStyle:V.hairStyle[(i*2+3)%V.hairStyle.length],hairTone:V.hairTone[i%V.hairTone.length],pose});
 const hanbokCanvas=document.createElement('canvas');hanbokCanvas.width=6*180;hanbokCanvas.height=Math.ceil(hanbokLooks.length/6)*256;const hc=hanbokCanvas.getContext('2d');hc.fillStyle='#f8fafc';hc.fillRect(0,0,hanbokCanvas.width,hanbokCanvas.height);hc.imageSmoothingEnabled=false;
 hanbokLooks.forEach((look,i)=>{drawMinimi(ctx,look);const x=i%6*180,y=Math.floor(i/6)*256;hc.drawImage(sprite,x+10,y,160,224);hc.fillStyle='#334155';hc.font='10px sans-serif';hc.fillText(look.character+' / '+look.top.replace('mm-hanbok-',''),x+6,y+238);hc.fillText(look.pose.replace('mm-','')+' / '+look.accessory.replace('mm-hanbok-',''),x+6,y+252)});
 const hanbokSheet=hanbokCanvas.toDataURL('image/png');
@@ -174,7 +183,7 @@ assert(!stage.setLook({hairStyle:'old-hair'}).applied,'Unknown values accepted')
 assert(stage.setLook({pose:'mm-wave'}).applied,'Valid pose rejected');assert(stage.capture()!==capture,'Pose did not update capture');
 const abort=new AbortController();abort.abort();let aborted=false;try{await stage.prepareLook(defaultAvatarLook(),{signal:abort.signal})}catch(e){aborted=e.name==='AbortError'}assert(aborted,'Cancelled preparation applied');
 stage.dispose();assert(!document.querySelector('#stage canvas'),'Canvas leaked on dispose');assert(!stage.setPose('mm-cheer').applied,'Disposed stage accepts changes');
-return {exhaustive:${exhaustive},combinations,headwearChecks,isolatedChecks,skinChecks,footwearChecks,bowlFringeChecks,softHairChecks,roundedCrownChecks,schoolUniformChecks,distinct,minPixels,maxPixels,poseSheet,hanbokSheet,overview,polishSheet,softHairSheet,royalSheet,royalHeadSheet,lifecycle:true};
+return {exhaustive:${exhaustive},combinations,headwearChecks,joseonFitChecks,isolatedChecks,skinChecks,footwearChecks,bowlFringeChecks,softHairChecks,roundedCrownChecks,schoolUniformChecks,distinct,minPixels,maxPixels,poseSheet,hanbokSheet,overview,polishSheet,softHairSheet,royalSheet,royalHeadSheet,lifecycle:true};
 };`,
     loader: "ts",
     resolveDir: root,

@@ -16,13 +16,18 @@ import {
   AVATAR_ITEMS,
   AVATAR_SLOTS,
   AVATAR_CATALOG_VERSION,
+  AVATAR_PURCHASE_TIERS,
   defaultAvatarLook,
   applyAvatarCatalogSettings,
   avatarItemMetadata,
   avatarItemPricePolicy,
+  avatarItemPurchaseTier,
+  avatarPurchaseTierLabel,
+  isAvatarPurchaseTier,
   effectiveAvatarItemPrice,
   type AvatarItem,
   type AvatarItemMetadata,
+  type AvatarPurchaseTier,
 } from "../../../features/avatar/catalog";
 import AvatarItemPreview from "../../../features/avatar/AvatarItemPreview";
 import {
@@ -47,7 +52,11 @@ import "./settingsAvatarPricing.css";
 
 const MAX_PRICE = 1_000_000;
 const genderLabels = { boy: "남자", girl: "여자", unisex: "공용" };
-type ItemDraft = AvatarItemMetadata & { paid: boolean; price: string };
+type ItemDraft = AvatarItemMetadata & {
+  paid: boolean;
+  price: string;
+  minPurchaseTier: AvatarPurchaseTier;
+};
 type Drafts = Record<string, ItemDraft>;
 export interface AvatarPricingAdapter {
   load: () => Promise<AvatarCatalogPricingState>;
@@ -55,6 +64,7 @@ export interface AvatarPricingAdapter {
     expectedRevision: number;
     prices: Record<string, number>;
     metadata: Record<string, AvatarItemMetadata>;
+    purchaseTiers: Record<string, AvatarPurchaseTier>;
   }) => Promise<AvatarCatalogPricingState>;
 }
 const adapter: AvatarPricingAdapter = {
@@ -75,6 +85,15 @@ const normalizePricing = (
       return [item.id, effectiveAvatarItemPrice(item, price)];
     }),
   ),
+  purchaseTiers: Object.fromEntries(
+    AVATAR_ITEMS.map((item) => {
+      const tier =
+        state.purchaseTiers?.[item.id] ?? avatarItemPurchaseTier(item);
+      if (!isAvatarPurchaseTier(tier))
+        throw new Error("아이템 구매 등급을 확인하지 못했습니다.");
+      return [item.id, tier];
+    }),
+  ),
 });
 const draftFor = (
   item: AvatarItem,
@@ -85,6 +104,7 @@ const draftFor = (
     ...avatarItemMetadata(effective),
     paid: effective.price > 0,
     price: effective.price ? String(effective.price) : "",
+    minPurchaseTier: avatarItemPurchaseTier(effective),
   };
 };
 const priceOf = (draft: ItemDraft | undefined): number | null => {
@@ -112,6 +132,7 @@ const changedFrom = (
     priceOf(draft) !== priceOf(current) ||
     draft.label.trim() !== current.label ||
     draft.gender !== current.gender ||
+    draft.minPurchaseTier !== current.minPurchaseTier ||
     draft.description.trim() !== current.description
   );
 };
@@ -122,6 +143,8 @@ const validationFor = (draft: ItemDraft): string => {
     return "설명은 400자 이내로 입력해 주세요.";
   if (priceOf(draft) === null)
     return "가격은 1~1,000,000 위스의 정수로 입력해 주세요.";
+  if (!isAvatarPurchaseTier(draft.minPurchaseTier))
+    return "구매 가능한 최소 등급을 선택해 주세요.";
   return "";
 };
 
@@ -242,7 +265,12 @@ function ItemEditor({
                 aria-label={`${item.label} 무료·유료`}
                 value={draft.paid ? "paid" : "free"}
                 onChange={(event) =>
-                  onChange({ paid: event.target.value === "paid" })
+                  onChange({
+                    paid: event.target.value === "paid",
+                    ...(event.target.value === "free"
+                      ? { minPurchaseTier: "tier_1" }
+                      : {}),
+                  })
                 }
                 disabled={policy !== null}
               >
@@ -268,6 +296,25 @@ function ItemEditor({
                 />
                 <WisIcon />
               </span>
+            </label>
+            <label>
+              <span>구매 등급</span>
+              <select
+                aria-label={`${item.label} 구매 등급`}
+                value={draft.paid ? draft.minPurchaseTier : "tier_1"}
+                disabled={!draft.paid}
+                onChange={(event) =>
+                  onChange({
+                    minPurchaseTier: event.target.value as AvatarPurchaseTier,
+                  })
+                }
+              >
+                {AVATAR_PURCHASE_TIERS.map((tier) => (
+                  <option key={tier.code} value={tier.code}>
+                    {tier.label}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
           <label>
@@ -323,6 +370,8 @@ function StudentShopPreview({
           requiresThumbnailRefresh: true,
         },
         balance: 0,
+        purchaseTierCode: "tier_5",
+        allowedPurchaseTiers: AVATAR_PURCHASE_TIERS.map((tier) => tier.code),
         pricing,
       }),
       purchase: async () => {
@@ -491,6 +540,7 @@ export function AvatarPricingManager({
           expectedRevision: state.revision,
           prices: { [id]: priceOf(draft)! },
           metadata: { [id]: metadataOf(draft) },
+          purchaseTiers: { [id]: draft.minPurchaseTier },
         }),
       );
       if (request !== sequence.current) return;
@@ -536,6 +586,14 @@ export function AvatarPricingManager({
                 drafts[item.id]
                   ? metadataOf(drafts[item.id])
                   : avatarItemMetadata(item),
+              ]),
+            ),
+            purchaseTiers: Object.fromEntries(
+              AVATAR_ITEMS.map((item) => [
+                item.id,
+                drafts[item.id]?.minPurchaseTier ??
+                  state.purchaseTiers?.[item.id] ??
+                  avatarItemPurchaseTier(item),
               ]),
             ),
           }
@@ -750,6 +808,11 @@ export function AvatarPricingManager({
                           {priceOf(draft)!.toLocaleString()}
                         </>
                       )}
+                    </p>
+                    <p className="avatar-pricing-policy">
+                      {draft.paid
+                        ? avatarPurchaseTierLabel(draft.minPurchaseTier)
+                        : "전 등급"}
                     </p>
                     {isChanged && (
                       <span className="avatar-pricing-changed">변경됨</span>

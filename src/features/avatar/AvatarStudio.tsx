@@ -18,6 +18,10 @@ import {
   avatarItemGender,
   avatarAccessoryGroup,
   canWearAvatarItem,
+  canPurchaseAvatarItem,
+  avatarItemPurchaseTier,
+  avatarPurchaseTierLabel,
+  normalizeAvatarPurchaseTiers,
   reconcileAvatarLook,
   ownsAvatarItem,
   restoreAvatarState,
@@ -27,10 +31,12 @@ import {
   type AvatarSlot,
   type AvatarState,
   type AvatarAccessoryGroup,
+  type AvatarPurchaseTier,
 } from "./catalog";
 import {
   avatarErrorMessage,
   avatarPricingFromError,
+  avatarPurchaseTiersFromError,
   getAvatarStudioState,
   makeAvatarThumbnail,
   purchaseAvatarItem,
@@ -50,6 +56,8 @@ export interface AvatarStudioAdapter {
     avatar: AvatarState;
     balance: number | null;
     pricing?: AvatarCatalogPricingState;
+    purchaseTierCode?: string;
+    allowedPurchaseTiers?: AvatarPurchaseTier[];
   }>;
   purchase(
     itemId: string,
@@ -92,6 +100,9 @@ export function AvatarStudio({
   const [look, setLook] = useState<AvatarLook>(defaultAvatarLook());
   const [characterChosen, setCharacterChosen] = useState(false);
   const [balance, setBalance] = useState<number | null>(null);
+  const [allowedPurchaseTiers, setAllowedPurchaseTiers] = useState<
+    AvatarPurchaseTier[] | null
+  >(null);
   const [pricing, setPricing] = useState<AvatarCatalogPricingState>({
     revision: 0,
     prices: {},
@@ -161,6 +172,9 @@ export function AvatarStudio({
         // Merely opening the studio never writes a selection.
         setNeedsThumbnailRefresh(Boolean(restored.requiresThumbnailRefresh));
         setBalance(data.balance);
+        setAllowedPurchaseTiers(
+          normalizeAvatarPurchaseTiers(data.allowedPurchaseTiers),
+        );
         setPricing(data.pricing || { revision: 0, prices: {} });
         return restored;
       } catch (failure) {
@@ -248,6 +262,8 @@ export function AvatarStudio({
   }, [pricedItems]);
   const available = (item: AvatarItem) =>
     allAvailable || ownsAvatarItem(item, owned);
+  const purchaseAllowed = (item: AvatarItem) =>
+    available(item) || canPurchaseAvatarItem(item, allowedPurchaseTiers);
   const itemForCurrentLook = (key: AvatarSlot) =>
     pricedItems.find(
       (item) =>
@@ -327,6 +343,12 @@ export function AvatarStudio({
       setConfirmError("선택한 아바타에 맞는 아이템을 선택해 주세요.");
       return;
     }
+    if (!purchaseAllowed(currentItem)) {
+      setConfirmError(
+        `${avatarPurchaseTierLabel(avatarItemPurchaseTier(currentItem))}만 구매할 수 있습니다.`,
+      );
+      return;
+    }
     busyRef.current = true;
     setBusy("buy");
     setConfirmError("");
@@ -342,6 +364,9 @@ export function AvatarStudio({
       setSaved(result.avatar);
       setBalance(result.wallet.balance);
       if (result.pricing) setPricing(result.pricing);
+      setAllowedPurchaseTiers(
+        normalizeAvatarPurchaseTiers(result.allowedPurchaseTiers),
+      );
       setPurchase(null);
       showToast({
         title: result.alreadyOwned
@@ -355,6 +380,13 @@ export function AvatarStudio({
     } catch (failure) {
       if (current === generation.current) {
         const updatedPricing = avatarPricingFromError(failure);
+        const updatedTiers = avatarPurchaseTiersFromError(failure);
+        if (
+          updatedTiers ||
+          (failure as { details?: { reason?: string } })?.details?.reason ===
+            "AVATAR_TIER_LOCKED"
+        )
+          setAllowedPurchaseTiers(updatedTiers);
         if (updatedPricing) {
           setPricing(updatedPricing);
           setPurchase(null);
@@ -564,6 +596,7 @@ export function AvatarStudio({
                 !characterChosen ||
                 Boolean(busy) ||
                 balance === null ||
+                !purchaseAllowed(selected) ||
                 !canWearAvatarItem(selected, look.character)
               }
               onClick={() => {
@@ -571,7 +604,9 @@ export function AvatarStudio({
                 setPurchase(selected);
               }}
             >
-              {selected.price.toLocaleString()} 위스로 구매
+              {!purchaseAllowed(selected) && !preview
+                ? `${avatarPurchaseTierLabel(avatarItemPurchaseTier(selected))} 구매 가능`
+                : `${selected.price.toLocaleString()} 위스로 구매`}
             </button>
           )}
           {studentAvatarEvent && !allAvailable && !isShop && !preview && (
@@ -778,6 +813,7 @@ export function AvatarStudio({
                 selected={selected?.id === item.id}
                 owned={available(item)}
                 hidePrice={allAvailable || !isShop}
+                purchaseLocked={!preview && !purchaseAllowed(item)}
                 disabled={
                   !characterChosen ||
                   Boolean(busy) ||
@@ -915,6 +951,7 @@ export function AvatarStudio({
               Boolean(busy) ||
               balance === null ||
               !purchase ||
+              !purchaseAllowed(purchase) ||
               balance < purchase.price
             }
             onClick={() => void buy()}

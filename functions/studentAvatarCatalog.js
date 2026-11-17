@@ -2,6 +2,8 @@ const { createHash } = require('node:crypto');
 const catalog = require('./avatarCatalog.json');
 
 const SLOTS = Object.freeze(['character', 'skinTone', 'faceShape', 'expression', 'hairStyle', 'hairTone', 'pose', 'top', 'bottom', 'shoes', 'accessory']);
+const PURCHASE_TIER_CODES = Object.freeze(['tier_1', 'tier_2', 'tier_3', 'tier_4', 'tier_5']);
+const itemMinPurchaseTier = item => item.minPurchaseTier ?? 'tier_1';
 const items = new Map();
 const itemIdFor = (slot, value) => `minimi-${slot}-${String(value).replace(/^mm-/, '')}`;
 const itemMetadata = item => ({
@@ -20,6 +22,7 @@ const effectiveAvatarPrice = (item, override) => {
 };
 for (const item of catalog.items) {
   if (!SLOTS.includes(item.slot) || item.id !== itemIdFor(item.slot, item.value) || items.has(item.id)
+    || !PURCHASE_TIER_CODES.includes(itemMinPurchaseTier(item))
     || !Number.isSafeInteger(item.price) || item.price < 0 || !Array.isArray(item.characters)
     || (itemPricePolicy(item) === 'free' ? item.price !== 0 : itemPricePolicy(item) === 'paid' && item.price === 0)
     || !item.characters.length || item.characters.some(value => !['girl', 'boy'].includes(value))) {
@@ -80,4 +83,4 @@ const sanitizePublicAvatar = value => {
   return result;
 };
 
-module.exports = { SLOTS, catalog, items, itemIdFor, itemMetadata, itemPricePolicy, effectiveAvatarPrice, defaultLook, validateLook, canWearItem, validateWearableLook, restoreStoredLook, lookHash, sanitizePublicAvatar };
+module.exports = { SLOTS, PURCHASE_TIER_CODES, itemMinPurchaseTier, catalog, items, itemIdFor, itemMetadata, itemPricePolicy, effectiveAvatarPrice, defaultLook, validateLook, canWearItem, validateWearableLook, restoreStoredLook, lookHash, sanitizePublicAvatar };

@@ -1,10 +1,18 @@
 import type { PixelPen } from "./details";
 import type { PixelPalette, TopCut } from "./wardrobe";
+import {
+  JOSEON_ACCESSORIES,
+  joseonHatHairLine,
+  drawJoseonSleeve,
+  drawJoseonTop,
+  drawJoseonAccessory,
+} from "./joseon";
 type Point = readonly [number, number];
 const INK = "#262331";
 const GOLD = "#e8c47c";
 const IVORY = "#fff4d8";
 export const HANBOK_ACCESSORIES = [
+  ...JOSEON_ACCESSORIES,
   "mm-hanbok-gat",
   "mm-hanbok-baekrip",
   "mm-hanbok-jokduri",
@@ -21,7 +29,7 @@ export const hanbokHatHairLine = (value: string) =>
       ? 25
       : value === "mm-hanbok-ayam"
         ? 16
-        : 0;
+        : joseonHatHairLine(value);
 export const isHanbokCut = (cut: TopCut) =>
   [
     "hanbok-flower",
@@ -54,6 +62,7 @@ export function drawHanbokSleeve(
   w: Point,
   fabric: PixelPalette,
 ) {
+  drawJoseonSleeve(p, cut, s, e, w, fabric);
   if (!isHanbokCut(cut)) return;
   const { line } = p;
   const wide = ["durumagi", "dopo", "scholar", "royal-hanbok"].includes(cut);
@@ -87,6 +96,7 @@ export function drawHanbokSleeve(
 }
 
 export function drawHanbokTop(p: PixelPen, cut: TopCut, fabric: PixelPalette) {
+  if (drawJoseonTop(p, cut, fabric)) return true;
   if (!isHanbokCut(cut)) return false;
   const { poly, line, rect } = p;
   const robe = ["durumagi", "dopo", "scholar", "royal-hanbok"].includes(cut);
@@ -356,6 +366,7 @@ export function drawHanbokBottom(
 }
 
 export function drawHanbokAccessory(p: PixelPen, value: string) {
+  if (drawJoseonAccessory(p, value)) return true;
   if (!HANBOK_ACCESSORIES.includes(value)) return false;
   const { poly, line, rect } = p;
   if (value === "mm-hanbok-gat" || value === "mm-hanbok-baekrip") {

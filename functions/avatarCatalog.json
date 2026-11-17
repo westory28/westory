@@ -28,7 +28,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-character-boy",
@@ -40,7 +41,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-skinTone-ivory",
@@ -53,7 +55,8 @@
         "girl",
         "boy"
       ],
-      "color": "#f8d8b8"
+      "color": "#f8d8b8",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-skinTone-peach",
@@ -66,7 +69,8 @@
         "girl",
         "boy"
       ],
-      "color": "#eeb98f"
+      "color": "#eeb98f",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-skinTone-tan",
@@ -79,7 +83,8 @@
         "girl",
         "boy"
       ],
-      "color": "#c98c62"
+      "color": "#c98c62",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-skinTone-deep",
@@ -92,7 +97,8 @@
         "girl",
         "boy"
       ],
-      "color": "#945d43"
+      "color": "#945d43",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-faceShape-round",
@@ -104,7 +110,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-expression-smile",
@@ -116,7 +123,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-expression-bright",
@@ -128,7 +136,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-expression-calm",
@@ -140,7 +149,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-expression-wink",
@@ -152,7 +162,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-bob",
@@ -165,7 +176,8 @@
         "girl",
         "boy"
       ],
-      "gender": "girl"
+      "gender": "girl",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-long",
@@ -178,7 +190,8 @@
         "girl",
         "boy"
       ],
-      "gender": "girl"
+      "gender": "girl",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-ponytail",
@@ -191,7 +204,8 @@
         "girl",
         "boy"
       ],
-      "gender": "girl"
+      "gender": "girl",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-crop",
@@ -204,7 +218,8 @@
         "girl",
         "boy"
       ],
-      "gender": "boy"
+      "gender": "boy",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-parted",
@@ -217,7 +232,8 @@
         "girl",
         "boy"
       ],
-      "gender": "boy"
+      "gender": "boy",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-wave",
@@ -230,7 +246,8 @@
         "girl",
         "boy"
       ],
-      "gender": "girl"
+      "gender": "girl",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairTone-ink",
@@ -243,7 +260,8 @@
         "girl",
         "boy"
       ],
-      "color": "#262535"
+      "color": "#262535",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairTone-brown",
@@ -256,7 +274,8 @@
         "girl",
         "boy"
       ],
-      "color": "#604333"
+      "color": "#604333",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairTone-chestnut",
@@ -269,7 +288,8 @@
         "girl",
         "boy"
       ],
-      "color": "#985d3d"
+      "color": "#985d3d",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairTone-honey",
@@ -282,7 +302,8 @@
         "girl",
         "boy"
       ],
-      "color": "#cc9b58"
+      "color": "#cc9b58",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-pose-idle",
@@ -294,7 +315,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-pose-wave",
@@ -306,7 +328,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-pose-cheer",
@@ -318,7 +341,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-school-white",
@@ -330,7 +354,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-school-navy",
@@ -342,7 +367,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-school-hoodie",
@@ -354,7 +380,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-school-halfzip",
@@ -366,7 +393,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-knit-cream",
@@ -378,7 +406,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-sweat-blue",
@@ -390,7 +419,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-bottom-school-shorts",
@@ -402,7 +432,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-bottom-school-joggers",
@@ -414,7 +445,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-bottom-jeans",
@@ -426,7 +458,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-bottom-skirt-navy",
@@ -437,7 +470,8 @@
       "tier": "standard",
       "characters": [
         "girl"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-shoes-sneakers-white",
@@ -449,7 +483,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-shoes-sneakers-navy",
@@ -461,7 +496,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-shoes-loafers",
@@ -473,7 +509,8 @@
       "characters": [
         "girl",
         "boy"
-      ]
+      ],
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-accessory-none",
@@ -486,7 +523,8 @@
         "girl",
         "boy"
       ],
-      "accessoryGroup": "accessory"
+      "accessoryGroup": "accessory",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-accessory-glasses",
@@ -499,7 +537,8 @@
         "girl",
         "boy"
       ],
-      "accessoryGroup": "glasses"
+      "accessoryGroup": "glasses",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-accessory-ribbon",
@@ -512,7 +551,8 @@
         "girl",
         "boy"
       ],
-      "accessoryGroup": "accessory"
+      "accessoryGroup": "accessory",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-accessory-cap",
@@ -525,7 +565,8 @@
         "girl",
         "boy"
       ],
-      "accessoryGroup": "hat"
+      "accessoryGroup": "hat",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-cloud-crop",
@@ -539,7 +580,8 @@
         "boy"
       ],
       "gender": "boy",
-      "description": "동그란 컬을 겹쳐 풍성하게 만든 짧은 머리입니다."
+      "description": "동그란 컬을 겹쳐 풍성하게 만든 짧은 머리입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-side-sweep",
@@ -553,7 +595,8 @@
         "boy"
       ],
       "gender": "boy",
-      "description": "옆으로 흐르는 긴 앞머리와 짧은 옆머리가 어우러진 스타일입니다."
+      "description": "옆으로 흐르는 긴 앞머리와 짧은 옆머리가 어우러진 스타일입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-soft-curtain",
@@ -567,7 +610,8 @@
         "boy"
       ],
       "gender": "boy",
-      "description": "양옆으로 부드럽게 갈라지는 앞머리가 특징입니다."
+      "description": "양옆으로 부드럽게 갈라지는 앞머리가 특징입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-wolf-layer",
@@ -581,7 +625,8 @@
         "boy"
       ],
       "gender": "boy",
-      "description": "뾰족한 층과 목덜미까지 내려오는 뒷머리가 특징입니다."
+      "description": "뾰족한 층과 목덜미까지 내려오는 뒷머리가 특징입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-wave-bob",
@@ -595,7 +640,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "볼 옆에서 둥글게 말리는 웨이브 단발입니다."
+      "description": "볼 옆에서 둥글게 말리는 웨이브 단발입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-twin-ribbon",
@@ -609,7 +655,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "리본으로 묶은 두 갈래 머리가 어깨 아래로 흐릅니다."
+      "description": "리본으로 묶은 두 갈래 머리가 어깨 아래로 흐릅니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-braided-twin",
@@ -623,7 +670,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "양쪽으로 촘촘히 땋아 내린 긴 머리입니다."
+      "description": "양쪽으로 촘촘히 땋아 내린 긴 머리입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-high-bun",
@@ -637,7 +685,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "정수리 위로 둥글게 올려 묶은 머리입니다."
+      "description": "정수리 위로 둥글게 올려 묶은 머리입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-half-up",
@@ -651,7 +700,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "긴 머리에 작은 묶음과 푸른 장식을 더했습니다."
+      "description": "긴 머리에 작은 묶음과 푸른 장식을 더했습니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-long-curl",
@@ -665,7 +715,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "어깨 아래로 풍성한 곡선이 이어지는 긴 머리입니다."
+      "description": "어깨 아래로 풍성한 곡선이 이어지는 긴 머리입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-hime-long",
@@ -679,7 +730,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "반듯한 앞머리와 짧은 옆머리를 함께 살렸습니다."
+      "description": "반듯한 앞머리와 짧은 옆머리를 함께 살렸습니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-fluffy-curl",
@@ -693,7 +745,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "작은 컬이 머리 전체를 폭신하게 감싸는 스타일입니다."
+      "description": "작은 컬이 머리 전체를 폭신하게 감싸는 스타일입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-expression-sparkle",
@@ -707,7 +760,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "큰 눈동자에 반짝이는 빛이 담긴 표정입니다."
+      "description": "큰 눈동자에 반짝이는 빛이 담긴 표정입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-expression-dreamy",
@@ -721,7 +775,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "눈꺼풀이 살짝 내려온 차분한 표정입니다."
+      "description": "눈꺼풀이 살짝 내려온 차분한 표정입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-expression-cat",
@@ -735,7 +790,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "눈꼬리와 작은 입매가 또렷한 표정입니다."
+      "description": "눈꼬리와 작은 입매가 또렷한 표정입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-expression-determined",
@@ -749,7 +805,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "굳게 다문 입과 힘 있는 눈썹이 특징입니다."
+      "description": "굳게 다문 입과 힘 있는 눈썹이 특징입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-expression-surprised",
@@ -763,7 +820,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "동그란 눈과 작은 입으로 놀란 표정을 짓습니다."
+      "description": "동그란 눈과 작은 입으로 놀란 표정을 짓습니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-expression-shy",
@@ -777,7 +835,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "볼에 홍조를 띠고 살짝 미소 짓는 표정입니다."
+      "description": "볼에 홍조를 띠고 살짝 미소 짓는 표정입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairTone-lavender",
@@ -792,7 +851,8 @@
       ],
       "gender": "unisex",
       "description": "밝은 보랏빛이 도는 염색입니다.",
-      "color": "#c1acd9"
+      "color": "#c1acd9",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairTone-silver",
@@ -807,7 +867,8 @@
       ],
       "gender": "unisex",
       "description": "시원한 은빛과 푸른 그림자가 어우러집니다.",
-      "color": "#d9deea"
+      "color": "#d9deea",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairTone-rose",
@@ -822,7 +883,8 @@
       ],
       "gender": "unisex",
       "description": "부드러운 장밋빛 염색입니다.",
-      "color": "#e8b5c4"
+      "color": "#e8b5c4",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairTone-mint",
@@ -837,7 +899,8 @@
       ],
       "gender": "unisex",
       "description": "맑은 민트빛 염색입니다.",
-      "color": "#a6d9d3"
+      "color": "#a6d9d3",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-sailor-mint",
@@ -851,7 +914,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "짙은 세일러 깃과 작은 리본을 더한 반소매 상의입니다."
+      "description": "짙은 세일러 깃과 작은 리본을 더한 반소매 상의입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-varsity-cherry",
@@ -865,7 +929,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "밝은 여밈과 줄무늬 시보리가 있는 긴소매 점퍼입니다."
+      "description": "밝은 여밈과 줄무늬 시보리가 있는 긴소매 점퍼입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-cardigan-rose",
@@ -879,7 +944,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "밝은 안감과 작은 주머니가 보이는 가디건입니다."
+      "description": "밝은 안감과 작은 주머니가 보이는 가디건입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-academy-navy",
@@ -893,7 +959,8 @@
         "boy"
       ],
       "gender": "boy",
-      "description": "넥타이와 접힌 깃을 갖춘 단정한 재킷입니다."
+      "description": "넥타이와 접힌 깃을 갖춘 단정한 재킷입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-moon-cape",
@@ -907,7 +974,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "금빛 테두리의 짧은 망토가 달린 긴소매 상의입니다."
+      "description": "금빛 테두리의 짧은 망토가 달린 긴소매 상의입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-lace-blouse",
@@ -921,7 +989,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "넓은 레이스 깃과 리본, 주름 밑단을 더했습니다."
+      "description": "넓은 레이스 깃과 리본, 주름 밑단을 더했습니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-stripe-tangerine",
@@ -935,7 +1004,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "가로 줄무늬와 작은 가슴 주머니가 있는 반소매입니다."
+      "description": "가로 줄무늬와 작은 가슴 주머니가 있는 반소매입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-star-hoodie",
@@ -949,7 +1019,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "커다란 별과 후드 끈이 돋보이는 긴소매 상의입니다."
+      "description": "커다란 별과 후드 끈이 돋보이는 긴소매 상의입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-royal-coat",
@@ -963,7 +1034,8 @@
         "boy"
       ],
       "gender": "boy",
-      "description": "금빛 단추와 깃 장식이 있는 자줏빛 재킷입니다."
+      "description": "금빛 단추와 깃 장식이 있는 자줏빛 재킷입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-hanbok-sky",
@@ -977,7 +1049,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "밝은 동정과 분홍 고름이 어우러진 저고리입니다."
+      "description": "밝은 동정과 분홍 고름이 어우러진 저고리입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-bottom-pleated-rose",
@@ -991,7 +1064,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "세로 주름과 밝은 밑단이 있는 장밋빛 치마입니다."
+      "description": "세로 주름과 밝은 밑단이 있는 장밋빛 치마입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-bottom-tartan-gray",
@@ -1005,7 +1079,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "작은 격자무늬가 이어지는 회색 치마입니다."
+      "description": "작은 격자무늬가 이어지는 회색 치마입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-bottom-culottes-cream",
@@ -1019,7 +1094,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "넉넉한 폭과 짧은 길이의 크림색 바지입니다."
+      "description": "넉넉한 폭과 짧은 길이의 크림색 바지입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-bottom-cargo-sage",
@@ -1033,7 +1109,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "양쪽 덧주머니가 달린 초록빛 긴바지입니다."
+      "description": "양쪽 덧주머니가 달린 초록빛 긴바지입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-bottom-shorts-denim",
@@ -1047,7 +1124,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "접힌 밑단이 있는 밝은 데님 반바지입니다."
+      "description": "접힌 밑단이 있는 밝은 데님 반바지입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-bottom-trousers-cocoa",
@@ -1061,7 +1139,8 @@
         "boy"
       ],
       "gender": "boy",
-      "description": "따뜻한 갈색과 금빛 허리 장식의 긴바지입니다."
+      "description": "따뜻한 갈색과 금빛 허리 장식의 긴바지입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-bottom-tulle-lilac",
@@ -1075,7 +1154,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "여러 겹의 물결 주름을 표현한 보랏빛 치마입니다."
+      "description": "여러 겹의 물결 주름을 표현한 보랏빛 치마입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-bottom-skirt-starlight",
@@ -1089,7 +1169,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "짙은 푸른색 위에 작은 별이 수놓인 치마입니다."
+      "description": "짙은 푸른색 위에 작은 별이 수놓인 치마입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-shoes-ribbon-flats",
@@ -1103,7 +1184,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "발등의 작은 리본이 돋보이는 낮은 구두입니다."
+      "description": "발등의 작은 리본이 돋보이는 낮은 구두입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-shoes-ankle-boots",
@@ -1117,7 +1199,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "발목을 감싸는 짧은 밤색 부츠입니다."
+      "description": "발목을 감싸는 짧은 밤색 부츠입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-shoes-hightop-pink",
@@ -1131,7 +1214,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "발목까지 올라오는 분홍색 운동화입니다."
+      "description": "발목까지 올라오는 분홍색 운동화입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-shoes-running-mint",
@@ -1145,7 +1229,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "밝은 옆선과 민트색이 어우러진 운동화입니다."
+      "description": "밝은 옆선과 민트색이 어우러진 운동화입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-shoes-royal-buckle",
@@ -1159,7 +1244,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "금빛 버클이 있는 자줏빛 구두입니다."
+      "description": "금빛 버클이 있는 자줏빛 구두입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-shoes-canvas-red",
@@ -1173,7 +1259,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "밝은 앞코와 빨간 천으로 만든 캔버스화입니다."
+      "description": "밝은 앞코와 빨간 천으로 만든 캔버스화입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-hanbok-plum",
@@ -1187,7 +1274,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "작은 매화와 고름을 더한 연분홍 저고리입니다."
+      "description": "작은 매화와 고름을 더한 연분홍 저고리입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-hanbok-saekdong",
@@ -1201,7 +1289,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "다섯 빛깔 소매와 붉은 밑단이 어우러진 저고리입니다."
+      "description": "다섯 빛깔 소매와 붉은 밑단이 어우러진 저고리입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-hanbok-ink",
@@ -1215,7 +1304,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "밝은 동정과 금빛 고름이 돋보이는 짙은 저고리입니다."
+      "description": "밝은 동정과 금빛 고름이 돋보이는 짙은 저고리입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-hanbok-mooncoat",
@@ -1229,7 +1319,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "발목 위로 내려오는 밝은 두루마기입니다."
+      "description": "발목 위로 내려오는 밝은 두루마기입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-hanbok-jade-dopo",
@@ -1243,7 +1334,8 @@
         "boy"
       ],
       "gender": "boy",
-      "description": "넓은 소매와 허리띠를 갖춘 비취빛 도포입니다."
+      "description": "넓은 소매와 허리띠를 갖춘 비취빛 도포입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-hanbok-royal-red",
@@ -1257,7 +1349,8 @@
         "boy"
       ],
       "gender": "boy",
-      "description": "금빛 구름무늬와 허리 장식을 더한 붉은 긴옷입니다."
+      "description": "금빛 구름무늬와 허리 장식을 더한 붉은 긴옷입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-hanbok-dangui",
@@ -1271,7 +1364,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "길게 내려오는 옷자락과 꽃무늬가 있는 비취빛 당의입니다."
+      "description": "길게 내려오는 옷자락과 꽃무늬가 있는 비취빛 당의입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-top-hanbok-scholar",
@@ -1285,7 +1379,8 @@
         "boy"
       ],
       "gender": "boy",
-      "description": "넓은 소매와 밝은 띠가 있는 짙은 남색 도포입니다."
+      "description": "넓은 소매와 밝은 띠가 있는 짙은 남색 도포입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-bottom-hanbok-chima-red",
@@ -1299,7 +1394,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "발목까지 넓게 퍼지는 붉은 꽃무늬 치마입니다."
+      "description": "발목까지 넓게 퍼지는 붉은 꽃무늬 치마입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-bottom-hanbok-chima-plum",
@@ -1313,7 +1409,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "꽃송이와 세로 주름이 어우러진 자줏빛 긴 치마입니다."
+      "description": "꽃송이와 세로 주름이 어우러진 자줏빛 긴 치마입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-bottom-hanbok-chima-jade",
@@ -1327,7 +1424,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "분홍 장식 끈을 드리운 비취빛 긴 치마입니다."
+      "description": "분홍 장식 끈을 드리운 비취빛 긴 치마입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-bottom-hanbok-chima-ivory",
@@ -1341,7 +1439,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "금빛 밑단과 작은 무늬가 있는 밝은 긴 치마입니다."
+      "description": "금빛 밑단과 작은 무늬가 있는 밝은 긴 치마입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-bottom-hanbok-baji-ivory",
@@ -1355,7 +1454,8 @@
         "boy"
       ],
       "gender": "boy",
-      "description": "넉넉한 바지통과 발목 대님을 표현한 미색 바지입니다."
+      "description": "넉넉한 바지통과 발목 대님을 표현한 미색 바지입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-bottom-hanbok-baji-indigo",
@@ -1369,7 +1469,8 @@
         "boy"
       ],
       "gender": "boy",
-      "description": "발목을 묶어 단정하게 마무리한 쪽빛 바지입니다."
+      "description": "발목을 묶어 단정하게 마무리한 쪽빛 바지입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-shoes-hanbok-flower-red",
@@ -1383,7 +1484,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "살짝 올라간 코와 꽃 장식이 있는 붉은 꽃신입니다."
+      "description": "살짝 올라간 코와 꽃 장식이 있는 붉은 꽃신입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-shoes-hanbok-flower-lilac",
@@ -1397,7 +1499,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "밝은 꽃 장식을 더한 보랏빛 꽃신입니다."
+      "description": "밝은 꽃 장식을 더한 보랏빛 꽃신입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-shoes-hanbok-mokhwa",
@@ -1411,7 +1514,8 @@
         "boy"
       ],
       "gender": "boy",
-      "description": "발목을 감싸는 짙은 전통 신발입니다."
+      "description": "발목을 감싸는 짙은 전통 신발입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-shoes-hanbok-jipsin",
@@ -1425,7 +1529,8 @@
         "boy"
       ],
       "gender": "unisex",
-      "description": "엮은 결을 표현한 따뜻한 빛깔의 짚신입니다."
+      "description": "엮은 결을 표현한 따뜻한 빛깔의 짚신입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-accessory-hanbok-gat",
@@ -1440,7 +1545,8 @@
       ],
       "gender": "boy",
       "description": "넓은 양태와 구슬 끈이 있는 검은 갓입니다.",
-      "accessoryGroup": "hat"
+      "accessoryGroup": "hat",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-accessory-hanbok-baekrip",
@@ -1455,7 +1561,8 @@
       ],
       "gender": "unisex",
       "description": "밝은 빛깔과 작은 구슬 끈이 돋보이는 갓입니다.",
-      "accessoryGroup": "hat"
+      "accessoryGroup": "hat",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-accessory-hanbok-jokduri",
@@ -1470,7 +1577,8 @@
       ],
       "gender": "girl",
       "description": "꽃과 금빛 장식을 얹은 작은 족두리입니다.",
-      "accessoryGroup": "hat"
+      "accessoryGroup": "hat",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-accessory-hanbok-satgat",
@@ -1485,7 +1593,8 @@
       ],
       "gender": "unisex",
       "description": "촘촘하게 엮은 결을 표현한 넓은 삿갓입니다.",
-      "accessoryGroup": "hat"
+      "accessoryGroup": "hat",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-accessory-hanbok-ayam",
@@ -1500,7 +1609,8 @@
       ],
       "gender": "girl",
       "description": "둥근 머리 부분과 길게 내린 뒷드림을 표현했습니다.",
-      "accessoryGroup": "hat"
+      "accessoryGroup": "hat",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-accessory-hanbok-daenggi",
@@ -1515,7 +1625,8 @@
       ],
       "gender": "girl",
       "description": "꽃무늬와 금빛 선이 있는 긴 붉은 댕기입니다.",
-      "accessoryGroup": "accessory"
+      "accessoryGroup": "accessory",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-accessory-hanbok-samo",
@@ -1530,7 +1641,8 @@
       ],
       "gender": "boy",
       "description": "양옆 사모뿔과 앞 장식을 표현한 검은 관모입니다.",
-      "accessoryGroup": "hat"
+      "accessoryGroup": "hat",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-accessory-hanbok-binyeo",
@@ -1545,7 +1657,8 @@
       ],
       "gender": "girl",
       "description": "두 송이 꽃과 작은 드리개가 달린 비녀 장식입니다.",
-      "accessoryGroup": "accessory"
+      "accessoryGroup": "accessory",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-ash-bowl",
@@ -1559,7 +1672,8 @@
         "boy"
       ],
       "gender": "boy",
-      "description": "둥근 볼륨과 촘촘한 앞머리에 은은한 결을 더한 헤어입니다."
+      "description": "둥근 볼륨과 촘촘한 앞머리에 은은한 결을 더한 헤어입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-accessory-sunglasses",
@@ -1574,7 +1688,8 @@
       ],
       "gender": "unisex",
       "accessoryGroup": "glasses",
-      "description": "짙은 렌즈와 은은한 빛 반사가 어우러진 선글라스입니다."
+      "description": "짙은 렌즈와 은은한 빛 반사가 어우러진 선글라스입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-ash-cloud",
@@ -1588,7 +1703,8 @@
         "boy"
       ],
       "gender": "boy",
-      "description": "둥글고 풍성한 볼륨에 부드러운 앞머리와 은은한 반사광을 더했습니다."
+      "description": "둥글고 풍성한 볼륨에 부드러운 앞머리와 은은한 반사광을 더했습니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-blossom-bob",
@@ -1602,7 +1718,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "안쪽으로 둥글게 말린 단발에 작은 꽃리본을 달았습니다."
+      "description": "안쪽으로 둥글게 말린 단발에 작은 꽃리본을 달았습니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-royal-ash",
@@ -1616,7 +1733,8 @@
         "boy"
       ],
       "gender": "boy",
-      "description": "둥글게 겹친 애쉬빛 앞머리에 넓고 부드러운 윤기를 더한 헤어입니다."
+      "description": "둥글게 겹친 애쉬빛 앞머리에 넓고 부드러운 윤기를 더한 헤어입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-hairStyle-royal-choco-bob",
@@ -1630,7 +1748,8 @@
         "boy"
       ],
       "gender": "girl",
-      "description": "진한 초코빛 앞머리와 안쪽으로 둥글게 감기는 C컬 단발입니다."
+      "description": "진한 초코빛 앞머리와 안쪽으로 둥글게 감기는 C컬 단발입니다.",
+      "minPurchaseTier": "tier_1"
     },
     {
       "id": "minimi-accessory-cherry-ribbon",
@@ -1645,7 +1764,300 @@
       ],
       "gender": "girl",
       "accessoryGroup": "accessory",
-      "description": "노란 꽃술의 분홍 벚꽃 아래로 긴 리본이 드리워진 머리핀입니다."
+      "description": "노란 꽃술의 분홍 벚꽃 아래로 긴 리본이 드리워진 머리핀입니다.",
+      "minPurchaseTier": "tier_1"
+    },
+    {
+      "id": "minimi-top-hanbok-gonryongpo",
+      "slot": "top",
+      "value": "mm-hanbok-gonryongpo",
+      "label": "대홍색 곤룡포",
+      "price": 300,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "조선 후기 왕의 집무복. 둥근 깃과 가슴·어깨의 원형 용보, 옥대를 표현했습니다. 익선관과 함께 입습니다. 용보의 세부 발톱은 픽셀 크기에 맞춰 단순화했습니다.",
+      "minPurchaseTier": "tier_5"
+    },
+    {
+      "id": "minimi-accessory-hanbok-ikseongwan",
+      "slot": "accessory",
+      "value": "mm-hanbok-ikseongwan",
+      "label": "익선관",
+      "price": 180,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "accessoryGroup": "hat",
+      "description": "곤룡포에 갖추는 왕·왕세자의 관모. 뒤의 매미 날개 두 개가 위로 향합니다. 옆으로 긴 날개가 달린 관리의 사모와 구분했습니다.",
+      "minPurchaseTier": "tier_5"
+    },
+    {
+      "id": "minimi-accessory-hanbok-waryonggwan",
+      "slot": "accessory",
+      "value": "mm-hanbok-waryonggwan",
+      "label": "와룡관",
+      "price": 180,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "accessoryGroup": "hat",
+      "description": "학창의에 쓰는 연거복 관모. 세로 골과 양옆의 말린 형태를 표현했습니다. 흥선대원군의 착용례가 있으며 왕만의 관모는 아닙니다. 왕실은 상점의 구매 등급입니다.",
+      "minPurchaseTier": "tier_5"
+    },
+    {
+      "id": "minimi-top-hanbok-court-dangui",
+      "slot": "top",
+      "value": "mm-hanbok-court-dangui",
+      "label": "초록 당의",
+      "price": 260,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "조선 후기 왕실 여성의 소례복을 바탕으로 한 당의. 초록 겉감·자주 고름·흰 거들지와 길게 굽은 자락을 표현했습니다. 별도 치마 위에 입으며, 당의 자체는 왕실만의 옷이 아닙니다.",
+      "minPurchaseTier": "tier_5"
+    },
+    {
+      "id": "minimi-accessory-hanbok-gache",
+      "slot": "accessory",
+      "value": "mm-hanbok-gache",
+      "label": "얹은머리 가채",
+      "price": 200,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "accessoryGroup": "hat",
+      "description": "조선 후기 얹은머리를 가체로 풍성하게 꾸민 모습. 땋아 올린 머리와 비녀를 표현했습니다. 가체는 왕실 전용이 아니며 영조·정조 때 사치로 금지된 시기도 있습니다.",
+      "minPurchaseTier": "tier_5"
+    },
+    {
+      "id": "minimi-top-hanbok-silk-durumagi",
+      "slot": "top",
+      "value": "mm-hanbok-silk-durumagi",
+      "label": "옥색 비단 두루마기",
+      "price": 150,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "조선 후기·말기의 비단 두루마기. 옆이 막힌 긴 자락과 비교적 좁은 소매를 표현했습니다. 두루마기는 양반만 입는 전용 복식이 아닙니다.",
+      "minPurchaseTier": "tier_4"
+    },
+    {
+      "id": "minimi-top-hanbok-hakchangui",
+      "slot": "top",
+      "value": "mm-hanbok-hakchangui",
+      "label": "흰 학창의",
+      "price": 180,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "조선 후기 사대부의 연거복. 흰 바탕의 깃·소매 끝·자락에 검은 선을 두르고 넓은 소매와 세조대를 표현했습니다. 와룡관 등과 함께 입었습니다.",
+      "minPurchaseTier": "tier_4"
+    },
+    {
+      "id": "minimi-accessory-hanbok-wide-gat",
+      "slot": "accessory",
+      "value": "mm-hanbok-wide-gat",
+      "label": "넓은 양태 흑립",
+      "price": 140,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "accessoryGroup": "hat",
+      "description": "조선 후기 넓은 양태의 갓. 검은 대우·양태와 장식 갓끈을 표현했습니다. 갓의 크기는 시대와 유행에 따라 달랐으므로 넓이만으로 신분을 단정할 수 없습니다.",
+      "minPurchaseTier": "tier_4"
+    },
+    {
+      "id": "minimi-top-hanbok-silk-jeogori",
+      "slot": "top",
+      "value": "mm-hanbok-silk-jeogori",
+      "label": "비단 회장저고리",
+      "price": 130,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "조선 후기 여성 비단 저고리를 바탕으로 깃·끝동의 자주색 회장과 동정·고름을 표현했습니다. 비단 치마와 따로 조합해 입습니다.",
+      "minPurchaseTier": "tier_4"
+    },
+    {
+      "id": "minimi-bottom-hanbok-silk-chima",
+      "slot": "bottom",
+      "value": "mm-hanbok-silk-chima",
+      "label": "자주 비단 치마",
+      "price": 130,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "조선 후기 여성 치마를 바탕으로 풍성한 주름과 비단의 은은한 광택을 표현했습니다. 용보나 관복 흉배를 장식하지 않았습니다.",
+      "minPurchaseTier": "tier_4"
+    },
+    {
+      "id": "minimi-top-hanbok-white-durumagi",
+      "slot": "top",
+      "value": "mm-hanbok-white-durumagi",
+      "label": "민무늬 흰 두루마기",
+      "price": 100,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "무명 흰 두루마기. 무늬·흉배 없이 동정과 고름, 막힌 옆선과 긴 자락을 표현했습니다. 중인 등급 상품이지만 역사적으로 중인만 입는 옷은 아닙니다.",
+      "minPurchaseTier": "tier_3"
+    },
+    {
+      "id": "minimi-accessory-hanbok-narrow-gat",
+      "slot": "accessory",
+      "value": "mm-hanbok-narrow-gat",
+      "label": "좁은 양태 흑립",
+      "price": 90,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "accessoryGroup": "hat",
+      "description": "장식 끈을 덜고 양태를 좁게 만든 흑립. 작은 갓은 시대별 유행·규제와도 관계가 있으며 중인만의 관모로 단정하지 않았습니다.",
+      "minPurchaseTier": "tier_3"
+    },
+    {
+      "id": "minimi-accessory-hanbok-tanggeon",
+      "slot": "accessory",
+      "value": "mm-hanbok-tanggeon",
+      "label": "말총 탕건",
+      "price": 80,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "accessoryGroup": "hat",
+      "description": "앞이 낮고 뒤가 높은 말총 관모. 망건 위에 쓰고 갓을 받치거나 실내에서 사용했습니다. 중인 전용 관모는 아닙니다.",
+      "minPurchaseTier": "tier_3"
+    },
+    {
+      "id": "minimi-top-hanbok-cotton-jeogori",
+      "slot": "top",
+      "value": "mm-hanbok-cotton-jeogori",
+      "label": "무명 저고리",
+      "price": 60,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "목화에서 얻은 실로 짠 면포인 무명의 저고리. 소박한 동정·고름과 장식 없는 옷감을 표현했습니다. 무명옷은 여러 계층이 입었습니다.",
+      "minPurchaseTier": "tier_2"
+    },
+    {
+      "id": "minimi-top-hanbok-hemp-jeoksam",
+      "slot": "top",
+      "value": "mm-hanbok-hemp-jeoksam",
+      "label": "삼베 적삼",
+      "price": 60,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "삼베로 지은 여름용 홑저고리. 성근 옷감과 간단한 여밈을 표현했습니다. 삼베는 평상복에도 쓰였으므로 상복만을 뜻하지 않습니다.",
+      "minPurchaseTier": "tier_2"
+    },
+    {
+      "id": "minimi-bottom-hanbok-hemp-chima",
+      "slot": "bottom",
+      "value": "mm-hanbok-hemp-chima",
+      "label": "삼베 치마",
+      "price": 55,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "girl",
+      "description": "삼베 바탕의 담백한 치마. 거친 천의 색과 주름을 표현하고 금박·자수는 넣지 않았습니다. 특정 신분의 제복이 아닌 생활 복식입니다.",
+      "minPurchaseTier": "tier_2"
+    },
+    {
+      "id": "minimi-top-hanbok-plain-jeogori",
+      "slot": "top",
+      "value": "mm-hanbok-plain-jeogori",
+      "label": "소박한 베 저고리",
+      "price": 35,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "description": "무늬 없는 베 저고리의 생활복 형태. 동정과 짧은 고름을 표현했습니다. 노비에게 공통 제복이 있었다는 뜻이 아니며 신분에 따른 누더기·맨발 고정관념을 적용하지 않았습니다.",
+      "minPurchaseTier": "tier_1"
+    },
+    {
+      "id": "minimi-bottom-hanbok-plain-baji",
+      "slot": "bottom",
+      "value": "mm-hanbok-plain-baji",
+      "label": "베 바지와 대님",
+      "price": 35,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "boy",
+      "description": "넉넉한 바지와 발목을 묶는 대님을 표현한 생활복. 여러 계층이 입던 기본 형태이며 노비만의 정해진 복장은 아닙니다.",
+      "minPurchaseTier": "tier_1"
+    },
+    {
+      "id": "minimi-accessory-hanbok-headcloth",
+      "slot": "accessory",
+      "value": "mm-hanbok-headcloth",
+      "label": "일할 때 두르는 수건",
+      "price": 25,
+      "tier": "premium",
+      "characters": [
+        "girl",
+        "boy"
+      ],
+      "gender": "unisex",
+      "accessoryGroup": "hat",
+      "description": "작업할 때 머리를 두르는 소박한 천 수건. 상투 주변을 감싼 형태로 표현했습니다. 노비만 착용하는 신분 표지가 아닙니다.",
+      "minPurchaseTier": "tier_1"
     }
   ]
 }

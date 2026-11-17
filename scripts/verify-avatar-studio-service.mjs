@@ -95,7 +95,7 @@ const wallet = {
   spentTotal: 0,
   revision: 1,
 };
-const studio = { avatar, pricing, balance: wallet.balance, wallet };
+const studio = { avatar, pricing, balance: wallet.balance, wallet, purchaseTierCode: "tier_6", allowedPurchaseTiers: ["tier_1", "tier_2", "tier_3", "tier_4", "tier_5"] };
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 const reset = () => {
   calls.length = 0;
@@ -178,6 +178,12 @@ const declinedRequestId = calls[0].payload.requestId;
 assert.equal(service.avatarPricingFromError(changed).prices["top:test"], 700);
 assert.match(service.avatarErrorMessage(changed), /정보가 변경.*이름과 가격/);
 assert.equal(service.avatarPricingFromError(new Error("other failure")), null);
+const rankDenied = { details: { reason: "AVATAR_TIER_LOCKED", minPurchaseTier: "tier_5", purchaseTierCode: "tier_2", allowedPurchaseTiers: ["tier_1", "tier_2"], pricing } };
+assert.deepEqual(Array.from(service.avatarPurchaseTiersFromError(rankDenied)), ["tier_1", "tier_2"]);
+assert.equal(service.avatarPurchaseTiersFromError({ details: { purchaseTierCode: "tier_5" } }), null);
+assert.equal(service.avatarPurchaseTiersFromError({ details: { allowedPurchaseTiers: ["tier_99"] } }), null);
+assert.equal(service.avatarPricingFromError(rankDenied), pricing);
+assert.match(service.avatarErrorMessage(rankDenied), /왕실만 구매/);
 assert.equal(
   service.avatarPricingFromError({
     details: { reason: "AVATAR_ITEM_NOT_OWNED", pricing },
@@ -244,6 +250,8 @@ assert.deepEqual(
 assert.equal(duplicate.wallet, wallet);
 assert.equal(duplicate.avatar, avatar);
 assert.equal(duplicate.pricing, pricing);
+assert.equal(duplicate.purchaseTierCode, "tier_6", "Duplicate response recovers the current authoritative rank, including custom tiers");
+assert.equal(duplicate.allowedPurchaseTiers, studio.allowedPurchaseTiers);
 
 // Responses from an account or authentication epoch that changed in flight are discarded.
 for (const change of [

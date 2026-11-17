@@ -1,4 +1,5 @@
 import type { AvatarItem } from "./catalog";
+import { avatarItemPurchaseTier, avatarPurchaseTierLabel } from "./catalog";
 import { avatarGenderLabel } from "./AvatarShopItemCard";
 import { avatarItemTypeLabel } from "./itemPresentation";
 import WisIcon from "../../components/common/WisIcon";
@@ -16,6 +17,10 @@ export default function AvatarShopItemDetails({
       <strong>{item.label}</strong>
       <span className="avatar-shop-item-meta">
         {avatarItemTypeLabel(item)} · {avatarGenderLabel(item)}
+        {" · "}
+        {item.price === 0
+          ? "전 등급"
+          : `${avatarPurchaseTierLabel(avatarItemPurchaseTier(item))} 구매 가능`}
       </span>
       {item.description && <p>{item.description}</p>}
       {!hidePrice && (

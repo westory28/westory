@@ -5,9 +5,9 @@ const sharp = require('sharp');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 const { readStudentMenuAccess, assertStudentMenuVisible } = require('./studentMenuVisibility');
 const { createStudentWisWallet } = require('./studentWisWallet');
-const { catalog, items, defaultLook, validateLook, validateWearableLook, restoreStoredLook, lookHash } = require('./studentAvatarCatalog');
+const { catalog, items, PURCHASE_TIER_CODES, defaultLook, validateLook, validateWearableLook, restoreStoredLook, lookHash } = require('./studentAvatarCatalog');
 const { readAvatarPricing, assertAvatarIdentity, readAvatarTeacher, ownedLookIds, canUsePricedLook } = require('./avatarCatalogPricing');
-const { resolveRankPolicy, getProfileEmojiEntryById, DEFAULT_PROFILE_EMOJI_ID } = require('./studentProfileEmojiPolicy');
+const { resolveRankPolicy, getCurrentTierCodeForRankTotal, getProfileEmojiEntryById, DEFAULT_PROFILE_EMOJI_ID } = require('./studentProfileEmojiPolicy');
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const safe = (value, min = 0) => Number.isSafeInteger(value) && value >= min;
@@ -105,6 +105,21 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
   const deletionCollection = teacher ? 'teacher_avatar_deletions' : 'student_avatar_deletions';
   const thumbnailFolder = teacher ? 'teacher_avatar_thumbnails' : 'student_avatar_thumbnails';
   const ownerField = teacher ? 'teacherUid' : 'studentUid';
+  // Match the existing semester point-policy source. No legacy wallet or client
+  // supplied rank may grant a purchase; this read joins the purchase transaction.
+  const readPurchaseAccess = async (tx, scope, wallet) => {
+    const policy = loadPolicy ? await loadPolicy(tx, scope.year, scope.semester)
+      : (await tx.getAll(db.doc(`years/${scope.year}/semesters/${scope.semester}/point_policies/current`), { fieldMask: ['rankPolicy.tiers'] }))[0].data();
+    const rankPolicy = resolveRankPolicy(policy?.rankPolicy);
+    const purchaseTierCode = getCurrentTierCodeForRankTotal(wallet.rankEarnedTotal, rankPolicy);
+    const currentIndex = rankPolicy.tiers.findIndex(tier => tier.code === purchaseTierCode);
+    const reachedCodes = new Set(rankPolicy.tiers.slice(0, currentIndex + 1).map(tier => tier.code));
+    // Codes are stable identities, not numeric ranks: the policy permits extra
+    // tiers, removal and reordered thresholds. Missing requirements stay locked;
+    // tier_1 remains the unrestricted legacy baseline even if removed or moved.
+    const allowedPurchaseTiers = PURCHASE_TIER_CODES.filter(code => code === 'tier_1' || reachedCodes.has(code));
+    return { purchaseTierCode, allowedPurchaseTiers };
+  };
   const exposeState = state => privateState(teacher ? { ...state, ownedItemIds: [...items.keys()] } : state);
   const canonicalWallet = createStudentWisWallet({ db, actorUid: 'system:student-avatar', validateStudentProfile: profile => {
     if (profile.weplayDeletionPending) fail('permission-denied', '승인된 학생 계정에서 사용할 수 있습니다.', 'AVATAR_STUDENT_REQUIRED');
@@ -187,8 +202,8 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
       // a second copy of those reads on this combined studio load.
       const { wallet } = await canonicalWallet.read(tx, scope, uid);
       if ((await tx.get(db.doc(`${deletionCollection}/${uid}`))).exists) fail('failed-precondition', '계정 정리 중입니다.', 'AVATAR_DELETION_PENDING');
-      const [state, pricing] = await Promise.all([readState(tx, uid), readAvatarPricing(tx, db)]);
-      return { avatar: exposeState(state), balance: wallet.balance, wallet: walletState(wallet), pricing };
+      const [state, pricing, purchaseAccess] = await Promise.all([readState(tx, uid), readAvatarPricing(tx, db), readPurchaseAccess(tx, scope, wallet)]);
+      return { avatar: exposeState(state), balance: wallet.balance, wallet: walletState(wallet), pricing, ...purchaseAccess };
     }, { readOnly: true });
   };
 
@@ -248,8 +263,13 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
         fail('failed-precondition', '아바타 가격이 변경되었습니다. 새 가격을 확인한 뒤 다시 구매해 주세요.', 'AVATAR_PRICE_CHANGED', { currentPrice: price, pricing });
       }
       const { wallet, economy } = await canonicalWallet.read(tx, scope, uid);
+      const purchaseAccess = await readPurchaseAccess(tx, scope, wallet);
+      if (!alreadyOwned && !purchaseAccess.allowedPurchaseTiers.includes(pricing.purchaseTiers[item.id])) {
+        fail('permission-denied', '이 아이템을 구매할 수 있는 등급에 도달하지 않았습니다.', 'AVATAR_TIER_LOCKED',
+          { ...purchaseAccess, minPurchaseTier: pricing.purchaseTiers[item.id], pricing });
+      }
       const timestamp = Timestamp.fromMillis(now());
-      const result = { itemId: item.id, charged: 0, alreadyOwned, duplicate: false, ledgerEntryId: null, wallet: walletState(wallet), avatar: exposeState(state), pricing };
+      const result = { itemId: item.id, charged: 0, alreadyOwned, duplicate: false, ledgerEntryId: null, wallet: walletState(wallet), avatar: exposeState(state), pricing, ...purchaseAccess };
       // No-charge probes must not grow a receipt collection. An earlier charged
       // receipt was already checked above and still replays exactly once.
       if (alreadyOwned) return result;

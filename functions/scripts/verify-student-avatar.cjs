@@ -64,7 +64,23 @@ function fixture(balance = 1000) {
         const baseline = new Map(versions), readPaths = new Set(), pending = [];
         const tx = {
           async get(ref) { assert.equal(pending.length, 0, 'All transaction reads precede writes'); reads.push(ref.path); readPaths.add(ref.path); return snapshot(source, ref.path); },
-          getAll(...refs) { return Promise.all(refs.map(ref => tx.get(ref))); },
+          getAll(...refs) {
+            const options = refs.at(-1)?.fieldMask ? refs.pop() : null;
+            return Promise.all(refs.map(async ref => {
+              const result = await tx.get(ref);
+              if (!options || !result.exists) return result;
+              const data = result.data(), projected = {};
+              for (const key of options.fieldMask) {
+                const parts = key.split('.');
+                const value = parts.reduce((entry, part) => entry?.[part], data);
+                if (value === undefined) continue;
+                let target = projected;
+                for (const part of parts.slice(0, -1)) target = target[part] ??= {};
+                target[parts.at(-1)] = value;
+              }
+              return { ...result, data: () => structuredClone(projected) };
+            }));
+          },
           set(ref, data, options) { pending.push({ path: ref.path, data, options }); },
           create(ref, data) { pending.push({ path: ref.path, data, create: true }); },
           delete(ref) { pending.push({ path: ref.path, delete: true }); },

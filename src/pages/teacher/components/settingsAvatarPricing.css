@@ -378,8 +378,13 @@
 }
 .avatar-pricing-editor-options {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1.5fr);
   gap: 12px;
+}
+@media (max-width: 900px) {
+  .avatar-pricing-editor-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .avatar-pricing-editor-fields input[aria-invalid="true"] {
   border-color: var(--ws-danger-text, #b91c1c);
@@ -408,8 +413,5 @@
   }
   .avatar-pricing-editor-options {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .avatar-pricing-editor-price {
-    grid-column: 1 / -1;
   }
 }

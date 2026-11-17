@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { fixture, uid, req, purchase, save, paid, accountPath } = require('./verify-student-avatar.cjs');
-const { catalog, defaultLook, lookHash, sanitizePublicAvatar, itemIdFor, itemMetadata, validateLook, validateWearableLook, canWearItem } = require('../studentAvatarCatalog');
+const { catalog, defaultLook, lookHash, sanitizePublicAvatar, itemIdFor, itemMetadata, itemMinPurchaseTier, PURCHASE_TIER_CODES, validateLook, validateWearableLook, canWearItem } = require('../studentAvatarCatalog');
 const { createStudentAvatarHandlers, createStudentAvatarDeletionHandler } = require('../studentAvatar');
 const { createAvatarCatalogPricingHandlers, PRICING_PATH, MAX_AVATAR_PRICE, MAX_AVATAR_LABEL_LENGTH, MAX_AVATAR_DESCRIPTION_LENGTH } = require('../avatarCatalogPricing');
 const reason = expected => error => error.details?.reason === expected;
@@ -22,6 +22,225 @@ const setPrices = (state, prices, revision = 1) => state.documents.set(PRICING_P
 const quotedPurchase = (item = paid[0], price = item.price, revision = 0, requestId = 'priced-purchase-1') =>
   req({ year: '2026', semester: '2', itemId: item.id, requestId, expectedPrice: price, expectedPricingRevision: revision,
     expectedPricingPolicyVersion: catalog.pricingPolicyVersion });
+const rankPolicyPath = 'years/2026/semesters/2/point_policies/current';
+
+test('purchase tiers preserve legacy defaults and catalog restrictions without migration writes', async () => {
+  const state = setup(); setPrices(state, {});
+  const result = await state.pricing.getAvatarCatalogPricing(teacherRequest({}));
+  assert.deepEqual(result.purchaseTiers, Object.fromEntries(catalog.items.map(item => [item.id, itemMinPurchaseTier(item)])));
+  assert.equal(itemMinPurchaseTier({}), 'tier_1');
+  assert.deepEqual(state.reads, [`users/${teacherUid}`, PRICING_PATH]);
+  assert.equal(state.writes.length, 0); assert.equal(state.documents.get(PRICING_PATH).purchaseTiers, undefined);
+});
+
+test('tier-only updates are validated, sparse and idempotent and legacy updates retain restrictions', async () => {
+  const state = setup(), item = paid[0], id = item.id;
+  for (const purchaseTiers of [null, [], { unknown: 'tier_1' }, { [id]: 'tier_0' }, { [id]: 'tier_6' }, { [id]: 5 }]) {
+    await assert.rejects(state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 0, purchaseTiers })), reason('AVATAR_PRICING_INPUT_INVALID'));
+  }
+  assert.equal(state.reads.length, 0); assert.equal(state.writes.length, 0);
+  const request = teacherRequest({ expectedRevision: 0, purchaseTiers: { [id]: 'tier_5' } });
+  const result = await state.pricing.updateAvatarCatalogPricing(request);
+  assert.equal(result.purchaseTiers[id], 'tier_5'); assert.equal(result.revision, 1);
+  assert.deepEqual(state.documents.get(PRICING_PATH).purchaseTiers, { [id]: 'tier_5' });
+  assert.deepEqual(state.reads, [`users/${teacherUid}`, PRICING_PATH]); assert.equal(state.writes.length, 1);
+  assert.equal((await state.pricing.updateAvatarCatalogPricing(request)).revision, 1); assert.equal(state.writes.length, 1);
+  const legacy = await state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 1, prices: { [id]: 123 } }));
+  assert.equal(legacy.purchaseTiers[id], 'tier_5');
+  const reverted = await state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 2, purchaseTiers: { [id]: itemMinPurchaseTier(item) } }));
+  assert.equal(reverted.prices[id], 123); assert.deepEqual(state.documents.get(PRICING_PATH).purchaseTiers, {});
+});
+
+test('concurrent tier edits conflict without overwriting another item and retry with current revision', async () => {
+  const state = setup(), [first, second] = paid;
+  const requestFor = item => teacherRequest({ expectedRevision: 0, purchaseTiers: { [item.id]: 'tier_4' } });
+  const results = await Promise.allSettled([first, second].map(item => state.pricing.updateAvatarCatalogPricing(requestFor(item))));
+  assert.equal(results.filter(value => value.status === 'fulfilled').length, 1); assert.equal(state.writes.length, 1);
+  const conflict = results.find(value => value.status === 'rejected').reason;
+  assert.equal(conflict.details.reason, 'AVATAR_PRICING_REVISION_CONFLICT');
+  const failed = results[0].status === 'rejected' ? first : second;
+  const retry = requestFor(failed); retry.data.expectedRevision = conflict.details.pricing.revision;
+  const recovered = await state.pricing.updateAvatarCatalogPricing(retry);
+  assert.equal(recovered.purchaseTiers[first.id], 'tier_4'); assert.equal(recovered.purchaseTiers[second.id], 'tier_4');
+  assert.equal(state.writes.length, 2);
+});
+
+test('corrupt persisted tier maps fail closed without wallet, inventory or settings writes', async () => {
+  for (const purchaseTiers of [null, [], { [paid[0].id]: 'tier_6' }]) {
+    const state = setup(); state.documents.set(PRICING_PATH, { schemaVersion: 1, revision: 1, prices: {}, purchaseTiers });
+    await assert.rejects(state.pricing.getAvatarCatalogPricing(teacherRequest({})), reason('AVATAR_PRICING_INVALID'));
+    await assert.rejects(state.api.getAvatarStudioState(req({ year: '2026', semester: '2' })), reason('AVATAR_PRICING_INVALID'));
+    await assert.rejects(state.api.purchaseStudentAvatarItem(quotedPurchase(paid[0], paid[0].price, 1)), reason('AVATAR_PRICING_INVALID'));
+    assert.equal(state.writes.length, 0); assert.equal(state.documents.get(accountPath).balance, 1000);
+  }
+});
+
+test('canonical rank with custom semester thresholds gates below/equal/above purchases and studio with bounded reads', async () => {
+  const thresholds = [0, 100, 400, 900, 2400], item = paid[0];
+  for (let minimum = 1; minimum < 5; minimum++) for (const offset of [-1, 0, 1]) {
+    const state = setup(), total = thresholds[minimum] + offset;
+    state.documents.set('site_settings/config', { studentMenuVisibility: { mypage: true, avatar: true, avatar_shop: true } });
+    state.documents.set(rankPolicyPath, { rankPolicy: { tiers: thresholds.map((minPoints, index) => ({ code: `tier_${index + 1}`, minPoints })) } });
+    state.documents.get(accountPath).rankEarnedTotal = total;
+    state.documents.get(`users/${uid}`).rankTierCode = 'tier_5'; // Profile/client hints never grant access.
+    state.documents.set(PRICING_PATH, { schemaVersion: 1, revision: 1, prices: {}, purchaseTiers: { [item.id]: `tier_${minimum + 1}` } });
+    const expectedCode = `tier_${minimum + (offset < 0 ? 0 : 1)}`;
+    const studio = await state.api.getAvatarStudioState(req({ year: '2026', semester: '2' }));
+    assert.equal(studio.purchaseTierCode, expectedCode); assert.equal(state.reads.length, 15);
+    assert.deepEqual(studio.allowedPurchaseTiers, PURCHASE_TIER_CODES.slice(0, minimum + (offset < 0 ? 0 : 1)));
+    assert.equal(state.reads.filter(path => path === rankPolicyPath).length, 1); assert.equal(state.writes.length, 0);
+    state.reads.length = 0;
+    const request = quotedPurchase(item, item.price, 1);
+    if (offset < 0) {
+      await assert.rejects(state.api.purchaseStudentAvatarItem(request), error => {
+        assert.equal(error.details.reason, 'AVATAR_TIER_LOCKED'); assert.equal(error.details.purchaseTierCode, expectedCode);
+        assert.equal(error.details.minPurchaseTier, `tier_${minimum + 1}`); assert.equal(error.details.pricing.revision, 1); return true;
+      });
+      assert.equal(state.writes.length, 0); assert.equal(state.documents.get(accountPath).balance, 1000);
+    } else {
+      const result = await state.api.purchaseStudentAvatarItem(request);
+      assert.equal(result.purchaseTierCode, expectedCode); assert.equal(result.charged, item.price);
+      assert.equal(state.writes.length, 8); assert.equal(result.wallet.rankEarnedTotal, total);
+    }
+    assert.equal(state.reads.length, 18); assert.equal(state.reads.filter(path => path === rankPolicyPath).length, 1);
+  }
+});
+
+test('forged rank fields and wrong semester cannot buy a restricted item', async () => {
+  const state = setup();
+  for (const field of ['purchaseTierCode', 'allowedPurchaseTiers', 'rankEarnedTotal', 'minPurchaseTier']) {
+    const request = purchase(); request.data[field] = field === 'rankEarnedTotal' ? 999999 : 'tier_5';
+    await assert.rejects(state.api.purchaseStudentAvatarItem(request), reason('AVATAR_INPUT_INVALID'));
+  }
+  assert.equal(state.reads.length, 0); assert.equal(state.writes.length, 0);
+  const wrong = purchase(); wrong.data.semester = '1';
+  await assert.rejects(state.api.purchaseStudentAvatarItem(wrong), error => error.code === 'failed-precondition');
+  assert.equal(state.reads.includes('years/2026/semesters/1/point_policies/current'), false);
+  assert.equal(state.writes.length, 0);
+});
+
+test('extended, reordered and removed rank tiers use policy order instead of numeric code comparisons', async () => {
+  const cases = [
+    { tiers: [[1, 0], [2, 50], [3, 150], [4, 300], [5, 500], [6, 750]], total: 750, current: 6, allowed: [1, 2, 3, 4, 5] },
+    { tiers: [[1, 0], [2, 50], [6, 100], [3, 150], [4, 300], [5, 500]], total: 100, current: 6, allowed: [1, 2] },
+    { tiers: [[1, 0], [2, 50], [3, 150], [5, 300], [4, 500]], total: 300, current: 5, allowed: [1, 2, 3, 5] },
+    { tiers: [[1, 0], [2, 50], [3, 150], [5, 300], [4, 500]], total: 500, current: 4, allowed: [1, 2, 3, 4, 5] },
+    { tiers: [[1, 0], [2, 50], [4, 300], [5, 500]], total: 300, current: 4, allowed: [1, 2, 4] },
+    { tiers: [[1, 0], [2, 50], [4, 300], [5, 500]], total: 500, current: 5, allowed: [1, 2, 4, 5] },
+    { tiers: [[2, 0], [3, 150], [4, 300], [5, 500]], total: 0, current: 2, allowed: [1, 2] },
+    { tiers: [[2, 50], [5, 500]], total: 0, current: 2, allowed: [1, 2] },
+    { tiers: [[6, 0]], total: 999, current: 6, allowed: [1] },
+    { tiers: [[2, 0], [3, 150], [4, 300], [5, 500], [1, 700]], total: 500, current: 5, allowed: [1, 2, 3, 4, 5] },
+    { tiers: [[2, 0], [3, 150], [4, 300], [5, 500], [1, 700]], total: 700, current: 1, allowed: [1, 2, 3, 4, 5] },
+  ];
+  const item = paid[0];
+  for (const scenario of cases) for (const minimum of PURCHASE_TIER_CODES) {
+    const state = setup(), allowed = scenario.allowed.map(index => `tier_${index}`);
+    state.documents.get(accountPath).rankEarnedTotal = scenario.total;
+    state.documents.set(rankPolicyPath, { rankPolicy: { tiers: scenario.tiers.map(([index, minPoints]) => ({ code: `tier_${index}`, minPoints })) } });
+    state.documents.set(PRICING_PATH, { schemaVersion: 1, revision: 1, prices: {}, purchaseTiers: { [item.id]: minimum } });
+    const studio = await state.api.getAvatarStudioState(req({ year: '2026', semester: '2' }));
+    assert.equal(studio.purchaseTierCode, `tier_${scenario.current}`); assert.deepEqual(studio.allowedPurchaseTiers, allowed);
+    const request = quotedPurchase(item, item.price, 1);
+    if (allowed.includes(minimum)) {
+      const result = await state.api.purchaseStudentAvatarItem(request);
+      assert.equal(result.purchaseTierCode, studio.purchaseTierCode); assert.deepEqual(result.allowedPurchaseTiers, allowed);
+      assert.equal(result.charged, item.price); assert.equal(state.writes.length, 8);
+    } else {
+      await assert.rejects(state.api.purchaseStudentAvatarItem(request), error => {
+        assert.equal(error.details.reason, 'AVATAR_TIER_LOCKED'); assert.equal(error.details.purchaseTierCode, studio.purchaseTierCode);
+        assert.deepEqual(error.details.allowedPurchaseTiers, allowed); return true;
+      });
+      assert.equal(state.writes.length, 0); assert.equal(state.documents.get(accountPath).balance, 1000);
+    }
+  }
+});
+
+test('tier changes invalidate quotes and a denied request can retry after earning the required rank', async () => {
+  const state = setup(), item = paid[0]; state.documents.get(accountPath).rankEarnedTotal = 0;
+  await state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 0, purchaseTiers: { [item.id]: 'tier_2' } }));
+  state.writes.length = 0;
+  await assert.rejects(state.api.purchaseStudentAvatarItem(purchase(item)), error => reason('AVATAR_PRICE_CHANGED')(error)
+    && error.details.pricing.purchaseTiers[item.id] === 'tier_2');
+  const request = quotedPurchase(item, item.price, 1, 'tier-unlock-retry');
+  await assert.rejects(state.api.purchaseStudentAvatarItem(request), reason('AVATAR_TIER_LOCKED'));
+  assert.equal(state.writes.length, 0);
+  state.documents.get(accountPath).rankEarnedTotal = 50;
+  const result = await state.api.purchaseStudentAvatarItem(request);
+  assert.equal(result.charged, item.price); assert.equal(result.purchaseTierCode, 'tier_2'); assert.equal(state.writes.length, 8);
+});
+
+test('a failed rank-policy read cannot debit or grant an item and the same request safely retries', async () => {
+  const state = setup(), request = purchase();
+  const runTransaction = state.db.runTransaction.bind(state.db);
+  let unavailable = true;
+  state.db.runTransaction = callback => runTransaction(tx => {
+    const getAll = tx.getAll.bind(tx);
+    tx.getAll = (...refs) => {
+      if (refs[0]?.path === rankPolicyPath && unavailable) throw new HttpsError('unavailable', 'Fixture policy read failure');
+      return getAll(...refs);
+    };
+    return callback(tx);
+  });
+  await assert.rejects(state.api.purchaseStudentAvatarItem(request), error => error.code === 'unavailable');
+  assert.equal(state.writes.length, 0); assert.equal(state.documents.get(accountPath).balance, 1000);
+  unavailable = false;
+  const result = await state.api.purchaseStudentAvatarItem(request);
+  assert.equal(result.charged, paid[0].price); assert.equal(state.writes.length, 8);
+  const replay = await state.api.purchaseStudentAvatarItem(request);
+  assert.equal(replay.duplicate, true); assert.equal(state.writes.length, 8);
+});
+
+test('owned items and paid receipts survive higher minimums and rank reductions without duplicate debits', async () => {
+  const state = setup(), item = paid[0], request = purchase(item);
+  const bought = await state.api.purchaseStudentAvatarItem(request);
+  await state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 0, purchaseTiers: { [item.id]: 'tier_5' } }));
+  state.documents.get(accountPath).rankEarnedTotal = 0;
+  state.reads.length = 0; state.writes.length = 0;
+  const replay = await state.api.purchaseStudentAvatarItem(request);
+  assert.equal(replay.duplicate, true); assert.equal(replay.charged, bought.charged);
+  assert.equal(state.reads.includes(rankPolicyPath), false); assert.equal(state.writes.length, 0);
+  const owned = await state.api.purchaseStudentAvatarItem(quotedPurchase(item, item.price, 1, 'owned-new-tier-request'));
+  assert.equal(owned.charged, 0); assert.equal(owned.purchaseTierCode, 'tier_1'); assert.equal(state.writes.length, 0);
+  const character = item.gender === 'boy' ? 'boy' : 'girl';
+  const saved = await state.api.saveStudentAvatar(await save({ look: { ...defaultLook(character), [item.slot]: item.value }, expectedRevision: bought.avatar.revision }));
+  assert.ok(saved.ownedItemIds.includes(item.id)); assert.equal(state.documents.get(accountPath).balance, 1000 - item.price);
+});
+
+test('free items remain available even with a higher purchase minimum and save without a rank read', async () => {
+  const state = setup(), item = catalog.items.find(item => item.id === catalog.freeClothingItemIds[0]);
+  state.documents.get(accountPath).rankEarnedTotal = 0;
+  state.documents.set(PRICING_PATH, { schemaVersion: 1, revision: 1, prices: {}, purchaseTiers: { [item.id]: 'tier_5' } });
+  const pricing = await state.pricing.getAvatarCatalogPricing(teacherRequest({}));
+  assert.equal(pricing.purchaseTiers[item.id], 'tier_1'); assert.equal(state.writes.length, 0);
+  const result = await state.api.purchaseStudentAvatarItem(quotedPurchase(item, 0, 1));
+  assert.equal(result.charged, 0); assert.equal(result.purchaseTierCode, 'tier_1'); assert.equal(state.writes.length, 0);
+  state.reads.length = 0;
+  await state.api.saveStudentAvatar(await save({ look: { ...defaultLook(), [item.slot]: item.value } }));
+  assert.equal(state.reads.includes(rankPolicyPath), false);
+  assert.equal(state.writes.some(write => write.path.startsWith('semester_wis_')), false);
+});
+
+test('free purchase tiers reject explicit restrictions and price-only free conversions normalize without losing metadata', async () => {
+  const state = setup(), item = catalog.items.find(item => item.slot === 'accessory' && item.price > 0);
+  const free = catalog.items.find(item => item.id === catalog.freeClothingItemIds[0]);
+  await assert.rejects(state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 0, purchaseTiers: { [free.id]: 'tier_5' } })),
+    reason('AVATAR_PRICING_INPUT_INVALID'));
+  await assert.rejects(state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 0, prices: { [item.id]: 0 }, purchaseTiers: { [item.id]: 'tier_5' } })),
+    reason('AVATAR_PRICING_INPUT_INVALID'));
+  assert.equal(state.writes.length, 0);
+  const metadata = { ...itemMetadata(item), label: '검증 상품' };
+  await state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 0, purchaseTiers: { [item.id]: 'tier_5' }, metadata: { [item.id]: metadata } }));
+  const converted = await state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 1, prices: { [item.id]: 0 } }));
+  assert.equal(converted.prices[item.id], 0); assert.equal(converted.purchaseTiers[item.id], 'tier_1');
+  assert.deepEqual(converted.metadata[item.id], metadata);
+  assert.deepEqual(state.documents.get(PRICING_PATH).purchaseTiers, {});
+  const writes = state.writes.length;
+  await state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 1, prices: { [item.id]: 0 } }));
+  assert.equal(state.writes.length, writes);
+  const restored = await state.pricing.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 2, prices: { [item.id]: item.price } }));
+  assert.equal(restored.purchaseTiers[item.id], 'tier_1', 'Returning to paid keeps the current unrestricted selection');
+});
 
 test('wearing eligibility checks gender and geometry while historical public looks remain valid', () => {
   for (const character of ['girl', 'boy']) {

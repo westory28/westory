@@ -203,7 +203,10 @@ export function drawMinimi(
   const topVisible = bodyVisible || only === "top";
   const bottomVisible = bodyVisible || only === "bottom";
   const shoesVisible = bodyVisible || only === "shoes";
-  const style = HAIR_BASES[look.hairStyle] || look.hairStyle;
+  // An updo gathers the selected hair instead of leaving loose lengths beneath it.
+  const gatheredHair = bodyVisible && look.accessory === "mm-hanbok-gache";
+  const renderedHairStyle = gatheredHair ? "mm-parted" : look.hairStyle;
+  const style = HAIR_BASES[renderedHairStyle] || renderedHairStyle;
   const customTop = TOPS[look.top];
   const customBottom = BOTTOMS[look.bottom];
   const customShoe = SHOES[look.shoes];
@@ -222,9 +225,9 @@ export function drawMinimi(
   };
   const skin = SKIN[look.skinTone] || SKIN["mm-ivory"];
   const hair = royalHairPalette(
-    look.hairStyle,
-    look.hairTone,
-    HAIR[look.hairTone] || HAIR["mm-ink"],
+    renderedHairStyle,
+    gatheredHair ? "mm-ink" : look.hairTone,
+    HAIR[gatheredHair ? "mm-ink" : look.hairTone] || HAIR["mm-ink"],
   );
   const winter =
     look.top === "mm-school-hoodie" || look.top === "mm-school-halfzip";
@@ -250,7 +253,7 @@ export function drawMinimi(
   // Hair behind the head/body has the same top silhouette as its front fringe.
   if (headVisible) {
     clipHair();
-    drawHairDetails(pen, look.hairStyle, hair, false);
+    drawHairDetails(pen, renderedHairStyle, hair, false);
     if (style === "mm-long" || style === "mm-wave") {
       poly(
         style === "mm-wave"
@@ -323,7 +326,7 @@ export function drawMinimi(
         line([57, 52], [59, 56], hair[0]);
       }
     }
-    if (look.hairStyle === "mm-ponytail") {
+    if (renderedHairStyle === "mm-ponytail") {
       poly(
         [
           [53, 19],
@@ -1395,7 +1398,7 @@ export function drawMinimi(
 
     drawHairDetails(
       pen,
-      look.hairStyle,
+      renderedHairStyle,
       hair,
       true,
       !bodyVisible ||

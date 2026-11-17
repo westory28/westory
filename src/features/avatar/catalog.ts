@@ -3,6 +3,28 @@ import catalog from "../../../functions/avatarCatalog.json";
 export type AvatarCharacter = "girl" | "boy";
 export type AvatarItemGender = AvatarCharacter | "unisex";
 export type AvatarAccessoryGroup = "hat" | "accessory" | "glasses";
+export const AVATAR_PURCHASE_TIERS = [
+  { code: "tier_1", label: "노비 이상" },
+  { code: "tier_2", label: "상민 이상" },
+  { code: "tier_3", label: "중인 이상" },
+  { code: "tier_4", label: "양반 이상" },
+  { code: "tier_5", label: "왕실" },
+] as const;
+export type AvatarPurchaseTier = (typeof AVATAR_PURCHASE_TIERS)[number]["code"];
+export const isAvatarPurchaseTier = (
+  value: unknown,
+): value is AvatarPurchaseTier =>
+  AVATAR_PURCHASE_TIERS.some((tier) => tier.code === value);
+export const normalizeAvatarPurchaseTiers = (
+  value: unknown,
+): AvatarPurchaseTier[] | null =>
+  Array.isArray(value) &&
+  value.length <= AVATAR_PURCHASE_TIERS.length &&
+  value.every(isAvatarPurchaseTier)
+    ? [...new Set(value)]
+    : null;
+export const avatarPurchaseTierLabel = (tier: AvatarPurchaseTier) =>
+  AVATAR_PURCHASE_TIERS.find((entry) => entry.code === tier)!.label;
 export interface AvatarItemMetadata {
   label: string;
   gender: AvatarItemGender;
@@ -35,7 +57,18 @@ export interface AvatarItem {
   gender?: AvatarItemGender;
   accessoryGroup?: AvatarAccessoryGroup;
   description?: string;
+  minPurchaseTier?: AvatarPurchaseTier;
 }
+export const avatarItemPurchaseTier = (item: AvatarItem): AvatarPurchaseTier =>
+  item.price === 0 ? "tier_1" : (item.minPurchaseTier ?? "tier_1");
+export const canPurchaseAvatarItem = (
+  item: AvatarItem,
+  allowedPurchaseTiers: readonly AvatarPurchaseTier[] | null | undefined,
+): boolean => {
+  const minimum = avatarItemPurchaseTier(item);
+  if (item.price === 0 || minimum === "tier_1") return true;
+  return allowedPurchaseTiers?.includes(minimum) === true;
+};
 export interface AvatarPublic {
   schemaVersion: number;
   catalogVersion: number;
@@ -103,13 +136,21 @@ export const applyAvatarCatalogSettings = (
   settings: {
     prices: Record<string, number>;
     metadata?: Record<string, AvatarItemMetadata>;
+    purchaseTiers?: Record<string, AvatarPurchaseTier>;
   },
-): AvatarItem => ({
-  ...item,
-  ...avatarItemMetadata(item),
-  ...settings.metadata?.[item.id],
-  price: effectiveAvatarItemPrice(item, settings.prices[item.id]),
-});
+): AvatarItem => {
+  const price = effectiveAvatarItemPrice(item, settings.prices[item.id]);
+  return {
+    ...item,
+    ...avatarItemMetadata(item),
+    ...settings.metadata?.[item.id],
+    price,
+    minPurchaseTier:
+      price === 0
+        ? "tier_1"
+        : (settings.purchaseTiers?.[item.id] ?? avatarItemPurchaseTier(item)),
+  };
+};
 export const AVATAR_SLOTS: { key: AvatarSlot; label: string; icon: string }[] =
   [
     { key: "character", label: "캐릭터", icon: "fa-user" },

@@ -45,14 +45,15 @@ import MainLayout from './src/components/layout/MainLayout';
 import TeacherAvatarShopPage from './src/pages/teacher/components/points/TeacherAvatarShopPage';
 import SettingsMyPage from './src/pages/teacher/components/SettingsMyPage';
 import {AVATAR_ITEMS,defaultAvatarLook} from './src/features/avatar/catalog';
-const qa=window.avatarPricingQa={reads:0,saves:[],revision:4,failLoad:false,conflict:false,deferred:false,errors:[],toasts:[],metadata:{},prices:Object.fromEntries(AVATAR_ITEMS.map(i=>[i.id,i.price]))};
+const qa=window.avatarPricingQa={reads:0,saves:[],revision:4,failLoad:false,conflict:false,deferred:false,errors:[],toasts:[],metadata:{},purchaseTiers:{},prices:Object.fromEntries(AVATAR_ITEMS.map(i=>[i.id,i.price]))};
 qa.metadata=${JSON.stringify(longNames)};
 qa.prices['minimi-top-knit-cream']=0;qa.prices['minimi-top-school-white']=999;qa.prices['minimi-top-school-hoodie']=999;
+qa.purchaseTiers['minimi-top-school-white']='tier_5';
 qa.avatar={schemaVersion:1,catalogVersion:2,look:defaultAvatarLook('boy'),revision:1,lookHash:'fixture',ownedItemIds:[],thumbnailUrl:''};
 window.addEventListener('error',e=>qa.errors.push(e.message));
 window.addEventListener('unhandledrejection',e=>qa.errors.push(String(e.reason)));
-qa.load=async()=>{qa.reads++;if(qa.failLoad)throw Error('가격표를 불러오지 못했습니다. 다시 불러와 주세요.');return{revision:qa.revision,prices:{...qa.prices},metadata:{...qa.metadata}}};
-qa.save=async input=>{qa.saves.push(structuredClone(input));if(qa.conflict){qa.conflict=false;qa.revision++;throw Object.assign(Error('다른 관리자가 변경했습니다. 입력 내용은 유지했습니다. 확인 후 다시 저장해 주세요.'),{details:{pricing:{revision:qa.revision,prices:{...qa.prices},metadata:{...qa.metadata}}}})}if(input.expectedRevision!==qa.revision)throw Error('revision mismatch');if(qa.deferred)await new Promise(resolve=>qa.release=resolve);qa.prices={...qa.prices,...input.prices};qa.metadata={...qa.metadata,...input.metadata};qa.revision++;return{revision:qa.revision,prices:{...qa.prices},metadata:{...qa.metadata}}};
+qa.load=async()=>{qa.reads++;if(qa.failLoad)throw Error('가격표를 불러오지 못했습니다. 다시 불러와 주세요.');return{revision:qa.revision,prices:{...qa.prices},metadata:{...qa.metadata},purchaseTiers:{...qa.purchaseTiers}}};
+qa.save=async input=>{qa.saves.push(structuredClone(input));if(qa.conflict){qa.conflict=false;qa.revision++;throw Object.assign(Error('다른 관리자가 변경했습니다. 입력 내용은 유지했습니다. 확인 후 다시 저장해 주세요.'),{details:{pricing:{revision:qa.revision,prices:{...qa.prices},metadata:{...qa.metadata},purchaseTiers:{...qa.purchaseTiers}}}})}if(input.expectedRevision!==qa.revision)throw Error('revision mismatch');if(qa.deferred)await new Promise(resolve=>qa.release=resolve);qa.prices={...qa.prices,...input.prices};qa.metadata={...qa.metadata,...input.metadata};qa.purchaseTiers={...qa.purchaseTiers,...input.purchaseTiers};qa.revision++;return{revision:qa.revision,prices:{...qa.prices},metadata:{...qa.metadata},purchaseTiers:{...qa.purchaseTiers}}};
 function App(){const[mode,setMode]=useState('normal'),[view,setView]=useState('shop');qa.setView=setView;return <><div className="qa-controls"><button onClick={()=>{qa.conflict=!qa.conflict;setMode(qa.conflict?'conflict':'normal')}}>동시 수정 오류</button><button onClick={()=>{qa.failLoad=!qa.failLoad;setMode(qa.failLoad?'load-error':'normal')}}>조회 오류</button><button onClick={()=>{qa.deferred=!qa.deferred;setMode(qa.deferred?'delayed':'normal')}}>저장 지연</button><button onClick={()=>qa.release?.()}>저장 응답</button><output>{mode}</output></div><MainLayout>{view==='shop'?<TeacherAvatarShopPage/>:<div className="ws-page" id="qa-studio-content"><SettingsMyPage/></div>}</MainLayout></>}
 createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/teacher/points?tab=products&shop=avatar']}><App/></MemoryRouter>);
 `;
@@ -69,6 +70,7 @@ const shellMocks = {
   studentMenuAccess: `export const getStudentRouteAccess=()=>({allowed:true}),isStudentVisibilityControlledPath=()=>false;`,
   AuthRecoveryState: `export default ()=>null;`,
   weplayPreload: `export const preloadStudentWeplay=()=>{};`,
+  useStudentWisStocks: `export const useStudentWisStockStatus=()=>({data:{studentOpen:false}});`,
   gongsinmoongo: `export const useGongsinAvailability=()=>({loaded:true,error:false,enabled:false,avatarEventEnabled:false});export const getGongsinmoongo=()=>{throw Error('Unexpected event read')},manageGongsinmoongo=()=>{throw Error('Unexpected event write')},newGongsinRequestId=()=>crypto.randomUUID();`,
 };
 const result = await build({
@@ -90,7 +92,7 @@ const result = await build({
         plugin.onResolve(
           {
             filter:
-              /\/(Header|AppToastProvider|safeStorage|loginPerf|browserTasks|semesterArchive|SemesterArchiveBoundary|studentMenuAccess|AuthRecoveryState|weplayPreload|gongsinmoongo)$/,
+              /\/(Header|AppToastProvider|safeStorage|loginPerf|browserTasks|semesterArchive|SemesterArchiveBoundary|studentMenuAccess|AuthRecoveryState|weplayPreload|gongsinmoongo|useStudentWisStocks)$/,
           },
           (args) => ({ path: path.basename(args.path), namespace: "shell" }),
         );
@@ -132,7 +134,7 @@ const result = await build({
           }),
         );
         plugin.onLoad({ filter: /.*/, namespace: "pricing" }, () => ({
-          contents: `export const avatarErrorMessage=e=>e.message,avatarPricingFromError=e=>e.details?.pricing||null;export const getAvatarCatalogPricing=()=>window.avatarPricingQa.load();export const updateAvatarCatalogPricing=x=>window.avatarPricingQa.save(x);export const getTeacherMyPage=async()=>{const qa=window.avatarPricingQa;qa.teacherReads=(qa.teacherReads||0)+1;return{avatar:qa.avatar,pricing:{revision:qa.revision,prices:{...qa.prices},metadata:{...qa.metadata}},profileEmojiId:'sun',profileIcon:'☀️',emojiRegistry:[{id:'sun',emoji:'☀️',label:'햇살'}],allAvailable:true}};export const saveTeacherAvatar=async()=>{throw Error('Unexpected avatar write')},updateTeacherProfileIcon=async()=>{throw Error('Unexpected emoji write')},makeAvatarThumbnail=()=>'',getAvatarStudioState=async()=>{throw Error('Unexpected student read')},purchaseAvatarItem=async()=>{throw Error('Unexpected purchase')},saveStudentAvatar=async()=>{throw Error('Unexpected student write')};`,
+          contents: `export const avatarErrorMessage=e=>e.message,avatarPricingFromError=e=>e.details?.pricing||null,avatarPurchaseTiersFromError=e=>e.details?.allowedPurchaseTiers||null;export const getAvatarCatalogPricing=()=>window.avatarPricingQa.load();export const updateAvatarCatalogPricing=x=>window.avatarPricingQa.save(x);export const getTeacherMyPage=async()=>{const qa=window.avatarPricingQa;qa.teacherReads=(qa.teacherReads||0)+1;return{avatar:qa.avatar,pricing:{revision:qa.revision,prices:{...qa.prices},metadata:{...qa.metadata},purchaseTiers:{...qa.purchaseTiers}},profileEmojiId:'sun',profileIcon:'☀️',emojiRegistry:[{id:'sun',emoji:'☀️',label:'햇살'}],allAvailable:true}};export const saveTeacherAvatar=async()=>{throw Error('Unexpected avatar write')},updateTeacherProfileIcon=async()=>{throw Error('Unexpected emoji write')},makeAvatarThumbnail=()=>'',getAvatarStudioState=async()=>{throw Error('Unexpected student read')},purchaseAvatarItem=async()=>{throw Error('Unexpected purchase')},saveStudentAvatar=async()=>{throw Error('Unexpected student write')};`,
           loader: "js",
         }));
         plugin.onResolve({ filter: /\/permissions$/ }, (args) => ({
@@ -246,6 +248,7 @@ try {
     Number,
   ) || [320, 390, 768, 1280, 1366]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
+    page.on("pageerror", (error) => console.error(error.stack || error.message));
     const rendererErrors = [];
     page.on("console", (message) => {
       if (
@@ -314,6 +317,9 @@ try {
         .isDisabled(),
       true,
     );
+    const freeTier = editor.getByLabel(labelFor("mm-school-white") + " 구매 등급", { exact: true });
+    assert.equal(await freeTier.isDisabled(), true);
+    assert.equal(await freeTier.inputValue(), "tier_1", "Free clothing never displays a meaningless locked tier");
     await closeEditor();
     assert.equal(
       await school
@@ -322,6 +328,22 @@ try {
       true,
       "Editor restores focus",
     );
+    await page.getByRole("button", { name: "장식", exact: true }).click();
+    const accessory = catalog.items.find(item => item.slot === "accessory" && item.price > 0 && (!item.minPurchaseTier || item.minPurchaseTier === "tier_1"));
+    const accessoryCard = itemCard(accessory.id);
+    await accessoryCard.locator(".avatar-pricing-edit").click();
+    const accessoryTier = editor.getByLabel(accessory.label + " 구매 등급", { exact: true });
+    const accessorySale = editor.getByLabel(accessory.label + " 무료·유료", { exact: true });
+    await accessoryTier.selectOption("tier_5");
+    await accessorySale.selectOption("free");
+    assert.equal(await accessoryTier.inputValue(), "tier_1");
+    assert.equal(await accessoryTier.isDisabled(), true);
+    await accessorySale.selectOption("paid");
+    assert.equal(await accessoryTier.isDisabled(), false);
+    assert.equal(await accessoryTier.inputValue(), "tier_1", "Returning to paid requires an explicit minimum selection");
+    await closeEditor();
+    assert.equal(await accessoryCard.getByRole("button", { name: "저장", exact: true }).isDisabled(), true);
+    await page.getByRole("button", { name: "상의", exact: true }).click();
     const genderFilter = page.getByRole("group", { name: "성별", exact: true });
     const saleFilter = page.getByRole("group", {
       name: "판매 방식",
@@ -436,6 +458,7 @@ try {
     await editor
       .getByLabel(originalName + " 성별", { exact: true })
       .selectOption("boy");
+    await editor.getByLabel(originalName + " 구매 등급", { exact: true }).selectOption("tier_4");
     await editor
       .getByLabel(originalName + " 설명", { exact: true })
       .fill("포근한 짜임의 긴소매 니트입니다.");
@@ -464,11 +487,11 @@ try {
         editorLayout.image.right < editorLayout.name.left,
         "Large image left of form",
       );
-      assert(
+      if (width > 900) assert(
         Math.max(...editorLayout.options.map((e) => e.top)) -
           Math.min(...editorLayout.options.map((e) => e.top)) <
           2,
-        "Gender, sales type, price share second row",
+        "Gender, sales type, price and minimum tier share one row on PC",
       );
       assert(
         editorLayout.name.bottom < editorLayout.options[0].top &&
@@ -587,6 +610,7 @@ try {
     );
     await knit.locator(".avatar-pricing-edit").click();
     assert.equal(await price.inputValue(), "750");
+    assert.equal(await editor.getByLabel(originalName + " 구매 등급", { exact: true }).inputValue(), "tier_4", "Conflict keeps minimum tier draft");
     await closeEditor();
     await knit.getByRole("button", { name: "저장", exact: true }).click();
     await page.waitForFunction(
@@ -596,6 +620,8 @@ try {
     assert.equal(requests.length, 2);
     assert.equal(requests[0].expectedRevision, 4);
     assert.equal(requests[1].expectedRevision, 5);
+    assert.deepEqual(requests[1].purchaseTiers, { "minimi-top-knit-cream": "tier_4" });
+    assert.equal(await page.evaluate(() => window.avatarPricingQa.purchaseTiers["minimi-top-knit-cream"]), "tier_4");
     assert.deepEqual(Object.keys(requests[1].prices), [
       "minimi-top-knit-cream",
     ]);

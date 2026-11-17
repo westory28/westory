@@ -6,16 +6,17 @@
   "format": "lossless-webp",
   "sources": {
     "scripts/render-avatar-item-previews.mjs": "21824d36525ab7d768cbffcf376b344c7f4c7614313d71010615812afb4d3ff5",
-    "functions/avatarCatalog.json": "7e127ccdfb6b2aa2e2c0d61f53c9df12ea41c71f1c1c6affe3a8219c6481292f",
-    "src/features/avatar/catalog.ts": "38a42452afcba47a5b0361a2109800d20c256fab2edcec513fe869bd89937710",
+    "functions/avatarCatalog.json": "3ddf0e44ef6aba09f62d6cced521cacfefb1b483acf6bbb4eb105c00131aed05",
+    "src/features/avatar/catalog.ts": "161cbf230aae0f7e5eb16585a166071f4438c30c4e5560082e473094ce2e2994",
     "src/features/avatar/minimi/bowlHair.ts": "d94aa59ddeb07cee0a6ece2cde6e28192edfae4aab4fd37fbb1f328580a6c9ad",
     "src/features/avatar/minimi/details.ts": "c22afd163a170ad1a8be4f05fb680bb10505a3f9cb0f190573fca490aba6bc39",
-    "src/features/avatar/minimi/draw.ts": "4ceba0cb5963eb010860b924269bfce4053b2186801c6d6cfe4d733a997e68db",
+    "src/features/avatar/minimi/draw.ts": "cc7b17a445f8a694948bd8fea5220fcac8284ff4e5ac0f09d4e81cdfcb8789f4",
     "src/features/avatar/minimi/engine.ts": "9967b104d4ae495018c0dfa8a6b8e88d6af9cc7c5f70d005aff5e694c3d3aff1",
-    "src/features/avatar/minimi/hanbok.ts": "70facfef7ef3892ccbda9aa91a5d1133ea5a467c47d2a2ecad05c620dbb34b94",
+    "src/features/avatar/minimi/hanbok.ts": "ee0619ad602478da8d07d351376212f1352d95c871bd8f4ed2ffa93a3c538662",
+    "src/features/avatar/minimi/joseon.ts": "c8c389402d4023872f0e682145641f2a8befc02074280cca6430d4098bbe0267",
     "src/features/avatar/minimi/royalHair.ts": "24414082fbfd9af614fa8000beccfd2141a75b14c2c1ab6e3ccc105e658d60e6",
     "src/features/avatar/minimi/softHair.ts": "d6367cc25fcd0e14b2365a6ce31e88df095f483451bdf4349ef4f8b11f0bf382",
-    "src/features/avatar/minimi/wardrobe.ts": "bc5007b54be9b05dd739001f5050914c508c359105cb9a9fc333b20c08d6f239"
+    "src/features/avatar/minimi/wardrobe.ts": "32275d1244e2349f6c0ae6a1e1ed6a8fa5e6c0e066505a12f6be9dff933f19a5"
   },
   "items": [
     {
@@ -852,6 +853,139 @@
       "sha256": "bd4508d64ad2d8142f07b91dfb45645de9c2802ea41090db86a79b0005929719"
     },
     {
+      "id": "minimi-top-hanbok-gonryongpo",
+      "character": "girl",
+      "file": "girl/top-mm-hanbok-gonryongpo.webp",
+      "bytes": 492,
+      "sha256": "c9e4672ed1ef2f226135e9bae3ca3b037b6d67c312c82c20ba8b73863b5c9ea9"
+    },
+    {
+      "id": "minimi-accessory-hanbok-ikseongwan",
+      "character": "girl",
+      "file": "girl/accessory-mm-hanbok-ikseongwan.webp",
+      "bytes": 312,
+      "sha256": "6ec167839145c26a6c3573c0ebe9f760feacb8e86bcf5fc41e3d88a9c70e5cfd"
+    },
+    {
+      "id": "minimi-accessory-hanbok-waryonggwan",
+      "character": "girl",
+      "file": "girl/accessory-mm-hanbok-waryonggwan.webp",
+      "bytes": 288,
+      "sha256": "c611f5b24ba39852595233329e1e6711275a28ac9d644d2b6c741b7cdc1727ff"
+    },
+    {
+      "id": "minimi-top-hanbok-court-dangui",
+      "character": "girl",
+      "file": "girl/top-mm-hanbok-court-dangui.webp",
+      "bytes": 644,
+      "sha256": "242f9ee89dd56b4509a148fd2617e1ed2b963f54b2cba12618b04241a149b068"
+    },
+    {
+      "id": "minimi-accessory-hanbok-gache",
+      "character": "girl",
+      "file": "girl/accessory-mm-hanbok-gache.webp",
+      "bytes": 388,
+      "sha256": "f34c6419f4408f9d00609029060a5bb893b7e939f0840c9d656c1cb242caba88"
+    },
+    {
+      "id": "minimi-top-hanbok-silk-durumagi",
+      "character": "girl",
+      "file": "girl/top-mm-hanbok-silk-durumagi.webp",
+      "bytes": 420,
+      "sha256": "37c73376983e409aeba709ca104a0387f3d34b1d4cee1b85296c344b668e1b6f"
+    },
+    {
+      "id": "minimi-top-hanbok-hakchangui",
+      "character": "girl",
+      "file": "girl/top-mm-hanbok-hakchangui.webp",
+      "bytes": 440,
+      "sha256": "e747067facb036cd1450475a5baaddb5fed14263d4ab8458bf5a8b9f711bf344"
+    },
+    {
+      "id": "minimi-accessory-hanbok-wide-gat",
+      "character": "girl",
+      "file": "girl/accessory-mm-hanbok-wide-gat.webp",
+      "bytes": 316,
+      "sha256": "ebe949e554060134a1b2b5f126ddeb7342bb4d12f44246460ea07641aabbd385"
+    },
+    {
+      "id": "minimi-top-hanbok-silk-jeogori",
+      "character": "girl",
+      "file": "girl/top-mm-hanbok-silk-jeogori.webp",
+      "bytes": 502,
+      "sha256": "d8d71b0d05ddbf1c947c35affad7c8eb6d385ac9094f918fd7bbdc50346f577e"
+    },
+    {
+      "id": "minimi-bottom-hanbok-silk-chima",
+      "character": "girl",
+      "file": "girl/bottom-mm-hanbok-silk-chima.webp",
+      "bytes": 276,
+      "sha256": "717a2dbdb19c45ae87a3368fb6578b0c6d3fa00cd68f0045ae4877954780dffc"
+    },
+    {
+      "id": "minimi-top-hanbok-white-durumagi",
+      "character": "girl",
+      "file": "girl/top-mm-hanbok-white-durumagi.webp",
+      "bytes": 422,
+      "sha256": "34d4cad53a44503d30fc7bdabcabac4535d7ffff2ca13d6b7f72dceab74d6914"
+    },
+    {
+      "id": "minimi-accessory-hanbok-narrow-gat",
+      "character": "girl",
+      "file": "girl/accessory-mm-hanbok-narrow-gat.webp",
+      "bytes": 280,
+      "sha256": "8c03e7f8083dbf8a36fe531e9f9b36032dcf37cc7f01ab0262feef617aaab572"
+    },
+    {
+      "id": "minimi-accessory-hanbok-tanggeon",
+      "character": "girl",
+      "file": "girl/accessory-mm-hanbok-tanggeon.webp",
+      "bytes": 202,
+      "sha256": "7c79c9012fd1e7fdf4b46ad8433249a09f5c315b798e36b4c37f63079f25867e"
+    },
+    {
+      "id": "minimi-top-hanbok-cotton-jeogori",
+      "character": "girl",
+      "file": "girl/top-mm-hanbok-cotton-jeogori.webp",
+      "bytes": 466,
+      "sha256": "1b7a65eb0909e006ae3ce12a8cd1f6721c94da630c0efba4c5b1ce04dfbae5cc"
+    },
+    {
+      "id": "minimi-top-hanbok-hemp-jeoksam",
+      "character": "girl",
+      "file": "girl/top-mm-hanbok-hemp-jeoksam.webp",
+      "bytes": 474,
+      "sha256": "b1b4dec4fdbfdcffaec58afc0ce0573b600491c642679203a92de4d92fd845e9"
+    },
+    {
+      "id": "minimi-bottom-hanbok-hemp-chima",
+      "character": "girl",
+      "file": "girl/bottom-mm-hanbok-hemp-chima.webp",
+      "bytes": 276,
+      "sha256": "612a188c6f25a883824ed4f4fb2226e8ad89a843615c11522834eae781429373"
+    },
+    {
+      "id": "minimi-top-hanbok-plain-jeogori",
+      "character": "girl",
+      "file": "girl/top-mm-hanbok-plain-jeogori.webp",
+      "bytes": 466,
+      "sha256": "d53064f3426db432abf4106fba714f2d61fa5f86eeddcea2b8fe21bda3ed5625"
+    },
+    {
+      "id": "minimi-bottom-hanbok-plain-baji",
+      "character": "girl",
+      "file": "girl/bottom-mm-hanbok-plain-baji.webp",
+      "bytes": 316,
+      "sha256": "ef902363d2046991647395584fa590b13911719e0f8d9a4b9f85fc26f36eb7ac"
+    },
+    {
+      "id": "minimi-accessory-hanbok-headcloth",
+      "character": "girl",
+      "file": "girl/accessory-mm-hanbok-headcloth.webp",
+      "bytes": 228,
+      "sha256": "b28517f4c1e7cdc78ce259bb89c3c4df594ca73fec0771b1290e522c7d749d94"
+    },
+    {
       "id": "minimi-character-boy",
       "character": "boy",
       "file": "boy/character-boy.webp",
@@ -1676,6 +1810,139 @@
       "file": "boy/accessory-mm-cherry-ribbon.webp",
       "bytes": 410,
       "sha256": "bd4508d64ad2d8142f07b91dfb45645de9c2802ea41090db86a79b0005929719"
+    },
+    {
+      "id": "minimi-top-hanbok-gonryongpo",
+      "character": "boy",
+      "file": "boy/top-mm-hanbok-gonryongpo.webp",
+      "bytes": 492,
+      "sha256": "c9e4672ed1ef2f226135e9bae3ca3b037b6d67c312c82c20ba8b73863b5c9ea9"
+    },
+    {
+      "id": "minimi-accessory-hanbok-ikseongwan",
+      "character": "boy",
+      "file": "boy/accessory-mm-hanbok-ikseongwan.webp",
+      "bytes": 312,
+      "sha256": "6ec167839145c26a6c3573c0ebe9f760feacb8e86bcf5fc41e3d88a9c70e5cfd"
+    },
+    {
+      "id": "minimi-accessory-hanbok-waryonggwan",
+      "character": "boy",
+      "file": "boy/accessory-mm-hanbok-waryonggwan.webp",
+      "bytes": 288,
+      "sha256": "c611f5b24ba39852595233329e1e6711275a28ac9d644d2b6c741b7cdc1727ff"
+    },
+    {
+      "id": "minimi-top-hanbok-court-dangui",
+      "character": "boy",
+      "file": "boy/top-mm-hanbok-court-dangui.webp",
+      "bytes": 644,
+      "sha256": "242f9ee89dd56b4509a148fd2617e1ed2b963f54b2cba12618b04241a149b068"
+    },
+    {
+      "id": "minimi-accessory-hanbok-gache",
+      "character": "boy",
+      "file": "boy/accessory-mm-hanbok-gache.webp",
+      "bytes": 388,
+      "sha256": "f34c6419f4408f9d00609029060a5bb893b7e939f0840c9d656c1cb242caba88"
+    },
+    {
+      "id": "minimi-top-hanbok-silk-durumagi",
+      "character": "boy",
+      "file": "boy/top-mm-hanbok-silk-durumagi.webp",
+      "bytes": 420,
+      "sha256": "37c73376983e409aeba709ca104a0387f3d34b1d4cee1b85296c344b668e1b6f"
+    },
+    {
+      "id": "minimi-top-hanbok-hakchangui",
+      "character": "boy",
+      "file": "boy/top-mm-hanbok-hakchangui.webp",
+      "bytes": 440,
+      "sha256": "e747067facb036cd1450475a5baaddb5fed14263d4ab8458bf5a8b9f711bf344"
+    },
+    {
+      "id": "minimi-accessory-hanbok-wide-gat",
+      "character": "boy",
+      "file": "boy/accessory-mm-hanbok-wide-gat.webp",
+      "bytes": 316,
+      "sha256": "ebe949e554060134a1b2b5f126ddeb7342bb4d12f44246460ea07641aabbd385"
+    },
+    {
+      "id": "minimi-top-hanbok-silk-jeogori",
+      "character": "boy",
+      "file": "boy/top-mm-hanbok-silk-jeogori.webp",
+      "bytes": 502,
+      "sha256": "d8d71b0d05ddbf1c947c35affad7c8eb6d385ac9094f918fd7bbdc50346f577e"
+    },
+    {
+      "id": "minimi-bottom-hanbok-silk-chima",
+      "character": "boy",
+      "file": "boy/bottom-mm-hanbok-silk-chima.webp",
+      "bytes": 276,
+      "sha256": "717a2dbdb19c45ae87a3368fb6578b0c6d3fa00cd68f0045ae4877954780dffc"
+    },
+    {
+      "id": "minimi-top-hanbok-white-durumagi",
+      "character": "boy",
+      "file": "boy/top-mm-hanbok-white-durumagi.webp",
+      "bytes": 422,
+      "sha256": "34d4cad53a44503d30fc7bdabcabac4535d7ffff2ca13d6b7f72dceab74d6914"
+    },
+    {
+      "id": "minimi-accessory-hanbok-narrow-gat",
+      "character": "boy",
+      "file": "boy/accessory-mm-hanbok-narrow-gat.webp",
+      "bytes": 280,
+      "sha256": "8c03e7f8083dbf8a36fe531e9f9b36032dcf37cc7f01ab0262feef617aaab572"
+    },
+    {
+      "id": "minimi-accessory-hanbok-tanggeon",
+      "character": "boy",
+      "file": "boy/accessory-mm-hanbok-tanggeon.webp",
+      "bytes": 202,
+      "sha256": "7c79c9012fd1e7fdf4b46ad8433249a09f5c315b798e36b4c37f63079f25867e"
+    },
+    {
+      "id": "minimi-top-hanbok-cotton-jeogori",
+      "character": "boy",
+      "file": "boy/top-mm-hanbok-cotton-jeogori.webp",
+      "bytes": 466,
+      "sha256": "1b7a65eb0909e006ae3ce12a8cd1f6721c94da630c0efba4c5b1ce04dfbae5cc"
+    },
+    {
+      "id": "minimi-top-hanbok-hemp-jeoksam",
+      "character": "boy",
+      "file": "boy/top-mm-hanbok-hemp-jeoksam.webp",
+      "bytes": 474,
+      "sha256": "b1b4dec4fdbfdcffaec58afc0ce0573b600491c642679203a92de4d92fd845e9"
+    },
+    {
+      "id": "minimi-bottom-hanbok-hemp-chima",
+      "character": "boy",
+      "file": "boy/bottom-mm-hanbok-hemp-chima.webp",
+      "bytes": 276,
+      "sha256": "612a188c6f25a883824ed4f4fb2226e8ad89a843615c11522834eae781429373"
+    },
+    {
+      "id": "minimi-top-hanbok-plain-jeogori",
+      "character": "boy",
+      "file": "boy/top-mm-hanbok-plain-jeogori.webp",
+      "bytes": 466,
+      "sha256": "d53064f3426db432abf4106fba714f2d61fa5f86eeddcea2b8fe21bda3ed5625"
+    },
+    {
+      "id": "minimi-bottom-hanbok-plain-baji",
+      "character": "boy",
+      "file": "boy/bottom-mm-hanbok-plain-baji.webp",
+      "bytes": 316,
+      "sha256": "ef902363d2046991647395584fa590b13911719e0f8d9a4b9f85fc26f36eb7ac"
+    },
+    {
+      "id": "minimi-accessory-hanbok-headcloth",
+      "character": "boy",
+      "file": "boy/accessory-mm-hanbok-headcloth.webp",
+      "bytes": 228,
+      "sha256": "b28517f4c1e7cdc78ce259bb89c3c4df594ca73fec0771b1290e522c7d749d94"
     }
   ]
 }
