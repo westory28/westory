@@ -237,6 +237,7 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
       "activateWisStockCatalogPlan",
       "getStudentWisStockState",
       "getStudentWisStockHistory",
+      "getWisStockInvestmentHistory",
       "transferStudentWisStock",
       "placeStudentWisStockOrder",
       "cancelStudentWisStockOrder",

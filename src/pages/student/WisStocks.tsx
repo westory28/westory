@@ -241,12 +241,6 @@ export default function StudentWisStocks() {
   const availableShares = position
     ? position.quantity - position.reservedSellQuantity
     : 0;
-  const quantityValid =
-    !!selected &&
-    Number.isSafeInteger(parsed) &&
-    parsed > 0 &&
-    parsed % selected.settings.lotSize === 0 &&
-    parsed <= (market.data?.rules.maxOrderQuantity || 0);
   const instrumentReady =
     !!selected &&
     selected.settings.tradingStatus !== "HALTED" &&
@@ -260,33 +254,58 @@ export default function StudentWisStocks() {
       ? estimate.total + (market.data?.rules.minimumCashReserve || 0) <=
         available
       : parsed <= availableShares);
-  const orderProblem = !canOrder
-    ? account.status === "loading"
-      ? "주식 지갑을 확인하고 있습니다."
-      : "시세와 주식 지갑 상태를 확인해 주세요."
-    : !instrumentReady
-      ? `현재 이 종목은 ${side === "BUY" ? "매수" : "매도"}할 수 없습니다.`
-      : !quantityValid
-        ? `${money(selected?.settings.lotSize || 1)}주 단위로, 최대 ${money(market.data?.rules.maxOrderQuantity || 0)}주까지 입력해 주세요.`
-        : !estimate
-          ? "주문 금액을 확인해 주세요."
-          : !balanceReady
-            ? side === "BUY"
-              ? `주식 지갑에 ${money(Math.max(0, estimate.total + (market.data?.rules.minimumCashReserve || 0) - available))} 위스가 더 필요합니다. 최소 잔액 ${money(market.data?.rules.minimumCashReserve || 0)} 위스를 남겨야 합니다.`
-              : availableShares === 0
-                ? "매도할 수 있는 주식이 없습니다."
-                : `매도 가능한 수량은 ${money(availableShares)}주입니다.`
-            : "";
+  const orderProblem = (() => {
+    if (busy && busy !== "place") return "주문 취소를 처리하고 있습니다.";
+    if (!canOrder) {
+      if (status.status === "error") return status.error;
+      if (status.status !== "ready")
+        return "거래 가능 여부를 확인하고 있습니다.";
+      if (!opened) return "아직 위스피가 열리지 않았습니다.";
+      if (status.data.halted || market.data?.rules.halted)
+        return "시장이 거래 정지 중입니다.";
+      if (market.status === "error") return market.error;
+      if (market.status !== "ready") return "현재 시세를 확인하고 있습니다.";
+      if (market.data.tradingEpoch !== status.data.tradingEpoch)
+        return "거래 상태가 바뀌어 최신 시세를 확인하고 있습니다.";
+      if (account.status === "error") return account.error;
+      return "주식 지갑을 확인하고 있습니다.";
+    }
+    if (!selected) return "주문할 종목을 선택해 주세요.";
+    if (!instrumentReady) {
+      if (selected.settings.tradingStatus === "SELL_ONLY" && side === "BUY")
+        return "이 종목은 매도만 가능합니다.";
+      if (selected.settings.tradingStatus === "HALTED")
+        return "이 종목은 거래 정지 중입니다.";
+      return "이 종목은 급격한 시세 변동으로 잠시 거래가 정지되었습니다.";
+    }
+    if (!Number.isSafeInteger(parsed) || parsed <= 0)
+      return "수량을 1주 이상 입력해 주세요.";
+    if (parsed % selected.settings.lotSize !== 0)
+      return `${money(selected.settings.lotSize)}주 단위로 입력해 주세요.`;
+    if (parsed > (market.data?.rules.maxOrderQuantity || 0))
+      return `한 번에 최대 ${money(market.data?.rules.maxOrderQuantity || 0)}주까지 주문할 수 있습니다.`;
+    if (!estimate) return "주문 금액을 확인할 수 없습니다. 수량을 줄여 주세요.";
+    if (!balanceReady) {
+      if (side === "SELL")
+        return position?.reservedSellQuantity
+          ? `보유 ${money(position.quantity)}주 중 ${money(position.reservedSellQuantity)}주가 매도 대기 중입니다. 지금 매도 가능한 수량은 ${money(availableShares)}주입니다.`
+          : availableShares === 0
+            ? "매도할 수 있는 주식이 없습니다."
+            : `매도 가능한 수량은 ${money(availableShares)}주입니다.`;
+      const reserve = market.data?.rules.minimumCashReserve || 0;
+      const reserved = account.data?.account.reservedCash || 0;
+      const shortage = Math.max(0, estimate.total + reserve - available);
+      return `${reserved ? `지갑 ${money(account.data!.account.stockCash)} 위스 중 ${money(reserved)} 위스가 대기 주문에 예약되어 있습니다. ` : ""}수수료 포함 결제 ${money(estimate.total)} 위스${reserve ? ` 후 최소 잔액 ${money(reserve)} 위스를 남겨야 하므로` : "에"} ${money(shortage)} 위스가 부족합니다.`;
+    }
+    return "";
+  })();
   const submit = async () => {
     if (
       !selected ||
       !market.data ||
       !account.data ||
       operation.current ||
-      !canOrder ||
-      !quantityValid ||
-      !instrumentReady ||
-      !balanceReady
+      orderProblem
     )
       return;
     const ownerKey = key;
@@ -754,77 +773,87 @@ export default function StudentWisStocks() {
                                   : `매도 가능 ${money(availableShares)}주`}
                               </span>
                             </div>
-                            <label>
-                              <span>수량</span>
-                              <input
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                value={quantity}
-                                onChange={(event) =>
-                                  setQuantity(
-                                    event.target.value.replace(/[^0-9]/g, ""),
-                                  )
-                                }
-                                aria-describedby={
-                                  orderProblem
-                                    ? "student-wispi-order-problem"
-                                    : undefined
-                                }
-                              />
-                            </label>
-                            <div className="student-wispi-inline">
+                            <div className="student-wispi-order-action">
+                              <label>
+                                <span>수량</span>
+                                <input
+                                  aria-label="수량"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
+                                  value={quantity}
+                                  onChange={(event) =>
+                                    setQuantity(
+                                      event.target.value.replace(/[^0-9]/g, ""),
+                                    )
+                                  }
+                                  aria-describedby={
+                                    orderProblem
+                                      ? "student-wispi-order-problem"
+                                      : undefined
+                                  }
+                                />
+                                <span aria-hidden="true">주</span>
+                              </label>
+                              {busy === "place" ? (
+                                <div
+                                  className="student-wispi-submitting"
+                                  role="status"
+                                  aria-label={`${submitting} 주문 접수 중`}
+                                >
+                                  <strong>주문 접수 중</strong>
+                                </div>
+                              ) : (
+                                <button
+                                  className="student-wispi-primary"
+                                  type="submit"
+                                  aria-label={`${side === "BUY" ? "매수" : "매도"} 주문 접수`}
+                                  disabled={!!orderProblem}
+                                  aria-describedby={
+                                    orderProblem
+                                      ? "student-wispi-order-problem"
+                                      : undefined
+                                  }
+                                  title={orderProblem || undefined}
+                                >
+                                  {side === "BUY" ? "매수" : "매도"}
+                                </button>
+                              )}
+                            </div>
+                            <div className="student-wispi-order-estimate">
                               <span>
                                 {side === "BUY" ? "예상 결제" : "예상 수령"}
                               </span>
                               <strong>
                                 {estimate ? money(estimate.total) : "—"} 위스
                               </strong>
+                              {estimate && (
+                                <small className="student-wispi-muted">
+                                  (수수료 {money(estimate.fee)} 위스
+                                  {side === "BUY" ? " 포함" : " 제외"})
+                                </small>
+                              )}
                             </div>
-                            {estimate && (
-                              <small className="student-wispi-muted">
-                                수수료 {money(estimate.fee)} 위스
-                                {side === "BUY" ? " 포함" : " 제외"}
-                              </small>
-                            )}
-                            {busy === "place" ? (
-                              <div
-                                className="student-wispi-submitting"
-                                role="status"
-                              >
-                                <strong>주문 접수 중</strong>
-                                <span>{submitting}</span>
-                              </div>
-                            ) : (
-                              <button
-                                className="student-wispi-primary"
-                                type="submit"
-                                disabled={
-                                  !canOrder ||
-                                  !quantityValid ||
-                                  !instrumentReady ||
-                                  !balanceReady
-                                }
-                              >
-                                {`${side === "BUY" ? "매수" : "매도"} 주문 접수`}
-                              </button>
-                            )}
                             {orderProblem && (
                               <p
                                 id="student-wispi-order-problem"
-                                className="student-wispi-muted"
+                                className="student-wispi-order-problem"
+                                role="status"
                               >
                                 {orderProblem}
                               </p>
                             )}
-                            {canOrder && !balanceReady && side === "BUY" && (
-                              <button
-                                type="button"
-                                className="student-wispi-wallet-link"
-                                onClick={() => setTab("account")}
-                              >
-                                주식 지갑에 입금하기
-                              </button>
-                            )}
+                            {canOrder &&
+                              estimate &&
+                              !balanceReady &&
+                              side === "BUY" && (
+                                <button
+                                  type="button"
+                                  className="student-wispi-wallet-link"
+                                  onClick={() => setTab("account")}
+                                >
+                                  주식 지갑에 입금하기
+                                </button>
+                              )}
                             {notice?.key === key && (
                               <p role="alert" className="student-wispi-error">
                                 {notice.text}

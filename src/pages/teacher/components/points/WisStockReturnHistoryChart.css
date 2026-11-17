@@ -1,0 +1,15 @@
+.wis-return-history { min-width: 0; }
+.wis-return-history__canvas { position: relative; min-width: 0; width: 100%; overflow: hidden; border: 1px solid var(--ws-border, #e5e7eb); border-radius: 12px; background: var(--ws-surface, #fff); }
+.wis-return-history__canvas:focus-visible { outline: 2px solid var(--ws-ring, #3b82f6); outline-offset: 2px; }
+.wis-return-history__canvas svg { display: block; max-width: 100%; }
+.wis-return-history__axes { color: var(--ws-text-muted, #6b7280); font-size: 12px; font-variant-numeric: tabular-nums; }
+.wis-return-history__axes text { fill: currentColor; }
+.wis-return-history__axes line { stroke: var(--ws-border, #e5e7eb); stroke-width: 1; }
+.wis-return-history__axes .wis-return-history__zero { stroke: var(--ws-text-muted, #6b7280); stroke-dasharray: 4 4; }
+.wis-return-history__plot { stroke: var(--ws-primary, #2563eb); fill: var(--ws-primary, #2563eb); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.wis-return-history__selection { stroke: var(--ws-text-muted, #6b7280); fill: var(--ws-surface, #fff); }
+.wis-return-history__selection line { stroke-dasharray: 4 4; }
+.wis-return-history__selection circle { stroke: var(--ws-primary, #2563eb); stroke-width: 2; }
+.wis-return-history__tooltip { position: absolute; top: 12px; display: grid; gap: 4px; width: 192px; padding: 8px 12px; background: var(--ws-surface, #fff); border: 1px solid var(--ws-border, #e5e7eb); border-radius: 8px; font-size: 12px; pointer-events: none; }
+.wis-return-history__tooltip strong { font-size: 16px; }
+.wis-return-history__notice { margin: 8px 0 0; font-size: 14px; color: var(--ws-text-muted, #6b7280); }

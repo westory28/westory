@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { animate, createScope } from "animejs";
 import InfoHelp from "../../../../components/common/InfoHelp";
+import RefreshButton from "../../../../components/common/RefreshButton";
+import WisStockReturnHistoryChart from "./WisStockReturnHistoryChart";
+import {
+  getWisStockInvestmentHistory,
+  wisStockInvestmentHistoryError,
+  type WisStockInvestmentHistory,
+} from "../../../../lib/wisStockInvestmentHistoryClient";
 import { topWisStockHoldingReturns } from "./wisStockInvestmentReturns";
 import {
   watchWisStockInvestmentBoard,
@@ -54,6 +61,13 @@ export default function WisStockInvestmentBoard({
   const [fullscreen, setFullscreen] = useState(false);
   const [pageFullscreen, setPageFullscreen] = useState(false);
   const [screenError, setScreenError] = useState("");
+  const [historyStudentKey, setHistoryStudentKey] = useState("");
+  const [history, setHistory] = useState<WisStockInvestmentHistory | null>(
+    null,
+  );
+  const [historyError, setHistoryError] = useState("");
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyRetry, setHistoryRetry] = useState(0);
   const expanded = fullscreen || pageFullscreen;
   useEffect(() => {
     setError("");
@@ -151,6 +165,44 @@ export default function WisStockInvestmentBoard({
   const totals = data?.totals;
   const ready = data?.status === "READY";
   const live = !error && ready && connection === "CONNECTED";
+  const historyStudent = live
+    ? data.rows.find((row) => row.studentKey === historyStudentKey) ||
+      data.rows[0]
+    : undefined;
+  const activeHistoryKey = historyStudent?.studentKey || "";
+  useEffect(() => {
+    let active = true;
+    setHistory(null);
+    setHistoryError("");
+    setHistoryLoading(Boolean(live && activeHistoryKey));
+    if (!live || !activeHistoryKey) return;
+    const [grade = "", classNumber = ""] =
+      classKey === "all" ? [] : classKey.split(":");
+    void getWisStockInvestmentHistory({
+      year,
+      semester,
+      grade,
+      classNumber,
+      studentKey: activeHistoryKey,
+    })
+      .then((next) => {
+        if (active) setHistory(next);
+      })
+      .catch((failure) => {
+        if (active) setHistoryError(wisStockInvestmentHistoryError(failure));
+      })
+      .finally(() => {
+        if (active) setHistoryLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [year, semester, classKey, live, activeHistoryKey, historyRetry]);
+  const visibleHistory =
+    history?.studentKey === activeHistoryKey &&
+    history.semesterId === `${year}-${semester}`
+      ? history
+      : null;
   const topReturns = useMemo(
     () => (live ? topWisStockHoldingReturns(data?.rows || []) : []),
     [data, live],
@@ -373,6 +425,81 @@ export default function WisStockInvestmentBoard({
           ) : (
             <p className="wis-investment-board__returns-empty">
               보유 주식이 있는 학생이 없습니다.
+            </p>
+          )}
+        </section>
+      )}
+      {live && (
+        <section
+          className="wis-investment-board__history"
+          aria-label="학생별 보유 수익률 변화"
+        >
+          <div className="wis-investment-board__history-heading">
+            <h3>학생별 보유 수익률 변화</h3>
+            <InfoHelp label="수익률 변화 기준">
+              <p>
+                그때 보유한 주식의 평가손익을 매수 수수료가 포함된 보유 원가로
+                나눈 비율입니다. 실제 체결 내역과 저장된 시세로 계산하며, 계좌
+                현금과 이미 매도한 주식의 실현손익은 제외합니다. 보유 주식이나
+                시세 기록이 없는 구간은 선을 잇지 않습니다.
+              </p>
+            </InfoHelp>
+            {historyStudent && (
+              <label>
+                <span className="sr-only">수익률 확인 학생</span>
+                <select
+                  aria-label="수익률 확인 학생"
+                  value={activeHistoryKey}
+                  onChange={(event) => setHistoryStudentKey(event.target.value)}
+                >
+                  {data.rows.map((row) => (
+                    <option key={row.studentKey} value={row.studentKey}>
+                      {row.grade}-{row.classNumber} · {row.studentNumber}번{" "}
+                      {studentName(row.displayName, maskNames)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <RefreshButton
+              label="수익률 기록 새로고침"
+              disabled={!historyStudent}
+              loading={historyLoading}
+              onClick={() => setHistoryRetry((value) => value + 1)}
+            />
+          </div>
+          {historyError ? (
+            <div className="wis-stocks__error" role="alert">
+              <p>{historyError}</p>
+              <button
+                type="button"
+                onClick={() => setHistoryRetry((value) => value + 1)}
+              >
+                수익률 기록 다시 조회
+              </button>
+            </div>
+          ) : historyLoading ? (
+            <p className="wis-return-history__notice" role="status">
+              수익률 기록을 확인하고 있습니다.
+            </p>
+          ) : visibleHistory?.points.length && historyStudent ? (
+            <>
+              <div className="wis-investment-board__history-time">
+                <span>조회 기준 {time.format(visibleHistory.asOfMs)}</span>
+              </div>
+              <WisStockReturnHistoryChart
+                observations={visibleHistory.points}
+                studentName={studentName(historyStudent.displayName, maskNames)}
+              />
+              {visibleHistory.incompleteBeforeMs !== null && (
+                <p className="wis-return-history__notice">
+                  이전 시세가 없는 구간은 표시하지 않습니다.
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="wis-return-history__notice">
+              아직 수익률 기록이 없습니다.
             </p>
           )}
         </section>

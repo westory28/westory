@@ -306,6 +306,32 @@
 .student-wispi-order > p {
   margin: 0;
 }
+.student-wispi-order-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.student-wispi-order-action > button {
+  min-width: 64px;
+  white-space: nowrap;
+}
+.student-wispi-order-estimate {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+.student-wispi-order-estimate > * {
+  white-space: nowrap;
+}
+.student-wispi-order-problem {
+  color: var(--ws-danger-text, #b91c1c);
+  font-size: 14px;
+  line-height: 1.6;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 .student-wispi h2.student-wispi-order-title {
   display: flex;
   align-items: center;
@@ -332,16 +358,15 @@
   text-underline-offset: 4px;
 }
 .student-wispi-submitting {
-  display: grid;
-  gap: 4px;
-  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px;
   background: var(--ws-primary-soft, #eff6ff);
   border-radius: 8px;
   color: var(--ws-primary-text, #1e3a8a);
-}
-.student-wispi-submitting span {
   font-size: 14px;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 .student-wispi-pending {
   margin-bottom: 24px;

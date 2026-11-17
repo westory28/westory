@@ -526,7 +526,7 @@ export default function WisStockOrderPreview({
       </section>
       <form className="wis-stock-preview__calculator" onSubmit={accept}>
         <div className="wis-stock-preview__heading">
-          <h3>주문 체험</h3>
+          <h3>주문</h3>
           <span className="wis-stocks__closed">예시 주문</span>
           <InfoHelp label="예시 주문 처리">
             <p>
