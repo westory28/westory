@@ -43,6 +43,41 @@
   margin: 0 0 24px;
 }
 
+.developer-log-likers-dialog {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  padding: 16px;
+  background: transparent;
+}
+
+.developer-log-likers-dialog[open] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.developer-log-likers-dialog::backdrop {
+  background: rgb(15 23 42 / 55%);
+}
+
+.developer-log-likers-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 448px;
+  max-height: 100%;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--ws-surface, #fff);
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 25%);
+}
+
 @media (max-width: 639px) {
   .developer-log-meta {
     gap: 4px 8px;

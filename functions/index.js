@@ -30,6 +30,10 @@ exports.getTeacherStudentRoster = require('./studentMaintenance').onCallWithStud
   { region: 'us-central1', timeoutSeconds: 60, memory: '256MiB', minInstances: 0, maxInstances: 10, concurrency: 40 },
   require('./teacherStudentRoster').createTeacherStudentRosterHandler({ db }),
 );
+exports.getDeveloperLogLikeStudents = require('./studentMaintenance').onCallWithStudentMaintenance(
+  { region: 'asia-northeast3', timeoutSeconds: 30, memory: '256MiB', minInstances: 0, maxInstances: 5, concurrency: 40 },
+  require('./developerLogLikeStudents').createDeveloperLogLikeStudentsHandler({ db }),
+);
 const studentAvatarHandlers = require('./studentAvatar').createStudentAvatarHandlers({
   db,
   bucket: () => require('firebase-admin/storage').getStorage().bucket(),

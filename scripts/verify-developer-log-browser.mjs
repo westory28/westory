@@ -35,7 +35,8 @@ const toast={showToast(value){window.developerLogQa.toasts.push(value)}};export 
 export const db={};export const collection=(...args)=>({path:args.map(x=>x?.path||x).join('/'),kind:'collection'});export const doc=(...args)=>{if(args.length===1&&args[0].kind==='collection'){const id='fixture-created';window.developerLogQa.reservations.push(id);return{path:args[0].path+'/'+id,id}}const path=args.map(x=>x?.path||x).join('/');return{path,id:path.split('/').at(-1)}};export const query=(ref)=>ref;export const orderBy=()=>null;export const limit=()=>null;export const serverTimestamp=()=>null;export const increment=(value)=>({increment:value});
 const post={title:'개발자 일지 화면 개선',createdByName:'방재석',category:'feature',summary:'포털 탐색 유지',bodyHtml:'<p>교사와 학생 포털에서 개발자 일지를 확인합니다.</p>',publishedAt:new Date('2026-11-14T00:00:00Z'),viewCount:3,likeCount:2};
 const eventPost={...post,action:'wispi',title:'아바타 콘테스트',category:'event',summary:'나의 아바타를 소개해 주세요.',bodyHtml:'<p>옷장에서 저장한 아바타와 소개를 보내세요. 계정당 1회, 교사가 확인한 뒤 100위스를 지급합니다.</p>',images:[{imageUrl:'/poster.svg',imageStoragePath:'fixture/poster.webp',imageWidth:1086,imageHeight:1448,imageByteSize:100,imageMimeType:'image/webp',alt:'아바타 콘테스트 포스터',order:0}]};
-window.developerLogQa={writes:[],reads:0,reservations:[],toasts:[],uploads:0,liked:false,documents:{'fixture-post':post,'fixture-event':eventPost},switchAccount(){state.currentUser={...user,uid:'fixture-second'};state.userData={...userData,uid:'fixture-second'};auth.currentUser=state.currentUser;window.dispatchEvent(new Event('fixture-auth-change'));}};
+window.developerLogQa={writes:[],reads:0,reservations:[],toasts:[],uploads:0,liked:false,likeStudentCalls:[],documents:{'fixture-post':post,'fixture-event':eventPost},switchAccount(){state.currentUser={...user,uid:'fixture-second'};state.userData={...userData,uid:'fixture-second'};auth.currentUser=state.currentUser;window.dispatchEvent(new Event('fixture-auth-change'));},switchRole(role){state.currentUser={...state.currentUser};state.userData={...state.userData,role};auth.currentUser=state.currentUser;window.dispatchEvent(new Event('fixture-auth-change'));}};
+export const callWithApplicationSession=async(name,input,caller,options={})=>{const qa=window.developerLogQa;if(name!=='getDeveloperLogLikeStudents')throw Error('Unexpected fixture callable');if(qa.holdLikeStudentsDispatch)await new Promise(resolve=>qa.releaseLikeStudentsDispatch=resolve);options.beforeDispatch?.();qa.likeStudentCalls.push({...input,uid:caller.uid});if(qa.holdLikeStudents)await new Promise(resolve=>qa.releaseLikeStudents=resolve);if(qa.failLikeStudents){qa.failLikeStudents=false;throw Object.assign(Error('synthetic-roster-failure'),{code:qa.likeStudentsErrorCode||'functions/unavailable'})}const count=qa.emptyLikeStudents?0:85;const students=Array.from({length:count},(_,i)=>({id:'fixture-student-'+String(i+1).padStart(3,'0'),name:i===0?'긴 이름도 생략하지 않는 검증 학생':'명단 학생 '+(i+1),grade:'3',class:String(Math.floor(i/30)+1),number:String(i%30+1)}));const start=input.cursor?students.findIndex(s=>s.id===input.cursor)+1:0;const page=students.slice(start,start+input.pageSize);const hasMore=start+page.length<students.length;return{data:{students:page,nextCursor:hasMore?page.at(-1).id:null,hasMore}}};
 export const onSnapshot=(ref,callback)=>{window.developerLogQa.reads++;callback({docs:[{id:'fixture-post',data:()=>post},{id:'fixture-event',data:()=>eventPost}]});return()=>{}};
 export const getDoc=async(ref)=>{const qa=window.developerLogQa;qa.reads++;if(qa.failReads)throw Error('synthetic-read-failure');const id=ref.path.split('/').at(-1);return{id,exists:()=>ref.path.includes('/likes/')?qa.liked:['fixture-post','fixture-event','fixture-created'].includes(id),data:()=>id==='fixture-event'?eventPost:id==='fixture-created'?qa.created:post}};export const getDocFromServer=getDoc;
 const forbidWrite=async()=>{window.developerLogQa.writes.push('blocked');throw Error('Fixture writes disabled')};
@@ -75,7 +76,7 @@ const built = await build({
         plugin.onResolve(
           {
             filter:
-              /firebase\/firestore$|(?:lib\/|\.\/)firebase$|lib\/(developerLogImages|weplayPreload|studentProfileEmoji|pointRankPromotion|pointRanks)$|hooks\/useStudentWisStocks$|contexts\/AuthContext$|(?:common\/|\.\/)AppToastProvider$/,
+              /firebase\/firestore$|(?:lib\/|\.\/)firebase$|(?:lib\/|\.\/)applicationSession$|lib\/(developerLogImages|weplayPreload|studentProfileEmoji|pointRankPromotion|pointRanks)$|hooks\/useStudentWisStocks$|contexts\/AuthContext$|(?:common\/|\.\/)AppToastProvider$/,
           },
           () => ({ path: "service", namespace: "fixture" }),
         );
@@ -162,7 +163,7 @@ try {
   });
   const checks = [];
   for (const identity of ["student", "developer", "teacher", "staff"]) {
-    for (const width of [320, 390, 768, 1280]) {
+    for (const width of [320, 390, 768, 1280, 1440]) {
       const page = await browser.newPage({ viewport: { width, height: 900 } });
       const errors = [];
       page.on("pageerror", (error) => errors.push(error.message));
@@ -287,6 +288,125 @@ try {
             0,
             "Existing posts have no unsolicited CTA",
           );
+        if (mode === "detail") {
+          const rosterButton = page.getByRole("button", {
+            name: "좋아요 누른 학생 보기",
+            exact: true,
+          });
+          assert.equal(
+            await rosterButton.count(),
+            identity === "teacher" || identity === "developer" ? 1 : 0,
+          );
+          assert.equal(
+            await page.evaluate(
+              () => window.developerLogQa.likeStudentCalls.length,
+            ),
+            0,
+            "No roster request before explicit teacher action",
+          );
+          if (identity === "teacher" || identity === "developer") {
+            await rosterButton.click();
+            const dialog = page.getByRole("dialog", {
+              name: "좋아요 누른 학생",
+              exact: true,
+            });
+            await dialog.getByText("명단 학생 40", { exact: true }).waitFor();
+            assert.equal(await dialog.getByRole("listitem").count(), 40);
+            assert.equal(
+              await dialog
+                .getByText("긴 이름도 생략하지 않는 검증 학생", { exact: true })
+                .count(),
+              1,
+            );
+            assert.equal(
+              await dialog.getByText("3학년 1반 1번", { exact: true }).count(),
+              1,
+            );
+            assert.equal(
+              await page.evaluate(() => document.activeElement?.textContent),
+              "닫기",
+            );
+            await page.keyboard.press("Tab");
+            assert.equal(
+              await page.evaluate(() => document.activeElement?.textContent),
+              "더 보기",
+            );
+            await page.keyboard.press("Tab");
+            assert.equal(
+              await page.evaluate(() => document.activeElement?.textContent),
+              "닫기",
+              "Native modal traps focus",
+            );
+            const dimensions = await dialog.evaluate((node) => ({
+              width: node.clientWidth,
+              scroll: node.scrollWidth,
+              viewport: innerWidth,
+            }));
+            assert(
+              dimensions.scroll <= dimensions.width + 1 &&
+                dimensions.width <= dimensions.viewport,
+            );
+            await dialog.getByRole("listitem").first().scrollIntoViewIfNeeded();
+            await page.screenshot({
+              path: path.join(evidence, `${identity}-likers-${width}.png`),
+              fullPage: true,
+            });
+            await dialog
+              .getByRole("button", { name: "더 보기", exact: true })
+              .click();
+            await dialog.getByText("명단 학생 80", { exact: true }).waitFor();
+            await dialog
+              .getByRole("button", { name: "더 보기", exact: true })
+              .click();
+            await dialog.getByText("명단 학생 85", { exact: true }).waitFor();
+            assert.equal(
+              await dialog.getByRole("listitem").count(),
+              85,
+              "Every page available without truncation",
+            );
+            assert.equal(
+              await dialog
+                .getByRole("button", { name: "더 보기", exact: true })
+                .count(),
+              0,
+            );
+            const calls = await page.evaluate(
+              () => window.developerLogQa.likeStudentCalls,
+            );
+            assert.deepEqual(
+              calls.map((call) => call.cursor || null),
+              [null, "fixture-student-040", "fixture-student-080"],
+            );
+            assert(
+              calls.every(
+                (call) =>
+                  call.pageSize === 40 && call.postId === "fixture-post",
+              ),
+            );
+            await page.keyboard.press("Escape");
+            assert.equal(await dialog.count(), 0);
+            assert.equal(
+              await rosterButton.evaluate(
+                (node) => node === document.activeElement,
+              ),
+              true,
+            );
+            assert.notEqual(
+              await page.evaluate(() => document.body.style.overflowY),
+              "hidden",
+            );
+            assert.deepEqual(
+              await page.evaluate(() => window.developerLogQa.writes),
+              [],
+            );
+            checks.push({
+              identity,
+              width,
+              roster:
+                "all 85 paged; on demand; zero writes; keyboard and layout",
+            });
+          }
+        }
         if (identity === "student" && width === 390 && mode === "detail") {
           await page.evaluate(() => {
             window.developerLogQa.deferWrites = true;
@@ -839,6 +959,188 @@ try {
       duplicateClicksBlocked: true,
       originalCountersPreserved: editing,
     });
+    await page.close();
+  }
+  for (const scenario of [
+    "empty",
+    "failure",
+    "more-failure",
+    "permission",
+    "closed",
+    "account",
+    "role",
+    "post",
+  ]) {
+    const page = await browser.newPage({
+      viewport: { width: 390, height: 900 },
+    });
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.route("**/*", (route) =>
+      new URL(route.request().url()).origin === origin
+        ? route.continue()
+        : route.abort(),
+    );
+    await page.goto(`${origin}/?identity=teacher#/developer-log/fixture-post`);
+    const opener = page.getByRole("button", {
+      name: "좋아요 누른 학생 보기",
+      exact: true,
+    });
+    await opener.waitFor();
+    await page.evaluate((scenario) => {
+      const qa = window.developerLogQa;
+      qa.emptyLikeStudents = scenario === "empty";
+      qa.failLikeStudents = scenario === "failure";
+      qa.holdLikeStudents = ["closed", "account", "role", "post"].includes(
+        scenario,
+      );
+    }, scenario);
+    await opener.click();
+    const dialog = page.getByRole("dialog", {
+      name: "좋아요 누른 학생",
+      exact: true,
+    });
+    if (scenario === "empty") {
+      await dialog
+        .getByText("좋아요를 누른 학생이 없습니다.", { exact: true })
+        .waitFor();
+      assert.equal(await dialog.getByRole("listitem").count(), 0);
+    } else if (["failure", "more-failure", "permission"].includes(scenario)) {
+      if (scenario !== "failure") {
+        await dialog.getByText("명단 학생 40", { exact: true }).waitFor();
+        await page.evaluate((scenario) => {
+          window.developerLogQa.failLikeStudents = true;
+          if (scenario === "permission")
+            window.developerLogQa.likeStudentsErrorCode =
+              "functions/permission-denied";
+        }, scenario);
+        await dialog
+          .getByRole("button", { name: "더 보기", exact: true })
+          .click();
+      }
+      await dialog.getByRole("alert").waitFor();
+      assert.equal(
+        await dialog.getByRole("listitem").count(),
+        scenario === "more-failure" ? 40 : 0,
+      );
+      await dialog
+        .getByRole("button", { name: "다시 시도", exact: true })
+        .click();
+      await dialog
+        .getByText(
+          scenario === "more-failure" ? "명단 학생 80" : "명단 학생 40",
+          { exact: true },
+        )
+        .waitFor();
+      assert.equal(await dialog.getByRole("alert").count(), 0);
+      const calls = await page.evaluate(
+        () => window.developerLogQa.likeStudentCalls,
+      );
+      assert.equal(calls.length, scenario !== "failure" ? 3 : 2);
+      if (scenario === "permission")
+        assert.equal(
+          calls.at(-1).cursor,
+          undefined,
+          "Permission denial clears earlier names and restarts only after explicit action",
+        );
+      else
+        assert.equal(
+          calls.at(-1).cursor,
+          calls.at(-2).cursor,
+          "Retry the failed page only",
+        );
+      await dialog.getByRole("button", { name: "닫기", exact: true }).click();
+      await opener.click();
+      await dialog.getByText("명단 학생 40", { exact: true }).waitFor();
+      assert.equal(
+        await dialog.getByRole("listitem").count(),
+        40,
+        "Reopen refreshes first page instead of caching student names",
+      );
+      assert.equal(
+        (await page.evaluate(() => window.developerLogQa.likeStudentCalls)).at(
+          -1,
+        ).cursor,
+        undefined,
+      );
+    } else {
+      await dialog.locator(".ws-loading-slot").waitFor();
+      assert.equal(
+        await page.evaluate(
+          () => window.developerLogQa.likeStudentCalls.length,
+        ),
+        1,
+      );
+      if (scenario === "closed") await page.keyboard.press("Escape");
+      if (scenario === "account")
+        await page.evaluate(() => window.developerLogQa.switchAccount());
+      if (scenario === "role")
+        await page.evaluate(() => window.developerLogQa.switchRole("student"));
+      if (scenario === "post")
+        await page.evaluate(() => {
+          location.hash = "/developer-log/fixture-event";
+        });
+      await dialog.waitFor({ state: "detached" });
+      await page.evaluate(() => {
+        window.developerLogQa.holdLikeStudents = false;
+        window.developerLogQa.releaseLikeStudents();
+      });
+      await page.waitForTimeout(60);
+      assert.equal(await dialog.count(), 0);
+      assert.equal(
+        await page
+          .getByText("긴 이름도 생략하지 않는 검증 학생", { exact: true })
+          .count(),
+        0,
+        "Stale response cannot expose old names",
+      );
+      assert.equal(
+        await page.evaluate(
+          () => window.developerLogQa.likeStudentCalls.length,
+        ),
+        1,
+        "Account/role/post changes never trigger automatic roster reads",
+      );
+      if (scenario === "role") assert.equal(await opener.count(), 0);
+      if (scenario === "post") {
+        await opener.click();
+        await dialog.getByText("명단 학생 40", { exact: true }).waitFor();
+        assert.equal(
+          (
+            await page.evaluate(() => window.developerLogQa.likeStudentCalls)
+          ).at(-1).postId,
+          "fixture-event",
+        );
+        await page.evaluate(() => {
+          location.hash = "/developer-log/fixture-post";
+        });
+        await dialog.waitFor({ state: "detached" });
+        await page
+          .getByRole("heading", { name: "개발자 일지 화면 개선", exact: true })
+          .waitFor();
+        assert.equal(
+          await page.evaluate(
+            () => window.developerLogQa.likeStudentCalls.length,
+          ),
+          2,
+          "Returning to a previous post does not reopen its old roster",
+        );
+      }
+    }
+    if (await dialog.count()) {
+      await dialog.click({ position: { x: 2, y: 2 } });
+      assert.equal(
+        await dialog.count(),
+        0,
+        "Clicking outside closes the modal",
+      );
+    }
+    assert.deepEqual(
+      await page.evaluate(() => window.developerLogQa.writes),
+      [],
+    );
+    assert.deepEqual(errors, []);
+    checks.push({ rosterScenario: scenario, zeroWrites: true });
     await page.close();
   }
   await fs.writeFile(

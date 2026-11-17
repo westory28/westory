@@ -44,6 +44,7 @@ import {
 } from "../lib/developerLogImages";
 import { isDeveloperUser } from "../lib/permissions";
 import { setDeveloperLogLike } from "../lib/developerLogLikes";
+import DeveloperLogLikeStudentsDialog from "./DeveloperLogLikeStudentsDialog";
 
 type SortMode = "latest" | "views" | "likes";
 
@@ -194,6 +195,12 @@ const DeveloperLog: React.FC = () => {
   const { showToast } = useAppToast();
   const canManage = isDeveloperUser(currentUser?.email);
   const canLike = userData?.role === "student";
+  const canViewLikeStudents = userData?.role === "teacher" || canManage;
+  const [likeStudentsPost, setLikeStudentsPost] = useState<{
+    postId: string;
+    owner: object;
+    role: string | undefined;
+  } | null>(null);
   const displayName = (userData?.name || "방재석 교사").trim();
 
   const [posts, setPosts] = useState<DeveloperLogPost[]>([]);
@@ -231,6 +238,10 @@ const DeveloperLog: React.FC = () => {
     "all" | DeveloperLogCategory
   >("all");
   const [sortMode, setSortMode] = useState<SortMode>("latest");
+
+  useEffect(() => {
+    setLikeStudentsPost(null);
+  }, [currentUser, userData?.role, postId, mode]);
 
   useEffect(() => {
     likeRequest.current = null;
@@ -810,10 +821,27 @@ const DeveloperLog: React.FC = () => {
               </span>
               <button
                 type="button"
-                onClick={() => void toggleLike()}
-                disabled={preview || !canLike || pendingLikeScope === likeScope}
-                aria-label="좋아요"
-                aria-pressed={!preview && liked}
+                onClick={() =>
+                  canViewLikeStudents && currentUser
+                    ? setLikeStudentsPost({
+                        postId: post.id,
+                        owner: currentUser,
+                        role: userData?.role,
+                      })
+                    : void toggleLike()
+                }
+                disabled={
+                  preview ||
+                  (!canLike && !canViewLikeStudents) ||
+                  pendingLikeScope === likeScope
+                }
+                aria-label={
+                  canViewLikeStudents ? "좋아요 누른 학생 보기" : "좋아요"
+                }
+                aria-haspopup={canViewLikeStudents ? "dialog" : undefined}
+                aria-pressed={
+                  canViewLikeStudents ? undefined : !preview && liked
+                }
                 aria-busy={!preview && pendingLikeScope === likeScope}
                 className={`developer-log-like inline-flex items-center justify-center rounded-full border font-bold transition ${
                   liked
@@ -1582,6 +1610,19 @@ const DeveloperLog: React.FC = () => {
           </section>
         )}
       </div>
+      {likeStudentsPost?.postId === postId &&
+        likeStudentsPost?.owner === currentUser &&
+        likeStudentsPost?.role === userData?.role &&
+        canViewLikeStudents &&
+        currentUser &&
+        mode === "detail" && (
+          <DeveloperLogLikeStudentsDialog
+            key={`${currentUser.uid}:${userData?.role}:${likeStudentsPost.postId}`}
+            user={currentUser}
+            postId={likeStudentsPost.postId}
+            onClose={() => setLikeStudentsPost(null)}
+          />
+        )}
       {expandedImage && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/75 p-4"
