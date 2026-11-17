@@ -21,3 +21,7 @@
 - 변경 TSX의 Prettier 검사 및 `git diff --check`가 통과했다.
 
 로컬 브라우저 증거: `%TEMP%/westory-portal-design-O7UC4X`, `%TEMP%/westory-portal-design-u5umIG`, `C:/westory/output/weplay-policy-20261117`. 개인정보 없는 합성 자료만 사용했다. 운영 반영은 검증한 커밋의 Vercel 성공·승격 및 `www.westory.kr`의 지정 Chrome 프로필 확인을 완료 기준으로 한다.
+
+## 운영 화면 확인
+
+첫 패치 `ee1d93bb`의 Vercel 배포를 운영에 승격하고 `방재석` Chrome 프로필에서 위스 현황의 실제 표·거래 영역, 단일 주 메뉴·내부 목차, 위스 운영 정책의 세 탭과 투명 제목을 확인했다. 충무공과 윷놀이의 이전한 설정을 열어 기존 정책 조회와 변경 없는 저장 버튼 비활성 상태를 확인했다. 운영 수치나 공개 상태는 저장하지 않았다. 윷놀이의 고정 규칙 영역에 남아 있던 옛 운영 정책 위치 안내는 후속 패치에서 삭제했다.

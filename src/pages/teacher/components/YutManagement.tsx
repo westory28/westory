@@ -639,10 +639,6 @@ export default function YutManagement() {
                   <dt>말 수</dt>
                   <dd>2개</dd>
                 </div>
-                <div>
-                  <dt>위스 보상</dt>
-                  <dd>위스 운영 정책에서 설정</dd>
-                </div>
               </dl>
               {saveError && (
                 <p className="yut-management-error" role="alert">
