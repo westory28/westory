@@ -16,6 +16,7 @@ export interface WisStockInvestmentHistory {
   priceRevision: number;
   points: WisStockReturnObservation[];
   incompleteBeforeMs: number | null;
+  holdings: { stockId: string; name: string; quantity: number }[];
 }
 interface HistoryScope {
   year: string;
@@ -76,6 +77,18 @@ function validateHistory(data: WisStockInvestmentHistory, scope: HistoryScope) {
     data.sourceRevision < 0 ||
     !Number.isSafeInteger(data.priceRevision) ||
     data.priceRevision < 0 ||
+    !Array.isArray(data.holdings) ||
+    data.holdings.some(
+      (holding) =>
+        !holding ||
+        !/^stock_[a-f0-9]{24}$/.test(holding.stockId) ||
+        typeof holding.name !== "string" ||
+        !holding.name.trim() ||
+        !Number.isSafeInteger(holding.quantity) ||
+        holding.quantity <= 0,
+    ) ||
+    new Set(data.holdings.map((holding) => holding.stockId)).size !==
+      data.holdings.length ||
     (data.incompleteBeforeMs !== null &&
       (!Number.isSafeInteger(data.incompleteBeforeMs) ||
         data.incompleteBeforeMs <= 0 ||

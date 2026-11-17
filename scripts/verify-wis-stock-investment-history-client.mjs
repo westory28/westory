@@ -14,21 +14,26 @@ const compiled = await build({entryPoints:['src/lib/wisStockInvestmentHistoryCli
 const {getWisStockInvestmentHistory:get,getWisStockInvestmentHistories:getMany}=await import(`data:text/javascript;base64,${Buffer.from(compiled.outputFiles[0].text).toString('base64')}`);
 const qa=globalThis.historyClientQa;
 const scope={year:'2026',semester:'2',grade:'3',classNumber:'1',studentKey:'student_000000000000000000000001'};
+const holding={stockId:'stock_000000000000000000000001',name:'검증 종목',quantity:3};
 const result=extra=>({semesterId:'2026-2',studentKey:scope.studentKey,grade:'3',classNumber:'1',asOfMs:10000,sourceRevision:4,priceRevision:6,
- points:[{atMs:1000,holdingValue:1100,holdingCostBasis:1000},{atMs:2000,holdingValue:null,holdingCostBasis:null},{atMs:3000,holdingValue:0,holdingCostBasis:0}],incompleteBeforeMs:2000,...extra});
+ points:[{atMs:1000,holdingValue:1100,holdingCostBasis:1000},{atMs:2000,holdingValue:null,holdingCostBasis:null},{atMs:3000,holdingValue:0,holdingCostBasis:0}],incompleteBeforeMs:2000,holdings:[holding],...extra});
 const tick=async()=>{for(let i=0;i<8;i++)await Promise.resolve()};
 const first=get(scope), duplicate=get({...scope});await tick();assert.equal(qa.calls.length,1);qa.pending.shift().resolve({data:result()});
 assert.deepEqual(await first,await duplicate);assert.deepEqual(qa.calls[0],{name:'getWisStockInvestmentHistory',scope});
 const fresh=get(scope);await tick();assert.equal(qa.calls.length,2);qa.pending.shift().resolve({data:result()});await fresh;
 for(const extra of [{semesterId:'2027-1'},{studentKey:'student_other'},{classNumber:'2'},
  {points:[{atMs:20000,holdingValue:1,holdingCostBasis:1}]},{points:[{atMs:1000,holdingValue:NaN,holdingCostBasis:1}]},
- {points:[{atMs:1000,holdingValue:1,holdingCostBasis:null}]},{incompleteBeforeMs:20000}]){
+ {points:[{atMs:1000,holdingValue:1,holdingCostBasis:null}]},{incompleteBeforeMs:20000},
+ {holdings:undefined},{holdings:null},{holdings:[null]},{holdings:[{...holding,stockId:'other'}]},
+ {holdings:[{...holding,name:''}]},{holdings:[{...holding,quantity:0}]},{holdings:[{...holding,quantity:-1}]},
+ {holdings:[{...holding,quantity:1.5}]},{holdings:[{...holding,quantity:Number.MAX_SAFE_INTEGER+1}]},{holdings:[holding,holding]}]){
  const pending=get(scope);await tick();qa.pending.shift().resolve({data:result(extra)});await assert.rejects(pending,/범위/);
 }
 const owner=get(scope);await tick();qa.auth.currentUser={...qa.user,uid:'other_teacher'};qa.pending.shift().resolve({data:result()});await assert.rejects(owner,/로그인/);qa.auth.currentUser=qa.user;
 const epoch=get(scope);await tick();qa.epoch++;qa.pending.shift().resolve({data:result()});await assert.rejects(epoch,/로그인/);
 const failed=get(scope);await tick();qa.pending.shift().reject(new Error('network'));await assert.rejects(failed,/network/);
 const retry=get(scope);await tick();qa.pending.shift().resolve({data:result()});await retry;
+const emptyHoldings=get(scope);await tick();qa.pending.shift().resolve({data:result({holdings:[]})});assert.deepEqual((await emptyHoldings).holdings,[]);
 const count=qa.calls.length;qa.auth.currentUser=null;await assert.rejects(get(scope),/로그인/);assert.equal(qa.calls.length,count);
 // Bounded multi-student requests share a flight regardless of ranking order.
 qa.auth.currentUser=qa.user;

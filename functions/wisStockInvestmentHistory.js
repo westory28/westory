@@ -87,8 +87,16 @@ function createWisStockInvestmentHistory({ db, now = Date.now, assertSession = a
         let series;
         try { series = buildWisStockInvestmentHistorySeries({ account, fills, stocks: market.stocks, asOfMs }); }
         catch (error) { fail(error.reason || 'WIS_STOCK_INVESTMENT_HISTORY_INVALID', error.message); }
+        // Positions were reconciled with all filled trades above. Pending buys
+        // are not holdings; shares reserved for a sell are still owned.
+        const holdings = Object.entries(account.positions)
+          .filter(([, position]) => position.quantity > 0)
+          .map(([stockId, position]) => ({ stockId,
+            name: market.stocks.find(stock => stock.id === stockId)?.settings?.name || '종목 정보 없음',
+            quantity: position.quantity }))
+          .sort((a, b) => a.stockId.localeCompare(b.stockId));
         histories.push({ semesterId: scope.semesterId, studentKey: studentKey, grade: selected.grade, classNumber: selected.classNumber,
-          asOfMs, sourceRevision: account.revision, priceRevision: market.revision, ...series });
+          asOfMs, sourceRevision: account.revision, priceRevision: market.revision, ...series, holdings });
       }
       return batch ? { semesterId: scope.semesterId, histories } : histories[0];
     }, { readOnly: true });

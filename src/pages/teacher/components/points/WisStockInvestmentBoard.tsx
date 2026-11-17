@@ -75,7 +75,7 @@ export default function WisStockInvestmentBoard({
       ? snapshot
       : null;
   const [sort, setSort] = useState("class");
-  const [page, setPage] = useState(0);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [fullscreen, setFullscreen] = useState(false);
   const [pageFullscreen, setPageFullscreen] = useState(false);
   const [screenError, setScreenError] = useState("");
@@ -91,6 +91,7 @@ export default function WisStockInvestmentBoard({
     entries: new Map<string, WisStockInvestmentHistory>(),
   });
   useEffect(() => setSelectedStudentKey(""), [year, semester, classKey]);
+  useEffect(() => setVisibleCount(PAGE_SIZE), [year, semester]);
   const expanded = fullscreen || pageFullscreen;
   useEffect(() => {
     setError("");
@@ -179,12 +180,7 @@ export default function WisStockInvestmentBoard({
       }),
     [data, sort],
   );
-  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const activePage = Math.min(page, pageCount - 1);
-  const pageRows = rows.slice(
-    activePage * PAGE_SIZE,
-    (activePage + 1) * PAGE_SIZE,
-  );
+  const visibleRows = rows.slice(0, visibleCount);
   const totals = data?.totals;
   const ready = data?.status === "READY";
   const live = !error && ready && connection === "CONNECTED";
@@ -210,6 +206,14 @@ export default function WisStockInvestmentBoard({
     sourceRevision,
     historyRetry,
   ]);
+  const selectedHoldings =
+    selectedStudent && historyCache.current.scope === historyScope
+      ? histories.find(
+          (history) =>
+            history.studentKey === selectedStudent.studentKey &&
+            history.semesterId === `${year}-${semester}`,
+        )?.holdings
+      : undefined;
   useEffect(() => {
     let active = true;
     const studentKeys: string[] = JSON.parse(historyKeys);
@@ -391,7 +395,7 @@ export default function WisStockInvestmentBoard({
             value={classKey}
             onChange={(event) => {
               setClassKey(event.target.value);
-              setPage(0);
+              setVisibleCount(PAGE_SIZE);
             }}
           >
             <option value="all">전체</option>
@@ -473,7 +477,7 @@ export default function WisStockInvestmentBoard({
                 value={sort}
                 onChange={(event) => {
                   setSort(event.target.value);
-                  setPage(0);
+                  setVisibleCount(PAGE_SIZE);
                 }}
               >
                 <option value="class">학급·번호</option>
@@ -491,7 +495,7 @@ export default function WisStockInvestmentBoard({
           >
             {ready && rows.length > 0 ? (
               <ul>
-                {pageRows.map((row) => {
+                {visibleRows.map((row) => {
                   const value = holdingReturn(row);
                   return (
                     <li key={row.studentKey}>
@@ -539,25 +543,25 @@ export default function WisStockInvestmentBoard({
               </div>
             )}
           </div>
-          <div className="wis-investment-board__pagination">
-            <span>
-              {activePage + 1} / {pageCount}
-            </span>
-            <button
-              type="button"
-              disabled={activePage === 0}
-              onClick={() => setPage(activePage - 1)}
-            >
-              이전
-            </button>
-            <button
-              type="button"
-              disabled={activePage + 1 >= pageCount}
-              onClick={() => setPage(activePage + 1)}
-            >
-              다음
-            </button>
-          </div>
+          {ready && rows.length > PAGE_SIZE && (
+            <div className="wis-investment-board__load-more">
+              <span aria-live="polite" aria-atomic="true">
+                {visibleRows.length} / {rows.length}명
+              </span>
+              {visibleRows.length < rows.length && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setVisibleCount((count) =>
+                      Math.min(count + PAGE_SIZE, rows.length),
+                    )
+                  }
+                >
+                  더보기
+                </button>
+              )}
+            </div>
+          )}
         </section>
         <section
           className="wis-investment-board__returns"
@@ -640,49 +644,89 @@ export default function WisStockInvestmentBoard({
             />
           )}
           {selectedStudent && (
-            <dl
-              className="wis-investment-board__detail"
-              aria-label={`${selectedStudent.displayName} 투자 상세`}
-            >
-              {[
-                { label: "계좌 현금", value: money(selectedStudent.stockCash) },
-                {
-                  label: "매수 예약",
-                  value: money(selectedStudent.reservedCash),
-                },
-                {
-                  label: "보유 종목",
-                  value: `${selectedStudent.holdingCount}개`,
-                },
-                {
-                  label: "주식 평가액",
-                  value: money(selectedStudent.holdingValue),
-                },
-                {
-                  label: "보유 원가",
-                  value: money(selectedStudent.holdingCostBasis),
-                },
-                { label: "총자산", value: money(selectedStudent.totalAssets) },
-                {
-                  label: "실현손익",
-                  value: signed(selectedStudent.realizedPnl),
-                  className: `is-${direction(selectedStudent.realizedPnl)}`,
-                },
-                {
-                  label: "평가손익",
-                  value: signed(selectedStudent.unrealizedPnl),
-                  className: `is-${direction(selectedStudent.unrealizedPnl)}`,
-                },
-              ].map((item) => (
-                <div key={item.label}>
-                  <dt>{item.label}</dt>
-                  <dd className={item.className}>
-                    {item.value}
-                    {item.label !== "보유 종목" && <small> 위스</small>}
-                  </dd>
-                </div>
-              ))}
-            </dl>
+            <>
+              <dl
+                className="wis-investment-board__detail"
+                aria-label={`${selectedStudent.displayName} 투자 상세`}
+              >
+                {[
+                  {
+                    label: "계좌 현금",
+                    value: money(selectedStudent.stockCash),
+                  },
+                  {
+                    label: "매수 예약",
+                    value: money(selectedStudent.reservedCash),
+                  },
+                  {
+                    label: "보유 종목",
+                    value: `${selectedStudent.holdingCount}개`,
+                  },
+                  {
+                    label: "주식 평가액",
+                    value: money(selectedStudent.holdingValue),
+                  },
+                  {
+                    label: "보유 원가",
+                    value: money(selectedStudent.holdingCostBasis),
+                  },
+                  {
+                    label: "총자산",
+                    value: money(selectedStudent.totalAssets),
+                  },
+                  {
+                    label: "실현손익",
+                    value: signed(selectedStudent.realizedPnl),
+                    className: `is-${direction(selectedStudent.realizedPnl)}`,
+                  },
+                  {
+                    label: "평가손익",
+                    value: signed(selectedStudent.unrealizedPnl),
+                    className: `is-${direction(selectedStudent.unrealizedPnl)}`,
+                  },
+                ].map((item) => (
+                  <div key={item.label}>
+                    <dt>{item.label}</dt>
+                    <dd className={item.className}>
+                      {item.value}
+                      {item.label !== "보유 종목" && <small> 위스</small>}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              <section
+                className="wis-investment-board__holdings"
+                aria-label={`${selectedStudent.displayName} 보유 주식`}
+              >
+                <h4>보유 주식</h4>
+                {selectedHoldings === undefined ? (
+                  <p role="status">
+                    {historyError
+                      ? "보유 종목을 확인하지 못했습니다."
+                      : "보유 종목을 확인하고 있습니다."}
+                  </p>
+                ) : selectedHoldings.length === 0 ? (
+                  <p>보유한 주식이 없습니다.</p>
+                ) : (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th scope="col">종목</th>
+                        <th scope="col">보유 수량</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedHoldings.map((holding) => (
+                        <tr key={holding.stockId}>
+                          <td>{holding.name}</td>
+                          <td>{holding.quantity.toLocaleString("ko-KR")}주</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </section>
+            </>
           )}
         </section>
       </div>

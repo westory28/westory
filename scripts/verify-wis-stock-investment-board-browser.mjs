@@ -49,7 +49,7 @@ const listeners=[];
 export const qa=window.boardQa={subscriptions:0,stops:0,scopes:[],last:null};
 let rows=Array.from({length:50},(_,i)=>({studentKey:'student_'+(i+1).toString(16).padStart(24,'0'),
  grade:'3',classNumber:i<25?'1':'2',studentNumber:String(i%25+1),displayName:'검증학생'+String(i+1).padStart(2,'0'),
- stockCash:1000+(i+1)*10,reservedCash:100+i+1,holdingCount:1,holdingValue:500+(i+1)*20,
+ stockCash:1000+(i+1)*10,reservedCash:100+i+1,holdingCount:i===0?2:1,holdingValue:500+(i+1)*20,
  holdingCostBasis:600+(i+1)*5,realizedPnl:(i+1-25)*3}));
 qa.setRows=next=>{rows=next};
 qa.push=(mode='READY',revision=1)=>{for(const listener of listeners.filter(item=>item.active)){
@@ -96,6 +96,7 @@ export async function getWisStockInvestmentHistories(scope){
  {atMs:asOfMs,holdingValue:row.holdingValue,holdingCostBasis:row.holdingCostBasis}];
  const result={semesterId:scope.year+'-'+scope.semester,studentKey,
  grade:row.grade,classNumber:row.classNumber,asOfMs,sourceRevision:qa.last.revision,priceRevision:qa.last.priceRevision,
+ holdings:Array.from({length:row.holdingCount},(_,i)=>({stockId:'stock_'+String(i+1).padStart(24,'0'),name:i?'보유 종목 2':'역사 속 교류와 산업의 발전을 함께 살펴보는 긴 이름의 합성 기업',quantity:(qa.holdingQuantity||3)+i*2})),
  points:qa.historyMode==='null'?points.map(point=>({...point,holdingValue:null,holdingCostBasis:null})):qa.historyMode==='empty'||(qa.historyMode==='partial'&&studentKey===scope.studentKeys[0])?[]:qa.historyMode==='single'?points.slice(-1):points,incompleteBeforeMs:null};
  return result;});
  if(qa.holdHistory){qa.holdHistory=false;await new Promise(resolve=>qa.releaseHistory=resolve);}
@@ -239,6 +240,40 @@ try {
     await chartReady(page);
     assert.equal(await rows(page).count(), 20);
     assert.equal(await firstName(page), "검증학생01");
+    const more = page.getByRole("button", { name: "더보기", exact: true });
+    const scrollBefore = await page
+      .locator(".wis-investment-board__list")
+      .evaluate((el) => {
+        el.scrollTop = 480;
+        return { top: el.scrollTop, height: el.clientHeight };
+      });
+    await more.press("Enter");
+    assert.equal(await rows(page).count(), 40);
+    assert.equal(await firstName(page), "검증학생01");
+    assert.deepEqual(
+      await page
+        .locator(".wis-investment-board__list")
+        .evaluate((el) => ({ top: el.scrollTop, height: el.clientHeight })),
+      scrollBefore,
+    );
+    await more.click();
+    assert.equal(await rows(page).count(), 50);
+    assert.equal(await more.count(), 0);
+    assert.equal(
+      await countRequests(page),
+      1,
+      "load more does not reread histories",
+    );
+    await page
+      .getByLabel("투자 현황 정렬", { exact: true })
+      .selectOption("assets");
+    assert.equal(await rows(page).count(), 20);
+    await page
+      .getByLabel("투자 현황 정렬", { exact: true })
+      .selectOption("class");
+    await page.locator(".wis-investment-board__list").evaluate((el) => {
+      el.scrollTop = 0;
+    });
     assert.equal(
       await page
         .locator(".wis-return-history__legend strong")
@@ -322,7 +357,7 @@ try {
     layouts.push(layout);
     const controls = await page
       .locator(
-        ".wis-investment-board__chart-controls button, .wis-investment-board__student",
+        ".wis-investment-board__chart-controls button, .wis-investment-board__student, .wis-investment-board__load-more button",
       )
       .evaluateAll((items) =>
         items.map((item) => ({
@@ -386,6 +421,24 @@ try {
     assert.equal(
       await page.locator(".wis-investment-board__detail dt").count(),
       8,
+    );
+    assert.deepEqual(
+      await page
+        .locator(".wis-investment-board__holdings tbody td:last-child")
+        .allTextContents(),
+      ["3주", "5주"],
+    );
+    assert.equal(
+      await page
+        .locator(".wis-investment-board__holdings th")
+        .allTextContents()
+        .then((labels) => labels.join(",")),
+      "종목,보유 수량",
+    );
+    assert(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
     );
     assert.equal(
       await page.locator(".wis-return-history__legend strong").innerText(),
@@ -477,9 +530,21 @@ try {
     .getByRole("button", { name: "상위 5명 보기", exact: true })
     .click();
   await chartReady(page);
-  await page.getByRole("button", { name: "다음", exact: true }).click();
-  assert.equal(await firstName(page), "검증학생30");
-  assert.equal(await countRequests(page), 1, "sort and page do not reread");
+  await page.getByRole("button", { name: "더보기", exact: true }).click();
+  assert.equal(await rows(page).count(), 40);
+  assert.equal(await firstName(page), "검증학생50");
+  assert.equal(
+    await rows(page)
+      .nth(20)
+      .locator(".wis-investment-board__identity strong")
+      .innerText(),
+    "검증학생30",
+  );
+  assert.equal(
+    await countRequests(page),
+    1,
+    "sort and load more do not reread",
+  );
   const priorDots = await dots(page);
   await page.evaluate(() => {
     const raw = {
@@ -515,6 +580,17 @@ try {
   );
   await push(page);
   await chartReady(page);
+  assert.equal(
+    await rows(page).count(),
+    20,
+    "class change resets visible count",
+  );
+  await page.getByRole("button", { name: "더보기", exact: true }).click();
+  assert.equal(await rows(page).count(), 25);
+  assert.equal(
+    await page.getByRole("button", { name: "더보기", exact: true }).count(),
+    0,
+  );
   assert.equal(
     await page
       .locator(".wis-return-history__legend strong")
@@ -628,6 +704,11 @@ try {
   await states.waitForFunction(
     () => window.boardQa.historyRequests.length === 3,
   );
+  assert.equal(
+    await states.locator(".wis-investment-board__holdings tbody tr").count(),
+    0,
+    "previous student's holdings disappear during a new request",
+  );
   await states
     .getByLabel("투자 현황 학급", { exact: true })
     .selectOption("3:2");
@@ -724,6 +805,7 @@ try {
   assert.equal(await states.locator(".wis-return-history__canvas").count(), 0);
   await rows(states).first().click();
   await chartReady(states, 1);
+  await states.getByText("보유한 주식이 없습니다.", { exact: true }).waitFor();
   assert.equal(
     await states.locator(".wis-return-history__legend li > span").innerText(),
     "미보유",
@@ -741,6 +823,50 @@ try {
   await states.close();
   checks.push(
     "Loading, single/empty/null/partial histories, period-empty state, missing quote and no-holding gaps, explicit error retry, current non-holder with genuine past returns; late responses after selection/class change are discarded.",
+  );
+
+  const holdings = await open(390);
+  await push(holdings);
+  await chartReady(holdings);
+  await rows(holdings).first().click();
+  await chartReady(holdings, 1);
+  await holdings.evaluate(() => {
+    window.boardQa.holdHistory = true;
+    window.boardQa.holdingQuantity = 7;
+  });
+  await push(holdings, "READY", 2);
+  await holdings.waitForFunction(() => Boolean(window.boardQa.releaseHistory));
+  assert.equal(
+    await holdings.locator(".wis-investment-board__holdings tbody tr").count(),
+    0,
+    "new trading revision clears old holdings before response",
+  );
+  await holdings.evaluate(() => window.boardQa.releaseHistory());
+  await chartReady(holdings, 1);
+  assert.deepEqual(
+    await holdings
+      .locator(".wis-investment-board__holdings tbody td:last-child")
+      .allTextContents(),
+    ["7주", "9주"],
+  );
+  const holdingRequests = await countRequests(holdings);
+  await holdings.evaluate(() =>
+    window.boardQa.pricePush({
+      ...window.boardQa.last,
+      priceRevision: 3,
+      asOfMs: window.boardQa.last.asOfMs + 1000,
+    }),
+  );
+  assert.deepEqual(
+    await holdings
+      .locator(".wis-investment-board__holdings tbody td:last-child")
+      .allTextContents(),
+    ["7주", "9주"],
+  );
+  assert.equal(await countRequests(holdings), holdingRequests);
+  await holdings.close();
+  checks.push(
+    "Load more appends 20/40/50 without rereads or inner-scroll reset; sort/class reset to 20. Selected holdings show each actual quantity, handle long names/empty/loading, discard prior student/revision quantities, and survive quote-only updates without additional calls.",
   );
 
   for (const width of [320, 390, 768, 1280, 1440]) {
