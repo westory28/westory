@@ -182,6 +182,26 @@
   font-weight: 700;
   background: var(--ws-primary-soft, #eff6ff);
 }
+.teacher-sidebar-nested-toggle {
+  width: 100%;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.teacher-sidebar-nested-toggle[aria-expanded="true"] .teacher-sidebar-chevron {
+  transform: rotate(180deg);
+}
+.teacher-sidebar-nested-menu {
+  margin: 4px 0 4px 8px;
+  padding-left: 8px;
+  border-left: 1px solid var(--ws-border, #e5e7eb);
+}
+.teacher-sidebar-nested-menu[hidden] {
+  display: none;
+}
 .teacher-sidebar-bottom {
   display: flex;
   align-items: center;

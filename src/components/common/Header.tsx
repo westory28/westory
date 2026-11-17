@@ -447,14 +447,15 @@ const Header: React.FC<{
         directUrl: item.resolvedChildren.length
           ? undefined
           : resolveTarget(item.url),
-        children: children.length
-          ? children
-          : [
-              {
-                name: item.name,
-                resolvedUrl: resolveTarget(item.url),
-              },
-            ],
+        children:
+          children.length || item.url === "/teacher/points"
+            ? children
+            : [
+                {
+                  name: item.name,
+                  resolvedUrl: resolveTarget(item.url),
+                },
+              ],
       };
     });
   if (
@@ -494,17 +495,34 @@ const Header: React.FC<{
     ...configuredShopChildren,
     ...defaultShopChildren,
   ].filter((child) => getShopTab(child.resolvedUrl) !== "requests");
-  if (
-    resolvedTeacherMenus.some((item) => item.url === "/teacher/points") &&
-    shopChildren.length
-  )
-    teacherSidebarGroups.push({
-      id: "shop",
-      name: "위스 마을",
-      icon: "shop",
-      secondary: true,
-      children: shopChildren,
-    });
+  const consolidateWisGroup = (
+    group: TeacherSidebarGroup | undefined,
+    shops: TeacherSidebarGroup["children"],
+  ) => {
+    if (!group) return;
+    const isHall = (child: { resolvedUrl: string }) =>
+      new URLSearchParams(child.resolvedUrl.split("?")[1]).get("tab") ===
+      "hall-of-fame";
+    const management = group.children.filter((child) => !isHall(child));
+    group.children = [
+      ...(management.length
+        ? [
+            {
+              name: "위스 관리",
+              resolvedUrl: management[0].resolvedUrl,
+              children: management,
+            },
+          ]
+        : []),
+      ...group.children.filter(isHall),
+      ...shops,
+    ];
+    group.directUrl = undefined;
+  };
+  consolidateWisGroup(
+    teacherSidebarGroups.find((group) => group.id === "points"),
+    shopChildren,
+  );
   const dictionaryChild = resolvedTeacherMenus
     .flatMap((item) => item.resolvedChildren)
     .find((child) => child.resolvedUrl === dictionaryUrl);
@@ -559,7 +577,7 @@ const Header: React.FC<{
           getVisibleChildren(item),
           "student",
         ).filter((child) => !getWisShopMenuKey(child.resolvedUrl, "student"));
-        const id = item.url.split("/")[2] || item.name;
+        const id = item.url.split("?")[0].split("/")[2] || item.name;
         return {
           id,
           name: item.name,
@@ -574,9 +592,10 @@ const Header: React.FC<{
             id === "weplay" || !children.length
               ? resolveTarget(item.url)
               : undefined,
-          children: children.length
-            ? children
-            : [{ name: item.name, resolvedUrl: resolveTarget(item.url) }],
+          children:
+            children.length || id === "points"
+              ? children
+              : [{ name: item.name, resolvedUrl: resolveTarget(item.url) }],
         };
       })
     : [];
@@ -590,13 +609,10 @@ const Header: React.FC<{
           return key && key !== "orders";
         })
     : [];
-  if (studentShopChildren.length)
-    studentSidebarGroups.push({
-      id: "shop",
-      name: "위스 마을",
-      icon: "shop",
-      children: studentShopChildren,
-    });
+  consolidateWisGroup(
+    studentSidebarGroups.find((group) => group.id === "points"),
+    studentShopChildren,
+  );
 
   const activeDesktopSubmenu = menuItems
     .map((item) => {

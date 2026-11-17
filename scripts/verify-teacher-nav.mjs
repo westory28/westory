@@ -37,6 +37,7 @@ const router = {
   useNavigate: () => () => {},
 };
 const stubs = {
+  useStudentWisStocks: { useStudentWisStockStatus: () => ({ status: 'ready', data: { studentOpen: false, halted: true }, error: '', retry() {} }) },
   AuthContext: { useAuth: () => auth },
   firebase: { auth: { currentUser: null } },
   AppToastProvider: { useAppToast: () => ({ showToast() {} }) },
@@ -107,24 +108,25 @@ for (const small of [false, true]) {
     const html = renderNavigation('teacher', ADMIN_EMAIL, migrated, collapsed);
     const groupLabels = [...html.matchAll(/<(?:a|button)\b[^>]*class="teacher-sidebar-item [^"]*"[^>]*>/g)]
       .map(([tag]) => tag.match(/aria-label="([^"]+)"/)?.[1]).filter(Boolean);
-    assert.equal(groupLabels[groupLabels.indexOf('역사 사전') + 1], '공神문고', 'Q&A follows the dictionary as an independent group');
+    assert.equal(groupLabels[groupLabels.indexOf('역사 사전') + 1], '공부의 神문고', 'Q&A follows the dictionary as an independent group');
     assert.equal([...html.matchAll(/href="#\/teacher\/gongsinmoongo"/g)].length, 1, 'Q&A is not duplicated inside the learning group');
     assert.match(html, /<a(?=[^>]*href="#\/teacher\/gongsinmoongo")(?=[^>]*aria-current="page")[^>]*>/, 'Direct Q&A route is active');
   }
   for (const role of ['teacher', 'staff', 'student']) {
     const email = `${role}@fixture.invalid`;
     const html = renderNavigation(role, email);
-    assert(!html.includes(`href="#${qnaPath}"`), `${role} must not see Q&A`);
-    assert.equal(canAccessTeacherPath(qnaPath, auth.userData, email), false, `${role} direct Q&A route is denied`);
-    assert.equal(canAccessTeacherPath(`${qnaPath}/preview`, auth.userData, email), false, `${role} nested Q&A route is denied`);
+    const allowed = role === 'teacher';
+    assert.equal(html.includes(`href="#${qnaPath}"`), allowed, `${role} Q&A menu follows teacher access`);
+    assert.equal(canAccessTeacherPath(qnaPath, auth.userData, email), allowed, `${role} direct Q&A route follows teacher access`);
+    assert.equal(canAccessTeacherPath(`${qnaPath}/preview`, auth.userData, email), allowed, `${role} nested Q&A route follows teacher access`);
   }
 }
 assert.equal(canAccessTeacherPath(qnaPath, { role: 'teacher' }, ADMIN_EMAIL), true);
-assert.equal(canAccessTeacherPath(qnaPath, { role: 'teacher', email: ADMIN_EMAIL }, 'teacher@fixture.invalid'), false, 'Unverified profile email cannot unlock the draft');
+assert.equal(canAccessTeacherPath(qnaPath, { role: 'staff', email: ADMIN_EMAIL }, 'staff@fixture.invalid'), false, 'Unverified profile email cannot unlock teacher access');
 assert.equal(canAccessTeacherPath(qnaPath, null, null), false);
 assert.equal(canAccessTeacherPath('/teacher/lesson', { role: 'staff', teacherPortalEnabled: true, staffPermissions: ['lesson_read'] }, 'staff@fixture.invalid'), true, 'Existing lesson staff access stays unchanged');
 const renamed = cloneDefaultMenus();
 Object.assign(renamed.teacher.find(item => item.url === qnaPath), { name: '우리 반 공신문고', nameCustomized: true });
 assert(renderNavigation('teacher', ADMIN_EMAIL, sanitizeMenuConfig(renamed)).includes('aria-label="우리 반 공신문고"'), 'Configured label is retained');
 assert(!readFileSync(resolve('src/pages/teacher/Settings.tsx'), 'utf8').includes('Gongsinmoongo'), 'Q&A no longer exists inside settings');
-console.log('PASS: administrator-only standalone Q&A, dictionary-adjacent placement, saved menu migration, active route, student/staff exclusion, configured labels and unchanged lesson access.');
+console.log('PASS: teacher-access standalone Q&A, dictionary-adjacent placement, saved menu migration, active route, student/staff exclusion, configured labels and unchanged lesson access.');

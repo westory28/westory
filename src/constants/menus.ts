@@ -136,7 +136,7 @@ export const MENUS: MenuConfig = {
       ],
     },
     {
-      name: "위스 관리",
+      name: "위스",
       url: "/teacher/points",
       icon: "M12 8c-2.761 0-5 1.567-5 3.5S9.239 15 12 15s5-1.567 5-3.5S14.761 8 12 8zm0 0V5m0 10v4m-7-7H3m18 0h-2",
       children: [
@@ -251,6 +251,7 @@ const normalizeMenuName = (
   )
     return "공부의 神문고";
   if (customized) return name;
+  if (url === "/teacher/points" && name === "위스 관리") return "위스";
   if (url === "/student/mypage?menu=avatar" && name === "아바타 꾸미기")
     return "아바타 옷장";
   const [path, query = ""] = url.split("?");

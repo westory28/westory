@@ -3,7 +3,6 @@ import { useAuth } from "../../../../contexts/AuthContext";
 import { canManageSettings } from "../../../../lib/permissions";
 import { lazyWithRetry } from "../../../../lib/lazyWithRetry";
 import { InlineLoading } from "../../../../components/common/LoadingState";
-import TeacherWisVillage from "./TeacherWisVillage";
 
 const SettingsAvatarPricing = lazyWithRetry(
   () => import("../SettingsAvatarPricing"),
@@ -14,7 +13,7 @@ export default function TeacherAvatarShopPage() {
   const { userData, currentUser } = useAuth();
   const allowed = canManageSettings(userData, currentUser?.email);
   return (
-    <TeacherWisVillage active="avatar">
+    <div className="min-w-0">
       {allowed ? (
         <React.Suspense fallback={<InlineLoading />}>
           <SettingsAvatarPricing />
@@ -22,6 +21,6 @@ export default function TeacherAvatarShopPage() {
       ) : (
         <p role="alert">관리자 계정에서 사용할 수 있습니다.</p>
       )}
-    </TeacherWisVillage>
+    </div>
   );
 }

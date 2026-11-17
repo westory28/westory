@@ -1,4 +1,4 @@
-/** Real teacher route, village navigation and feature bodies; synthetic service adapters only. */
+/** Real teacher route, unified Wis navigation and feature bodies; synthetic service adapters only. */
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -17,7 +17,7 @@ const playwright = require(
       ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright",
     ),
 );
-const output = path.join(root, "output/wispi-layout-fix-20261115");
+const output = path.join(root, "output/wis-menu-integration-20261117");
 await fs.mkdir(output, { recursive: true });
 // Reuse the existing checked-in synthetic adapters, not their browser runners.
 async function adapter(file, next) {
@@ -51,12 +51,14 @@ const stocks = (
 );
 const avatar = `
 import {AVATAR_ITEMS} from './src/features/avatar/catalog';
-export const avatarErrorMessage=e=>e.message,avatarPricingFromError=()=>null;
+export const avatarErrorMessage=e=>e.message,avatarPricingFromError=()=>null,avatarPurchaseTiersFromError=()=>null;
 export const getAvatarCatalogPricing=async()=>{window.villageQa.avatarReads++;return{revision:1,prices:Object.fromEntries(AVATAR_ITEMS.map(item=>[item.id,item.price])),metadata:{}}};
 const reject=async()=>{throw Error('Unexpected avatar write/read')};
 export const updateAvatarCatalogPricing=reject,getTeacherMyPage=reject,saveTeacherAvatar=reject,updateTeacherProfileIcon=reject,makeAvatarThumbnail=()=>'',getAvatarStudioState=reject,purchaseAvatarItem=reject,saveStudentAvatar=reject;
 `;
 const board = `
+export const getWisStockInvestmentHistory=async()=>{throw Error('Unexpected investment history read')};
+export const wisStockInvestmentHistoryError=error=>error.message;
 export function watchWisStockInvestmentBoard(scope,onData,onConnection){
   window.villageQa.boardSubscriptions++;
   onConnection('CONNECTED');
@@ -73,9 +75,10 @@ import {PortalWorkspaceFooterProvider,PortalFallbackFooter} from './src/componen
 import './src/assets/index.css';import './src/components/common/portalPage.css';import './src/components/layout/teacherLayout.css';import './src/pages/teacher/teacherSettings.css';
 window.villageQa={avatarReads:0,boardSubscriptions:0,boardStops:0};
 const params=new URLSearchParams(location.search),student=params.has('student');
-const groups=[{id:'quiz',name:'평가 관리',icon:'assessment',children:[],directUrl:'/teacher/quiz'},{id:'village',name:'위스 마을',icon:'shop',children:[{name:'위스 상점',resolvedUrl:'/teacher/points?tab=products'},{name:'아바타 상점',resolvedUrl:'/teacher/points?tab=products&shop=avatar'},{name:'위스피(WsPI)',resolvedUrl:'/teacher/points?tab=stocks'}]}];
+const management={name:'위스 관리',resolvedUrl:'/teacher/points',children:[{name:'위스 현황',resolvedUrl:'/teacher/points'}]};
+const groups=[{id:'quiz',name:'평가 관리',icon:'assessment',children:[],directUrl:'/teacher/quiz'},{id:'points',name:'위스',icon:'wis',children:[management,{name:'명예의 전당 관리',resolvedUrl:'/teacher/points?tab=hall-of-fame'},{name:'위스 상점',resolvedUrl:'/teacher/points?tab=products'},...(!params.has('readonly')?[{name:'아바타 상점',resolvedUrl:'/teacher/points?tab=products&shop=avatar'}]:[]),{name:'위스피(WsPI)',resolvedUrl:'/teacher/points?tab=stocks'}]}];
 // Actual primary navigation/styles and workspace footer; the account header has no service reads.
-function Shell(){const[collapsed,setCollapsed]=useState(params.has('collapsed'));return <PortalWorkspaceFooterProvider><div className={'teacher-layout flex min-h-screen flex-col bg-gray-50'+(collapsed?' is-sidebar-collapsed':'')}><TeacherSidebar groups={groups} home='/teacher/dashboard' semesterLabel='2026학년도 2학기' showDashboard showSettings collapsed={collapsed} mobileOpen={false} onToggleCollapsed={()=>setCollapsed(v=>!v)} onCloseMobile={()=>{}} isChildActive={url=>location.hash.slice(1)===url}/><header className='teacher-header teacher-account-header'><div className='header-container'><div className='header-right'><span>검증 교사</span></div></div></header><main className='min-h-0 w-full flex-1' data-fixture-main><TeacherPointsRoute/></main><PortalFallbackFooter teacher/></div></PortalWorkspaceFooterProvider>}
+function Shell(){const[collapsed,setCollapsed]=useState(params.has('collapsed'));const[mobileOpen,setMobileOpen]=useState(false);return <PortalWorkspaceFooterProvider><div className={'teacher-layout flex min-h-screen flex-col bg-gray-50'+(collapsed?' is-sidebar-collapsed':'')}><TeacherSidebar groups={groups} home='/teacher/dashboard' semesterLabel='2026학년도 2학기' showDashboard showSettings collapsed={collapsed} mobileOpen={mobileOpen} onToggleCollapsed={()=>setCollapsed(v=>!v)} onCloseMobile={()=>setMobileOpen(false)} isChildActive={url=>location.hash.slice(1)===url||(url==='/teacher/points?tab=products'&&location.hash.endsWith('?tab=requests'))}/><header className='teacher-header teacher-account-header'><div className='header-container'><button type='button' className='teacher-navigation-toggle' aria-label='메뉴 열기' onClick={()=>setMobileOpen(true)}>메뉴</button><div className='header-right'><span>검증 교사</span></div></div></header><main className='min-h-0 w-full flex-1' data-fixture-main><TeacherPointsRoute/></main><PortalFallbackFooter teacher/></div></PortalWorkspaceFooterProvider>}
 createRoot(document.getElementById('root')).render(<HashRouter>{student?<main className="ws-page"><WisShopNavigation portal="student" active="products"/></main>:<Shell/>}</HashRouter>);
 `;
 const bundle = await build({
@@ -99,11 +102,22 @@ const bundle = await build({
           namespace: "fixture",
         }));
         plugin.onResolve(
-          { filter: /lib\/wisStockInvestmentBoardClient$/ },
+          { filter: /lib\/wisStockInvestment(?:Board|History)Client$/ },
           () => ({ path: "board", namespace: "fixture" }),
         );
         plugin.onResolve({ filter: /lib\/wisStocksClient$/ }, () => ({
           path: "stocks",
+          namespace: "fixture",
+        }));
+        plugin.onResolve(
+          { filter: /lib\/wisStockListingSubscription$/ },
+          () => ({
+            path: "stocks",
+            namespace: "fixture",
+          }),
+        );
+        plugin.onResolve({ filter: /hooks\/useStudentWisStocks$/ }, () => ({
+          path: "stock-status",
           namespace: "fixture",
         }));
         plugin.onResolve(
@@ -133,6 +147,8 @@ const bundle = await build({
             stocks,
             avatar,
             board,
+            "stock-status":
+              "export const useStudentWisStockStatus=()=>({status:'ready',data:{studentOpen:false},error:'',retry(){}});",
             preload: "export const preloadStudentWeplay=()=>{};",
             empty: "export default ()=>null",
           }[args.path],
@@ -203,15 +219,32 @@ async function open(width, tab, extra = "", height = 960) {
   await page.goto(`${origin}/?teacher=1${extra}#/teacher/points?tab=${tab}`);
   return page;
 }
-const secondary = (page) => page.locator(".wis-village-navigation");
-const contentTitle = (page) => page.locator(".wis-village-content h1");
-async function expandVillage(page) {
-  const toggle = secondary(page).locator(".teacher-settings-menu-toggle");
+const wisMenu = (page) => page.locator("#teacher-menu-points");
+const shopLinks = (page) =>
+  wisMenu(page).locator('a[href*="tab=products"],a[href*="tab=stocks"]');
+const contentTitle = (page) => page.locator("[data-fixture-main] h1").first();
+async function expandWis(page) {
   if (
-    (await toggle.isVisible()) &&
-    (await toggle.getAttribute("aria-expanded")) !== "true"
+    page.viewportSize().width < 1024 &&
+    !(await page.locator(".teacher-sidebar").getAttribute("class")).includes(
+      "is-mobile-open",
+    )
   )
+    await page.getByRole("button", { name: "메뉴 열기", exact: true }).click();
+  const toggle = page
+    .locator(".teacher-sidebar")
+    .getByRole("button", { name: "위스", exact: true });
+  if ((await toggle.getAttribute("aria-expanded")) !== "true")
     await toggle.click();
+}
+async function closeMobile(page) {
+  if (
+    page.viewportSize().width < 1024 &&
+    (await page.locator(".teacher-sidebar").getAttribute("class")).includes(
+      "is-mobile-open",
+    )
+  )
+    await page.getByRole("button", { name: "메뉴 닫기", exact: true }).click();
 }
 async function saveFailure(page, name) {
   await page.screenshot({
@@ -242,7 +275,6 @@ try {
         kind = tab.includes("avatar") ? "avatar" : tab,
         name = `${width}-${collapsed ? "collapsed" : "expanded"}-${kind}`;
       try {
-        await secondary(page).waitFor();
         await contentTitle(page).waitFor();
         if (kind === "stocks")
           await page
@@ -253,26 +285,13 @@ try {
             .locator(".avatar-pricing-categories button")
             .last()
             .waitFor();
-        const toggle = secondary(page).locator(".teacher-settings-menu-toggle");
-        if (width < 768) {
-          assert(await toggle.isVisible());
-          assert.equal(await toggle.getAttribute("aria-expanded"), "false");
-          assert.equal(
-            await secondary(page)
-              .locator(".teacher-settings-sections")
-              .isVisible(),
-            false,
-          );
-        }
-        await expandVillage(page);
         await page.evaluate(() => document.fonts.ready);
         const layout = await page.evaluate(() => {
-          const nav = document.querySelector(".wis-village-navigation"),
-            content = document.querySelector(".wis-village-content"),
-            title = content.querySelector("h1"),
+          const nav = document.querySelector("#teacher-menu-points"),
             main = document.querySelector("[data-fixture-main]"),
-            primary = document.querySelector(".teacher-sidebar"),
-            workspace = document.querySelector(".wis-village-workspace");
+            content = main.querySelector(".ws-page"),
+            title = main.querySelector("h1"),
+            primary = document.querySelector(".teacher-sidebar");
           const rect = (e) => {
             const r = e.getBoundingClientRect();
             return {
@@ -284,25 +303,26 @@ try {
               bottom: r.bottom,
             };
           };
-          const active = nav.querySelector('[aria-current="page"]');
           return {
             nav: rect(nav),
             content: rect(content),
             title: rect(title),
             main: rect(main),
             primary: rect(primary),
-            workspace: rect(workspace),
-            panelTitle: rect(nav.querySelector(".teacher-settings-heading")),
-            footerCount: workspace.querySelectorAll(
-              ":scope > .teacher-sub-workspace-footer",
+            footerCount: document.querySelectorAll("footer").length,
+            secondaryCount: document.querySelectorAll(
+              ".wis-village-navigation,.wis-village-workspace",
             ).length,
-            background: getComputedStyle(nav).backgroundColor,
-            shadow: getComputedStyle(nav).boxShadow,
-            activeRadius: getComputedStyle(active).borderRadius,
-            activeBackground: getComputedStyle(active, "::before")
+            titleBackground: getComputedStyle(title.closest("header") || title)
               .backgroundColor,
+            titleShadow: getComputedStyle(title.closest("header") || title)
+              .boxShadow,
             overflow: document.documentElement.scrollWidth > innerWidth + 1,
-            links: [...nav.querySelectorAll("a")].map((e) => ({
+            links: [
+              ...nav.querySelectorAll(
+                'a[href*="tab=products"],a[href*="tab=stocks"]',
+              ),
+            ].map((e) => ({
               name: e.getAttribute("aria-label") || e.textContent.trim(),
               active: e.getAttribute("aria-current"),
               ...rect(e),
@@ -321,61 +341,38 @@ try {
           };
         });
         layouts.push({ width, collapsed, kind, ...layout });
-        assert.equal(layout.background, "rgb(255, 255, 255)");
-        assert.equal(layout.shadow, "none");
         assert.equal(
-          layout.footerCount,
-          1,
-          "PortalWorkspace owns exactly one footer",
+          layout.secondaryCount,
+          0,
+          "No separate village rail remains",
         );
+        assert.equal(layout.titleBackground, "rgba(0, 0, 0, 0)");
+        assert.equal(layout.titleShadow, "none");
+        assert.equal(layout.footerCount, 1, "Exactly one page footer");
         assert.equal(
           layout.overflow,
           false,
           `${name}: overflow ${JSON.stringify(layout.offenders)}`,
         );
-        assert.equal(layout.nav.width, width < 768 ? width : 180);
-        if (width >= 1024) {
-          assert.equal(layout.primary.width, collapsed ? 88 : 232);
-          assert.equal(layout.primary.x, 0);
-          assert.equal(layout.primary.height, 960);
-          assert.equal(
-            layout.nav.x,
-            layout.primary.right,
-            "Secondary touches primary without page gutter",
-          );
-          assert.equal(
-            layout.nav.y,
-            0,
-            "Secondary reaches screen top above the account header",
-          );
-          assert(
-            layout.nav.bottom >= 960,
-            "White panel fills viewport including the footer",
-          );
-          assert.equal(layout.nav.bottom, layout.workspace.bottom);
-          assert(layout.panelTitle.y <= 32, "Panel title starts at the top");
-          assert(
-            layout.title.y <= layout.main.y + 40,
-            "Content title starts directly in main content",
-          );
-        } else if (width === 768) {
-          assert.equal(layout.nav.x, 0);
-          assert.equal(layout.nav.y, layout.main.y);
-        } else {
-          assert.equal(layout.nav.x, 0);
-          assert(layout.content.y >= layout.nav.bottom - 1);
-        }
-        assert(
-          Number.parseFloat(layout.activeRadius) >= 8,
-          "Active menu uses the existing rounded selection",
+        assert.equal(layout.main.x, width >= 1024 ? (collapsed ? 88 : 232) : 0);
+        assert.equal(layout.main.right, width);
+        assert.equal(
+          layout.content.x,
+          layout.main.x,
+          "Content starts after only the primary sidebar",
         );
-        assert.notEqual(layout.activeBackground, "rgba(0, 0, 0, 0)");
+        assert.equal(
+          layout.content.width,
+          layout.main.width,
+          "Content uses the available main width",
+        );
+        assert(
+          layout.title.x >= layout.main.x &&
+            layout.title.x < layout.main.x + 64,
+        );
         assert.deepEqual(
           layout.links.map((link) => link.name),
           ["위스 상점", "아바타 상점", "위스피(WsPI)"],
-        );
-        assert(
-          layout.links.every((link) => link.height >= 44 && link.width >= 44),
         );
         assert.equal(
           layout.links.filter((link) => link.active === "page").length,
@@ -413,33 +410,20 @@ try {
           await page.evaluate(() => window.villageQa.boardSubscriptions),
           0,
         );
-        await secondary(page).locator("a").first().focus();
+        await expandWis(page);
+        await shopLinks(page).first().focus();
         await page.keyboard.press("Tab");
         assert.equal(
-          await page.evaluate(
-            () =>
-              document.activeElement?.getAttribute("aria-label") ||
-              document.activeElement?.textContent.trim(),
-          ),
+          await page.evaluate(() => document.activeElement?.textContent.trim()),
           "아바타 상점",
         );
         assert.equal(
-          await secondary(page)
-            .locator("a")
+          await shopLinks(page)
             .nth(1)
             .evaluate((e) => getComputedStyle(e).outlineStyle),
           "solid",
         );
-        if (width < 768) {
-          await toggle.click();
-          assert.equal(await toggle.getAttribute("aria-expanded"), "false");
-          assert.equal(
-            await secondary(page)
-              .locator(".teacher-settings-sections")
-              .isVisible(),
-            false,
-          );
-        }
+        await closeMobile(page);
         if (kind === "avatar") {
           const categories = await page.evaluate(() => {
             const category = document.querySelector(
@@ -611,7 +595,7 @@ try {
       }
     }
   checks.push(
-    "36 real route layouts: 320/390/768/1024/1280/1440, expanded primary sidebar and 1024/1280/1440 collapsed primary; 232px/88px primary and 180px full-height white secondary touch without gutters at y=0 on desktop; rounded active links, common mobile collapse, one workspace footer, no page overflow.",
+    "36 real route layouts: 320/390/768/1024/1280/1440 and 1024/1280/1440 collapsed primary; single 232px/88px primary sidebar, no village rail, full-width main content, transparent headings, one footer, keyboard-accessible shop links and no page overflow.",
   );
   checks.push(
     "Nine avatar layouts: all 12 existing category buttons wrap within their container, no horizontal scrolling or clipped items, search region fits and does not overlap, last category and search work locally without extra reads.",
@@ -624,8 +608,8 @@ try {
       ["위스피(WsPI)", "위스피(WsPI)"],
       ["위스 상점", "위스 상점"],
     ]) {
-      await expandVillage(page);
-      await secondary(page)
+      await expandWis(page);
+      await wisMenu(page)
         .getByRole("link", { name: link, exact: true })
         .click();
       await page.getByRole("heading", { name: title, exact: true }).waitFor();
@@ -652,8 +636,9 @@ try {
   {
     const page = await open(390, "products&shop=avatar", "&readonly=1");
     await page.getByRole("alert").waitFor();
+    await expandWis(page);
     assert.equal(
-      await secondary(page)
+      await wisMenu(page)
         .getByRole("link", { name: "아바타 상점", exact: true })
         .count(),
       0,
@@ -663,9 +648,7 @@ try {
   }
   for (const width of [320, 1440]) {
     const page = await open(width, "products", "&student=1");
-    await page
-      .getByRole("navigation", { name: "위스 마을", exact: true })
-      .waitFor();
+    await page.getByRole("navigation", { name: "위스", exact: true }).waitFor();
     assert.equal(await page.locator(".wis-village-navigation").count(), 0);
     assert.equal(
       await page
@@ -683,7 +666,7 @@ try {
     await page.close();
   }
   checks.push(
-    "Real destination changes, ordinary Wis management exclusion, denied avatar access with zero reads, and unchanged two-tab student navigation with WsPI closed.",
+    "Real destination changes, ordinary Wis management without a separate rail, denied avatar access with zero reads, and unchanged two-tab student navigation with WsPI closed.",
   );
   for (const state of ["loading", "error"]) {
     const page = await open(320, "stocks", `&${state}=1`);
@@ -694,7 +677,7 @@ try {
           })
         : page.getByRole("alert")
     ).waitFor();
-    assert.equal(await secondary(page).locator("a").count(), 3);
+    assert.equal(await shopLinks(page).count(), 3);
     const before = await contentTitle(page).boundingBox();
     if (state === "loading")
       await page.evaluate(() => window.stockQa.release());
@@ -710,46 +693,29 @@ try {
   }
   {
     const page = await open(1280, "stocks");
-    await secondary(page).waitFor();
-    const initial = await secondary(page).boundingBox();
+    await contentTitle(page).waitFor();
+    const main = page.locator("[data-fixture-main]");
+    const initial = await main.boundingBox();
     await page.locator(".teacher-sidebar-collapse").click();
-    assert.equal((await secondary(page).boundingBox()).x, 88);
-    assert.equal((await secondary(page).boundingBox()).width, 180);
+    assert.equal((await main.boundingBox()).x, 88);
+    assert.equal((await main.boundingBox()).width, 1280 - 88);
     await page.locator(".teacher-sidebar-collapse").click();
-    assert.equal((await secondary(page).boundingBox()).x, initial.x);
-    await page
-      .getByRole("button", { name: "위스 마을 목차 접기", exact: true })
-      .click();
-    assert.equal((await secondary(page).boundingBox()).width, 56);
-    assert.equal((await secondary(page).boundingBox()).x, initial.x);
+    assert.equal((await main.boundingBox()).x, initial.x);
+    assert.equal(await page.locator(".wis-village-navigation").count(), 0);
     assert.equal(
-      await secondary(page).locator(".wis-village-menu").isVisible(),
-      false,
-    );
-    assert.equal(
-      await page
-        .getByRole("button", { name: "위스 마을 목차 펼치기", exact: true })
-        .getAttribute("aria-expanded"),
-      "false",
-    );
-    await page.screenshot({
-      path: path.join(output, "1280-secondary-collapsed.png"),
-    });
-    await page
-      .getByRole("button", { name: "위스 마을 목차 펼치기", exact: true })
-      .click();
-    assert.equal((await secondary(page).boundingBox()).width, 180);
-    assert.equal(
-      await secondary(page)
+      await wisMenu(page)
         .getByRole("link", { name: "위스피(WsPI)", exact: true })
         .getAttribute("aria-current"),
       "page",
     );
+    await page.screenshot({
+      path: path.join(output, "1280-primary-expanded.png"),
+    });
     assert.equal(await page.evaluate(() => window.stockQa.reads), 1);
     await page.close();
   }
   checks.push(
-    "Loading/error/retry retain content title position; actual primary-sidebar collapse/expand and 180px/56px secondary collapse preserve the selected destination without additional service reads; all scenarios perform zero writes.",
+    "Loading/error/retry retain content title position; actual primary-sidebar collapse/expand preserves the selected destination without additional service reads; all scenarios perform zero writes.",
   );
   for (const [width, height] of [
     [1920, 900],

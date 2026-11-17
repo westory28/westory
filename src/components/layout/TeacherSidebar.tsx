@@ -11,7 +11,11 @@ export interface TeacherSidebarGroup {
   name: string;
   compactName?: string;
   icon: TeacherIconName;
-  children: Array<{ name: string; resolvedUrl: string }>;
+  children: Array<{
+    name: string;
+    resolvedUrl: string;
+    children?: Array<{ name: string; resolvedUrl: string }>;
+  }>;
   directUrl?: string;
   secondary?: boolean;
 }
@@ -79,17 +83,35 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
     ? location.pathname === bottomLink.url.split("?")[0] ||
       location.pathname.startsWith(`${bottomLink.url.split("?")[0]}/`)
     : false;
-  const allChildren = groups.flatMap((group) => group.children);
+  const getLeaves = (group: TeacherSidebarGroup) =>
+    group.children.flatMap((child) =>
+      child.children?.length ? child.children : [child],
+    );
+  const allChildren = groups.flatMap(getLeaves);
   const activeMenuGroup = groups.find((group) =>
-    group.children.some((child) =>
+    getLeaves(group).some((child) =>
       isChildActive(child.resolvedUrl, allChildren),
     ),
   );
   const activeGroup = activeMenuGroup?.id;
   const activeAccordionGroup =
     activeMenuGroup && !activeMenuGroup.directUrl ? activeMenuGroup.id : null;
+  const activeNestedIndex = activeMenuGroup?.children.findIndex((child) =>
+    child.children?.some((leaf) =>
+      isChildActive(leaf.resolvedUrl, allChildren),
+    ),
+  );
+  const activeNestedGroup =
+    activeAccordionGroup &&
+    activeNestedIndex !== undefined &&
+    activeNestedIndex >= 0
+      ? `${portal}-menu-${activeAccordionGroup}-child-${activeNestedIndex}`
+      : null;
   const [openGroup, setOpenGroup] = useState<string | null>(
     activeAccordionGroup,
+  );
+  const [openNestedGroup, setOpenNestedGroup] = useState<string | null>(
+    activeNestedGroup,
   );
   const [animatingGroups, setAnimatingGroups] = useState<string[]>([]);
   const menuAnimationTimer = useRef<number | undefined>(undefined);
@@ -100,19 +122,27 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
     const focusedChild = panelRef.current?.contains(document.activeElement)
       ? document.activeElement?.closest(".teacher-sidebar-submenu")
       : null;
-    if (
+    const focusedNested = focusedChild
+      ? document.activeElement?.closest(".teacher-sidebar-nested-menu")
+      : null;
+    const foldedMenuId =
       focusedChild?.id &&
       focusedChild.id !== `${portal}-menu-${activeAccordionGroup}`
-    ) {
+        ? focusedChild.id
+        : focusedNested?.id && focusedNested.id !== activeNestedGroup
+          ? focusedNested.id
+          : null;
+    if (foldedMenuId) {
       panelRef.current
         ?.querySelector<HTMLButtonElement>(
-          `button[aria-controls="${focusedChild.id}"]`,
+          `button[aria-controls="${foldedMenuId}"]`,
         )
         ?.focus();
     }
     // Navigation reveals the selected group without moving focus from a child
     // that remains visible. A manual fold survives ordinary page rerenders.
     setOpenGroup(activeAccordionGroup);
+    setOpenNestedGroup(activeNestedGroup);
     setAnimatingGroups([]);
     window.clearTimeout(menuAnimationTimer.current);
   }, [
@@ -120,6 +150,7 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
     location.search,
     activeGroup,
     activeAccordionGroup,
+    activeNestedGroup,
     portal,
   ]);
 
@@ -340,6 +371,66 @@ const TeacherSidebar: React.FC<TeacherSidebarProps> = ({
                           hidden={!expanded && !animating}
                         >
                           {group.children.map((child, childIndex) => {
+                            if (child.children?.length) {
+                              const nestedId = `${groupId}-child-${childIndex}`;
+                              const nestedExpanded =
+                                expanded && openNestedGroup === nestedId;
+                              const selected = child.children.some((leaf) =>
+                                isChildActive(leaf.resolvedUrl, allChildren),
+                              );
+                              return (
+                                <div key={`${child.resolvedUrl}-${childIndex}`}>
+                                  <button
+                                    type="button"
+                                    className={`teacher-sidebar-child teacher-sidebar-nested-toggle ${selected ? "is-active" : ""}`}
+                                    aria-label={child.name}
+                                    aria-expanded={nestedExpanded}
+                                    aria-controls={nestedId}
+                                    tabIndex={expanded ? undefined : -1}
+                                    onClick={() =>
+                                      setOpenNestedGroup((previous) =>
+                                        previous === nestedId ? null : nestedId,
+                                      )
+                                    }
+                                  >
+                                    <span>{child.name}</span>
+                                    <TeacherNavigationIcon
+                                      name="chevron"
+                                      className="teacher-sidebar-chevron"
+                                    />
+                                  </button>
+                                  <div
+                                    id={nestedId}
+                                    className="teacher-sidebar-nested-menu"
+                                    hidden={!nestedExpanded}
+                                    aria-hidden={!nestedExpanded}
+                                  >
+                                    {child.children.map((leaf, leafIndex) => {
+                                      const leafSelected = isChildActive(
+                                        leaf.resolvedUrl,
+                                        allChildren,
+                                      );
+                                      return (
+                                        <Link
+                                          key={`${leaf.resolvedUrl}-${leafIndex}`}
+                                          to={leaf.resolvedUrl}
+                                          className={`teacher-sidebar-child ${leafSelected ? "is-active" : ""}`}
+                                          aria-current={
+                                            leafSelected ? "page" : undefined
+                                          }
+                                          tabIndex={
+                                            nestedExpanded ? undefined : -1
+                                          }
+                                          onClick={onCloseMobile}
+                                        >
+                                          {leaf.name}
+                                        </Link>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            }
                             const selected = isChildActive(
                               child.resolvedUrl,
                               allChildren,

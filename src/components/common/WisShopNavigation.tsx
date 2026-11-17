@@ -137,7 +137,7 @@ export default function WisShopNavigation({
   return items ? (
     links
   ) : (
-    <nav className="ws-page-tabs mb-4" aria-label="위스 마을">
+    <nav className="ws-page-tabs mb-4" aria-label="위스">
       {links}
     </nav>
   );
