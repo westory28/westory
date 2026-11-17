@@ -5,7 +5,7 @@ const { getFirestore } = require('firebase-admin/firestore');
 const { createWisStockTradingExports } = require('../wisStockTradingExports');
 const app = initializeApp({ projectId: 'demo-westory-stock-exports' });
 const exported = createWisStockTradingExports({ db: getFirestore(app) });
-const calls = ['getStudentWisStockState', 'getStudentWisStockHistory', 'transferStudentWisStock', 'placeStudentWisStockOrder', 'cancelStudentWisStockOrder'];
+const calls = ['getStudentWisStockState', 'getStudentWisStockHistory', 'transferStudentWisStock', 'placeStudentWisStockOrder', 'cancelStudentWisStockOrder', 'getWisStockInvestmentHistory'];
 const triggers = { onWisStockOrderCreated: 'years/{year}/semesters/{semester}/wis_stock_orders/{orderId}',
   onWisStockMarketTradingWrite: 'years/{year}/semesters/{semester}/wis_stock_markets/current',
   onWisStockEnrollmentSlotWritten: 'semester_enrollment_slots/{slotId}' };
@@ -25,4 +25,4 @@ assert.equal(task.taskQueueTrigger.rateLimits.maxConcurrentDispatches, 20);
 assert.equal(exported.recoverWisStockOrders.__endpoint.scheduleTrigger.schedule, 'every 5 minutes');
 const index = fs.readFileSync(require.resolve('../index'), 'utf8');
 assert.ok(index.includes("Object.assign(exports, require('./wisStockTradingExports').createWisStockTradingExports({ db }));"));
-deleteApp(app).then(() => console.log('PASS actual ten trading exports, private service identity, task retry, trigger paths and root entrypoint; network 0'));
+deleteApp(app).then(() => console.log('PASS actual trading/history exports, private service identity, task retry, trigger paths and root entrypoint; network 0'));

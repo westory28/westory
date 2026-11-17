@@ -11,6 +11,8 @@ function createWisStockTradingExports({ db,
   const result = {};
   for (const name of ['getStudentWisStockState', 'getStudentWisStockHistory', 'transferStudentWisStock',
     'placeStudentWisStockOrder', 'cancelStudentWisStockOrder']) result[name] = onCall(runtime, handlers[name]);
+  result.getWisStockInvestmentHistory = onCall(runtime,
+    require('./wisStockInvestmentHistory').createWisStockInvestmentHistory({ db }));
   result.settleWisStockOrderTask = onTaskDispatched({ ...runtime, maxInstances: 5,
     retryConfig: { maxAttempts: 10, minBackoffSeconds: 5, maxBackoffSeconds: 60, maxDoublings: 4 },
     rateLimits: { maxConcurrentDispatches: 20, maxDispatchesPerSecond: 20 },

@@ -13,6 +13,8 @@ process.env.WESTORY_APP_CHECK_MODE = 'DISABLED';
 const { initializeApp, deleteApp } = require('firebase-admin/app');
 const { getFirestore, Timestamp } = require('firebase-admin/firestore');
 const { createWisStockTrading } = require('../wisStockTrading');
+const { createWisStockInvestmentHistory } = require(process.env.WIS_STOCK_HISTORY_SOURCE_DIR
+  ? path.join(process.env.WIS_STOCK_HISTORY_SOURCE_DIR, 'wisStockInvestmentHistory.js') : '../wisStockInvestmentHistory');
 const { accountIdFor } = require('../studentWisWallet');
 const { blankMarket, normalizeSettings, createWisStockHandlers } = require('../wisStocks');
 const { reconstructWisStockIndex, validWisStockIndex } = require('../wisStockIndex');
@@ -129,6 +131,54 @@ async function test(name, fn, count = 2, supply = 1000) {
   console.log(`PASS ${name}`);
 }
 (async () => { try {
+  await test('teacher investment history reconstructs only selected filled ledger with no writes and current authority', async () => {
+    await transfer('student0', 'DEPOSIT', 5000);
+    await transfer('student1', 'DEPOSIT', 5000);
+    const first = await place('student0', 'BUY', 2), unrelated = await place('student1', 'BUY', 1);
+    clock += 60001; await settle(first.order.id); await settle(unrelated.order.id);
+    const teacher = 'historyTeacher', key = `student_${hash('student0').slice(0, 24)}`;
+    await db.doc(`users/${teacher}`).set({ role: 'teacher', registrationApprovalStatus: 'APPROVED' });
+    await db.doc(sessionPath(teacher)).set({ ...(await get(sessionPath('student0'))), uid: teacher });
+    const historyApi = createWisStockInvestmentHistory({ db: observedDb, now: () => clock });
+    const read = (uid = teacher, extra = {}) => historyApi(request(uid, { studentKey: key, grade: '', classNumber: '', ...extra }));
+    const historyStart = commits.length;
+    const baseline = await read();
+    assert.equal(baseline.studentKey, key); assert.equal(baseline.sourceRevision, 3);
+    assert.deepEqual(baseline.points.at(-1), { atMs: clock, holdingValue: 200, holdingCostBasis: 202 });
+    assert.equal(commits.at(-1).finalReads, 10); assert.equal(commits.at(-1).writes.length, 0);
+    const beforeRetry = commits.length; assert.deepEqual(await read(), baseline);
+    assert.equal(commits.length, beforeRetry + 1); assert.equal(commits.at(-1).writes.length, 0);
+    assert.deepEqual((await read(teacher, { grade: '3', classNumber: '1' })).points, baseline.points);
+    await denied(read(teacher, { grade: '3', classNumber: '2' }), 'WIS_STOCK_INVESTMENT_STUDENT_UNAVAILABLE');
+    await denied(read('student0'), 'WIS_STOCK_TEACHER_REQUIRED');
+    await db.doc(`users/${teacher}`).update({ role: 'staff', teacherPortalEnabled: true, staffPermissions: ['point_read'] });
+    assert.deepEqual((await read()).points, baseline.points);
+    await db.doc(`users/${teacher}`).update({ staffPermissions: [] });
+    await denied(read(), 'WIS_STOCK_TEACHER_REQUIRED');
+    await db.doc(`users/${teacher}`).update({ role: 'teacher' });
+    await db.doc(`users/${teacher}`).update({ registrationApprovalStatus: 'PENDING' });
+    await denied(read(), 'STUDENT_REGISTRATION_APPROVAL_REQUIRED');
+    await db.doc(`users/${teacher}`).update({ registrationApprovalStatus: 'APPROVED' });
+    await denied(read(teacher, { year: '2025' }), 'WIS_STOCK_SCOPE_CHANGED');
+    await db.doc(`semester_manifests/${scope.semesterId}`).update({ readOnly: true });
+    await denied(read(), 'WIS_STOCK_SCOPE_CHANGED');
+    await db.doc(`semester_manifests/${scope.semesterId}`).update({ readOnly: false });
+    const account = await get(acctPath('student0'));
+    await db.doc(acctPath('student0')).update({ [`positions.${stockId}.costBasis`]: 203 });
+    await denied(read(), 'WIS_STOCK_INVESTMENT_HISTORY_INVALID');
+    await db.doc(acctPath('student0')).set(account);
+    await db.doc(sessionPath(teacher)).update({ status: 'closed' });
+    await assert.rejects(read());
+    assert.equal((await get(acctPath('student0'))).positions[stockId].costBasis, 202);
+    assert.equal((await db.collection(`${base}/wis_stock_history`).where('accountId', '==', account.accountId)
+      .where('kind', '==', 'ORDER_FILLED').get()).size, 1);
+    const historyTransactions = commits.slice(historyStart);
+    assert.ok(historyTransactions.every(transaction => transaction.writes.length === 0));
+    console.log(JSON.stringify({ investmentHistorySource: process.env.WIS_STOCK_HISTORY_SOURCE_DIR || 'workspace',
+      investmentHistorySuccesses: historyTransactions.length,
+      investmentHistoryTransactionReadBudgets: [...new Set(historyTransactions.map(transaction => transaction.finalReads))],
+      investmentHistoryWrites: 0, existingSessionAndMaintenanceGuardReadsPerSuccess: 3 }));
+  });
   await test('read-only absence and pre-investment market ticks create no account or fake board', async () => {
     await db.doc('site_settings/student_maintenance').delete();
     const result = await state('student0'); assert.equal(result.accountPath, acctPath('student0')); assert.equal(result.account.stockCash, 0);
