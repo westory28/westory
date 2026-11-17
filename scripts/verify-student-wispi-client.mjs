@@ -63,11 +63,94 @@ await check('concurrent same command is coalesced; successful transfers notify o
   const a=api.transferStudentWisStock(scope,'DEPOSIT',500),b=api.transferStudentWisStock(scope,'DEPOSIT',500);
   await until(()=>finish);assert.equal(qa.calls.length,1);finish({changed:true,state:state(2)});await Promise.all([a,b]);assert.equal(qa.pointsEvents,1);
 });
-await check('account and auth-time changes reject late responses and stop commands during reauthentication',async()=>{
+await check('identical commands share the reauthentication preparation before dispatch',async()=>{
+  const {qa,api}=await setup();let finishPreparation,preparations=0;
+  qa.reauth=()=>{preparations++;return new Promise(resolve=>{finishPreparation=resolve})};
+  const a=api.transferStudentWisStock(scope,'DEPOSIT',500),b=api.transferStudentWisStock(scope,'DEPOSIT',500);
+  await until(()=>finishPreparation);assert.equal(preparations,1);assert.equal(qa.calls.length,0);
+  qa.owner.epoch++;finishPreparation();await Promise.all([a,b]);assert.equal(qa.calls.length,1);
+});
+await check('identical commands in a renewed epoch cannot overtake receipt migration',async()=>{
+  for(const side of ['BUY','SELL']){
+    const {qa,api,storage}=await setup();let failures=1;
+    qa.handler=async()=>{if(failures-->0)throw Error('lost response');return {changed:false,duplicate:true,state:state(2)}};
+    const input={stockId:'stock-a',side,quantity:2,quote:{price:100,atMs:10000,marketRevision:1}};
+    await assert.rejects(api.placeStudentWisStockOrder(scope,input));assert.equal(storage.size,1);
+    const descriptor=Object.getOwnPropertyDescriptor(globalThis,'crypto');let releaseMigration;
+    Object.defineProperty(globalThis,'crypto',{configurable:true,value:{randomUUID:()=>webcrypto.randomUUID(),subtle:{digest:async(algorithm,bytes)=>{
+      if(new TextDecoder().decode(bytes).includes('student-a:100:'))await new Promise(resolve=>{releaseMigration=resolve});
+      return webcrypto.subtle.digest(algorithm,bytes);
+    }}}});
+    try{
+      let preparations=0;qa.reauth=async()=>{preparations++;qa.owner.epoch++};
+      const renewal=api.placeStudentWisStockOrder(scope,input);await until(()=>releaseMigration);
+      const simultaneous=api.placeStudentWisStockOrder(scope,{...input,quote:{price:200,atMs:20000,marketRevision:2}});
+      await new Promise(resolve=>setTimeout(resolve,10));assert.equal(preparations,1);assert.equal(qa.calls.length,1);
+      releaseMigration();await Promise.all([renewal,simultaneous]);
+      assert.equal(qa.calls.length,2);assert.deepEqual(qa.calls[1].data,qa.calls[0].data);assert.equal(storage.size,0);
+    }finally{if(descriptor)Object.defineProperty(globalThis,'crypto',descriptor);else delete globalThis.crypto;}
+  }
+});
+await check('same-owner renewal during an active order rejects its response, then retries its original receipt once',async()=>{
+  for(const side of ['BUY','SELL']){
+    const {qa,api,storage}=await setup();let finish;
+    qa.handler=()=>new Promise(resolve=>{finish=resolve});
+    const input={stockId:'stock-a',side,quantity:2,quote:{price:100,atMs:10000,marketRevision:1}};
+    const first=api.placeStudentWisStockOrder(scope,input);await until(()=>finish);
+    qa.owner.epoch++;
+    const simultaneous=api.placeStudentWisStockOrder(scope,input);
+    const rejected=[assert.rejects(first,/로그인 상태/),assert.rejects(simultaneous,/로그인 상태/)];
+    finish({changed:true,state:state(2)});await Promise.all(rejected);assert.equal(qa.calls.length,1);assert.equal(storage.size,1);
+    qa.handler=async()=>({changed:false,duplicate:true,state:state(2)});
+    await api.placeStudentWisStockOrder(scope,{...input,quote:{price:200,atMs:20000,marketRevision:2}});
+    assert.equal(qa.calls.length,2);assert.deepEqual(qa.calls[1].data,qa.calls[0].data);assert.equal(storage.size,0);
+  }
+});
+await check('account and auth-time changes reject late responses',async()=>{
   for(const change of [q=>{q.owner=owner('student-b')},q=>{q.owner.epoch++}]){
     const {qa,api}=await setup();let finish;qa.handler=()=>new Promise(r=>{finish=r});
     const pending=api.transferStudentWisStock(scope,'DEPOSIT',500);await until(()=>finish);change(qa);finish({changed:true,state:state(2)});await assert.rejects(pending,/로그인 상태/);
-    qa.reauth=async()=>change(qa);const before=qa.calls.length;await assert.rejects(api.transferStudentWisStock(scope,'DEPOSIT',500));assert.equal(qa.calls.length,before);
+  }
+});
+await check('same-student reauthentication allows buy, sell, cancel and transfer once; account switches still stop dispatch',async()=>{
+  for(const action of ['BUY','SELL','CANCEL','DEPOSIT','WITHDRAW']){
+    const {qa,api}=await setup();qa.reauth=async()=>{qa.owner.epoch++};
+    const execute=()=>['BUY','SELL'].includes(action)
+      ?api.placeStudentWisStockOrder(scope,{stockId:'stock-a',side:action,quantity:2,quote:{price:100,atMs:10000,marketRevision:1}})
+      :action==='CANCEL'?api.cancelStudentWisStockOrder(scope,'order-a'):api.transferStudentWisStock(scope,action,500);
+    await execute();assert.equal(qa.calls.length,1);
+    qa.reauth=async()=>{qa.owner=owner('student-b')};
+    await assert.rejects(execute(),/로그인 상태/);assert.equal(qa.calls.length,1);
+  }
+});
+await check('uncertain orders and transfers retain their receipt across same-student reauthentication and another retry',async()=>{
+  for(const action of ['BUY','SELL','DEPOSIT','WITHDRAW']){
+    const {qa,api,storage}=await setup();let failures=2;
+    qa.handler=async()=>{if(failures-->0)throw Object.assign(Error('lost response'),{code:'functions/unavailable'});return {changed:false,duplicate:true,state:state(2)}};
+    const execute=()=>['BUY','SELL'].includes(action)
+      ?api.placeStudentWisStockOrder(scope,{stockId:'stock-a',side:action,quantity:2,quote:{price:100+qa.calls.length,atMs:10000+qa.calls.length,marketRevision:1+qa.calls.length}})
+      :api.transferStudentWisStock(scope,action,500);
+    await assert.rejects(execute());assert.equal(storage.size,1);
+    qa.reauth=async()=>{qa.owner.epoch++};await assert.rejects(execute());assert.equal(storage.size,1);
+    qa.reauth=async()=>{};await execute();assert.equal(storage.size,0);
+    assert.deepEqual(qa.calls[1].data,qa.calls[0].data);assert.deepEqual(qa.calls[2].data,qa.calls[0].data);
+  }
+});
+await check('a new unrelated login session does not inherit an old pending command',async()=>{
+  const {qa,api}=await setup();let failure=true;
+  qa.handler=async()=>{if(failure){failure=false;throw Error('lost response')}return {changed:true,state:state(2)}};
+  await assert.rejects(api.transferStudentWisStock(scope,'DEPOSIT',500));
+  qa.owner=owner('student-a');qa.owner.epoch++;await api.transferStudentWisStock(scope,'DEPOSIT',500);
+  assert.notEqual(qa.calls[0].data.requestId,qa.calls[1].data.requestId);
+});
+await check('account funding, pending-order limit, missing-stock and changed firm quote rejection allow a fresh quote on retry',async()=>{
+  for(const reason of ['WIS_STOCK_ACCOUNT_REQUIRED','WIS_STOCK_PENDING_LIMIT','WIS_STOCK_NOT_FOUND','WIS_STOCK_FIRM_QUOTE_CHANGED']){
+    const {qa,api,storage}=await setup();let failure=true;
+    qa.handler=async()=>{if(failure){failure=false;throw Object.assign(Error(reason),{details:{reason}})}return {changed:true,state:state(2)}};
+    const first={stockId:'stock-a',side:'BUY',quantity:2,quote:{price:100,atMs:10000,marketRevision:1}};
+    await assert.rejects(api.placeStudentWisStockOrder(scope,first));assert.equal(storage.size,0);
+    await api.placeStudentWisStockOrder(scope,{...first,quote:{price:200,atMs:20000,marketRevision:2}});
+    assert.notEqual(qa.calls[0].data.requestId,qa.calls[1].data.requestId);assert.equal(qa.calls[1].data.quote.price,200);
   }
 });
 await check('state subscribers share one request/listener and reject local snapshots; last detach stops reads',async()=>{

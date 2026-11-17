@@ -32,7 +32,11 @@ type StateEntry = {
 };
 const entries = new Map<string, StateEntry>();
 const reads = new Map<string, Promise<StudentWisStockState>>();
-const commands = new Map<string, Promise<StudentWisStockMutation>>();
+type CommandEntry = {
+  flight?: Promise<StudentWisStockMutation>;
+  pendingKey?: string;
+};
+const commands = new WeakMap<User, Map<string, CommandEntry>>();
 type PendingCommand = { requestId: string; fields: Record<string, unknown> };
 const requestIds = new Map<string, PendingCommand>();
 const changed = () =>
@@ -394,38 +398,99 @@ export function watchStudentWisStockState(
     detach();
   };
 }
+const commandSignature = (name: string, value: Record<string, unknown>) =>
+  name === "placeStudentWisStockOrder"
+    ? { stockId: value.stockId, side: value.side, quantity: value.quantity }
+    : value;
 async function mutate(
   scope: WisStockScope,
   name: string,
   fields: Record<string, unknown>,
   withRequestId = true,
 ) {
+  const owner = auth.currentUser;
+  if (!owner) throw changed();
+  const flightKey = JSON.stringify([
+    scope.year,
+    scope.semester,
+    name,
+    commandSignature(name, fields),
+  ]);
+  const ownerCommands = commands.get(owner) || new Map<string, CommandEntry>();
+  commands.set(owner, ownerCommands);
+  const command = ownerCommands.get(flightKey) || {};
+  if (command.flight) return command.flight;
+  ownerCommands.set(flightKey, command);
+  // Acquire before the first await: a renewed session must not overtake an
+  // identical order while its step-up or receipt migration is still running.
+  const task = prepareMutation(
+    scope,
+    name,
+    fields,
+    withRequestId,
+    owner,
+    command,
+  ).finally(() => {
+    if (command.flight !== task) return;
+    command.flight = undefined;
+    if (!command.pendingKey) ownerCommands.delete(flightKey);
+  });
+  command.flight = task;
+  return task;
+}
+async function prepareMutation(
+  scope: WisStockScope,
+  name: string,
+  fields: Record<string, unknown>,
+  withRequestId: boolean,
+  owner: User,
+  command: CommandEntry,
+) {
+  const original = await boundary(scope);
+  if (original.owner !== owner) throw changed();
+  await ensureSensitiveOperation();
   const b = await boundary(scope);
+  // A successful step-up renews auth_time. Capture that authorized session,
+  // while still rejecting a different account or later session changes.
+  if (b.owner !== original.owner) throw changed();
   // An uncertain order retry must keep its original confirmed quote as well as its receipt id.
   const signature = (value: Record<string, unknown>) =>
-    name === "placeStudentWisStockOrder"
-      ? { stockId: value.stockId, side: value.side, quantity: value.quantity }
-      : value;
-  const bytes = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(JSON.stringify([b.key, name, signature(fields)])),
-  );
-  const key =
-    "westory:student-wispi:" +
-    Array.from(new Uint8Array(bytes), (v) =>
-      v.toString(16).padStart(2, "0"),
-    ).join("");
-  const existing = commands.get(key);
-  if (existing) return existing;
+    commandSignature(name, value);
+  const commandKey = async (ownerKey: string) => {
+    const bytes = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(
+        JSON.stringify([ownerKey, name, signature(fields)]),
+      ),
+    );
+    return (
+      "westory:student-wispi:" +
+      Array.from(new Uint8Array(bytes), (v) =>
+        v.toString(16).padStart(2, "0"),
+      ).join("")
+    );
+  };
+  const key = await commandKey(b.key);
+  const previousKey =
+    original.key === b.key ? key : await commandKey(original.key);
   const task = (async () => {
-    await ensureSensitiveOperation();
     await check(b);
-    let pending = requestIds.get(key);
-    try {
-      const saved = sessionStorage.getItem(key);
-      if (!pending && saved && saved.length < 10_000)
-        pending = JSON.parse(saved) as PendingCommand;
-    } catch {}
+    const readPending = (pendingKey: string) => {
+      let value = requestIds.get(pendingKey);
+      try {
+        const saved = sessionStorage.getItem(pendingKey);
+        if (!value && saved && saved.length < 10_000)
+          value = JSON.parse(saved) as PendingCommand;
+      } catch {}
+      return value;
+    };
+    let pending = readPending(key);
+    const rememberedKey = command.pendingKey;
+    if (!pending && rememberedKey && rememberedKey !== key)
+      pending = readPending(rememberedKey);
+    // A receipt belongs to this logical command, including a response lost
+    // during same-user renewal. New SDK users retain separate session keys.
+    if (!pending && previousKey !== key) pending = readPending(previousKey);
     if (
       !pending ||
       !/^[A-Za-z0-9_-]{16,80}$/.test(pending.requestId) ||
@@ -435,10 +500,18 @@ async function mutate(
     )
       pending = { requestId: crypto.randomUUID(), fields };
     if (withRequestId) {
+      command.pendingKey = key;
       requestIds.set(key, pending);
       try {
         sessionStorage.setItem(key, JSON.stringify(pending));
       } catch {}
+      for (const staleKey of new Set([previousKey, rememberedKey])) {
+        if (!staleKey || staleKey === key) continue;
+        requestIds.delete(staleKey);
+        try {
+          sessionStorage.removeItem(staleKey);
+        } catch {}
+      }
     }
     const entry = entries.get(b.key);
     if (entry) entry.commands++;
@@ -449,6 +522,7 @@ async function mutate(
       });
       const result = { ...raw, state: accept(raw.state, b) };
       entries.get(b.key)?.apply(result.state);
+      command.pendingKey = undefined;
       requestIds.delete(key);
       try {
         sessionStorage.removeItem(key);
@@ -463,11 +537,15 @@ async function mutate(
       if (
         [
           "WIS_STOCK_QUOTE_CHANGED",
+          "WIS_STOCK_FIRM_QUOTE_CHANGED",
           "WIS_STOCK_QUOTE_EXPIRED",
           "WIS_STOCK_INPUT_INVALID",
           "WIS_STOCK_TRADE_INPUT_INVALID",
           "WIS_STOCK_INSUFFICIENT_CASH",
           "WIS_STOCK_INSUFFICIENT_HOLDING",
+          "WIS_STOCK_ACCOUNT_REQUIRED",
+          "WIS_STOCK_PENDING_LIMIT",
+          "WIS_STOCK_NOT_FOUND",
           "WIS_STOCK_ORDER_LIMIT",
           "WIS_STOCK_DAILY_LIMIT",
           "WIS_STOCK_HOLDING_LIMIT",
@@ -483,6 +561,7 @@ async function mutate(
           "WIS_STOCK_UNSAFE_TOTAL",
         ].includes(reason)
       ) {
+        command.pendingKey = undefined;
         requestIds.delete(key);
         try {
           sessionStorage.removeItem(key);
@@ -499,10 +578,7 @@ async function mutate(
           entry.refresh();
       }
     }
-  })().finally(() => {
-    if (commands.get(key) === task) commands.delete(key);
-  });
-  commands.set(key, task);
+  })();
   return task;
 }
 export const transferStudentWisStock = (
