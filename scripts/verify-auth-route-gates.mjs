@@ -398,6 +398,7 @@ for (const rolePreference of [null, "teacher"]) {
 
 for (const [pathname, userData] of [
   ["/student/dashboard", profile("student")],
+  ["/student/gongsinmoongo", profile("student")],
   ["/teacher/dashboard", profile("teacher")],
   [
     "/teacher/lesson",
@@ -433,6 +434,53 @@ for (const [pathname, userData] of [
   assertBlocked(
     h.flush(),
     "logout removes all previously allowed portal nodes",
+  );
+}
+
+// Launcher-only Q&A is outside the sidebar; its live publication gate and
+// callable still enforce access after the ordinary authenticated layout mount.
+for (const search of ["", "?source=general", "?source=lesson&unitId=unit-a"]) {
+  assert.equal(
+    studentMenuAccess.getStudentRouteAccess(
+      { pathname: "/student/gongsinmoongo", search },
+      { showLesson: false, showQuiz: false, showScore: false },
+      { student: [], teacher: [] },
+    ).allowed,
+    true,
+    "Q&A entry does not require a sidebar entry or unrelated lesson/quiz switch",
+  );
+}
+for (const pathname of [
+  "/student/gongsinmoongo-private",
+  "/student/gongsinmoongo/admin",
+]) {
+  assert.equal(
+    studentMenuAccess.getStudentRouteAccess(
+      { pathname },
+      { showLesson: true },
+      { student: [], teacher: [] },
+    ).allowed,
+    false,
+    "The exact Q&A exception must not admit sibling or child paths",
+  );
+  const h = layoutHarness({ pathname });
+  h.render();
+  assertBlocked(h.flush(), "unknown Q&A sibling remains blocked by layout");
+  assert.equal(h.events.navigation[0][0], "/student/dashboard");
+}
+for (const auth of [
+  { authPhase: "signed-out", currentUser: null, userData: null },
+  {
+    authPhase: "registration-pending",
+    currentUser: null,
+    onboardingUser: fakeUser,
+  },
+]) {
+  const h = layoutHarness({ pathname: "/student/gongsinmoongo", auth });
+  h.render();
+  assertBlocked(
+    h.flush(),
+    "Q&A shortcut does not bypass authentication or registration",
   );
 }
 

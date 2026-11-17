@@ -31,11 +31,19 @@ import Student from ${imp("src/components/common/StudentHistoryDictionaryControl
 import ${imp("src/assets/index.css")};
 import ${imp("src/components/common/historyDictionary.css")};
 const teacher=location.pathname.startsWith("/teacher");
+if(!teacher)document.body.classList.add('student-fixture');
 createRoot(document.getElementById("root")).render(<BrowserRouter>{teacher?<Teacher/>:<Student/>}</BrowserRouter>);
 `;
 const services = `
-const auth={currentUser:{uid:"synthetic",email:"fixture@example.invalid",getIdTokenResult:async()=>({claims:{}})},userData:{role:"admin"},authGeneration:1};
-export const useAuth=()=>auth;
+const params=new URLSearchParams(location.search);
+export const qa=window.launcherQa={reads:0,stops:0,recovered:false};
+const context={currentUser:{uid:"synthetic",email:"fixture@example.invalid",getIdTokenResult:async()=>({claims:{}})},userData:{role:"admin"},authGeneration:1,config:{year:'2026',semester:'2'}};
+export const auth={currentUser:context.currentUser},db={};
+export const useAuth=()=>context;
+export const doc=(_db,...segments)=>({path:segments.join('/')});
+export const onSnapshot=(ref,next,error)=>{qa.reads++;queueMicrotask(()=>params.has('gate-error')&&!qa.recovered?error(Error('Synthetic publication error')):next({data:()=>({enabled:params.has('open')||qa.recovered,revision:1})}));return()=>{qa.stops++}};
+export const callWithApplicationSession=async()=>{throw Error('Launcher must not query personal data')};
+export const useStudentLearningShortcuts=()=>({items:[],loading:false,loaded:true,error:'',reload:async()=>{},save:async()=>{}});
 export const isAdminUser=()=>true;
 const toast={showToast(){}};export const useAppToast=()=>toast;
 export const prepareTeacherPatchNoteSession=async()=>{};
@@ -52,11 +60,12 @@ const bundle = await build({
     sourcefile: "floating-fixture.tsx",
   },
   bundle: true,
+  metafile: true,
   write: false,
   outdir: "out",
   format: "esm",
   platform: "browser",
-  loader: { ".svg": "dataurl" },
+  loader: { ".svg": "dataurl", ".webp": "dataurl" },
   plugins: [
     {
       name: "synthetic-boundaries",
@@ -64,25 +73,33 @@ const bundle = await build({
         builder.onResolve(
           {
             filter:
-              /AuthContext$|\/permissions$|\/teacherPatchNoteCommands$|\/teacherPatchNotes$|\/AppToastProvider$|\/StudentHistoryDictionaryWorkspace$/,
+              /^firebase\/firestore$|(?:^|\/)(?:firebase|applicationSession|AuthContext|permissions|teacherPatchNoteCommands|teacherPatchNotes|AppToastProvider|StudentHistoryDictionaryWorkspace|studentLearningShortcuts)$/,
           },
           () => ({ path: "services", namespace: "fixture" }),
         );
         builder.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({
           contents: services,
           loader: "jsx",
+          resolveDir: root,
         }));
       },
     },
   ],
 });
+assert(
+  !Object.keys(bundle.metafile.inputs).some((file) =>
+    /node_modules[\\/](?:firebase|@firebase)[\\/]/.test(file),
+  ),
+  "Fixture must not bundle live Firebase",
+);
 const js = bundle.outputFiles.find((file) => file.path.endsWith(".js")).text;
 const css = bundle.outputFiles.find((file) => file.path.endsWith(".css")).text;
 const tailwind = await fs.readFile(
-  path.join(os.tmpdir(), "westory-tailwind-fixture.js"),
+  process.env.PORTAL_DESIGN_TAILWIND_PATH ||
+    path.join(os.tmpdir(), "westory-qa-tailwind.js"),
   "utf8",
 );
-const html = `<!doctype html><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><link rel="stylesheet" href="/fixture.css"><style>body{margin:0;min-height:2000px}#action{position:fixed;right:16px;bottom:16px;width:56px;height:56px;background:orange}#action.off{right:160px}#overlay{position:fixed;inset:0;background:#fff;z-index:50}#overlay[hidden]{display:none}#save{position:absolute;right:16px;bottom:16px;width:56px;height:56px}</style><button id="action" class="off">동작</button><div id="root"></div><div id="overlay" role="dialog" aria-modal="true" hidden><button id="save">저장</button></div><script>window.clicks=0;document.getElementById('action').onclick=()=>window.clicks++;document.getElementById('save').onclick=()=>window.clicks++</script><script type="module" src="/fixture.js"></script>`;
+const html = `<!doctype html><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><link rel="stylesheet" href="/fixture.css"><style>body{margin:0;min-height:2600px}.student-fixture #root{transform:translateZ(0);min-height:1800px}#action{position:fixed;z-index:1;right:16px;bottom:16px;width:56px;height:56px;background:orange}#action.off{right:160px}#overlay{position:fixed;inset:0;background:#fff;z-index:50}#overlay[hidden]{display:none}#save{position:absolute;right:16px;bottom:16px;width:56px;height:56px}</style><button id="action" class="off">동작</button><div id="root"></div><div id="overlay" role="dialog" aria-modal="true" hidden><button id="save">저장</button></div><script>window.clicks=0;document.getElementById('action').onclick=()=>window.clicks++;document.getElementById('save').onclick=()=>window.clicks++</script><script type="module" src="/fixture.js"></script>`;
 const server = http.createServer((req, res) => {
   const asset =
     req.url === "/fixture.js"
@@ -108,7 +125,8 @@ try {
       const errors = [];
       page.on("pageerror", (error) => errors.push(error.message));
       await page.route("**/*", (route) =>
-        new URL(route.request().url()).origin === base
+        new URL(route.request().url()).origin === base ||
+        route.request().url().startsWith("data:")
           ? route.continue()
           : route.abort(),
       );
@@ -137,16 +155,52 @@ try {
         element.style.left = `${rect.x}px`;
         element.style.top = `${rect.y}px`;
       }, box);
-      await page.waitForFunction(() =>
-        document.querySelector("[data-launcher-obscured]"),
-      );
-      assert.equal(await launcher.isVisible(), false);
-      await page.mouse.click(box.x + 28, box.y + 28);
-      assert.equal(
-        await page.evaluate(() => window.clicks),
-        1,
-        `${role}/${width}: underlying button receives click`,
-      );
+      if (role === "teacher") {
+        await page.waitForFunction(() =>
+          document.querySelector("[data-launcher-obscured]"),
+        );
+        assert.equal(await launcher.isVisible(), false);
+        await page.mouse.click(box.x + 28, box.y + 28);
+        assert.equal(
+          await page.evaluate(() => window.clicks),
+          1,
+          `${role}/${width}: underlying button receives click`,
+        );
+      } else {
+        assert.equal(
+          await launcher.isVisible(),
+          true,
+          "Student launcher stays visible over ordinary page actions",
+        );
+        assert.equal(
+          await launcher.evaluate((el) => el.parentElement === document.body),
+          true,
+          "Launcher escapes transformed page ancestors",
+        );
+        assert.equal(
+          await launcher
+            .locator("img")
+            .evaluate((el) => getComputedStyle(el).filter),
+          "grayscale(1)",
+        );
+        for (const scroll of [0, 900, 2600]) {
+          await page.evaluate((y) => window.scrollTo(0, y), scroll);
+          const position = await launcher.boundingBox();
+          assert(
+            position && position.y >= 0 && position.y + position.height <= 844,
+            `Student launcher visible at scroll ${scroll}`,
+          );
+          assert(
+            Math.abs(position.y - box.y) < 1,
+            "Viewport fixed position is stable",
+          );
+          assert.equal(await launcher.isVisible(), true);
+          await page.screenshot({
+            path: path.join(evidence, `student-${width}-scroll-${scroll}.png`),
+          });
+        }
+        await page.evaluate(() => window.scrollTo(0, 0));
+      }
       await page.locator("#action").evaluate((element) => {
         element.style.left = "160px";
       });
@@ -160,7 +214,10 @@ try {
         document.querySelector("[data-launcher-obscured]"),
       );
       await page.locator("#save").click();
-      assert.equal(await page.evaluate(() => window.clicks), 2);
+      assert.equal(
+        await page.evaluate(() => window.clicks),
+        role === "teacher" ? 2 : 1,
+      );
       await page.screenshot({
         path: path.join(evidence, `${role}-${width}-modal.png`),
       });
@@ -209,16 +266,43 @@ try {
         await launcher.click();
         const menu = page.getByRole("menu", { name: "학습 도구" });
         await menu.waitFor();
+        assert.equal(
+          await launcher
+            .locator("img")
+            .evaluate((el) => getComputedStyle(el).filter),
+          "none",
+          "Opening menu restores supplied logo colors",
+        );
+        await page.screenshot({
+          path: path.join(evidence, `student-${width}-menu-color.png`),
+        });
         const menuBox = await menu.boundingBox();
         const launcherBox = await launcher.boundingBox();
-        assert(menuBox.y + menuBox.height < launcherBox.y, "menu expands above launcher");
-        assert.equal(await menu.getByRole("menuitem").count(), 1, "unreleased Q&A stays hidden");
+        assert(
+          menuBox.y + menuBox.height < launcherBox.y,
+          "menu expands above launcher",
+        );
+        assert.equal(
+          await menu.getByRole("menuitem").count(),
+          2,
+          "unreleased Q&A stays hidden",
+        );
         await page.locator("#action").click();
         assert.equal(await menu.count(), 0, "outside click dismisses menu");
         await launcher.click();
         await page.keyboard.press("Escape");
         assert.equal(await menu.count(), 0);
-        assert(await launcher.evaluate(element => document.activeElement === element));
+        assert.equal(
+          await launcher
+            .locator("img")
+            .evaluate((el) => getComputedStyle(el).filter),
+          "grayscale(1)",
+        );
+        assert(
+          await launcher.evaluate(
+            (element) => document.activeElement === element,
+          ),
+        );
         await launcher.press("ArrowUp");
         await page.getByRole("menuitem", { name: "역사 사전" }).press("Enter");
         await page.waitForFunction(() => document.querySelector("dialog").open);
@@ -250,6 +334,79 @@ try {
       );
       await page.close();
     }
+  for (const width of [390, 768, 1280]) {
+    for (const scenario of [
+      {
+        path: "/student/dashboard?open",
+        label: "공부의 神문고",
+        target: "/student/gongsinmoongo?source=general",
+        reads: 1,
+      },
+      {
+        path: "/student/lesson/note?open&id=unit-a",
+        label: "공부의 神문고",
+        target: "/student/gongsinmoongo?source=lesson&unitId=unit-a",
+        reads: 1,
+      },
+      {
+        path: "/student/lesson/history-dictionary?open",
+        label: "공부의 神문고",
+        target: "/student/gongsinmoongo?source=general",
+        reads: 1,
+      },
+      {
+        path: "/student/dashboard?gate-error",
+        label: "공부의 神문고 다시 시도",
+        target: "/student/gongsinmoongo?source=general",
+        reads: 2,
+      },
+    ]) {
+      const page = await browser.newPage({ viewport: { width, height: 844 } });
+      await page.route("**/*", (route) =>
+        new URL(route.request().url()).origin === base ||
+        route.request().url().startsWith("data:")
+          ? route.continue()
+          : route.abort(),
+      );
+      await page.goto(base + scenario.path);
+      const launcher = page.locator("button[data-history-dictionary-launcher]");
+      await launcher.click();
+      const item = page.getByRole("menuitem", {
+        name: scenario.label,
+        exact: true,
+      });
+      await item.waitFor();
+      if (scenario.path.includes("history-dictionary"))
+        assert.equal(
+          await page
+            .getByRole("menuitem", { name: "역사 사전", exact: true })
+            .count(),
+          0,
+        );
+      if (scenario.path.includes("gate-error"))
+        await page.evaluate(() => (window.launcherQa.recovered = true));
+      await item.click();
+      await page.waitForURL(base + scenario.target);
+      assert.equal(
+        await page.getByRole("menu", { name: "학습 도구" }).count(),
+        0,
+      );
+      assert.equal(
+        await page.evaluate(() => window.launcherQa.reads),
+        scenario.reads,
+      );
+      assert.equal(
+        await page.evaluate(
+          () => window.launcherQa.reads - window.launcherQa.stops,
+        ),
+        1,
+      );
+      await page.close();
+    }
+    console.log(
+      `PASS student ${width}px: direct/lesson/dictionary entry, gate failure retry, one shared publication listener`,
+    );
+  }
   console.log(`Evidence: ${evidence}`);
 } finally {
   await browser.close();

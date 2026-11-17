@@ -69,7 +69,7 @@ function normalizeInput(data, mutation) {
   if (mutation) {
     if (!['settings', 'ack', 'submit', 'submitAvatar', 'rewardAvatar', 'answer', 'story', 'restrict'].includes(data.action)
       || !/^[A-Za-z0-9_-]{16,100}$/.test(data.requestId || '')) fail('invalid-argument', '저장 요청을 다시 확인해 주세요.', 'GONGSIN_ACTION_INVALID');
-  } else if (!['state', 'avatar-event', 'questions', 'detail', 'stories', 'restrictions'].includes(data.mode)
+  } else if (!['state', 'bootstrap', 'avatar-event', 'questions', 'detail', 'stories', 'restrictions'].includes(data.mode)
     || (data.filter !== undefined && !['all', 'waiting', 'selected'].includes(data.filter))
     || (data.cursor !== undefined && data.cursor !== null && (typeof data.cursor !== 'string' || data.cursor.length > 500)))
     fail('invalid-argument', '조회할 목록을 확인해 주세요.', 'GONGSIN_QUERY_INVALID');
@@ -277,10 +277,22 @@ function createGongsinmoongoHandlers({ db, assertSession = assertScoreWorkflowSe
         await readStudentMenuAccess(tx, db, ['mypage', 'avatar']);
         return avatarEventState(settings, await readAvatarParticipation(db, tx, uid));
       }
-      if (input.mode === 'state') {
-        const [restriction, ack] = teacher ? [null, null] : await tx.getAll(db.doc(path(scope, 'restrictions', uid)), db.doc(path(scope, 'acknowledgments', uid)));
-        return { role: teacher ? 'teacher' : 'student', canManageSettings: context.admin, settings,
+      if (input.mode === 'state' || input.mode === 'bootstrap') {
+        const bootstrap = input.mode === 'bootstrap';
+        if (bootstrap) {
+          if (teacher) fail('permission-denied', '학생 본인의 질문함입니다.', 'GONGSIN_STUDENT_REQUIRED');
+          requireOpen(context);
+        }
+        // The student entry needs both state and the first own conversation page.
+        // Share one live authority check/read snapshot; keep paging and teacher reads separate.
+        const [[restriction, ack], questions] = await Promise.all([
+          teacher ? [null, null] : tx.getAll(db.doc(path(scope, 'restrictions', uid)), db.doc(path(scope, 'acknowledgments', uid))),
+          bootstrap ? paginate(tx, db.collection(path(scope, 'questions')).where('studentId', '==', uid), {},
+            (id, value) => projectQuestion(id, value, false)) : null,
+        ]);
+        const state = { role: teacher ? 'teacher' : 'student', canManageSettings: context.admin, settings,
           restriction: projectRestriction(uid, restriction?.data()), acknowledgedWarningRevision: ack?.data()?.warningRevision || 0 };
+        return bootstrap ? { state, questions } : state;
       }
       requireOpen(context);
       if (input.mode === 'detail') {

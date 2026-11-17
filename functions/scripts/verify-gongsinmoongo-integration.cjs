@@ -86,6 +86,48 @@ let rules;
     await assert.rejects(api.getGongsinmoongo(request('a', { mode: 'questions', semesterId: '2026-1' })), reason('GONGSIN_SEMESTER_INACTIVE'));
     assert.equal(metrics.writes, 0);
   });
+  await check('student bootstrap shares authority reads and returns only the first own page without writes', async () => {
+    await Promise.all(Array.from({ length: 26 }, (_, index) => db.doc(`${root}/gongsinmoongo_questions/q${String(index).padStart(2, '0')}`).set({
+      semesterId: scope, studentId: index === 25 ? 'b' : 'a', studentLabel: '합성', source: { kind: 'general' },
+      question: `질문 ${index}`, reply: '', publicQuestion: '교사용 공개 초안', publicReply: '교사용 답변 초안',
+      selected: false, status: 'waiting', revision: 1, createdAt: index + 1, updatedAt: index + 1,
+    })));
+    resetMetrics();
+    const state = await query('a', 'state');
+    const stateReads = metrics.reads;
+    const questions = await query('a', 'questions');
+    counts.studentEntryBefore = { calls: 2, ...metrics };
+    resetMetrics();
+    const result = await query('a', 'bootstrap');
+    counts.studentEntry = { calls: 1, ...metrics };
+    assert.deepEqual(result, { state, questions });
+    assert.equal(result.questions.items.length, 20); assert(result.questions.nextCursor);
+    assert(result.questions.items.every(item => item.studentId === 'a' && !Object.hasOwn(item, 'publicQuestion')));
+    assert.equal(metrics.reads, stateReads + 21);
+    assert(metrics.reads < counts.studentEntryBefore.reads);
+    assert.equal(metrics.queries, 1); assert.equal(metrics.writes, 0);
+    const next = await query('a', 'questions', { cursor: result.questions.nextCursor });
+    assert.equal(next.items.length, 5); assert.equal(next.nextCursor, null);
+    assert.equal(new Set([...result.questions.items, ...next.items].map(item => item.id)).size, 25);
+  });
+  await check('bootstrap keeps live session, owner, publication, enrollment and retry fences', async () => {
+    const bad = request('a', { mode: 'bootstrap' }); delete bad.data._session;
+    await assert.rejects(api.getGongsinmoongo(bad), error => error.code === 'unauthenticated');
+    await assert.rejects(query('a', 'bootstrap', { studentId: 'b' }), reason('GONGSIN_OWNER_REQUIRED'));
+    await assert.rejects(query('teacher', 'bootstrap'), reason('GONGSIN_STUDENT_REQUIRED'));
+    await db.doc(`${root}/gongsinmoongo_config/settings`).update({ enabled: false });
+    await assert.rejects(query('a', 'bootstrap'), reason('GONGSIN_CLOSED'));
+    await db.doc(`${root}/gongsinmoongo_config/settings`).update({ enabled: true });
+    await db.doc('semester_enrollments/en_a').update({ enrollmentStatus: 'TRANSFERRED' });
+    await assert.rejects(query('a', 'bootstrap'), reason('GONGSIN_ENROLLMENT_REQUIRED'));
+    await db.doc('semester_enrollments/en_a').update({ enrollmentStatus: 'ACTIVE' });
+    resetMetrics();
+    assert.deepEqual((await query('a', 'bootstrap')).questions, { items: [], nextCursor: null });
+    counts.studentEntryEmpty = { calls: 1, ...metrics };
+    assert.equal(metrics.queries, 1); assert.equal(metrics.writes, 0);
+    await db.doc('site_settings/semester_active').update({ semesterId: '2027-1' });
+    await assert.rejects(query('a', 'bootstrap'), reason('GONGSIN_SEMESTER_INACTIVE'));
+  });
   await check('private creation is atomic with existing inbox notifications and exact duplicate retry does no writes', async () => {
     const req = request('a', { action: 'submit', requestId: randomUUID(), ...questionInput });
     const first = await api.manageGongsinmoongo(req); counts.submit = { ...metrics };

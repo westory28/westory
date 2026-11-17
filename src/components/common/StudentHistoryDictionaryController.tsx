@@ -1,9 +1,17 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { getStudentMenuLabel } from "../../constants/menus";
 import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import StudentHistoryDictionaryWorkspace from "./StudentHistoryDictionaryWorkspace";
+import BrandLogo from "./BrandLogo";
+import StudentLearningShortcutsEditor, {
+  STUDENT_LEARNING_SHORTCUTS,
+  StudentShortcutIcon,
+} from "./StudentLearningShortcutsEditor";
+import { useStudentLearningShortcuts } from "../../lib/studentLearningShortcuts";
+import { getStudentRouteAccess } from "../../lib/studentMenuAccess";
 import { useFloatingLauncherVisibility } from "./useFloatingLauncherVisibility";
 import "./studentLearningTools.css";
 import {
@@ -13,8 +21,6 @@ import {
 import { isSemesterArchive } from "../../lib/semesterArchive";
 
 const getFloatingOffsetClassName = (pathname: string, search: string) => {
-  if (pathname.startsWith("/student/lesson/history-dictionary"))
-    return "hidden";
   if (pathname.startsWith("/student/lesson/note")) {
     const hasSelectedUnit = Boolean(new URLSearchParams(search).get("id"));
     return hasSelectedUnit
@@ -25,7 +31,7 @@ const getFloatingOffsetClassName = (pathname: string, search: string) => {
 };
 
 export default function StudentHistoryDictionaryController() {
-  const { currentUser, menuConfig } = useAuth();
+  const { currentUser, menuConfig, config, authGeneration } = useAuth();
   const title = getStudentMenuLabel(
     menuConfig,
     "/student/lesson/history-dictionary",
@@ -48,18 +54,36 @@ export default function StudentHistoryDictionaryController() {
   const [open, setOpen] = useState(false);
   const [visited, setVisited] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [menuAnchor, setMenuAnchor] = useState({ bottom: 0, right: 0 });
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const shortcuts = useStudentLearningShortcuts(menuOpen || settingsOpen);
+  const availableShortcuts = STUDENT_LEARNING_SHORTCUTS.filter((item) => {
+    const [pathname, search = ""] = item.url.split("?");
+    return getStudentRouteAccess({ pathname, search }, config, menuConfig)
+      .allowed;
+  });
+  const savedShortcuts = shortcuts.items.flatMap((id) => {
+    const item = availableShortcuts.find((candidate) => candidate.id === id);
+    return item ? [item] : [];
+  });
+  const [menuAnchor, setMenuAnchor] = useState<{
+    bottom?: number;
+    top?: number;
+    right: number;
+    maxHeight?: number;
+  }>({ bottom: 0, right: 0 });
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const isStudentRoute =
-    location.pathname.startsWith("/student") &&
-    !location.pathname.startsWith("/student/lesson/history-dictionary");
+  const isStudentRoute = location.pathname.startsWith("/student");
+  const isDictionaryRoute = location.pathname.startsWith(
+    "/student/lesson/history-dictionary",
+  );
 
   const focusLauncherWhenVisible = useFloatingLauncherVisibility(
     buttonRef,
     Boolean(currentUser && isStudentRoute),
-    open,
+    open || settingsOpen,
+    false,
   );
 
   useEffect(() => {
@@ -109,8 +133,17 @@ export default function StudentHistoryDictionaryController() {
   useEffect(() => {
     setOpen(false);
     setMenuOpen(false);
+    setSettingsOpen(false);
     if (!isStudentRoute || !currentUser) setVisited(false);
-  }, [location.pathname, location.search, currentUser?.uid, isStudentRoute]);
+  }, [
+    location.pathname,
+    location.search,
+    currentUser?.uid,
+    authGeneration,
+    config?.year,
+    config?.semester,
+    isStudentRoute,
+  ]);
 
   useLayoutEffect(() => {
     if (!menuOpen) return;
@@ -119,9 +152,14 @@ export default function StudentHistoryDictionaryController() {
     if (!launcher || !menu) return;
     const placeMenu = () => {
       const rect = launcher.getBoundingClientRect();
+      const height = document.documentElement.clientHeight;
+      const above = rect.top >= height - rect.bottom;
       setMenuAnchor({
-        bottom: document.documentElement.clientHeight - rect.top + 12,
+        ...(above
+          ? { bottom: height - rect.top + 12 }
+          : { top: rect.bottom + 12 }),
         right: document.documentElement.clientWidth - rect.right + 4,
+        maxHeight: Math.max(44, (above ? rect.top : height - rect.bottom) - 28),
       });
     };
     const dismissOutside = (event: Event) => {
@@ -168,7 +206,7 @@ export default function StudentHistoryDictionaryController() {
   };
   if (!currentUser || !isStudentRoute) return null;
 
-  return (
+  return createPortal(
     <>
       {menuOpen && (
         <div className="student-learning-tools-scrim" aria-hidden="true" />
@@ -195,31 +233,14 @@ export default function StudentHistoryDictionaryController() {
           }
           if (event.key === "Escape") setMenuOpen(false);
         }}
-        className={`fixed z-[80] inline-flex h-14 w-14 items-center justify-center rounded-full border border-blue-100 bg-white text-blue-700 shadow-[0_18px_42px_rgba(37,99,235,0.22)] transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 ${getFloatingOffsetClassName(location.pathname, location.search)}`}
+        className={`student-learning-tools-launcher fixed z-[80] inline-flex h-14 w-14 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 ${getFloatingOffsetClassName(location.pathname, location.search)}`}
         aria-label={menuOpen ? "학습 도구 닫기" : "학습 도구 열기"}
         aria-expanded={menuOpen}
         aria-haspopup="menu"
         aria-controls={menuOpen ? "student-learning-tools-menu" : undefined}
         title="학습 도구"
       >
-        <svg
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          aria-hidden="true"
-        >
-          {menuOpen ? (
-            <path d="m6 6 12 12M18 6 6 18" />
-          ) : (
-            <>
-              <path d="M12 20V6m0 0C9 3 5 3 3 4v14c3-1 6 0 9 2 3-2 6-3 9-2V4c-2-1-6-1-9 2Z" />
-              <path d="m9 10 3-3 3 3" />
-            </>
-          )}
-        </svg>
+        <BrandLogo variant="mark" decorative />
       </button>
       {menuOpen && (
         <div
@@ -262,28 +283,44 @@ export default function StudentHistoryDictionaryController() {
           <button
             type="button"
             role="menuitem"
+            aria-label="바로가기 편집"
             onClick={() => {
               setMenuOpen(false);
-              setVisited(true);
-              setOpen(true);
+              setSettingsOpen(true);
             }}
           >
-            <span className="student-learning-tools-label">{title}</span>
+            <span className="student-learning-tools-label">바로가기 편집</span>
             <span className="student-learning-tools-icon">
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                aria-hidden="true"
-              >
-                <path d="M12 20V6m0 0C9 3 5 3 3 4v14c3-1 6 0 9 2 3-2 6-3 9-2V4c-2-1-6-1-9 2Z" />
-              </svg>
+              <StudentShortcutIcon path="M12 5v14M5 12h14" />
             </span>
           </button>
-          {gongsin.enabled &&
+          {!isDictionaryRoute && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
+                setVisited(true);
+                setOpen(true);
+              }}
+            >
+              <span className="student-learning-tools-label">{title}</span>
+              <span className="student-learning-tools-icon">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  aria-hidden="true"
+                >
+                  <path d="M12 20V6m0 0C9 3 5 3 3 4v14c3-1 6 0 9 2 3-2 6-3 9-2V4c-2-1-6-1-9 2Z" />
+                </svg>
+              </span>
+            </button>
+          )}
+          {(gongsin.enabled || gongsin.error) &&
             !isAssessmentRunning &&
             location.pathname !== "/student/gongsinmoongo" && (
               <button
@@ -291,6 +328,7 @@ export default function StudentHistoryDictionaryController() {
                 role="menuitem"
                 onClick={() => {
                   setMenuOpen(false);
+                  if (gongsin.error) gongsin.retry();
                   const unitId =
                     location.pathname === "/student/lesson/note"
                       ? new URLSearchParams(location.search).get("id")
@@ -304,6 +342,7 @@ export default function StudentHistoryDictionaryController() {
               >
                 <span className="student-learning-tools-label">
                   공부의 神문고
+                  {gongsin.error ? " 다시 시도" : ""}
                 </span>
                 <span className="student-learning-tools-icon">
                   <svg
@@ -321,7 +360,39 @@ export default function StudentHistoryDictionaryController() {
                 </span>
               </button>
             )}
+          {savedShortcuts.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
+                navigate(item.url);
+              }}
+            >
+              <span className="student-learning-tools-label">{item.label}</span>
+              <span className="student-learning-tools-icon">
+                <StudentShortcutIcon path={item.icon} />
+              </span>
+            </button>
+          ))}
         </div>
+      )}
+      {settingsOpen && (
+        <StudentLearningShortcutsEditor
+          key={`${currentUser.uid}:${authGeneration}:${config?.year}:${config?.semester}`}
+          items={shortcuts.items}
+          availableIds={availableShortcuts.map((item) => item.id)}
+          loading={shortcuts.loading}
+          loaded={shortcuts.loaded && !shortcuts.loading}
+          error={shortcuts.error}
+          onReload={shortcuts.reload}
+          onSave={shortcuts.save}
+          onClose={() => {
+            focusLauncherWhenVisible();
+            setSettingsOpen(false);
+          }}
+        />
       )}
       <dialog
         ref={dialogRef}
@@ -348,6 +419,7 @@ export default function StudentHistoryDictionaryController() {
           {visited && <StudentHistoryDictionaryWorkspace active={open} />}
         </div>
       </dialog>
-    </>
+    </>,
+    document.body,
   );
 }

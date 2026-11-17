@@ -19,6 +19,10 @@ const REGION = 'asia-northeast3';
 const gongsinmoongoHandlers = require('./gongsinmoongo').createGongsinmoongoHandlers({ db });
 exports.getGongsinmoongo = onCall({ region: REGION, timeoutSeconds: 60, memory: '256MiB', maxInstances: 10 }, gongsinmoongoHandlers.getGongsinmoongo);
 exports.manageGongsinmoongo = onCall({ region: REGION, timeoutSeconds: 60, memory: '256MiB', maxInstances: 10 }, gongsinmoongoHandlers.manageGongsinmoongo);
+exports.manageStudentLearningShortcuts = onCall(
+  { region: REGION, timeoutSeconds: 60, memory: '256MiB', minInstances: 0, maxInstances: 10 },
+  require('./studentLearningShortcuts').createStudentLearningShortcutsHandler({ db }),
+);
 const registrationPolicyHandlers = require('./studentRegistrationPolicy').createStudentRegistrationPolicyHandlers({ db });
 exports.getStudentRegistrationPolicy = onCall({ region: REGION }, registrationPolicyHandlers.getStudentRegistrationPolicy);
 exports.saveStudentRegistrationPolicy = onCall({ region: REGION }, registrationPolicyHandlers.saveStudentRegistrationPolicy);
@@ -3197,6 +3201,8 @@ const collectLessonCorePointResetUpdates = async (year, semester, uid) => {
 
 const collectKnownUserStudentDataRefs = async (uid) => {
   const refsByPath = new Map();
+  const shortcutRef = db.doc(`users/${uid}/preferences/studentLearningTools`);
+  refsByPath.set(shortcutRef.path, shortcutRef);
   const userCollections = [
     'academic_records',
     'performance_score_consents',

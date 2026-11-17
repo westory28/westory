@@ -28,6 +28,7 @@ import {
   getGongsinSourceUrl,
   GONGSIN_SOURCE_LABELS,
   type GongsinState,
+  type GongsinBootstrap,
   type GongsinSettings,
   type GongsinQuestion,
   type GongsinStory,
@@ -384,10 +385,18 @@ export default function GongsinmoongoWorkspace({
     void (async () => {
       try {
         const cacheKey = `${identity}:${gate.revision}:${refresh}`;
+        const bootstrap = teacher
+          ? null
+          : await getGongsinmoongo<GongsinBootstrap>(
+              gate.semesterId,
+              "bootstrap",
+            );
+        if (cancelled || id !== request.current) return;
         const next =
-          stateCache.current?.key === cacheKey
+          bootstrap?.state ??
+          (stateCache.current?.key === cacheKey
             ? stateCache.current.value
-            : await getGongsinmoongo<GongsinState>(gate.semesterId, "state");
+            : await getGongsinmoongo<GongsinState>(gate.semesterId, "state"));
         if (cancelled || id !== request.current) return;
         stateCache.current = { key: cacheKey, value: next };
         loadedIdentity.current = identity;
@@ -401,11 +410,13 @@ export default function GongsinmoongoWorkspace({
           setWarningAgreed(false);
           setWarningOpen(true);
         }
-        const page = await getGongsinmoongo<GongsinPage<GongsinQuestion>>(
-          gate.semesterId,
-          "questions",
-          teacher ? { filter } : {},
-        );
+        const page =
+          bootstrap?.questions ??
+          (await getGongsinmoongo<GongsinPage<GongsinQuestion>>(
+            gate.semesterId,
+            "questions",
+            teacher ? { filter } : {},
+          ));
         if (cancelled || id !== request.current) return;
         setList(page);
         if (teacher) {

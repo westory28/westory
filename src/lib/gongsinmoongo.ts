@@ -100,6 +100,10 @@ export interface GongsinPage<T> {
   items: T[];
   nextCursor: string | null;
 }
+export interface GongsinBootstrap {
+  state: GongsinState;
+  questions: GongsinPage<GongsinQuestion>;
+}
 export interface GongsinMutation {
   question?: GongsinQuestion;
   settings?: GongsinSettings;
@@ -191,7 +195,8 @@ export function getGongsinSourceUrl(source: GongsinSource) {
   return "";
 }
 
-// One minimal public listener per account/semester, shared by the launcher and page.
+// One minimal public listener per account/session generation/semester, shared by
+// the launcher and page. A new login cannot reuse a failed or stale listener.
 // Last subscriber departure clears data; an error fails closed and has no polling retry.
 interface Availability {
   enabled: boolean;
@@ -221,10 +226,11 @@ const availability = new Map<
   }
 >();
 export function useGongsinAvailability(active = true) {
-  const { currentUser, config } = useAuth();
+  const { currentUser, config, authGeneration } = useAuth();
   const { year, semester } = getYearSemester(config);
   const uid = currentUser?.uid;
-  const key = active && uid ? `${uid}:${year}:${semester}` : "";
+  const key =
+    active && uid ? `${uid}:${authGeneration}:${year}:${semester}` : "";
   const [state, setState] = useState<{ key: string; value: Availability }>({
     key: "",
     value: CLOSED,

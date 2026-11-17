@@ -1,3 +1,24 @@
+.student-learning-tools-launcher {
+  padding: 8px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  background: var(--ws-surface, #fff);
+  box-shadow: var(--shadow-md, 0 14px 28px rgb(15 23 42 / 10%));
+  cursor: pointer;
+}
+
+.student-learning-tools-launcher .ws-brand-logo {
+  filter: grayscale(1);
+}
+
+.student-learning-tools-launcher[aria-expanded="true"] {
+  border-color: var(--ws-border-blue, #dbeafe);
+  background: var(--ws-primary-soft, #eff6ff);
+}
+
+.student-learning-tools-launcher[aria-expanded="true"] .ws-brand-logo {
+  filter: none;
+}
+
 .student-learning-tools-scrim {
   position: fixed;
   inset: 0;
@@ -15,11 +36,171 @@
   gap: 12px;
   width: max-content;
   max-width: calc(100vw - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0;
   border: 0;
   background: transparent;
   box-shadow: none;
   animation: student-learning-tools-rise 150ms ease-out;
+}
+
+.student-shortcuts-dialog {
+  box-sizing: border-box;
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 24px;
+  overflow-y: auto;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 16px;
+  background: var(--ws-surface, #fff);
+  color: var(--ws-text, #374151);
+}
+
+.student-shortcuts-dialog::backdrop {
+  background: var(--ws-overlay, rgb(15 23 42 / 62%));
+}
+
+.student-shortcuts-dialog .student-shortcuts-heading {
+  position: static;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 0;
+  margin: 0 0 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.student-shortcuts-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.student-shortcuts-dialog .student-shortcuts-heading h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--ws-text-strong, #111827);
+}
+
+.student-shortcuts-dialog button:not(.ws-info-help__button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.student-shortcuts-dialog button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.student-shortcuts-dialog button:focus-visible {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: 2px;
+}
+
+.student-shortcuts-selected {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.student-shortcuts-selected li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+}
+
+.student-shortcuts-selected .is-dragging {
+  background: var(--ws-primary-soft, #eff6ff);
+}
+
+.student-shortcuts-name {
+  flex: 1;
+}
+.student-shortcuts-name small {
+  display: block;
+  color: var(--ws-text-muted, #6b7280);
+}
+
+.student-shortcuts-dialog button.student-shortcuts-handle {
+  touch-action: none;
+  cursor: grab;
+  color: var(--ws-text-muted, #6b7280);
+}
+
+.student-shortcuts-dialog .is-dragging .student-shortcuts-handle {
+  cursor: grabbing;
+}
+
+.student-shortcuts-available {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.student-shortcuts-available button:not(.ws-info-help__button) {
+  justify-content: flex-start;
+  gap: 8px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  font-size: 14px;
+  text-align: left;
+}
+
+.student-shortcuts-available svg {
+  flex-shrink: 0;
+}
+.student-shortcuts-available button > span:last-child {
+  margin-left: auto;
+}
+
+.student-shortcuts-dialog .student-shortcuts-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 24px 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.student-shortcuts-actions button:not(.ws-info-help__button) {
+  padding: 8px 16px;
+}
+.student-shortcuts-actions button.student-shortcuts-save {
+  background: var(--ws-primary, #2563eb);
+  color: white;
+  font-weight: 700;
+}
+
+.student-shortcuts-error {
+  margin-bottom: 12px;
+  color: var(--ws-danger-text, #b91c1c);
+}
+
+@media (max-width: 480px) {
+  .student-shortcuts-dialog {
+    padding: 16px;
+  }
 }
 
 [data-launcher-obscured] + .student-learning-tools-menu {
