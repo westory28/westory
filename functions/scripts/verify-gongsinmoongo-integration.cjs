@@ -207,6 +207,58 @@ let rules;
     await assert.rejects(command('a', 'submit', questionInput), reason('GONGSIN_WARNING_REQUIRED'));
     resetMetrics(); await command('admin', 'settings', { settings: saved.settings, expectedRevision: 2 }); assert.equal(metrics.writes, 0);
   });
+  await check('teacher inbox loads 30 at a time with exact boundaries, stable tied-time cursors and bounded reads', async () => {
+    resetMetrics();
+    const empty = await query('teacher', 'questions');
+    assert.deepEqual(empty, { items: [], nextCursor: null });
+    assert.equal(metrics.queries, 1); assert.equal(metrics.writes, 0);
+    const authorityReads = metrics.reads - 1;
+    counts.teacherInboxPages = [{ total: 0, returned: 0, ...metrics }];
+    let seeded = 0;
+    for (const total of [30, 31, 60, 61]) {
+      for (let number = seeded + 1; number <= total; number++) {
+        const id = `q${String(number).padStart(3, '0')}`, waiting = number % 2 === 1;
+        await db.doc(`${root}/gongsinmoongo_questions/${id}`).set({
+          semesterId: scope, studentId: number === 61 ? 'b' : 'a', studentLabel: '합성', profileEmojiId: 'smile',
+          source: { kind: 'general', title: '질문' }, question: `질문 ${number}`, reply: waiting ? '' : '합성 답변',
+          publicQuestion: '', publicReply: '', selected: number % 3 === 0, status: waiting ? 'waiting' : 'answered',
+          revision: 1, createdAt: 1000, updatedAt: 1000,
+        });
+      }
+      seeded = total;
+      const ids = [];
+      let cursor;
+      do {
+        const remaining = total - ids.length;
+        resetMetrics();
+        const page = await query('teacher', 'questions', cursor ? { cursor } : {});
+        assert.equal(page.items.length, Math.min(30, remaining));
+        assert.equal(Boolean(page.nextCursor), remaining > 30);
+        assert.equal(metrics.queries, 1); assert.equal(metrics.writes, 0);
+        assert.equal(metrics.reads, authorityReads + Math.min(31, remaining));
+        counts.teacherInboxPages.push({ total, returned: page.items.length, ...metrics });
+        ids.push(...page.items.map(item => item.id));
+        cursor = page.nextCursor;
+      } while (cursor);
+      assert.deepEqual(ids, Array.from({ length: total }, (_, index) => `q${String(total - index).padStart(3, '0')}`));
+    }
+    resetMetrics();
+    const waiting = await query('teacher', 'questions', { filter: 'waiting' });
+    assert.equal(waiting.items.length, 30); assert(waiting.nextCursor);
+    assert(waiting.items.every(item => !item.reply));
+    assert.equal(metrics.reads, authorityReads + 31); assert.equal(metrics.queries, 1); assert.equal(metrics.writes, 0);
+    const lastWaiting = await query('teacher', 'questions', { filter: 'waiting', cursor: waiting.nextCursor });
+    assert.deepEqual(lastWaiting.items.map(item => item.id), ['q001']); assert.equal(lastWaiting.nextCursor, null);
+    const selected = await query('teacher', 'questions', { filter: 'selected' });
+    assert.equal(selected.items.length, 20); assert.equal(selected.nextCursor, null);
+    assert(selected.items.every(item => item.selected));
+    const conversation = await query('teacher', 'questions', { studentId: 'a' });
+    assert.equal(conversation.items.length, 20); assert(conversation.nextCursor);
+    const student = await query('a', 'questions');
+    assert.equal(student.items.length, 20); assert(student.nextCursor);
+    assert.deepEqual(student.items.map(item => item.id), conversation.items.map(item => item.id));
+    assert(student.items.every(item => item.studentId === 'a'));
+  });
   await check('cursor pagination never returns another owner and student cleanup removes teacher receipts with private responses', async () => {
     const rows = Array.from({ length: 25 }, (_, i) => [`${root}/gongsinmoongo_questions/q${i.toString().padStart(2, '0')}`, {
       semesterId: scope, studentId: i === 24 ? 'b' : 'a', studentLabel: '합성', profileEmojiId: 'smile', source: { kind: 'general', title: '질문' },

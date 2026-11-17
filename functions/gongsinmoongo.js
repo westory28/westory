@@ -12,6 +12,7 @@ const { frozenWrongQuestion } = require('./studentQuizReviewNotes');
 
 const ADMIN_EMAIL = 'westoria28@gmail.com';
 const PAGE_SIZE = 20;
+const TEACHER_INBOX_PAGE_SIZE = 30;
 const SOURCE_KINDS = ['lesson', 'dictionary', 'mock', 'formative', 'diagnostic'];
 const DURATIONS = [0, 3600000, 10800000, 86400000, 259200000, 604800000];
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -148,7 +149,7 @@ async function readQuestion(db, tx, context, id) {
     fail('not-found', '질문을 찾을 수 없습니다.', 'GONGSIN_QUESTION_NOT_FOUND');
   return { ref: doc.ref, value };
 }
-async function paginate(tx, query, input, mapper, sort = 'createdAt') {
+async function paginate(tx, query, input, mapper, sort = 'createdAt', pageSize = PAGE_SIZE) {
   query = query.orderBy(sort, 'desc').orderBy(FieldPath.documentId(), 'desc');
   if (input.cursor) {
     let cursor;
@@ -157,9 +158,9 @@ async function paginate(tx, query, input, mapper, sort = 'createdAt') {
       fail('invalid-argument', '목록을 처음부터 다시 열어 주세요.', 'GONGSIN_CURSOR_INVALID');
     query = query.startAfter(cursor.time, cursor.id);
   }
-  const rows = (await tx.get(query.limit(PAGE_SIZE + 1))).docs;
-  const visible = rows.slice(0, PAGE_SIZE), last = visible.at(-1);
-  return { items: visible.map(doc => mapper(doc.id, doc.data())), nextCursor: rows.length > PAGE_SIZE
+  const rows = (await tx.get(query.limit(pageSize + 1))).docs;
+  const visible = rows.slice(0, pageSize), last = visible.at(-1);
+  return { items: visible.map(doc => mapper(doc.id, doc.data())), nextCursor: rows.length > pageSize
     ? Buffer.from(JSON.stringify({ time: last.data()[sort], id: last.id })).toString('base64url') : null };
 }
 async function validateSource(db, tx, context, raw) {
@@ -291,7 +292,8 @@ function createGongsinmoongoHandlers({ db, assertSession = assertScoreWorkflowSe
         if (!teacher || input.studentId) query = query.where('studentId', '==', teacher ? input.studentId : uid);
         if (input.filter === 'waiting') query = query.where('status', '==', 'waiting');
         if (input.filter === 'selected') { requireTeacher(context); query = query.where('selected', '==', true); }
-        return paginate(tx, query, input, (id, value) => projectQuestion(id, value, teacher));
+        return paginate(tx, query, input, (id, value) => projectQuestion(id, value, teacher), 'createdAt',
+          teacher && !input.studentId ? TEACHER_INBOX_PAGE_SIZE : PAGE_SIZE);
       }
       if (input.mode === 'stories') {
         if (!teacher && !settings.storiesVisible) return { items: [], nextCursor: null };

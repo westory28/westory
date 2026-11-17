@@ -228,11 +228,9 @@ export default function GongsinmoongoWorkspace({
     items: [],
     nextCursor: null,
   });
-  const [cursors, setCursors] = useState<Array<string | undefined>>([
-    undefined,
-  ]);
-  const [listIndex, setListIndex] = useState(0);
-  const [visiblePage, setVisiblePage] = useState(0);
+  const [listBusy, setListBusy] = useState(false);
+  const listRequest = useRef<object | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const [filter, setFilter] = useState("all");
   const [listOpen, setListOpen] = useState(false);
   const [view, setView] = useState<"inbox" | "settings">("inbox");
@@ -272,6 +270,9 @@ export default function GongsinmoongoWorkspace({
   const scope = `${identity}:${allowed}:${gate.revision}`;
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
+  const listScope = `${scope}:${teacher}:${filter}:${view}:${refresh}:${location.key}`;
+  const listScopeRef = useRef(listScope);
+  listScopeRef.current = listScope;
   const mutationScope = `${identity}:${allowed}`;
   const mutationScopeRef = useRef(mutationScope);
   mutationScopeRef.current = mutationScope;
@@ -305,9 +306,6 @@ export default function GongsinmoongoWorkspace({
     setStoryIndex(null);
     mutation.current = null;
     stateCache.current = null;
-    setCursors([undefined]);
-    setListIndex(0);
-    setVisiblePage(0);
     setBusy(false);
     setConversationBusy(false);
     setStoryEdit(false);
@@ -362,6 +360,8 @@ export default function GongsinmoongoWorkspace({
     if (!gate.loaded) return;
     const id = ++request.current;
     let cancelled = false;
+    listRequest.current = null;
+    setListBusy(false);
     if (!allowed) {
       setState(null);
       setMessages([]);
@@ -377,6 +377,10 @@ export default function GongsinmoongoWorkspace({
     }
     setLoading(true);
     setError("");
+    if (teacher && view === "inbox") {
+      setList({ items: [], nextCursor: null });
+      if (listRef.current) listRef.current.scrollTop = 0;
+    }
     void (async () => {
       try {
         const cacheKey = `${identity}:${gate.revision}:${refresh}`;
@@ -400,7 +404,7 @@ export default function GongsinmoongoWorkspace({
         const page = await getGongsinmoongo<GongsinPage<GongsinQuestion>>(
           gate.semesterId,
           "questions",
-          teacher ? { filter, cursor: cursors[listIndex] } : {},
+          teacher ? { filter } : {},
         );
         if (cancelled || id !== request.current) return;
         setList(page);
@@ -462,11 +466,56 @@ export default function GongsinmoongoWorkspace({
     gate.revision,
     teacher,
     filter,
-    listIndex,
     view,
     refresh,
     location.key,
   ]);
+
+  const moreQuestions = async () => {
+    if (
+      !teacher ||
+      view !== "inbox" ||
+      loading ||
+      !list.nextCursor ||
+      listRequest.current
+    )
+      return;
+    const token = {};
+    listRequest.current = token;
+    const operationScope = scopeRef.current;
+    const operationListScope = listScopeRef.current;
+    const id = request.current;
+    const current = () =>
+      listRequest.current === token &&
+      operationScope === scopeRef.current &&
+      operationListScope === listScopeRef.current &&
+      id === request.current;
+    setListBusy(true);
+    setError("");
+    try {
+      const page = await getGongsinmoongo<GongsinPage<GongsinQuestion>>(
+        gate.semesterId,
+        "questions",
+        { filter, cursor: list.nextCursor },
+      );
+      if (!current()) return;
+      setList((previous) => ({
+        items: [
+          ...new Map(
+            [...previous.items, ...page.items].map((item) => [item.id, item]),
+          ).values(),
+        ],
+        nextCursor: page.nextCursor,
+      }));
+    } catch (e) {
+      if (current()) setError(errorText(e));
+    } finally {
+      if (current()) {
+        listRequest.current = null;
+        setListBusy(false);
+      }
+    }
+  };
 
   useEffect(() => {
     const id = targetQuestion || selected?.id;
@@ -726,9 +775,6 @@ export default function GongsinmoongoWorkspace({
               disabled={busy}
               onChange={(e) => {
                 setFilter(e.target.value);
-                setCursors([undefined]);
-                setListIndex(0);
-                setVisiblePage(0);
               }}
             >
               <option value="all">전체</option>
@@ -736,10 +782,14 @@ export default function GongsinmoongoWorkspace({
               <option value="selected">스토리 선정</option>
             </select>
           </label>
-          <div className="gsm-question-list" aria-label="질문 목록">
-            {(loadedIdentity.current === identity ? list.items : [])
-              .slice(visiblePage * 4, visiblePage * 4 + 4)
-              .map((item) => (
+          <div
+            ref={listRef}
+            className="gsm-question-list"
+            aria-label="질문 목록"
+            aria-busy={loading || listBusy}
+          >
+            {(loadedIdentity.current === identity ? list.items : []).map(
+              (item) => (
                 <button
                   key={item.id}
                   disabled={busy}
@@ -764,51 +814,26 @@ export default function GongsinmoongoWorkspace({
                   <strong>{item.question}</strong>
                   <span>{item.studentLabel}</span>
                 </button>
-              ))}
+              ),
+            )}
             {!loading && !list.items.length && (
               <p className="gsm-empty">아직 도착한 질문이 없습니다.</p>
             )}
+            {list.nextCursor &&
+              loadedIdentity.current === identity &&
+              view === "inbox" && (
+                <div className="gsm-list-more">
+                  <button
+                    type="button"
+                    className="gsm-button"
+                    disabled={loading || listBusy || busy}
+                    onClick={() => void moreQuestions()}
+                  >
+                    {listBusy ? "불러오는 중…" : "더보기"}
+                  </button>
+                </div>
+              )}
           </div>
-          <nav className="gsm-pagination" aria-label="질문 목록 페이지">
-            <button
-              className="gsm-icon"
-              aria-label="이전 질문 목록"
-              disabled={(listIndex === 0 && visiblePage === 0) || loading}
-              onClick={() => {
-                if (visiblePage > 0) setVisiblePage((i) => i - 1);
-                else {
-                  setVisiblePage(4);
-                  setListIndex((i) => i - 1);
-                }
-              }}
-            >
-              <Chevron direction="left" />
-            </button>
-            <span>{listIndex * 5 + visiblePage + 1}</span>
-            <button
-              className="gsm-icon"
-              aria-label="다음 질문 목록"
-              disabled={
-                (!list.nextCursor &&
-                  (visiblePage + 1) * 4 >= list.items.length) ||
-                loading
-              }
-              onClick={() => {
-                if ((visiblePage + 1) * 4 < list.items.length) {
-                  setVisiblePage((i) => i + 1);
-                  return;
-                }
-                setCursors((items) => [
-                  ...items.slice(0, listIndex + 1),
-                  list.nextCursor!,
-                ]);
-                setListIndex((i) => i + 1);
-                setVisiblePage(0);
-              }}
-            >
-              <Chevron />
-            </button>
-          </nav>
         </PortalSubNavigation>
       )}
       <div className="teacher-sub-content gsm-content">

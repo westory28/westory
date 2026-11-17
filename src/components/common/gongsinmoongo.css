@@ -102,6 +102,7 @@
 }
 .gsm-filter {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 12px;
   padding: 0 16px 16px;
@@ -162,12 +163,16 @@
   font-size: 12px;
   color: var(--ws-text-muted, #6b7280);
 }
-.gsm-pagination {
+.gsm-pagination,
+.gsm-list-more {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 8px 16px;
+}
+.gsm-list-more {
+  justify-content: center;
 }
 .gsm-chat {
   display: flex;
@@ -858,10 +863,7 @@
   }
   .gsm-sidebar .gsm-question-list {
     flex: 1;
-    overflow: hidden;
-  }
-  .gsm-sidebar .gsm-pagination {
-    flex: none;
+    overflow-y: auto;
   }
   .gsm-student {
     height: calc(100dvh - var(--student-account-height, 64px));
