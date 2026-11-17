@@ -181,9 +181,9 @@ for (const small of [false, true]) {
   const studentWis = submenu(html, "student", "points");
   assert(html.includes('aria-label="위스"'));
   assert(!html.includes('aria-label="위스 마을"') && !html.includes('id="student-menu-shop"'));
-  assert(studentWis.includes('aria-label="위스 관리"'));
-  const studentManagement = studentWis.match(/class="teacher-sidebar-nested-menu"[^>]*>([\s\S]*?)<\/div>/)?.[1] || "";
-  assert.deepEqual(urls(studentManagement), ["/student/points"]);
+  assert(!studentWis.includes('위스 관리'));
+  assert(!studentWis.includes('teacher-sidebar-nested-menu'));
+  assert.match(studentWis, /<a[^>]*href="#\/student\/points"[^>]*>내 위스<\/a>/, "Students open their wallet directly inside Wis");
   assert.equal(urls(studentWis).length, 4, "Student Wis has own wallet, hall and the currently released shops");
   assert(studentWis.includes("위스 상점") && studentWis.includes("아바타 상점"));
   assert(!html.includes("tab=stocks") && !html.includes("위스피"), "Renaming never publishes student WsPI");
@@ -205,4 +205,4 @@ for (const small of [false, true]) {
   assert(!urls(render('student')).includes('/student/wispi'), 'Only interface visibility hides an already published market');
   marketPublished = false;
 }
-console.log("PASS: student/teacher route separation, configured labels, unified Wis with direct teacher management and nested student management, preserved bookmarks, point/avatar permissions, closed student WsPI, mobile/desktop/collapsed navigation; no backend calls.");
+console.log("PASS: student/teacher route separation, configured labels, unified Wis with direct teacher management and student wallet, preserved bookmarks, point/avatar permissions, closed student WsPI, mobile/desktop/collapsed navigation; no backend calls.");

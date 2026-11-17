@@ -23,14 +23,23 @@ for (const file of [
     "utf8",
   );
 }
-// Verify inactive wardrobe does not start the unrelated profile/score/rank loaders.
+// Wardrobe and stock wallet bypass unrelated profile/score/rank loaders.
+// Prove the current shared guard still includes the wardrobe before checking its exits.
 assert.match(
   sources["student/MyPage"],
-  /if \(isAvatarWardrobe\) \{\s*setMyPageLoading\(false\);\s*return;\s*\}\s*void loadMyPage\(\)/,
+  /const isAvatarWardrobe = menu === "avatar";/,
 );
 assert.match(
   sources["student/MyPage"],
-  /if \(isAvatarWardrobe\) return;\s*void loadPointRankState\(\)/,
+  /const isIndependentMenu = isAvatarWardrobe \|\| menu === "wispi";/,
+);
+assert.match(
+  sources["student/MyPage"],
+  /if \(isIndependentMenu\) \{\s*setMyPageLoading\(false\);\s*return;\s*\}\s*void loadMyPage\(\)/,
+);
+assert.match(
+  sources["student/MyPage"],
+  /if \(isIndependentMenu\) return;\s*void loadPointRankState\(\)/,
 );
 assert.match(sources["student/MyPage"], /menu !== "score" \|\| !canUseScore/);
 assert.match(sources["student/MyPage"], /<StudentAvatarStudio mode="wardrobe"/);
@@ -75,9 +84,10 @@ const mocks = {
   browserTasks: `export const runAfterNextPaint=()=>()=>{};`,
   AppToastProvider: `export const useAppToast=()=>({showToast:()=>{}});`,
   HeaderStudentWis: `export default ()=>null;`,
+  useStudentWisStocks: `export const useStudentWisStockStatus=()=>({status:'ready',data:{studentOpen:true,halted:false},error:'',retry(){}});`,
   NotificationBell: `export default ()=>null;`,
   pointRankPromotion: `export const loadStudentRankPromotionSnapshot=()=>{throw Error('Unexpected header read')},invalidateStudentRankPromotionSnapshotCache=()=>{};`,
-  TeacherSidebar: `import React from 'react';import {Link} from 'react-router-dom';export default function Sidebar({groups,isChildActive}){return <aside data-testid="sidebar">{groups.map(g=><section key={g.id} data-group={g.id}><h2>{g.name}</h2>{g.children.map(c=><Link key={c.resolvedUrl} to={c.resolvedUrl} aria-current={isChildActive(c.resolvedUrl,g.children)?'page':undefined}>{c.name}</Link>)}</section>)}</aside>}`,
+  TeacherSidebar: `import React from 'react';import {Link} from 'react-router-dom';export default function Sidebar({groups,isChildActive}){return <aside data-testid="sidebar">{groups.map(g=><section key={g.id} data-group={g.id}><h2>{g.name}</h2>{g.children.map(c=><Link key={c.resolvedUrl} to={c.resolvedUrl} data-nested={Boolean(c.children?.length)} aria-current={isChildActive(c.resolvedUrl,g.children)?'page':undefined}>{c.name}</Link>)}</section>)}</aside>}`,
   AvatarStudio: `import React,{useEffect} from 'react';export default function Studio({mode='wardrobe'}){useEffect(()=>{window.avatarRouteQa.studioReads++},[]);return <div data-testid="studio" data-mode={mode}>아바타 {mode}</div>}`,
   SettingsAvatarPricing: `import React,{useEffect} from 'react';export default function Pricing(){useEffect(()=>{window.avatarRouteQa.pricingReads++},[]);return <div data-testid="pricing">상품 편집</div>}`,
 };
@@ -100,7 +110,7 @@ const result = await build({
         plugin.onResolve(
           {
             filter:
-              /\/(AuthContext|firebase|browserTasks|AppToastProvider|HeaderStudentWis|NotificationBell|pointRankPromotion|TeacherSidebar|AvatarStudio|SettingsAvatarPricing)$/,
+              /\/(AuthContext|firebase|browserTasks|AppToastProvider|HeaderStudentWis|useStudentWisStocks|NotificationBell|pointRankPromotion|TeacherSidebar|AvatarStudio|SettingsAvatarPricing)$/,
           },
           (args) => ({ path: path.basename(args.path), namespace: "mock" }),
         );
@@ -171,6 +181,13 @@ const browser = await playwright.chromium.launch({
 });
 const page = await browser.newPage();
 const reports = [];
+const externalRequests = [];
+await page.route("**/*", (route) => {
+  const url = route.request().url();
+  if (url.startsWith(base) || url.startsWith("data:")) return route.continue();
+  externalRequests.push(url);
+  return route.abort();
+});
 const open = async (
   scenario,
   route = "/student/points?tab=shop&shop=avatar",
@@ -203,18 +220,36 @@ try {
     assert.deepEqual(qa.legacyMounts, []);
     assert.equal(qa.studioReads, 1);
     assert.equal(qa.pricingReads, 0);
-    const shop = page.locator('[data-group="shop"]');
-    assert.equal(await shop.locator("a").count(), 2);
+    const shop = page.locator('[data-group="points"]');
+    assert.equal(await shop.locator("a").count(), 5);
+    assert.equal(await page.locator('[data-group="shop"]').count(), 0);
+    assert.equal(
+      await shop.getByRole("link", { name: "위스 관리", exact: true }).count(),
+      0,
+    );
+    const myWis = shop.getByRole("link", { name: "내 위스", exact: true });
+    assert.equal(await myWis.count(), 1);
+    assert.equal(await myWis.getAttribute("href"), "/student/points");
+    assert.equal(await myWis.getAttribute("data-nested"), "false");
+    assert.equal(await shop.locator('a[href="/student/wispi"]').count(), 1);
+    assert.equal(
+      await page.locator("#route-content nav").count(),
+      0,
+      "Avatar shop has no duplicate destination tabs",
+    );
+    assert.equal(await page.locator("#route-content h1").count(), 1);
+    assert.equal(
+      await page.locator("#route-content h1").innerText(),
+      scenario === "custom" ? "우리 반 패션" : "아바타 상점",
+    );
     assert.equal(await shop.locator('a[href*="tab=stocks"]').count(), 0);
     assert.equal(await shop.locator('a[aria-current="page"]').count(), 1);
     assert.match(
       await shop.locator('a[aria-current="page"]').getAttribute("href"),
       /tab=shop&shop=avatar/,
     );
-    assert.equal(
-      await page.locator('[data-group="points"] a[href*="tab=shop"]').count(),
-      0,
-    );
+    assert.equal(await shop.locator('a[href*="tab=shop"]').count(), 2);
+    assert.equal(await shop.locator('a[href*="tab=orders"]').count(), 0);
     if (scenario === "custom") {
       assert.equal(
         await shop.getByRole("link", { name: "우리 반 패션" }).count(),
@@ -222,8 +257,8 @@ try {
       );
       assert.equal(
         await page
-          .getByRole("navigation", { name: "위스 마을" })
-          .getByRole("link", { name: "우리 반 패션" })
+          .locator("#route-content")
+          .getByRole("heading", { name: "우리 반 패션", exact: true })
           .count(),
         1,
       );
@@ -256,7 +291,9 @@ try {
     assert.equal(qa.studioReads, 0);
     assert.deepEqual(qa.legacyMounts, []);
     assert.equal(
-      await page.locator('[data-group="shop"] a[href*="shop=avatar"]').count(),
+      await page
+        .locator('[data-group="points"] a[href*="shop=avatar"]')
+        .count(),
       0,
     );
   }
@@ -284,21 +321,23 @@ try {
     const qa = await inspect(scenario);
     assert.deepEqual(qa.legacyMounts, []);
     assert.equal(qa.pricingReads, 1);
-    const shop = page.locator('[data-group="shop"]');
-    assert.equal(await shop.locator("a").count(), 3);
+    const shop = page.locator('[data-group="points"]');
+    assert.equal(await shop.locator("a").count(), 5);
+    assert.equal(await page.locator('[data-group="shop"]').count(), 0);
+    assert.equal(
+      await shop.getByRole("link", { name: "위스 관리", exact: true }).count(),
+      1,
+    );
     assert.equal(await shop.locator('a[href*="tab=requests"]').count(), 0);
     assert.equal(
-      await page.getByRole("navigation", { name: "위스 마을" }).getByRole("link").count(),
-      3,
+      await page.getByRole("navigation", { name: "위스 마을" }).count(),
+      0,
     );
     assert.equal(await shop.locator('a[aria-current="page"]').count(), 1);
     assert.equal(
       await shop
         .getByRole("link", {
-          name:
-            scenario === "custom-teacher"
-              ? "상품 꾸미기"
-              : "아바타 상점",
+          name: scenario === "custom-teacher" ? "상품 꾸미기" : "아바타 상점",
         })
         .count(),
       1,
@@ -310,7 +349,7 @@ try {
   assert.equal(denied.pricingReads, 0);
   assert.deepEqual(denied.legacyMounts, []);
   assert.equal(
-    await page.locator('[data-group="shop"] a[href*="shop=avatar"]').count(),
+    await page.locator('[data-group="points"] a[href*="shop=avatar"]').count(),
     0,
   );
   for (const key of ["tab", "section", "menu"]) {
@@ -326,10 +365,20 @@ try {
   assert.deepEqual((await inspect("teacher general products")).legacyMounts, [
     "ManagePoints",
   ]);
+  assert.deepEqual(
+    externalRequests,
+    [],
+    "The route fixture must not contact production services",
+  );
   await fs.writeFile(
     path.join(output, "report.json"),
     JSON.stringify(
-      { passed: true, staticInactiveLoadGuards: true, checks: reports },
+      {
+        passed: true,
+        staticInactiveLoadGuards: true,
+        checks: reports,
+        externalRequests,
+      },
       null,
       2,
     ),

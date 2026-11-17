@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useLayoutEffect, useRef } from "react";
 import {
   getScheduleCategoryMeta,
   getScheduleEventColor,
@@ -39,13 +39,31 @@ const ScheduleEventDetailModal: React.FC<ScheduleEventDetailModalProps> = ({
 }) => {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const dialog = dialogRef.current;
     if (!event || !dialog) return;
+    const previousFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
     if (!dialog.open) dialog.showModal();
 
     return () => {
       if (dialog.open) dialog.close();
+      // React may remove the dialog before the browser restores its opener.
+      // Keep focus chosen by a replacement dialog or another user action.
+      queueMicrotask(() => {
+        const currentFocus = document.activeElement;
+        if (
+          previousFocus?.isConnected &&
+          (!currentFocus ||
+            currentFocus === document.body ||
+            currentFocus === dialog ||
+            !currentFocus.isConnected)
+        ) {
+          previousFocus.focus({ preventScroll: true });
+        }
+      });
     };
   }, [event]);
 

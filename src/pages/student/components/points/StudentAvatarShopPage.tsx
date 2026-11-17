@@ -4,8 +4,7 @@ import { getStudentMenuLabel } from "../../../../constants/menus";
 import { getStudentRouteAccess } from "../../../../lib/studentMenuAccess";
 import { lazyWithRetry } from "../../../../lib/lazyWithRetry";
 import { InlineLoading } from "../../../../components/common/LoadingState";
-import WisShopNavigation from "../../../../components/common/WisShopNavigation";
-import StudentPointNavigation from "./StudentPointNavigation";
+import { STUDENT_AVATAR_SHOP_URL } from "../../../../lib/avatarRoutes";
 
 const StudentAvatarStudio = lazyWithRetry(
   () => import("../../../../features/avatar/AvatarStudio"),
@@ -16,9 +15,8 @@ export default function StudentAvatarShopPage() {
   const { config, menuConfig } = useAuth();
   const pageTitle = getStudentMenuLabel(
     menuConfig,
-    "/student/points",
-    "위스",
-    "group",
+    STUDENT_AVATAR_SHOP_URL,
+    "아바타 상점",
   );
   const allowed =
     getStudentRouteAccess(
@@ -37,8 +35,6 @@ export default function StudentAvatarShopPage() {
         <header className="ws-page-header mb-4">
           <h1>{pageTitle}</h1>
         </header>
-        <StudentPointNavigation activeTab="shop" pageTitle={pageTitle} />
-        <WisShopNavigation portal="student" active="avatar" />
         {allowed ? (
           <React.Suspense fallback={<InlineLoading />}>
             <StudentAvatarStudio mode="shop" />

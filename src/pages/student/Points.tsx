@@ -52,7 +52,6 @@ import StudentPointShopTab from "./components/points/StudentPointShopTab";
 import StudentPointSummaryTab from "./components/points/StudentPointSummaryTab";
 import StudentPointNavigation from "./components/points/StudentPointNavigation";
 import StudentAvatarShopPage from "./components/points/StudentAvatarShopPage";
-import WisShopNavigation from "../../components/common/WisShopNavigation";
 import { isStudentAvatarShop } from "../../lib/avatarRoutes";
 
 type StudentPointTab = keyof typeof STUDENT_POINT_TAB_LABELS;
@@ -110,12 +109,6 @@ const Points: React.FC = () => {
     interfaceConfig,
     menuConfig,
   } = useAuth();
-  const pageTitle = getStudentMenuLabel(
-    menuConfig,
-    "/student/points",
-    "위스",
-    "group",
-  );
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const activeTab: StudentPointTab =
@@ -124,6 +117,14 @@ const Points: React.FC = () => {
     requestedTab === "orders"
       ? requestedTab
       : "overview";
+  const titleTab = activeTab === "orders" ? "shop" : activeTab;
+  const pageTitle = getStudentMenuLabel(
+    menuConfig,
+    titleTab === "overview"
+      ? "/student/points"
+      : `/student/points?tab=${titleTab}`,
+    STUDENT_POINT_TAB_LABELS[titleTab],
+  );
   const [wallet, setWallet] = useState<PointWallet | null>(null);
   const [transactions, setTransactions] = useState<PointTransaction[]>([]);
   const [historyCursor, setHistoryCursor] = useState("");
@@ -727,12 +728,12 @@ const Points: React.FC = () => {
           isHallOfFameTab ? "" : "ws-page--reading"
         }`}
       >
-        <header className="ws-page-header mb-4">
-          <h1>{pageTitle}</h1>
-        </header>
-        <StudentPointNavigation activeTab={activeTab} pageTitle={pageTitle} />
-        {activeTab === "shop" && (
-          <WisShopNavigation portal="student" active="products" />
+        {activeTab === "shop" || activeTab === "orders" ? (
+          <StudentPointNavigation activeTab={activeTab} pageTitle={pageTitle} />
+        ) : (
+          <header className="ws-page-header mb-4">
+            <h1>{pageTitle}</h1>
+          </header>
         )}
 
         <div className="min-w-0">

@@ -75,11 +75,15 @@ const browser=await playwright.chromium.launch({channel:process.env.PLAYWRIGHT_B
 const reports=[];let activePage;let failure;
 try {
   const retakeOnly = process.argv.includes("--retake-only");
-  for(const width of retakeOnly ? [390,1280] : [320,390,768,1280,1440])for(const category of retakeOnly ? ["diagnostic","formative"] : ["exam_prep","diagnostic","formative"]){
+  const headersOnly = process.argv.includes("--navigation-headers-only");
+  const headerStyle = node => {const style=getComputedStyle(node);return{position:style.position,minHeight:style.minHeight,background:style.backgroundColor,top:style.top,zIndex:style.zIndex,shadow:style.boxShadow}};
+  const expectedHeaderStyle = {position:"static",minHeight:"0px",background:"rgba(0, 0, 0, 0)",top:"auto",zIndex:"auto",shadow:"none"};
+  for(const width of headersOnly ? [390,768,1280] : retakeOnly ? [390,1280] : [320,390,768,1280,1440])for(const category of headersOnly ? ["diagnostic"] : retakeOnly ? ["diagnostic","formative"] : ["exam_prep","diagnostic","formative"]){
     const page=activePage=await browser.newPage({viewport:{width,height:1000},hasTouch:width<=768});
     const errors=[],external=[];page.on("pageerror",e=>errors.push(e.message));
     await page.route("**/*",route=>{if(route.request().url().startsWith(origin)||route.request().url().startsWith("data:"))return route.continue();external.push(route.request().url());return route.abort();});
     await page.goto(`${origin}/student/quiz/run?unitId=${category==="exam_prep"?"exam_prep":"fixture"}&category=${category}&round=round_2`);
+    if(headersOnly){await page.locator('.student-quiz-topbar').waitFor();assert.deepEqual(await page.locator('.student-quiz-topbar').evaluate(headerStyle),expectedHeaderStyle);await page.screenshot({path:path.join(evidence,`runner-header-${width}.png`),fullPage:true});}
     if(category==="exam_prep"){
       await page.getByRole("button",{name:"1번 문제 확대",exact:true}).click();
       const dialog=page.getByRole("dialog",{name:"1번 문제 확대",exact:true});
@@ -99,6 +103,7 @@ try {
     }
     await page.getByRole("button",{name:"제출하기",exact:true}).click();
     await page.getByRole("alertdialog").getByRole("button",{name:"제출하기",exact:true}).click();
+    if(headersOnly){await page.locator('.student-quiz-result-heading').waitFor();assert.deepEqual(await page.locator('.student-quiz-result-heading').evaluate(headerStyle),expectedHeaderStyle);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);await page.screenshot({path:path.join(evidence,`result-header-${width}.png`),fullPage:true});reports.push({width,category,headers:true,network:"local fixture only",passed:true});await page.close();activePage=null;continue;}
     if (retakeOnly) {
       await page.getByRole("button", {name:"다시 풀기",exact:true}).click();
       await page.getByRole("button", {name:/경주/}).waitFor();

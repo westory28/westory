@@ -7,7 +7,7 @@ import type { CalendarEvent } from "../../../types";
 import {
   getScheduleCategoryMeta,
   getScheduleEventColor,
-  useScheduleCategories,
+  type ScheduleCategory,
 } from "../../../lib/scheduleCategories";
 import {
   compareCalendarSchedule,
@@ -29,6 +29,7 @@ type View = "dayGridMonth" | "listMonth";
 
 interface Props {
   events: CalendarEvent[];
+  categories: ScheduleCategory[];
   attendanceDates: string[];
   onEventClick: (event: CalendarEvent) => void;
 }
@@ -36,11 +37,11 @@ interface Props {
 // Uses the same calendar shell and grid styles as TeacherCalendarSection.
 export default function StudentCalendarSection({
   events,
+  categories,
   attendanceDates,
   onEventClick,
 }: Props) {
   const calendarRef = useRef<FullCalendar>(null);
-  const { categories } = useScheduleCategories();
   const [view, setView] = useState<View>("dayGridMonth");
   const [title, setTitle] = useState("");
   const [range, setRange] = useState({ start: "", end: "" });

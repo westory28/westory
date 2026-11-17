@@ -12,7 +12,6 @@ import {
   studentWisStockError,
   studentWisStockNow,
 } from "../../lib/studentWisStockClient";
-import WisShopNavigation from "../../components/common/WisShopNavigation";
 import WisStockPriceChart, {
   stockObservations,
 } from "../../components/common/WisStockPriceChart";
@@ -438,7 +437,6 @@ export default function StudentWisStocks() {
       <header className="ws-page-header">
         <h1>위스피(WsPI)</h1>
       </header>
-      <WisShopNavigation portal="student" active="stocks" />
       {status.status === "loading" && (
         <p role="status">위스피를 불러오는 중입니다.</p>
       )}

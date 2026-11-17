@@ -1,5 +1,5 @@
 import { getStudentMenuLabel } from "../../constants/menus";
-import { getScheduleEventColor } from "../../lib/scheduleCategories";
+import { useScheduleCategories } from "../../lib/scheduleCategories";
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { db } from "../../lib/firebase";
@@ -8,15 +8,16 @@ import {
   getKoreanPublicHolidays,
   mergeEventsWithKoreanPublicHolidays,
 } from "../../lib/koreanPublicHolidays";
-import { getSchedulePeriodRangeLabel } from "../../lib/schedulePeriods";
 import { loadVisibleCalendarEvents } from "../../lib/visibleSchedule";
 import StudentCalendarSection from "./components/StudentCalendarSection";
+import ScheduleEventDetailModal from "../../components/common/ScheduleEventDetailModal";
 import type { CalendarEvent } from "../../types";
 import { useAttendanceDates } from "./hooks/useAttendanceDates";
 import { LoadingOverlay } from "../../components/common/LoadingState";
 
 const Calendar = () => {
   const { user, menuConfig } = useAuth();
+  const { categories } = useScheduleCategories();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [userClass, setUserClass] = useState<string | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
@@ -33,19 +34,9 @@ const Calendar = () => {
     currentConfig && userClass
       ? `${currentConfig.year}/${currentConfig.semester}/${userClass}`
       : "";
-  // Modal State
-  const [modalOpen, setModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(
     null,
   );
-
-  const typeLabelMap: { [key: string]: string } = {
-    exam: "정기 시험",
-    performance: "수행평가",
-    event: "행사",
-    diagnosis: "진단평가",
-    formative: "형성평가",
-  };
 
   useEffect(() => {
     let active = true;
@@ -154,7 +145,6 @@ const Calendar = () => {
   const handleEventClick = (event: CalendarEvent) => {
     if (event.eventType === "holiday") return;
     setSelectedEvent(event);
-    setModalOpen(true);
   };
 
   return (
@@ -198,75 +188,17 @@ const Calendar = () => {
       >
         <StudentCalendarSection
           events={events}
+          categories={categories}
           attendanceDates={attendance.dates}
           onEventClick={handleEventClick}
         />
       </div>
 
-      {/* Detail Modal */}
-      {modalOpen && selectedEvent && (
-        <div
-          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
-          onClick={() => setModalOpen(false)}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 mx-4 relative transform transition-all scale-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-4">
-              <span
-                className="px-2 py-1 rounded text-xs font-bold text-white inline-block mb-2"
-                style={{
-                  backgroundColor: getScheduleEventColor(selectedEvent),
-                }}
-              >
-                {typeLabelMap[selectedEvent.eventType] || "일정"}
-              </span>
-              <h3 className="text-xl font-bold text-gray-900 leading-tight">
-                {selectedEvent.title}
-              </h3>
-            </div>
-
-            <div className="space-y-3 text-sm text-gray-600 bg-gray-50 p-4 rounded-xl border border-gray-100 mb-6">
-              <div className="flex items-start gap-3">
-                <i className="fas fa-clock mt-1 text-blue-500"></i>
-                <div>
-                  <p className="font-bold text-gray-800">기간</p>
-                  <p>
-                    {selectedEvent.start}{" "}
-                    {selectedEvent.end &&
-                    selectedEvent.end !== selectedEvent.start
-                      ? `~ ${selectedEvent.end}`
-                      : ""}
-                    <span className="ml-2 font-bold text-blue-600">
-                      {getSchedulePeriodRangeLabel(
-                        selectedEvent.startPeriod ?? selectedEvent.period,
-                        selectedEvent.endPeriod,
-                      )}
-                    </span>
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <i className="fas fa-align-left mt-1 text-blue-500"></i>
-                <div>
-                  <p className="font-bold text-gray-800">상세 내용</p>
-                  <p className="whitespace-pre-wrap leading-relaxed">
-                    {selectedEvent.description || "-"}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setModalOpen(false)}
-              className="w-full bg-gray-800 text-white font-bold py-3 rounded-xl hover:bg-gray-900 transition"
-            >
-              닫기
-            </button>
-          </div>
-        </div>
-      )}
+      <ScheduleEventDetailModal
+        event={selectedEvent}
+        categories={categories}
+        onClose={() => setSelectedEvent(null)}
+      />
     </div>
   );
 };

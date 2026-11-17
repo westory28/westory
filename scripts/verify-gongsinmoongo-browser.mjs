@@ -521,7 +521,8 @@ try {
           `${role} page scroll at ${width}x${height}: ${geometry.pageHeight}`,
         );
         assert(geometry.composer.bottom <= height + 1);
-        assert(geometry.conversation.height >= 300);
+        // Fractional font metrics can round the available height below 300px.
+        assert(geometry.conversation.height + 1 >= 300);
         if (role === "student")
           assert(
             geometry.conversation.width >= width - 320,
@@ -625,20 +626,38 @@ try {
               .evaluate((el) => getComputedStyle(el).backgroundColor),
             "rgba(0, 0, 0, 0)",
           );
-        for (const selector of [".gsm-page-header", ".gsm-chat-header"]) {
-          const headerStyle = await page
-            .locator(selector)
-            .evaluate((element) => {
-              const style = getComputedStyle(element);
-              return {
-                background: style.backgroundColor,
-                position: style.position,
-              };
-            });
-          assert.equal(headerStyle.background, "rgba(0, 0, 0, 0)");
-          assert.equal(headerStyle.position, "static");
-        }
       }
+      for (const selector of [".gsm-page-header", ".gsm-chat-header"]) {
+        const headerStyle = await page.locator(selector).evaluate((element) => {
+          const style = getComputedStyle(element);
+          return {
+            background: style.backgroundColor,
+            position: style.position,
+            minHeight: style.minHeight,
+            shadow: style.boxShadow,
+          };
+        });
+        assert.equal(
+          headerStyle.background,
+          "rgba(0, 0, 0, 0)",
+          `${role} ${selector}`,
+        );
+        assert.equal(headerStyle.position, "static", `${role} ${selector}`);
+        assert.equal(headerStyle.minHeight, "0px", `${role} ${selector}`);
+        assert.equal(headerStyle.shadow, "none", `${role} ${selector}`);
+      }
+      assert(
+        await page.evaluate(() => {
+          const title = document
+            .querySelector(".gsm-page-header h1")
+            .getBoundingClientRect();
+          const tabs = document
+            .querySelector(".gsm-page-header .ws-page-tabs")
+            .getBoundingClientRect();
+          return tabs.top >= title.bottom;
+        }),
+        `${role}: tabs follow the title`,
+      );
       await page.screenshot({
         path: path.join(evidence, `${role}-${width}x${height}.png`),
         fullPage: true,

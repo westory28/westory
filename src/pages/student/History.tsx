@@ -162,19 +162,11 @@ const StudentExamAnswer: React.FC = () => {
   if (!hasAnyInput) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
-        <main className="flex-1 w-full max-w-4xl mx-auto px-4 py-8">
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-10 text-center">
-            <div className="text-4xl text-gray-300 mb-3">
-              <i className="fas fa-file-alt"></i>
-            </div>
-            <h1 className="text-2xl font-bold text-gray-800 mb-2">
-              {pageTitle}
-            </h1>
-            <p className="text-gray-500 font-bold">아직 입력된게 없습니다.</p>
-            <p className="text-sm text-gray-400 mt-2">
-              교사가 정기 시험 답안을 입력하면 이곳에 표시됩니다.
-            </p>
-          </div>
+        <main className="ws-page ws-page--reading flex-1">
+          <header className="ws-page-header mb-6">
+            <h1>{pageTitle}</h1>
+          </header>
+          <p className="text-gray-500">아직 등록된 답안이 없습니다.</p>
         </main>
       </div>
     );
@@ -216,9 +208,9 @@ const StudentExamAnswer: React.FC = () => {
                 return (
                   <div
                     key={index}
-                    className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0"
+                    className="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-gray-100 last:border-b-0"
                   >
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 sm:gap-4">
                       <span className="w-8 text-center text-blue-600 font-bold">
                         {index + 1}
                       </span>
@@ -254,7 +246,7 @@ const StudentExamAnswer: React.FC = () => {
                         })}
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="ml-auto flex items-center gap-3">
                       <span className="text-xs font-bold text-gray-400">
                         {item.score}점
                       </span>
@@ -282,12 +274,6 @@ const StudentExamAnswer: React.FC = () => {
             </span>
             서술형 답안
           </h2>
-
-          <div className="bg-yellow-50 text-yellow-800 text-sm p-3 rounded mb-4">
-            <i className="fas fa-info-circle mr-1"></i>
-            정답을 확인한 후 <strong>정답 인정</strong> 또는{" "}
-            <strong>오답</strong>을 선택하세요.
-          </div>
 
           {examConfig?.subjective.some(
             (parent) => (parent.subItems || []).length > 0,

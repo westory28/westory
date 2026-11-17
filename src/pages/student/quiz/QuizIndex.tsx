@@ -58,12 +58,17 @@ const examScenes = [
 const QuizIndex: React.FC = () => {
   const { userData, currentUser, config, menuConfig } = useAuth();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const linkedRound = isMockExamRound(searchParams.get("round"))
     ? normalizeMockExamRound(searchParams.get("round"))
     : "";
-  const openMockFromLink =
-    searchParams.get("tab") === "mock" || isMockExamRound(linkedRound);
+  const activeTab =
+    searchParams.get("tab") === "units"
+      ? "units"
+      : searchParams.get("tab") === "mock" || isMockExamRound(linkedRound)
+        ? "mock"
+        : "units";
+  const selectedRound = isMockExamRound(linkedRound) ? linkedRound : "round_1";
 
   const [tree, setTree] = useState<TreeItem[]>([]);
   const [assessmentConfig, setAssessmentConfig] = useState<
@@ -73,12 +78,8 @@ const QuizIndex: React.FC = () => {
   const [loadError, setLoadError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
-  const [activeTab, setActiveTab] = useState<"units" | "mock">(
-    openMockFromLink ? "mock" : "units",
-  );
-  const [hasOpenedMockExam, setHasOpenedMockExam] = useState(openMockFromLink);
-  const [selectedRound, setSelectedRound] = useState<MockExamRound>(
-    isMockExamRound(linkedRound) ? linkedRound! : "round_1",
+  const [hasOpenedMockExam, setHasOpenedMockExam] = useState(
+    activeTab === "mock",
   );
   const [clockNow, setClockNow] = useState(Date.now);
   const [serverClockOffset, setServerClockOffset] = useState(0);
@@ -94,11 +95,8 @@ const QuizIndex: React.FC = () => {
   const mockScope = `${currentUser?.uid || ""}:${semesterId}`;
 
   useEffect(() => {
-    if (!openMockFromLink) return;
-    setActiveTab("mock");
-    setHasOpenedMockExam(true);
-    if (isMockExamRound(linkedRound)) setSelectedRound(linkedRound!);
-  }, [linkedRound, openMockFromLink]);
+    if (activeTab === "mock") setHasOpenedMockExam(true);
+  }, [activeTab]);
 
   // One local timer at the next opening boundary. Returning from a sleeping
   // mobile tab updates the same clock without polling or starting an attempt.
@@ -255,8 +253,17 @@ const QuizIndex: React.FC = () => {
   ]);
 
   const selectTab = (tab: "units" | "mock") => {
-    setActiveTab(tab);
-    if (tab === "mock") setHasOpenedMockExam(true);
+    if (tab === activeTab) return;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("tab", tab);
+    setSearchParams(nextParams);
+  };
+  const selectRound = (round: MockExamRound) => {
+    if (round === selectedRound) return;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("tab", "mock");
+    nextParams.set("round", round);
+    setSearchParams(nextParams);
   };
   const roundStatus = (round: MockExamRound, visible: boolean) => {
     const state = currentMockOverview?.rounds.find(
@@ -423,7 +430,7 @@ const QuizIndex: React.FC = () => {
                 aria-pressed={selected.round === round}
                 aria-controls="student-exam-detail"
                 aria-label={`${formatMockExamRoundShortLabel(round)} · ${roundStatus(round, visible)}`}
-                onClick={() => setSelectedRound(round)}
+                onClick={() => selectRound(round)}
               >
                 <span className="student-exam-lobby__round-number">
                   {getMockExamRoundNumber(round)}회

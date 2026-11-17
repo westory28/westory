@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import PortalSubNavigation from "../../../../components/common/PortalSubNavigation";
 import type { StudentCurriculumTreeItem } from "../../../../lib/studentLessonReadCache";
 
@@ -31,6 +31,25 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
     new Set(),
   );
+  useEffect(() => {
+    if (!selectedUnitId) return;
+    const bigIndex = tree.findIndex((big) =>
+      big.children?.some((mid) =>
+        mid.children?.some((unit) => unit.id === selectedUnitId),
+      ),
+    );
+    if (bigIndex < 0) return;
+    const midIndex = tree[bigIndex].children?.findIndex((mid) =>
+      mid.children?.some((unit) => unit.id === selectedUnitId),
+    );
+    setCollapsedGroups((previous) => {
+      const keys = [`big-${bigIndex}`, `mid-${bigIndex}-${midIndex}`];
+      if (!keys.some((key) => previous.has(key))) return previous;
+      const next = new Set(previous);
+      keys.forEach((key) => next.delete(key));
+      return next;
+    });
+  }, [selectedUnitId, tree]);
   const toggleGroup = (key: string) => {
     setCollapsedGroups((previous) => {
       const next = new Set(previous);
@@ -59,7 +78,27 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
               aria-expanded={!collapsedGroups.has(`big-${bigIdx}`)}
               onClick={() => toggleGroup(`big-${bigIdx}`)}
             >
-              {big.title}
+              <span>{big.title}</span>
+              <svg
+                aria-hidden="true"
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                className={
+                  collapsedGroups.has(`big-${bigIdx}`)
+                    ? "-rotate-90 shrink-0"
+                    : "shrink-0"
+                }
+              >
+                <path
+                  d="m4 6 4 4 4-4"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </button>
           </h3>
           <div

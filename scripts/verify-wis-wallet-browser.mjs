@@ -74,7 +74,7 @@ const start=cursor?rows.findIndex(row=>row.uid===cursor)+1:0,chunk=rows.slice(st
 if(qa.holdRosterNext){qa.holdRosterNext=false;await new Promise(resolve=>qa.releaseRoster=resolve)}if(qa.failRoster)throw Error('synthetic roster failed');return result};
 export const listPointStudentTargets=async()=>[wallet()],listPointStudentTargetsByClass=async()=>[wallet()];
 export const getPointSchoolOptions=async()=>{qa.calls.push({kind:'school'});return{grades:[{value:'3',label:'3학년'}],classes:[{value:'1',label:'1반'},{value:'2',label:'2반'}]}};
-export const listStudentPointOrders=async()=>[],listStudentPointProducts=async()=>[];
+export const listStudentPointOrders=async()=>{qa.calls.push({kind:'orders'});return[]},listStudentPointProducts=async()=>{qa.calls.push({kind:'products'});return[]};
 export const listPointProducts=async()=>{qa.calls.push({kind:'products'});return[]},listPointOrders=async()=>{qa.calls.push({kind:'orders'});return[]},listPointTransactionsByUid=async()=>[];
 export const getStudentPointHallOfFame=async()=>null;
 export const getPendingCanonicalPointAdjustment=()=>null;
@@ -695,12 +695,7 @@ try {
     await tabs.waitFor();
     assert.deepEqual(await tabs.getByRole("link").allTextContents(), ["상품 관리", "구매 요청 관리"]);
     assert.equal(await tabs.getByRole("link", { name: "상품 관리", exact: true }).getAttribute("aria-current"), "page");
-    if (width < 768) await shop.locator('.wis-village-navigation .teacher-settings-menu-toggle').click();
-    const village = shop.getByRole("navigation", { name: "위스 마을 메뉴", exact: true });
-    assert.equal(await village.getByRole("link", { name: "위스 상점", exact: true }).getAttribute("aria-current"), "page");
-    // The synthetic teacher lacks avatar settings privileges; the common nav
-    // still exposes the released shop and teacher-only WsPI.
-    assert.deepEqual(await village.getByRole("link").evaluateAll(links => links.map(link => link.getAttribute("aria-label") || link.textContent)), ["위스 상점", "위스피(WsPI)"]);
+    assert.equal(await shop.locator('.wis-village-navigation').count(), 0, "Shop siblings live in the primary sidebar");
     await tabs.getByRole("link", { name: "구매 요청 관리", exact: true }).press("Enter");
     await shop.waitForFunction(() => window.wisWalletQa.calls.some(call => call.kind === "orders"));
     assert.equal(await tabs.getByRole("link", { name: "구매 요청 관리", exact: true }).getAttribute("aria-current"), "page");
@@ -716,7 +711,36 @@ try {
     await shop.screenshot({ path: path.join(evidence, `teacher-shop-tabs-${width}.png`), fullPage: true });
     await shop.close();
   }
-  checks.push("Village and actual ManagePoints shop tabs at 320/390/768/1440: two internal destinations, keyboard navigation, unchanged catalog/order reads, transparent header, no overflow.");
+  checks.push("Actual ManagePoints shop tabs at 320/390/768/1440: two internal destinations, keyboard navigation, unchanged catalog/order reads, transparent header, no overflow.");
+  for (const width of [320, 390, 768, 1280, 1440]) {
+    const shop = await open(width, false, "shop");
+    const tabs = shop.getByRole("navigation", { name: "위스 상점 메뉴", exact: true });
+    await tabs.waitFor();
+    await shop.waitForFunction(() => window.wisWalletQa.calls.some(call => call.kind === "products"));
+    assert.deepEqual(await tabs.getByRole("link").allTextContents(), ["위스 상점", "구매 내역"]);
+    assert.equal(await shop.getByRole("heading", { name: "위스 상점", exact: true }).count(), 1);
+    assert.equal(await shop.getByRole("navigation").count(), 1, "Only the shop's own destinations are repeated inside the page");
+    const before = await shop.evaluate(() => window.wisWalletQa.calls.length);
+    await tabs.getByRole("link", { name: "구매 내역", exact: true }).press("Enter");
+    await shop.waitForFunction(() => window.wisWalletQa.calls.some(call => call.kind === "orders"));
+    assert.deepEqual(await shop.evaluate(start => window.wisWalletQa.calls.slice(start).map(call => call.kind), before), ["orders"]);
+    assert.equal(await tabs.getByRole("link", { name: "구매 내역", exact: true }).getAttribute("aria-current"), "page");
+    await shop.goBack();
+    await shop.waitForFunction(() => location.hash.endsWith("tab=shop"));
+    assert.equal(await tabs.getByRole("link", { name: "위스 상점", exact: true }).getAttribute("aria-current"), "page");
+    await shop.goForward();
+    await shop.waitForFunction(() => location.hash.endsWith("tab=orders"));
+    const layout = await shop.evaluate(() => {
+      const style = getComputedStyle(document.querySelector('.teacher-sub-navigation--tabs'));
+      return { scroll: document.documentElement.scrollWidth, background: style.backgroundColor, shadow: style.boxShadow };
+    });
+    assert(layout.scroll <= width, `Student shop overflows at ${width}`);
+    assert.equal(layout.background, "rgba(0, 0, 0, 0)");
+    assert.equal(layout.shadow, "none");
+    await shop.screenshot({ path: path.join(evidence, `student-shop-tabs-${width}.png`), fullPage: true });
+    await shop.close();
+  }
+  checks.push("Student shop at 320/390/768/1280/1440: one title and one tab row, purchase history keyboard/back/forward navigation, only one deferred order read, transparent header and no overflow.");
   const paging = await open(1280, true);
   await paging.getByText("충무공 도전 비용", { exact: true }).waitFor();
   await paging.evaluate(() => {

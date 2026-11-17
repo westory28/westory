@@ -681,7 +681,7 @@ async function sidebarChecks(page, portal, width) {
     false,
     "Opening another upper menu closes the old group",
   );
-  const management = sidebar.getByRole(portal === "teacher" ? "link" : "button", { name: "위스 관리", exact: true });
+  const management = sidebar.getByRole("link", { name: portal === "teacher" ? "위스 관리" : "내 위스", exact: true });
   assert.equal(await sidebar.getByRole("button", { name: "위스 마을", exact: true }).count(), 0);
   if (portal === "teacher") {
     assert.equal(await sidebar.getByRole("button", { name: "위스 관리", exact: true }).count(), 0);
@@ -695,19 +695,10 @@ async function sidebarChecks(page, portal, width) {
       assert.equal(await management.getAttribute("aria-current"), "page", `The management link is active for ${tab}`);
     }
   } else {
-  const managementPanel = sidebar.locator(`#${await management.getAttribute("aria-controls")}`);
-  await management.press("Enter");
-  await expanded(management, true, "Wis management opens as a nested group");
-  assert.deepEqual(
-    await managementPanel.getByRole("link").allTextContents(),
-    ["내 위스"],
-  );
+  assert.equal(await sidebar.getByRole("button", { name: "위스 관리", exact: true }).count(), 0);
   await navigateLink("내 위스");
   await expanded(points, true, "The newly selected group remains open");
-  await expanded(management, true, "Selecting management preserves both ancestors");
-  await management.press("Enter");
-  await expanded(management, false, "Nested management can be folded manually");
-  assert.equal(await managementPanel.locator('a:not([tabindex="-1"])').count(), 0);
+  assert.equal(await management.getAttribute("aria-current"), "page", "The wallet is selected directly");
   if (mobile) {
     await page.keyboard.press("Escape");
     await checkMobileReturn();
@@ -715,13 +706,12 @@ async function sidebarChecks(page, portal, width) {
     await sidebar.getByRole("button", { name: "메뉴 접기", exact: true }).click();
     await sidebar.getByRole("button", { name: "메뉴 펼치기", exact: true }).click();
   }
-  await expanded(management, false, "Unchanged route preserves a nested manual fold");
+  assert.equal(await management.getAttribute("aria-current"), "page", "The wallet selection survives closing the menu");
   await navigateHash("#/student/points?tab=hall-of-fame");
   }
   const managementHash = portal === "teacher" ? "#/teacher/points?tab=policy" : "#/student/points";
   await navigateHash(managementHash);
-  if (portal === "student") await expanded(management, true, "Direct management links reveal both ancestors");
-  else assert.equal(await management.getAttribute("aria-current"), "page");
+  assert.equal(await management.getAttribute("aria-current"), "page");
   const queryLink = await navigateLink(
     portal === "teacher" ? "명예의 전당 관리" : "명예의 전당",
   );
@@ -735,20 +725,17 @@ async function sidebarChecks(page, portal, width) {
       await queryLink.evaluate((el) => el === document.activeElement),
       "Query-only navigation preserves child focus",
     );
-  if (portal === "student") await expanded(management, false, "Hall of fame is directly under Wis, outside management");
-  else assert.equal(await management.getAttribute("aria-current"), null, "Hall of fame is outside management");
+  assert.equal(await management.getAttribute("aria-current"), null, "Hall of fame is a separate Wis destination");
   await page.goBack();
   await page.waitForFunction((hash) => location.hash === hash, managementHash);
   await checkMobileReturn();
   await expanded(points, true, "Back to management opens Wis");
-  if (portal === "student") await expanded(management, true, "Back to management restores the nested group");
-  else assert.equal(await management.getAttribute("aria-current"), "page", "Back restores the management selection");
+  assert.equal(await management.getAttribute("aria-current"), "page", "Back restores the wallet/management selection");
   await page.goForward();
   await page.waitForFunction((hash) => location.hash === hash, `#/${portal}/points?tab=hall-of-fame`);
   await checkMobileReturn();
   await expanded(points, true, "Forward to hall keeps Wis open");
-  if (portal === "student") await expanded(management, false, "Forward to hall closes management");
-  else assert.equal(await management.getAttribute("aria-current"), null, "Forward restores the hall selection");
+  assert.equal(await management.getAttribute("aria-current"), null, "Forward restores the hall selection");
   const currentHash =
     portal === "teacher"
       ? "#/teacher/points?tab=products"
@@ -828,12 +815,12 @@ async function sidebarChecks(page, portal, width) {
   const wis = sidebar.locator(`#${portal}-menu-points`);
   assert.equal(await sidebar.locator(`#${portal}-menu-shop`).count(), 0);
   const directWisLinks = wis.locator(":scope > .teacher-sidebar-submenu-clip > .teacher-sidebar-children > a");
-  assert.equal(await directWisLinks.count(), portal === "teacher" ? 5 : 3);
+  assert.equal(await directWisLinks.count(), portal === "teacher" ? 5 : 4);
   assert.deepEqual(
     await directWisLinks.allTextContents(),
     portal === "teacher"
       ? ["위스 관리", "명예의 전당 관리", "위스 상점", "아바타 상점", "위스피(WsPI)"]
-      : ["명예의 전당", "위스 상점", "아바타 상점"],
+      : ["내 위스", "명예의 전당", "위스 상점", "아바타 상점"],
   );
   if (portal === "teacher") {
     await navigateHash("#/teacher/points?tab=stocks");

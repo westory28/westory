@@ -506,7 +506,7 @@ const Header: React.FC<{
   const consolidateWisGroup = (
     group: TeacherSidebarGroup | undefined,
     shops: TeacherSidebarGroup["children"],
-    nestedManagement = true,
+    teacherManagement = false,
   ) => {
     if (!group) return;
     const isHall = (child: { resolvedUrl: string }) =>
@@ -514,17 +514,14 @@ const Header: React.FC<{
       "hall-of-fame";
     const management = group.children.filter((child) => !isHall(child));
     group.children = [
-      ...(management.length
+      ...(teacherManagement && management.length
         ? [
             {
               name: "위스 관리",
-              resolvedUrl: nestedManagement
-                ? management[0].resolvedUrl
-                : "/teacher/points",
-              ...(nestedManagement ? { children: management } : {}),
+              resolvedUrl: "/teacher/points",
             },
           ]
-        : []),
+        : management),
       ...group.children.filter(isHall),
       ...shops,
     ];
@@ -533,7 +530,7 @@ const Header: React.FC<{
   consolidateWisGroup(
     teacherSidebarGroups.find((group) => group.id === "points"),
     shopChildren,
-    false,
+    true,
   );
   const dictionaryChild = resolvedTeacherMenus
     .flatMap((item) => item.resolvedChildren)

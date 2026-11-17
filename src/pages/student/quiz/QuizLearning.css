@@ -19,6 +19,16 @@
   color: var(--ws-text);
 }
 
+.student-quiz-topbar,
+.student-quiz-result-heading {
+  position: static;
+  top: auto;
+  z-index: auto;
+  min-height: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .student-quiz-topbar {
   display: flex;
   align-items: center;

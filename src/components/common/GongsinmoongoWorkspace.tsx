@@ -848,11 +848,7 @@ export default function GongsinmoongoWorkspace({
         </PortalSubNavigation>
       )}
       <div className="teacher-sub-content gsm-content">
-        <header
-          className={
-            teacher ? "ws-page-header gsm-page-header" : "gsm-page-header"
-          }
-        >
+        <header className="ws-page-header gsm-page-header">
           <div className="gsm-title-line">
             <h1>
               <GongsinBrand />

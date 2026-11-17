@@ -191,18 +191,18 @@
   background: white;
   border-bottom: 1px solid var(--ws-border, #e5e7eb);
 }
-.gsm-teacher :is(.gsm-page-header, .gsm-chat-header) {
+.gsm-workspace :is(.gsm-page-header, .gsm-chat-header) {
   position: static;
   min-height: 0;
   background: transparent;
   box-shadow: none;
 }
-.gsm-teacher .gsm-page-header {
+.gsm-workspace .gsm-page-header {
   flex-wrap: wrap;
   gap: 4px 12px;
   border: 0;
 }
-.gsm-teacher .gsm-title-line {
+.gsm-workspace .gsm-title-line {
   display: flex;
   flex: 0 0 100%;
   align-items: center;
@@ -225,11 +225,11 @@
   background: var(--ws-primary-soft, #eff6ff);
   color: var(--ws-primary-text, #1e3a8a);
 }
-.gsm-teacher .gsm-page-header .ws-page-tabs {
+.gsm-workspace .gsm-page-header .ws-page-tabs {
   flex: 1;
   order: 0;
 }
-.gsm-teacher .gsm-refresh {
+.gsm-workspace .gsm-refresh {
   flex: none;
   margin-left: 0;
 }
