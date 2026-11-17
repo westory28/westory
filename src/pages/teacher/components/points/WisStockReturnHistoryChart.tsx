@@ -9,7 +9,7 @@ interface ReturnSeries {
   studentKey: string;
   studentName: string;
   studentLabel: string;
-  returnPercent: number;
+  returnPercent: number | null;
   observations: readonly WisStockReturnObservation[];
 }
 const percent = (value: number) =>
@@ -35,8 +35,12 @@ const strokes = [undefined, "8 4", "2 4", "10 3 2 3", "12 4 4 4"];
 
 export default function WisStockReturnHistoryChart({
   series,
+  range,
+  label = "보유 수익률 상위 5명",
 }: {
   series: readonly ReturnSeries[];
+  range?: { fromMs: number; toMs: number };
+  label?: string;
 }) {
   const canvas = useRef<HTMLDivElement>(null);
   const id = useId();
@@ -49,9 +53,12 @@ export default function WisStockReturnHistoryChart({
     () =>
       series.map((item) => ({
         ...item,
-        points: wisStockReturnObservations(item.observations),
+        points: wisStockReturnObservations(item.observations).filter(
+          (point) =>
+            !range || (point.atMs >= range.fromMs && point.atMs <= range.toMs),
+        ),
       })),
-    [series],
+    [series, range?.fromMs, range?.toMs],
   );
   useEffect(() => {
     const element = canvas.current;
@@ -63,7 +70,7 @@ export default function WisStockReturnHistoryChart({
     return () => observer.disconnect();
   }, []);
   const membership = lines.map((line) => line.studentKey).join(":");
-  useEffect(() => setSelected(null), [membership]);
+  useEffect(() => setSelected(null), [membership, range?.fromMs, range?.toMs]);
   const points = lines.flatMap((line) => line.points);
   const values = points.flatMap((point) =>
     point.returnPercent === null ? [] : [point.returnPercent],
@@ -82,8 +89,9 @@ export default function WisStockReturnHistoryChart({
     top = 24,
     bottom = 212,
     height = 272;
-  const start = points.reduce((a, b) => Math.min(a, b.atMs), Infinity),
-    end = points.reduce((a, b) => Math.max(a, b.atMs), 0);
+  const start =
+      range?.fromMs ?? points.reduce((a, b) => Math.min(a, b.atMs), Infinity),
+    end = range?.toMs ?? points.reduce((a, b) => Math.max(a, b.atMs), 0);
   const x = (atMs: number) =>
     left +
     (end > start ? (atMs - start) / (end - start) : 0.5) * (right - left);
@@ -134,7 +142,7 @@ export default function WisStockReturnHistoryChart({
     <div className="wis-return-history">
       <ol
         className="wis-return-history__legend"
-        aria-label="보유 수익률 상위 학생"
+        aria-label="차트에 표시된 학생"
       >
         {lines.map((line, index) => (
           <li key={line.studentKey} data-series={index}>
@@ -149,7 +157,8 @@ export default function WisStockReturnHistoryChart({
             </svg>
             <div>
               <strong>
-                {index + 1}. {line.studentName}
+                {lines.length > 1 ? `${index + 1}. ` : ""}
+                {line.studentName}
               </strong>
               <small>
                 {line.studentLabel}
@@ -162,14 +171,16 @@ export default function WisStockReturnHistoryChart({
             </div>
             <span
               className={
-                line.returnPercent > 0
+                (line.returnPercent ?? 0) > 0
                   ? "is-up"
-                  : line.returnPercent < 0
+                  : (line.returnPercent ?? 0) < 0
                     ? "is-down"
                     : "is-flat"
               }
             >
-              {percent(line.returnPercent)}
+              {line.returnPercent === null
+                ? "미보유"
+                : percent(line.returnPercent)}
             </span>
           </li>
         ))}
@@ -179,7 +190,7 @@ export default function WisStockReturnHistoryChart({
         className="wis-return-history__canvas"
         role="group"
         tabIndex={points.length ? 0 : -1}
-        aria-label="상위 5명 시기별 보유 수익률 차트"
+        aria-label={`${label} 시기별 차트`}
         aria-describedby={`${id}-help${active ? ` ${id}-value` : ""}`}
         onFocus={() => setSelected(latest())}
         onBlur={() => setSelected(null)}
@@ -396,7 +407,9 @@ export default function WisStockReturnHistoryChart({
       </div>
       {!points.length && (
         <p className="wis-return-history__notice">
-          아직 수익률 기록이 없습니다.
+          {range
+            ? "선택한 기간에 수익률 기록이 없습니다."
+            : "아직 수익률 기록이 없습니다."}
         </p>
       )}
       {!!points.length && !values.length && (
@@ -404,16 +417,6 @@ export default function WisStockReturnHistoryChart({
           확인할 수 있는 보유 수익률 기록이 없습니다.
         </p>
       )}
-      {!!values.length &&
-        lines.every(
-          (line) =>
-            line.points.filter((point) => point.returnPercent !== null)
-              .length <= 1,
-        ) && (
-          <p className="wis-return-history__notice">
-            첫 기록입니다. 다음 기록부터 변화가 선으로 이어집니다.
-          </p>
-        )}
     </div>
   );
 }

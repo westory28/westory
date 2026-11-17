@@ -18,7 +18,7 @@ const { chromium } = require(
       ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright",
     ),
 );
-const output = path.join(root, "output/wispi-top-five-20261117/board");
+const output = path.join(root, "output/wispi-charts-20261117/investment");
 await fs.mkdir(output, { recursive: true });
 const imp = (file) =>
   JSON.stringify(path.join(root, file).replaceAll("\\", "/"));
@@ -76,8 +76,8 @@ import ${imp("src/pages/teacher/components/points/TeacherWisStocks.css")};
 function App(){const[mounted,setMounted]=useState(true),[account,setAccount]=useState(1),[scope,setScope]=useState({year:'2026',semester:'2'});
  qa.leave=()=>setMounted(false);qa.enter=()=>setMounted(true);qa.switchAccount=()=>setAccount(value=>value+1);
  qa.switchSemester=()=>setScope({year:'2027',semester:'1'});
- return <><aside className="fixture-teacher-rail" aria-hidden="true">교사</aside><aside className="fixture-village-rail" aria-hidden="true">위스<br/>마을</aside>
- <main className="ws-page wis-stocks"><h1>학생 투자 현황</h1>{mounted&&<Board key={account+':'+scope.year+':'+scope.semester} {...scope}/>}</main></>;
+ return <><aside className="fixture-teacher-rail" aria-hidden="true">교사</aside>
+ <main className="ws-page wis-stocks"><h1>학생 투자 현황</h1>{mounted&&<Board key={account} {...scope}/>}</main></>;
 }createRoot(document.getElementById('root')).render(<App/>);`;
 const historyService = `
 export async function getWisStockInvestmentHistories(scope){
@@ -86,14 +86,17 @@ export async function getWisStockInvestmentHistories(scope){
  const results=scope.studentKeys.map(studentKey=>{
  const row=qa.last.rows.find(row=>row.studentKey===studentKey);
  const asOfMs=qa.last.asOfMs;
- const points=[{atMs:asOfMs-3600000,holdingValue:1000,holdingCostBasis:1000},
+ const points=[{atMs:asOfMs-40*86400000,holdingValue:700,holdingCostBasis:1000},
+ {atMs:asOfMs-10*86400000,holdingValue:900,holdingCostBasis:1000},
+ {atMs:asOfMs-2*86400000,holdingValue:950,holdingCostBasis:1000},
+ {atMs:asOfMs-3600000,holdingValue:1000,holdingCostBasis:1000},
  {atMs:asOfMs-2400000,holdingValue:1200,holdingCostBasis:1000},
  {atMs:asOfMs-1800000,holdingValue:null,holdingCostBasis:null},
  {atMs:asOfMs-1200000,holdingValue:800,holdingCostBasis:1000},
  {atMs:asOfMs,holdingValue:row.holdingValue,holdingCostBasis:row.holdingCostBasis}];
  const result={semesterId:scope.year+'-'+scope.semester,studentKey,
  grade:row.grade,classNumber:row.classNumber,asOfMs,sourceRevision:qa.last.revision,priceRevision:qa.last.priceRevision,
- points:qa.historyMode==='empty'||(qa.historyMode==='partial'&&studentKey===scope.studentKeys[0])?[]:qa.historyMode==='single'?points.slice(-1):points,incompleteBeforeMs:null};
+ points:qa.historyMode==='null'?points.map(point=>({...point,holdingValue:null,holdingCostBasis:null})):qa.historyMode==='empty'||(qa.historyMode==='partial'&&studentKey===scope.studentKeys[0])?[]:qa.historyMode==='single'?points.slice(-1):points,incompleteBeforeMs:null};
  return result;});
  if(qa.holdHistory){qa.holdHistory=false;await new Promise(resolve=>qa.releaseHistory=resolve);}
  return results;
@@ -112,8 +115,15 @@ const bundle = await build({
     {
       name: "synthetic-board",
       setup(plugin) {
-        plugin.onResolve({ filter: /lib\/wisStockInvestmentHistoryClient$/ }, () => ({ path: "history", namespace: "history-fixture" }));
-        plugin.onLoad({ filter: /.*/, namespace: "history-fixture" }, () => ({ contents: historyService, loader: "tsx", resolveDir: root }));
+        plugin.onResolve(
+          { filter: /lib\/wisStockInvestmentHistoryClient$/ },
+          () => ({ path: "history", namespace: "history-fixture" }),
+        );
+        plugin.onLoad({ filter: /.*/, namespace: "history-fixture" }, () => ({
+          contents: historyService,
+          loader: "tsx",
+          resolveDir: root,
+        }));
         plugin.onResolve(
           { filter: /lib\/wisStockInvestmentBoardClient$/ },
           () => ({ path: "watcher", namespace: "fixture" }),
@@ -140,7 +150,7 @@ const tailwind = await fs.readFile(
   "utf8",
 );
 const html =
-  '<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><link rel="stylesheet" href="/qa.css"><style>body{margin:0;background:#f3f4f6}*{box-sizing:border-box}main.ws-page{padding:16px!important}main>h1{font-size:24px;margin:0 0 12px}.fixture-teacher-rail,.fixture-village-rail{display:none}@media(min-width:1024px){.fixture-teacher-rail,.fixture-village-rail{display:block;position:fixed;top:0;bottom:0;padding:16px 8px;font-size:14px;background:#fff}.fixture-teacher-rail{left:0;width:128px}.fixture-village-rail{left:128px;width:64px;background:#f8fafc}main.ws-page{margin-left:192px!important;width:calc(100% - 192px)!important}}</style><div id="root"></div><script type="module" src="/qa.js"></script></html>';
+  '<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script src="/tailwind.js"></script><link rel="stylesheet" href="/qa.css"><style>body{margin:0;background:#f3f4f6}*{box-sizing:border-box}main.ws-page{padding:16px!important}main>h1{font-size:24px;margin:0 0 12px}.fixture-teacher-rail{display:none}@media(min-width:1024px){.fixture-teacher-rail{display:block;position:fixed;top:0;bottom:0;padding:16px 8px;font-size:14px;background:#fff}.fixture-teacher-rail{left:0;width:232px}main.ws-page{margin-left:232px!important;width:calc(100% - 232px)!important}}</style><div id="root"></div><script type="module" src="/qa.js"></script></html>';
 const server = http.createServer((req, res) => {
   const file = {
     "/qa.js": ["text/javascript", js],
@@ -176,9 +186,17 @@ async function open(width = 1440, reducedMotion = "no-preference") {
   await page.waitForFunction(() => window.boardQa?.subscriptions === 1);
   return page;
 }
-const rows = (page) => page.locator(".wis-investment-board tbody tr");
-const firstName = (page) => rows(page).first().locator("td").nth(2).innerText();
+const rows = (page) => page.locator(".wis-investment-board__student");
+const firstName = (page) =>
+  rows(page)
+    .first()
+    .locator(".wis-investment-board__identity strong")
+    .innerText();
 const stats = (page) => page.locator(".wis-investment-board__stats");
+const countRequests = (page) =>
+  page.evaluate(() => window.boardQa.historyRequests?.length || 0);
+const plotted = (page) => page.locator(".wis-return-history__plot");
+const dots = (page) => page.locator(".wis-return-history__plot circle").count();
 async function push(page, mode = "READY", revision = 1) {
   await page.evaluate(
     ([mode, revision]) => window.boardQa.push(mode, revision),
@@ -186,113 +204,592 @@ async function push(page, mode = "READY", revision = 1) {
   );
   await page.waitForFunction(
     (mode) =>
-      mode === "READY"
-        ? document.querySelectorAll(".wis-investment-board tbody tr").length > 0
-        : document.querySelectorAll(".wis-investment-board tbody tr").length ===
-          0,
+      Boolean(document.querySelector(".wis-investment-board__student")) ===
+      (mode === "READY"),
     mode,
+  );
+}
+async function chartReady(page, count = 5) {
+  await page.waitForFunction(
+    (count) =>
+      document.querySelectorAll(".wis-return-history__plot").length === count,
+    count,
   );
 }
 async function assertBlank(page) {
   await page.waitForFunction(
     () =>
-      document.querySelectorAll(".wis-investment-board tbody tr").length === 0,
+      document.querySelectorAll(".wis-investment-board__student").length === 0,
   );
-  assert.equal(await rows(page).count(), 0);
-  assert.equal(await page.locator(".wis-investment-board__returns").count(), 0);
+  assert.equal(await plotted(page).count(), 0);
   assert.equal(
     await stats(page).locator("strong").filter({ hasText: "—" }).count(),
     6,
   );
 }
+const period = (page, name) =>
+  page
+    .locator(".wis-investment-board__chart-controls")
+    .getByRole("button", { name, exact: true });
 try {
-  for (const width of [320, 390, 768, 1280]) {
+  for (const width of [320, 390, 768, 1280, 1440]) {
     const page = await open(width);
-    await assertBlank(page); await push(page);
-    await page.locator('.wis-return-history__plot').first().waitFor();
-    assert.equal(await rows(page).count(),20);
-    assert.equal(await firstName(page),'검증학생01');
-    assert.equal(await page.locator('.wis-return-history__legend li').count(),5);
-    assert.equal(await page.locator('.wis-return-history__legend strong').first().innerText(),'1. 검증학생50');
-    assert.equal(await page.locator('.wis-return-history__legend li > span').first().innerText(),'+76.47%');
-    assert.equal(await page.locator('.wis-return-history__plot').count(),5);
-    assert.equal(await page.locator('.wis-return-history__plot polyline').count(),10,'each missing-price gap splits its line');
-    assert.equal(await page.locator('.wis-investment-board__returns-bar, .wis-investment-board__history, .wis-investment-board__mask').count(),0);
-    assert.equal(await page.getByLabel('수익률 확인 학생',{exact:true}).count(),0);
-    assert.equal(await page.getByLabel('이름 숨김',{exact:true}).count(),0);
-    assert.deepEqual(await page.evaluate(()=>window.boardQa.historyRequests.map(r=>r.studentKeys.length)),[5]);
-    const layout=await page.locator('.wis-investment-board').evaluate(el=>({width:innerWidth,documentWidth:document.documentElement.scrollWidth,
-      toolbarBackground:getComputedStyle(el.querySelector('.wis-investment-board__toolbar')).backgroundColor,
-      headingBackground:getComputedStyle(el.querySelector('.wis-investment-board__returns-heading')).backgroundColor,
-      shadow:getComputedStyle(el.querySelector('.wis-investment-board__returns-heading')).boxShadow,
-      chartWidth:el.querySelector('.wis-return-history__canvas').getBoundingClientRect().width,boardWidth:el.getBoundingClientRect().width}));
-    assert(layout.documentWidth<=width,JSON.stringify(layout));assert(layout.chartWidth<=layout.boardWidth);
-    assert.equal(layout.toolbarBackground,'rgba(0, 0, 0, 0)');assert.equal(layout.headingBackground,'rgba(0, 0, 0, 0)');assert.equal(layout.shadow,'none');layouts.push(layout);
-    const chart=page.locator('.wis-return-history__canvas');await chart.focus();await chart.press('Home');
-    assert.equal(await page.locator('.wis-return-history__tooltip').getAttribute('data-return'),'0');await chart.press('ArrowRight');
-    assert.equal(await page.locator('.wis-return-history__tooltip').getAttribute('data-return'),'20');await chart.press('ArrowRight');
-    assert.match(await page.locator('.wis-return-history__tooltip').innerText(),/시세 기록 없음/);await chart.press('ArrowDown');
-    assert.match(await page.locator('.wis-return-history__tooltip').innerText(),/검증학생49/);await chart.press('Escape');
-    assert.equal(await page.locator('.wis-return-history__tooltip').count(),0);
-    await page.screenshot({path:path.join(output,'board-'+width+'.png'),fullPage:true});
-    await page.evaluate(()=>window.boardQa.setRows(window.boardQa.last.rows.map((row,index)=>({...row,displayName:index===49?'김이름이아주길어도생략하지않는학생':row.displayName}))));
-    await push(page,'READY',2);await page.locator('.wis-return-history__legend strong').first().waitFor();
-    assert.equal(await page.locator('.wis-return-history__legend strong').first().innerText(),'1. 김이름이아주길어도생략하지않는학생');
-    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-    await page.screenshot({path:path.join(output,'board-long-name-'+width+'.png'),fullPage:true});
+    await assertBlank(page);
+    await push(page);
+    await chartReady(page);
+    assert.equal(await rows(page).count(), 20);
+    assert.equal(await firstName(page), "검증학생01");
+    assert.equal(
+      await page
+        .locator(".wis-return-history__legend strong")
+        .first()
+        .innerText(),
+      "1. 검증학생50",
+    );
+    assert.equal(
+      await page
+        .locator(".wis-return-history__legend li > span")
+        .first()
+        .innerText(),
+      "+76.47%",
+    );
+    assert.equal(
+      await plotted(page).locator("polyline").count(),
+      10,
+      "actual null gaps split each series",
+    );
+    assert.equal(await dots(page), 35);
+    assert.deepEqual(
+      await page.evaluate(() =>
+        window.boardQa.historyRequests.map((r) => r.studentKeys.length),
+      ),
+      [5],
+    );
+    const layout = await page
+      .locator(".wis-investment-board")
+      .evaluate((el) => {
+        const list = el
+          .querySelector(".wis-investment-board__students")
+          .getBoundingClientRect();
+        const graph = el
+          .querySelector(".wis-investment-board__returns")
+          .getBoundingClientRect();
+        return {
+          width: innerWidth,
+          documentWidth: document.documentElement.scrollWidth,
+          list: {
+            x: list.x,
+            y: list.y,
+            right: list.right,
+            bottom: list.bottom,
+          },
+          graph: { x: graph.x, y: graph.y },
+          toolbarBackground: getComputedStyle(
+            el.querySelector(".wis-investment-board__toolbar"),
+          ).backgroundColor,
+          headingBackground: getComputedStyle(
+            el.querySelector(".wis-investment-board__returns-heading"),
+          ).backgroundColor,
+          controlsBackground: getComputedStyle(
+            el.querySelector(".wis-investment-board__chart-controls"),
+          ).backgroundColor,
+          periodBackground: getComputedStyle(
+            el.querySelector(".ws-page-tabs button"),
+          ).backgroundColor,
+          shadow: getComputedStyle(
+            el.querySelector(".wis-investment-board__returns-heading"),
+          ).boxShadow,
+          chartWidth: el
+            .querySelector(".wis-return-history__canvas")
+            .getBoundingClientRect().width,
+          boardWidth: el.getBoundingClientRect().width,
+        };
+      });
+    assert(layout.documentWidth <= width, JSON.stringify(layout));
+    assert(layout.chartWidth <= layout.boardWidth);
+    if (width >= 1280) {
+      assert(layout.list.right < layout.graph.x);
+      assert.equal(layout.list.y, layout.graph.y);
+    } else assert(layout.list.bottom < layout.graph.y);
+    for (const key of [
+      "toolbarBackground",
+      "headingBackground",
+      "controlsBackground",
+      "periodBackground",
+    ])
+      assert.equal(layout[key], "rgba(0, 0, 0, 0)");
+    assert.equal(layout.shadow, "none");
+    layouts.push(layout);
+    const controls = await page
+      .locator(
+        ".wis-investment-board__chart-controls button, .wis-investment-board__student",
+      )
+      .evaluateAll((items) =>
+        items.map((item) => ({
+          width: item.getBoundingClientRect().width,
+          height: item.getBoundingClientRect().height,
+        })),
+      );
+    assert(controls.every((item) => item.width >= 44 && item.height >= 44));
+    await page.screenshot({
+      path: path.join(output, "board-" + width + ".png"),
+      fullPage: true,
+    });
+    for (const [name, expected] of [
+      ["1일", 20],
+      ["1주", 25],
+      ["1개월", 30],
+      ["전체", 35],
+    ]) {
+      await period(page, name).click();
+      await page.waitForFunction(
+        (expected) =>
+          document.querySelectorAll(".wis-return-history__plot circle")
+            .length === expected,
+        expected,
+      );
+      assert.equal(
+        await countRequests(page),
+        1,
+        "period changes reuse the same actual records",
+      );
+    }
+    const chart = page.locator(".wis-return-history__canvas");
+    await chart.focus();
+    await chart.press("Home");
+    assert.equal(
+      await page
+        .locator(".wis-return-history__tooltip")
+        .getAttribute("data-return"),
+      "-30",
+    );
+    for (let i = 0; i < 5; i++) await chart.press("ArrowRight");
+    assert.match(
+      await page.locator(".wis-return-history__tooltip").innerText(),
+      /시세 기록 없음/,
+    );
+    await chart.press("ArrowDown");
+    assert.match(
+      await page.locator(".wis-return-history__tooltip").innerText(),
+      /검증학생49/,
+    );
+    await chart.press("Escape");
+    assert.equal(await page.locator(".wis-return-history__tooltip").count(), 0);
+    await rows(page).first().focus();
+    await rows(page).first().press("Enter");
+    await chartReady(page, 1);
+    assert.equal(await rows(page).first().getAttribute("aria-pressed"), "true");
+    assert.equal(
+      await page.locator(".wis-investment-board__returns h3").innerText(),
+      "검증학생01의 보유 수익률",
+    );
+    assert.equal(
+      await page.locator(".wis-investment-board__detail dt").count(),
+      8,
+    );
+    assert.equal(
+      await page.locator(".wis-return-history__legend strong").innerText(),
+      "검증학생01",
+    );
+    assert.deepEqual(
+      await page.evaluate(() =>
+        window.boardQa.historyRequests.map((r) => r.studentKeys.length),
+      ),
+      [5, 1],
+    );
+    await period(page, "1일").click();
+    assert.equal(await countRequests(page), 2);
+    await page.screenshot({
+      path: path.join(output, "student-" + width + ".png"),
+      fullPage: true,
+    });
+    await page
+      .getByRole("button", { name: "상위 5명 보기", exact: true })
+      .click();
+    await chartReady(page);
+    assert.equal(await countRequests(page), 2);
+    assert.equal(
+      await page.locator(".wis-investment-board__detail").count(),
+      0,
+    );
+    assert.equal(
+      await period(page, "1일").getAttribute("aria-pressed"),
+      "true",
+      "period remains selected when changing chart subject",
+    );
+    await page.evaluate(() =>
+      window.boardQa.setRows(
+        window.boardQa.last.rows.map((row, index) => ({
+          ...row,
+          displayName:
+            index === 0
+              ? "김이름이아주길어도생략하지않는학생"
+              : row.displayName,
+        })),
+      ),
+    );
+    await push(page, "READY", 2);
+    await chartReady(page);
+    await rows(page).first().click();
+    await chartReady(page, 1);
+    assert.equal(await firstName(page), "김이름이아주길어도생략하지않는학생");
+    assert(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    );
+    await page.screenshot({
+      path: path.join(output, "student-long-name-" + width + ".png"),
+      fullPage: true,
+    });
     await page.close();
   }
-  checks.push('320/390/768/1280px: exactly five real history series; one bounded request; missing-price gaps; no bar/individual selector/mask; transparent headers; long full names without page overflow; keyboard exact-point and per-student inspection.');
-  const page=await open();await push(page);await page.locator('.wis-return-history__plot').first().waitFor();
-  const requested=await page.evaluate(()=>window.boardQa.historyRequests[0].studentKeys);
-  const plotted=await page.locator('.wis-return-history__plot').evaluateAll(items=>items.map(item=>item.dataset.studentKey).sort());assert.deepEqual(requested,plotted);
-  await page.getByLabel('투자 현황 정렬',{exact:true}).selectOption('assets');await page.getByRole('button',{name:'다음',exact:true}).click();
-  assert.equal(await firstName(page),'검증학생30');assert.equal(await page.evaluate(()=>window.boardQa.historyRequests.length),1);
-  // A price-only board notification has a stable source revision and adds real points without a ledger reread.
-  const dots=await page.locator('.wis-return-history__plot circle').count();
-  await page.evaluate(()=>{ const raw={...window.boardQa.last,revision:2,priceRevision:2,asOfMs:window.boardQa.last.asOfMs+1000};window.boardQa.pricePush(raw); });
-  await page.waitForFunction(n=>document.querySelectorAll('.wis-return-history__plot circle').length===n+5,dots);
-  assert.equal(await page.evaluate(()=>window.boardQa.historyRequests.length),1);
-  await page.getByRole('button',{name:'수익률 기록 새로고침',exact:true}).click();await page.waitForFunction(()=>window.boardQa.historyRequests.length===2);
-  await page.getByLabel('투자 현황 학급',{exact:true}).selectOption('3:1');await assertBlank(page);await push(page);
-  await page.locator('.wis-return-history__plot').first().waitFor();assert.equal(await page.locator('.wis-return-history__legend strong').first().innerText(),'1. 검증학생25');
-  assert.deepEqual(await page.evaluate(()=>[window.boardQa.historyRequests.at(-1).grade,window.boardQa.historyRequests.at(-1).classNumber,window.boardQa.historyRequests.at(-1).studentKeys.length]),['3','1',5]);
-  await page.getByRole('button',{name:'전광판 보기',exact:true}).click();await page.waitForFunction(()=>Boolean(document.fullscreenElement));
-  assert.equal(await firstName(page),'검증학생25');assert.equal(await page.getByLabel('이름 숨김',{exact:true}).count(),0);
-  await page.getByRole('button',{name:'전체 화면 닫기',exact:true}).click();await page.waitForFunction(()=>!document.fullscreenElement);
-  for(const connection of ['PAUSED','OFFLINE','CONNECTING']){await page.evaluate(state=>window.boardQa.connection(state),connection);await assertBlank(page);await push(page);}
-  await page.evaluate(()=>window.boardQa.switchSemester());await assertBlank(page);await push(page);await page.locator('.wis-return-history__plot').first().waitFor();
-  assert.equal(await page.evaluate(()=>window.boardQa.historyRequests.at(-1).year),'2027');
-  await page.evaluate(()=>window.boardQa.leave());await page.waitForFunction(()=>window.boardQa.active()===0);await page.close();
-  checks.push('Requests match only ranked five; sorting/pagination do not reread; price-only live observations retain real points without history requests; refresh one request; class/semester/offline scope changes clear prior histories; native fullscreen keeps names.');
-  const states=await open(390);await states.evaluate(()=>{window.boardQa.holdHistory=true;});await push(states);
-  await states.waitForFunction(()=>Boolean(window.boardQa.releaseHistory));assert.match(await states.locator('.wis-investment-board__returns').innerText(),/기록을 확인/);
-  await states.getByLabel('투자 현황 학급',{exact:true}).selectOption('3:1');await push(states);await states.locator('.wis-return-history__plot').first().waitFor();
-  await states.evaluate(()=>window.boardQa.releaseHistory());assert.equal(await states.locator('.wis-return-history__legend strong').first().innerText(),'1. 검증학생25');
-  for(const mode of ['single','empty']){await states.evaluate(mode=>{window.boardQa.historyMode=mode;},mode);await states.getByRole('button',{name:'수익률 기록 새로고침',exact:true}).click();
-    await states.getByText(mode==='single'?'첫 기록입니다. 다음 기록부터 변화가 선으로 이어집니다.':'아직 수익률 기록이 없습니다.').waitFor();
-    assert.equal(await states.locator('.wis-return-history__plot polyline').count(),0);assert.equal(await states.locator('.wis-return-history__plot circle').count(),mode==='single'?5:0);
-  }
-  await states.evaluate(()=>{window.boardQa.historyMode='partial';});await states.getByRole('button',{name:'수익률 기록 새로고침',exact:true}).click();await states.locator('.wis-return-history__plot').first().waitFor();
-  assert.match(await states.locator('.wis-return-history__legend').innerText(),/기록 없음/);assert.equal(await states.locator('.wis-return-history__plot polyline').count(),8);
-  await states.evaluate(()=>{window.boardQa.historyFailure=true;});await states.getByRole('button',{name:'수익률 기록 새로고침',exact:true}).click();
-  await states.getByRole('button',{name:'수익률 기록 다시 조회',exact:true}).waitFor();assert.equal(await states.locator('.wis-return-history__canvas').count(),0);
-  await states.evaluate(()=>{window.boardQa.historyFailure=false;window.boardQa.historyMode='';});await states.getByRole('button',{name:'수익률 기록 다시 조회',exact:true}).click();await states.locator('.wis-return-history__plot').first().waitFor();
-  await states.evaluate(()=>window.boardQa.setRows(window.boardQa.last.rows.map(row=>({...row,holdingCount:0,holdingValue:0,holdingCostBasis:0}))));await push(states,'READY',4);
-  await states.getByText('보유 주식이 있는 학생이 없습니다.').waitFor();assert.equal(await states.locator('.wis-return-history__canvas').count(),0);await states.close();
-  checks.push('Loading, single-point, empty history, no holdings, failed request and explicit retry are visible; late prior-class response discarded.');
-  for(const width of [320,390,768,1280]){
-    const page=await open(width,'reduce');await push(page);await page.locator('.wis-return-history__plot').first().waitFor();
-    await page.evaluate(()=>Object.defineProperty(Element.prototype,'requestFullscreen',{configurable:true,value:async()=>{throw new DOMException('Synthetic rejection','NotAllowedError');}}));
-    await page.getByRole('button',{name:'전광판 보기',exact:true}).click();await page.locator('dialog[open]').waitFor();
-    assert.equal(await firstName(page),'검증학생01');assert.equal(await page.locator('.wis-return-history__legend strong').first().innerText(),'1. 검증학생50');
-    assert(await page.locator('dialog[open]').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
-    await page.screenshot({path:path.join(output,'board-dialog-'+width+'.png'),fullPage:true});await page.keyboard.press('Escape');await page.locator('dialog[open]').waitFor({state:'hidden'});
-    await page.waitForFunction(()=>document.activeElement?.textContent?.trim()==='전광판 보기');assert.equal(await page.evaluate(()=>window.boardQa.subscriptions),1);await page.close();
-  }
-  checks.push('Fullscreen rejection fallback at four widths preserves every name, contains horizontal overflow, restores keyboard focus on Escape, and adds no watcher.');
-  assert.deepEqual(errors,[]);assert.deepEqual(blocked,[]);assert.deepEqual(await hashes(),before,'Source changed during QA');
+  checks.push(
+    "320/390/768/1280/1440px: desktop left list/right graph; mobile reflow without overflow; transparent headings and period controls; 44px controls; keyboard student selection; all eight accounting values; period preservation and top-five return; long Korean names.",
+  );
+  checks.push(
+    "One initial five-key request; outside student fetches one key; four periods and return to cached top five add zero requests; real timestamps/null gaps/KST keyboard inspection preserved.",
+  );
 
+  const page = await open();
+  await push(page);
+  await chartReady(page);
+  const initialKeys = await page.evaluate(
+    () => window.boardQa.historyRequests[0].studentKeys,
+  );
+  assert.deepEqual(
+    await plotted(page).evaluateAll((items) =>
+      items.map((item) => item.dataset.studentKey).sort(),
+    ),
+    initialKeys,
+  );
+  await page
+    .getByLabel("투자 현황 정렬", { exact: true })
+    .selectOption("assets");
+  await rows(page).first().click();
+  await chartReady(page, 1);
+  assert.equal(
+    await countRequests(page),
+    1,
+    "cached ranked student requires no request",
+  );
+  await page
+    .getByRole("button", { name: "상위 5명 보기", exact: true })
+    .click();
+  await chartReady(page);
+  await page.getByRole("button", { name: "다음", exact: true }).click();
+  assert.equal(await firstName(page), "검증학생30");
+  assert.equal(await countRequests(page), 1, "sort and page do not reread");
+  const priorDots = await dots(page);
+  await page.evaluate(() => {
+    const raw = {
+      ...window.boardQa.last,
+      revision: 2,
+      priceRevision: 2,
+      asOfMs: window.boardQa.last.asOfMs + 1000,
+    };
+    window.boardQa.pricePush(raw);
+  });
+  await page.waitForFunction(
+    (n) =>
+      document.querySelectorAll(".wis-return-history__plot circle").length ===
+      n + 5,
+    priorDots,
+  );
+  assert.equal(
+    await countRequests(page),
+    1,
+    "price-only observations do not reread ledger",
+  );
+  await page
+    .getByRole("button", { name: "수익률 기록 새로고침", exact: true })
+    .click();
+  await page.waitForFunction(() => window.boardQa.historyRequests.length === 2);
+  await chartReady(page);
+  await page.getByLabel("투자 현황 학급", { exact: true }).selectOption("3:1");
+  await assertBlank(page);
+  assert.equal(
+    await countRequests(page),
+    2,
+    "class change never requests previous-class keys",
+  );
+  await push(page);
+  await chartReady(page);
+  assert.equal(
+    await page
+      .locator(".wis-return-history__legend strong")
+      .first()
+      .innerText(),
+    "1. 검증학생25",
+  );
+  assert.deepEqual(
+    await page.evaluate(() => {
+      const r = window.boardQa.historyRequests.at(-1);
+      return [r.grade, r.classNumber, r.studentKeys.length];
+    }),
+    ["3", "1", 5],
+  );
+  await rows(page).first().click();
+  await chartReady(page, 1);
+  assert.equal(
+    await countRequests(page),
+    3,
+    JSON.stringify(await page.evaluate(() => window.boardQa.historyRequests)),
+  );
+  await page.getByRole("button", { name: "전광판 보기", exact: true }).click();
+  await page.waitForFunction(() => Boolean(document.fullscreenElement));
+  assert.equal(
+    await page.locator(".wis-investment-board__returns h3").innerText(),
+    "검증학생25의 보유 수익률",
+  );
+  await page
+    .getByRole("button", { name: "전체 화면 닫기", exact: true })
+    .click();
+  await page.waitForFunction(() => !document.fullscreenElement);
+  for (const connection of ["PAUSED", "OFFLINE", "CONNECTING"]) {
+    const requests = await countRequests(page);
+    await page.evaluate(
+      (state) => window.boardQa.connection(state),
+      connection,
+    );
+    await assertBlank(page);
+    await push(page);
+    await chartReady(page, 1);
+    assert.equal(
+      await countRequests(page),
+      requests + 1,
+      "reconnect discards even previously cached same-owner history",
+    );
+  }
+  const requests = await countRequests(page);
+  await push(page, "READY", 5);
+  await page.waitForFunction(
+    (n) => window.boardQa.historyRequests.length === n + 1,
+    requests,
+  );
+  await chartReady(page, 1);
+  await page.evaluate(() => window.boardQa.switchAccount());
+  await assertBlank(page);
+  await push(page);
+  await chartReady(page);
+  assert.equal(
+    await countRequests(page),
+    requests + 2,
+    "account remount discards history cache",
+  );
+  const beforeSemester = await countRequests(page);
+  await page.evaluate(() => window.boardQa.switchSemester());
+  await assertBlank(page);
+  assert.equal(
+    await countRequests(page),
+    beforeSemester,
+    "same mounted board never requests old snapshot after semester change",
+  );
+  await push(page);
+  await chartReady(page);
+  assert.equal(
+    await page.evaluate(() => window.boardQa.historyRequests.at(-1).year),
+    "2027",
+  );
+  await page.evaluate(() => window.boardQa.fail());
+  await assertBlank(page);
+  await page.getByRole("button", { name: "다시 연결", exact: true }).click();
+  await push(page);
+  await chartReady(page);
+  await page.evaluate(() => window.boardQa.leave());
+  await page.waitForFunction(() => window.boardQa.active() === 0);
+  await page.close();
+  checks.push(
+    "Price updates append actual observations without ledger requests; current-class ranking, source revision, refresh, PAUSED/OFFLINE/CONNECTING, account/same-component semester and permission-error transitions clear or reload appropriate scopes; native fullscreen retains selection.",
+  );
+
+  const states = await open(390);
+  await states.evaluate(() => {
+    window.boardQa.holdHistory = true;
+  });
+  await push(states);
+  await states.waitForFunction(() => Boolean(window.boardQa.releaseHistory));
+  assert.match(
+    await states.locator(".wis-investment-board__returns").innerText(),
+    /기록을 확인/,
+  );
+  await rows(states).first().click();
+  await chartReady(states, 1);
+  await states.evaluate(() => window.boardQa.releaseHistory());
+  assert.equal(
+    await states.locator(".wis-return-history__legend strong").innerText(),
+    "검증학생01",
+    "late top-five response cannot overwrite selected student",
+  );
+  await states.evaluate(() => {
+    window.boardQa.holdHistory = true;
+  });
+  await rows(states).nth(1).click();
+  await states.waitForFunction(
+    () => window.boardQa.historyRequests.length === 3,
+  );
+  await states
+    .getByLabel("투자 현황 학급", { exact: true })
+    .selectOption("3:2");
+  await assertBlank(states);
+  await push(states);
+  await chartReady(states);
+  await states.evaluate(() => window.boardQa.releaseHistory());
+  assert.equal(
+    await states
+      .locator(".wis-return-history__legend strong")
+      .first()
+      .innerText(),
+    "1. 검증학생50",
+    "late prior-class response discarded",
+  );
+  for (const mode of ["single", "empty", "null"]) {
+    await states.evaluate((mode) => {
+      window.boardQa.historyMode = mode;
+    }, mode);
+    await states
+      .getByRole("button", { name: "수익률 기록 새로고침", exact: true })
+      .click();
+    await chartReady(states);
+    if (mode !== "single")
+      await states
+        .getByText(
+          mode === "empty"
+            ? "아직 수익률 기록이 없습니다."
+            : "확인할 수 있는 보유 수익률 기록이 없습니다.",
+        )
+        .waitFor();
+    assert.equal(await plotted(states).locator("polyline").count(), 0);
+    assert.equal(await dots(states), mode === "single" ? 5 : 0);
+  }
+  await period(states, "1일").click();
+  await states.evaluate(() => {
+    window.boardQa.historyMode = "empty";
+  });
+  await states
+    .getByRole("button", { name: "수익률 기록 새로고침", exact: true })
+    .click();
+  await states.getByText("선택한 기간에 수익률 기록이 없습니다.").waitFor();
+  await period(states, "전체").click();
+  await states.evaluate(() => {
+    window.boardQa.historyMode = "partial";
+  });
+  await states
+    .getByRole("button", { name: "수익률 기록 새로고침", exact: true })
+    .click();
+  await chartReady(states);
+  assert.match(
+    await states.locator(".wis-return-history__legend").innerText(),
+    /기록 없음/,
+  );
+  assert.equal(await plotted(states).locator("polyline").count(), 8);
+  await states.evaluate(() => {
+    window.boardQa.historyFailure = true;
+  });
+  await states
+    .getByRole("button", { name: "수익률 기록 새로고침", exact: true })
+    .click();
+  await states
+    .getByRole("button", { name: "수익률 기록 다시 조회", exact: true })
+    .waitFor();
+  assert.equal(await states.locator(".wis-return-history__canvas").count(), 0);
+  const failedRequests = await countRequests(states);
+  await period(states, "1주").click();
+  assert.equal(
+    await countRequests(states),
+    failedRequests,
+    "period does not retry a failed request",
+  );
+  await states.evaluate(() => {
+    window.boardQa.historyFailure = false;
+    window.boardQa.historyMode = "";
+  });
+  await states
+    .getByRole("button", { name: "수익률 기록 다시 조회", exact: true })
+    .click();
+  await chartReady(states);
+  assert.equal(await countRequests(states), failedRequests + 1);
+  await states.evaluate(() =>
+    window.boardQa.setRows(
+      window.boardQa.last.rows.map((row) => ({
+        ...row,
+        holdingCount: 0,
+        holdingValue: 0,
+        holdingCostBasis: 0,
+      })),
+    ),
+  );
+  await push(states, "READY", 4);
+  await states.getByText("보유 주식이 있는 학생이 없습니다.").waitFor();
+  assert.equal(await states.locator(".wis-return-history__canvas").count(), 0);
+  await rows(states).first().click();
+  await chartReady(states, 1);
+  assert.equal(
+    await states.locator(".wis-return-history__legend li > span").innerText(),
+    "미보유",
+  );
+  assert(
+    (await dots(states)) > 0,
+    "currently unheld student retains historical returns",
+  );
+  await states.locator(".wis-return-history__canvas").focus();
+  await states.locator(".wis-return-history__canvas").press("End");
+  assert.match(
+    await states.locator(".wis-return-history__tooltip").innerText(),
+    /보유 주식 없음/,
+  );
+  await states.close();
+  checks.push(
+    "Loading, single/empty/null/partial histories, period-empty state, missing quote and no-holding gaps, explicit error retry, current non-holder with genuine past returns; late responses after selection/class change are discarded.",
+  );
+
+  for (const width of [320, 390, 768, 1280, 1440]) {
+    const page = await open(width, "reduce");
+    await push(page);
+    await chartReady(page);
+    await page.evaluate(() =>
+      Object.defineProperty(Element.prototype, "requestFullscreen", {
+        configurable: true,
+        value: async () => {
+          throw new DOMException("Synthetic rejection", "NotAllowedError");
+        },
+      }),
+    );
+    await page
+      .getByRole("button", { name: "전광판 보기", exact: true })
+      .click();
+    await page.locator("dialog[open]").waitFor();
+    assert.equal(await firstName(page), "검증학생01");
+    assert.equal(
+      await page
+        .locator(".wis-return-history__legend strong")
+        .first()
+        .innerText(),
+      "1. 검증학생50",
+    );
+    assert(
+      await page
+        .locator("dialog[open]")
+        .evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
+    );
+    await page.screenshot({
+      path: path.join(output, "board-dialog-" + width + ".png"),
+      fullPage: true,
+    });
+    await page.keyboard.press("Escape");
+    await page.locator("dialog[open]").waitFor({ state: "hidden" });
+    await page.waitForFunction(
+      () => document.activeElement?.textContent?.trim() === "전광판 보기",
+    );
+    assert.equal(await page.evaluate(() => window.boardQa.subscriptions), 1);
+    await page.close();
+  }
+  checks.push(
+    "Fullscreen dialog fallback at all five widths: overflow containment, reduced-motion, names and series preserved, Escape focus restoration, no additional subscription.",
+  );
+  assert.deepEqual(errors, []);
+  assert.deepEqual(blocked, []);
+  assert.deepEqual(await hashes(), before, "Source changed during QA");
 } catch (error) {
   failure = error;
   console.error(error);

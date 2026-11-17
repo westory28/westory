@@ -30,6 +30,20 @@ const time = new Intl.DateTimeFormat("ko-KR", {
   timeZone: "Asia/Seoul",
 });
 const PAGE_SIZE = 20;
+const periods = [
+  { days: 1, label: "1일" },
+  { days: 7, label: "1주" },
+  { days: 30, label: "1개월" },
+  { days: Infinity, label: "전체" },
+];
+const holdingReturn = (row: WisStockInvestmentBoardState["rows"][number]) =>
+  row.holdingCount > 0 && row.holdingCostBasis > 0
+    ? (row.unrealizedPnl / row.holdingCostBasis) * 100
+    : null;
+const percent = (value: number | null) =>
+  value === null
+    ? "미보유"
+    : `${value > 0 ? "+" : ""}${value.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}%`;
 export default function WisStockInvestmentBoard({
   year,
   semester,
@@ -40,7 +54,9 @@ export default function WisStockInvestmentBoard({
   const root = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const restoreFocus = useRef(false);
-  const [data, setData] = useState<WisStockInvestmentBoardState | null>(null);
+  const [snapshot, setData] = useState<WisStockInvestmentBoardState | null>(
+    null,
+  );
   const [classes, setClasses] = useState<
     WisStockInvestmentBoardState["classes"]
   >([]);
@@ -49,6 +65,15 @@ export default function WisStockInvestmentBoard({
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   const [classKey, setClassKey] = useState("all");
+  // A scope change renders before the watcher effect clears its old snapshot.
+  // Gate that snapshot synchronously so old students never enter the new request.
+  const data =
+    snapshot?.semesterId === `${year}-${semester}` &&
+    (classKey === "all"
+      ? !snapshot.grade && !snapshot.classNumber
+      : `${snapshot.grade}:${snapshot.classNumber}` === classKey)
+      ? snapshot
+      : null;
   const [sort, setSort] = useState("class");
   const [page, setPage] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
@@ -58,6 +83,14 @@ export default function WisStockInvestmentBoard({
   const [historyError, setHistoryError] = useState("");
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyRetry, setHistoryRetry] = useState(0);
+  const [selectedStudentKey, setSelectedStudentKey] = useState("");
+  const [periodDays, setPeriodDays] = useState(Infinity);
+  // View-local reuse only. Source/session/connection/scope changes discard it.
+  const historyCache = useRef({
+    scope: "",
+    entries: new Map<string, WisStockInvestmentHistory>(),
+  });
+  useEffect(() => setSelectedStudentKey(""), [year, semester, classKey]);
   const expanded = fullscreen || pageFullscreen;
   useEffect(() => {
     setError("");
@@ -159,18 +192,49 @@ export default function WisStockInvestmentBoard({
     () => (live ? topWisStockHoldingReturns(data?.rows || []) : []),
     [data, live],
   );
-  // Sort the membership key so a rank-only change does not repeat history reads.
+  const selectedStudent = live
+    ? rows.find((row) => row.studentKey === selectedStudentKey)
+    : undefined;
+  const chartRows = selectedStudent
+    ? [{ ...selectedStudent, returnPercent: holdingReturn(selectedStudent) }]
+    : topReturns;
+  // Rank/order changes alone do not repeat history reads.
   const historyKeys = JSON.stringify(
-    topReturns.map((row) => row.studentKey).sort(),
+    chartRows.map((row) => row.studentKey).sort(),
   );
   const sourceRevision = live ? data.sourceRevision : 0;
+  const historyScope = JSON.stringify([
+    year,
+    semester,
+    classKey,
+    sourceRevision,
+    historyRetry,
+  ]);
   useEffect(() => {
     let active = true;
     const studentKeys: string[] = JSON.parse(historyKeys);
     setHistories([]);
     setHistoryError("");
-    setHistoryLoading(Boolean(live && studentKeys.length));
-    if (!live || !studentKeys.length) return;
+    setHistoryLoading(false);
+    if (!live) {
+      historyCache.current = { scope: "", entries: new Map() };
+      return;
+    }
+    if (historyCache.current.scope !== historyScope)
+      historyCache.current = { scope: historyScope, entries: new Map() };
+    if (!studentKeys.length) return;
+    const missing = studentKeys.filter(
+      (key) => !historyCache.current.entries.has(key),
+    );
+    const showCached = () =>
+      setHistories(
+        studentKeys.map((key) => historyCache.current.entries.get(key)!),
+      );
+    if (!missing.length) {
+      showCached();
+      return;
+    }
+    setHistoryLoading(true);
     const [grade = "", classNumber = ""] =
       classKey === "all" ? [] : classKey.split(":");
     void getWisStockInvestmentHistories({
@@ -178,10 +242,14 @@ export default function WisStockInvestmentBoard({
       semester,
       grade,
       classNumber,
-      studentKeys,
+      studentKeys: missing,
     })
       .then((next) => {
-        if (active) setHistories(next);
+        if (!active || historyCache.current.scope !== historyScope) return;
+        next.forEach((history) =>
+          historyCache.current.entries.set(history.studentKey, history),
+        );
+        showCached();
       })
       .catch((failure) => {
         if (active) setHistoryError(wisStockInvestmentHistoryError(failure));
@@ -192,41 +260,33 @@ export default function WisStockInvestmentBoard({
     return () => {
       active = false;
     };
-  }, [
-    year,
-    semester,
-    classKey,
-    live,
-    historyKeys,
-    sourceRevision,
-    historyRetry,
-  ]);
+  }, [year, semester, classKey, live, historyKeys, historyScope]);
   useEffect(() => {
-    if (!live || !data) return;
-    // Keep real quote observations without rereading immutable trade ledgers.
+    if (!live || !data || historyCache.current.scope !== historyScope) return;
+    // Keep actual quote observations for visited students without rereading ledgers.
+    const cached = historyCache.current.entries;
+    cached.forEach((history, key) => {
+      const row = data.rows.find((item) => item.studentKey === key);
+      if (!row || data.asOfMs <= history.asOfMs) return;
+      cached.set(key, {
+        ...history,
+        asOfMs: data.asOfMs,
+        priceRevision: data.priceRevision,
+        points: [
+          ...history.points,
+          {
+            atMs: data.asOfMs,
+            holdingValue: row.holdingValue,
+            holdingCostBasis: row.holdingCostBasis,
+          },
+        ],
+      });
+    });
     setHistories((previous) =>
-      previous.map((history) => {
-        const row = data.rows.find(
-          (item) => item.studentKey === history.studentKey,
-        );
-        if (!row || data.asOfMs <= history.asOfMs) return history;
-        return {
-          ...history,
-          asOfMs: data.asOfMs,
-          priceRevision: data.priceRevision,
-          points: [
-            ...history.points,
-            {
-              atMs: data.asOfMs,
-              holdingValue: row.holdingValue,
-              holdingCostBasis: row.holdingCostBasis,
-            },
-          ],
-        };
-      }),
+      previous.map((history) => cached.get(history.studentKey) || history),
     );
-  }, [data, live]);
-  const historySeries = topReturns.map((row) => {
+  }, [data, live, historyScope]);
+  const historySeries = chartRows.map((row) => {
     const history = histories.find(
       (item) =>
         item.studentKey === row.studentKey &&
@@ -255,6 +315,19 @@ export default function WisStockInvestmentBoard({
         : [],
     };
   });
+  const chartAsOfMs = Math.max(
+    data?.asOfMs || 0,
+    ...histories.map((history) => history.asOfMs),
+  );
+  const chartRange = Number.isFinite(periodDays)
+    ? {
+        fromMs: Math.max(1, chartAsOfMs - periodDays * 86_400_000),
+        toMs: chartAsOfMs,
+      }
+    : undefined;
+  const chartTitle = selectedStudent
+    ? `${selectedStudent.displayName}의 보유 수익률`
+    : "보유 수익률 상위 5명";
   const status = error
     ? "연결 오류"
     : connection === "PAUSED"
@@ -384,30 +457,164 @@ export default function WisStockInvestmentBoard({
           </div>
         ))}
       </div>
-      {live && (
+      <div className="wis-investment-board__workspace">
+        <section
+          className="wis-investment-board__students"
+          aria-label="투자 학생 목록"
+        >
+          <div className="wis-investment-board__list-heading">
+            <span>
+              {ready ? `${rows.length.toLocaleString()}명` : "학생별 투자 현황"}
+            </span>
+            <label>
+              정렬
+              <select
+                aria-label="투자 현황 정렬"
+                value={sort}
+                onChange={(event) => {
+                  setSort(event.target.value);
+                  setPage(0);
+                }}
+              >
+                <option value="class">학급·번호</option>
+                <option value="assets">총자산 높은 순</option>
+                <option value="pnl">평가손익 높은 순</option>
+              </select>
+            </label>
+          </div>
+          <div
+            className="wis-investment-board__list"
+            tabIndex={0}
+            role="region"
+            aria-label="학생 투자 내역"
+            aria-busy={connection === "CONNECTING" && !error}
+          >
+            {ready && rows.length > 0 ? (
+              <ul>
+                {pageRows.map((row) => {
+                  const value = holdingReturn(row);
+                  return (
+                    <li key={row.studentKey}>
+                      <button
+                        type="button"
+                        className="wis-investment-board__student"
+                        aria-pressed={
+                          selectedStudent?.studentKey === row.studentKey
+                        }
+                        onClick={() => setSelectedStudentKey(row.studentKey)}
+                      >
+                        <span className="wis-investment-board__identity">
+                          <strong>{row.displayName}</strong>
+                          <small>
+                            {row.grade}학년 {row.classNumber}반 ·{" "}
+                            {row.studentNumber}번
+                          </small>
+                        </span>
+                        <span className="wis-investment-board__student-values">
+                          <strong
+                            className={`is-${direction(value ?? undefined)}`}
+                          >
+                            {percent(value)}
+                          </strong>
+                          <small>총자산 {money(row.totalAssets)} 위스</small>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="wis-investment-board__empty">
+                <strong>
+                  {error
+                    ? "투자 현황을 불러오지 못했습니다."
+                    : connection === "CONNECTING"
+                      ? "투자 현황을 확인하고 있습니다."
+                      : connection === "PAUSED" || connection === "OFFLINE"
+                        ? "실시간 연결이 중지되었습니다."
+                        : ready
+                          ? "투자 내역이 없습니다."
+                          : "아직 집계된 투자 현황이 없습니다."}
+                </strong>
+              </div>
+            )}
+          </div>
+          <div className="wis-investment-board__pagination">
+            <span>
+              {activePage + 1} / {pageCount}
+            </span>
+            <button
+              type="button"
+              disabled={activePage === 0}
+              onClick={() => setPage(activePage - 1)}
+            >
+              이전
+            </button>
+            <button
+              type="button"
+              disabled={activePage + 1 >= pageCount}
+              onClick={() => setPage(activePage + 1)}
+            >
+              다음
+            </button>
+          </div>
+        </section>
         <section
           className="wis-investment-board__returns"
-          aria-label="보유 수익률 상위 5명"
+          aria-label="학생 보유 수익률"
+          data-view={selectedStudent ? "student" : "top-five"}
         >
           <div className="wis-investment-board__returns-heading">
-            <h3>보유 수익률 상위 5명</h3>
+            <h3>{chartTitle}</h3>
             <InfoHelp label="보유 수익률 변화 기준">
               <p>
-                선택한 학급의 현재 보유 수익률 상위 5명을 비교합니다. 그때
-                보유한 주식의 평가손익을 수수료가 포함된 보유 원가로 나눈
-                비율이며, 실제 체결 내역과 저장된 시세로 계산합니다. 계좌 현금과
-                실현손익은 제외하며, 보유 주식이나 시세 기록이 없는 구간은 선을
-                잇지 않습니다.
+                현재 보유 수익률 상위 5명 또는 선택한 학생의 기록입니다. 당시
+                주식 평가손익을 수수료가 포함된 보유 원가로 나눈 비율이며, 계좌
+                현금과 실현손익은 제외합니다. 보관된 실제 시세와 체결 기록을
+                사용하며, 시세 기록이 없거나 주식을 보유하지 않은 구간은 선을
+                잇지 않습니다. 기간은 마지막 확인 시각부터 최근 24시간·7일·30일
+                또는 보관된 전체 기록입니다.
               </p>
             </InfoHelp>
             <RefreshButton
               label="수익률 기록 새로고침"
-              disabled={!topReturns.length}
+              disabled={!live || !chartRows.length}
               loading={historyLoading}
               onClick={() => setHistoryRetry((value) => value + 1)}
             />
           </div>
-          {!topReturns.length ? (
+          <div className="wis-investment-board__chart-controls">
+            <div
+              className="ws-page-tabs"
+              role="group"
+              aria-label="수익률 조회 기간"
+            >
+              {periods.map((period) => (
+                <button
+                  key={period.label}
+                  type="button"
+                  aria-pressed={periodDays === period.days}
+                  onClick={() => setPeriodDays(period.days)}
+                >
+                  {period.label}
+                </button>
+              ))}
+            </div>
+            {selectedStudent && (
+              <button
+                type="button"
+                className="wis-investment-board__top-five"
+                onClick={() => setSelectedStudentKey("")}
+              >
+                상위 5명 보기
+              </button>
+            )}
+          </div>
+          {!live ? (
+            <p className="wis-investment-board__returns-empty">
+              투자 현황이 연결되면 수익률 기록을 확인할 수 있습니다.
+            </p>
+          ) : !chartRows.length ? (
             <p className="wis-investment-board__returns-empty">
               보유 주식이 있는 학생이 없습니다.
             </p>
@@ -426,115 +633,58 @@ export default function WisStockInvestmentBoard({
               수익률 기록을 확인하고 있습니다.
             </p>
           ) : (
-            <WisStockReturnHistoryChart series={historySeries} />
+            <WisStockReturnHistoryChart
+              series={historySeries}
+              range={chartRange}
+              label={chartTitle}
+            />
+          )}
+          {selectedStudent && (
+            <dl
+              className="wis-investment-board__detail"
+              aria-label={`${selectedStudent.displayName} 투자 상세`}
+            >
+              {[
+                { label: "계좌 현금", value: money(selectedStudent.stockCash) },
+                {
+                  label: "매수 예약",
+                  value: money(selectedStudent.reservedCash),
+                },
+                {
+                  label: "보유 종목",
+                  value: `${selectedStudent.holdingCount}개`,
+                },
+                {
+                  label: "주식 평가액",
+                  value: money(selectedStudent.holdingValue),
+                },
+                {
+                  label: "보유 원가",
+                  value: money(selectedStudent.holdingCostBasis),
+                },
+                { label: "총자산", value: money(selectedStudent.totalAssets) },
+                {
+                  label: "실현손익",
+                  value: signed(selectedStudent.realizedPnl),
+                  className: `is-${direction(selectedStudent.realizedPnl)}`,
+                },
+                {
+                  label: "평가손익",
+                  value: signed(selectedStudent.unrealizedPnl),
+                  className: `is-${direction(selectedStudent.unrealizedPnl)}`,
+                },
+              ].map((item) => (
+                <div key={item.label}>
+                  <dt>{item.label}</dt>
+                  <dd className={item.className}>
+                    {item.value}
+                    {item.label !== "보유 종목" && <small> 위스</small>}
+                  </dd>
+                </div>
+              ))}
+            </dl>
           )}
         </section>
-      )}
-      <div className="wis-investment-board__list-heading">
-        <span>
-          {ready ? `${rows.length.toLocaleString()}명` : "학생별 투자 현황"}
-        </span>
-        <label>
-          정렬
-          <select
-            aria-label="투자 현황 정렬"
-            value={sort}
-            onChange={(event) => {
-              setSort(event.target.value);
-              setPage(0);
-            }}
-          >
-            <option value="class">학급·번호</option>
-            <option value="assets">총자산 높은 순</option>
-            <option value="pnl">평가손익 높은 순</option>
-          </select>
-        </label>
-      </div>
-      <div
-        className="wis-investment-board__table"
-        tabIndex={0}
-        role="region"
-        aria-label="학생 투자 내역"
-        aria-busy={connection === "CONNECTING" && !error}
-      >
-        {ready && rows.length > 0 ? (
-          <table>
-            <caption className="sr-only">
-              학급별 학생 주식 투자 현황, 금액 단위 위스
-            </caption>
-            <thead>
-              <tr>
-                <th>학급</th>
-                <th>번호</th>
-                <th>이름</th>
-                <th>계좌 현금</th>
-                <th>매수 예약</th>
-                <th>보유 종목</th>
-                <th>주식 평가액</th>
-                <th>총자산</th>
-                <th>실현손익</th>
-                <th>평가손익</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageRows.map((row) => (
-                <tr key={row.studentKey}>
-                  <td>
-                    {row.grade}-{row.classNumber}
-                  </td>
-                  <td>{row.studentNumber}</td>
-                  <td>{row.displayName}</td>
-                  <td>{money(row.stockCash)}</td>
-                  <td>{money(row.reservedCash)}</td>
-                  <td>{row.holdingCount}개</td>
-                  <td>{money(row.holdingValue)}</td>
-                  <td>
-                    <strong>{money(row.totalAssets)}</strong>
-                  </td>
-                  <td className={`is-${direction(row.realizedPnl)}`}>
-                    {signed(row.realizedPnl)}
-                  </td>
-                  <td className={`is-${direction(row.unrealizedPnl)}`}>
-                    {signed(row.unrealizedPnl)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <div className="wis-investment-board__empty">
-            <strong>
-              {error
-                ? "투자 현황을 불러오지 못했습니다."
-                : connection === "CONNECTING"
-                  ? "투자 현황을 확인하고 있습니다."
-                  : connection === "PAUSED" || connection === "OFFLINE"
-                    ? "실시간 연결이 중지되었습니다."
-                    : ready
-                      ? "투자 내역이 없습니다."
-                      : "아직 집계된 투자 현황이 없습니다."}
-            </strong>
-          </div>
-        )}
-      </div>
-      <div className="wis-investment-board__pagination">
-        <span>
-          {activePage + 1} / {pageCount}
-        </span>
-        <button
-          type="button"
-          disabled={activePage === 0}
-          onClick={() => setPage(activePage - 1)}
-        >
-          이전
-        </button>
-        <button
-          type="button"
-          disabled={activePage + 1 >= pageCount}
-          onClick={() => setPage(activePage + 1)}
-        >
-          다음
-        </button>
       </div>
     </div>
   );

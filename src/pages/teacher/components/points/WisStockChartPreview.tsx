@@ -89,7 +89,7 @@ export default function WisStockChartPreview({
   return (
     <div ref={root} className="wis-stock-preview">
       <div className="wis-stock-preview__heading">
-        <h2>학생 화면 미리보기</h2>
+        <h2>주식 차트 미리보기</h2>
         <span className="wis-stocks__closed">
           {isPlan ? "6주 기획안 · 가상 시세" : "등록 종목"}
         </span>
@@ -209,7 +209,11 @@ export default function WisStockChartPreview({
             </p>
           </div>
           <div className={`wis-stock-preview__chart is-${direction}`}>
-            <StockChart stock={selected} days={period.days} />
+            <StockChart
+              stock={selected}
+              days={period.days}
+              variant="candlestick"
+            />
           </div>
           <div className="wis-stock-preview__periods" aria-label="차트 기간">
             {periods.map((item) => (

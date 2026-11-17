@@ -1,3 +1,71 @@
+.wispi-price-chart-shell {
+  min-width: 0;
+}
+.wispi-price-chart__controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.wispi-price-chart__controls .ws-page-tabs {
+  min-width: 0;
+  margin: 0;
+  border-bottom: 0;
+}
+.wispi-price-chart__controls .ws-page-tabs button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  font-size: 14px;
+}
+.wispi-price-chart__controls .ws-page-tabs button[aria-pressed="true"] {
+  border-bottom-color: var(--ws-primary, #2563eb);
+  color: var(--ws-primary, #2563eb);
+  font-weight: 700;
+}
+.wispi-price-chart .wispi-price-chart__candle {
+  stroke-width: 1.5;
+  stroke: currentColor;
+  fill: currentColor;
+}
+.wispi-price-chart__candle.is-up {
+  color: var(--ws-danger, #dc2626);
+}
+.wispi-price-chart__candle.is-down {
+  color: var(--ws-primary, #2563eb);
+}
+.wispi-price-chart__candle.is-down rect {
+  fill: #fff;
+}
+.wispi-price-chart__candle.is-flat {
+  color: var(--ws-text-muted, #6b7280);
+}
+.wispi-price-chart__ohlc {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+  margin: 8px 0 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+.wispi-price-chart__ohlc div {
+  min-width: 0;
+}
+.wispi-price-chart__tooltip .wispi-price-chart__ohlc dt {
+  color: #e2e8f0;
+}
+.wispi-price-chart__tooltip .wispi-price-chart__ohlc dd {
+  margin: 0;
+  text-align: left;
+}
+.wispi-price-chart__observations {
+  font-size: 11px;
+  color: #e2e8f0;
+}
 .wispi-price-chart {
   min-width: 0;
   border: 1px solid var(--ws-border, #e5e7eb);

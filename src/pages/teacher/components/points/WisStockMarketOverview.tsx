@@ -103,9 +103,18 @@ export default function WisStockMarketOverview({
         )}
       </div>
       {stock ? (
-        <WisStockPriceChart stock={stock} days={Infinity} />
+        <WisStockPriceChart
+          stock={stock}
+          days={Infinity}
+          variant="candlestick"
+        />
       ) : index?.history.length ? (
-        <WisStockPriceChart stock={series} days={Infinity} kind="index" />
+        <WisStockPriceChart
+          stock={series}
+          days={Infinity}
+          kind="index"
+          variant="candlestick"
+        />
       ) : (
         <p className="wis-stocks__empty">아직 지수 기록이 없습니다.</p>
       )}
