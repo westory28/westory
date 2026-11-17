@@ -104,6 +104,7 @@ export const subscribeYutRoom=(_config,_id,onRoom)=>{listeners.add(onRoom);retur
 export const commandYutRoom=async(_config,data)=>{qa.calls.push(data);if(data.action==="throw"&&qa.holdThrow)await new Promise(resolve=>qa.releaseThrow=resolve);if(qa.delay)await new Promise(r=>setTimeout(r,qa.delay));if(qa.fail){qa.fail=false;throw new Error(qa.errorMessage||'검증용 연결 오류')}if(data.action==='move')qa.move(data.route,data.pieceId,data.stack);else if(data.action==='claimReward'){qa.emit({...qa.room,syncRevision:(qa.room.syncRevision||0)+1,reward:{...qa.room.reward,status:qa.claimPaid?'paid':'pending'}})}else if(data.action==='start')qa.emit(core.startYutGame(qa.room,Date.now()));else if(data.action==='throw')qa.emit(core.throwYut(qa.room,'qa',sticks(qa.throwValue||1),Date.now(),data.power));else if(data.action==='leave')qa.emit(null);return{room:qa.room,serverNowMs:Date.now()}};
 export const yutErrorMessage=error=>error.message;
 export const getLegalYutMoves=core.getLegalYutMoves;
+export const invalidateWeplayRanking=()=>{};
 `;
 const harness = `import React,{useState,useEffect}from'react';import{createRoot}from'react-dom/client';import Game from ${source("src/components/common/weplay/yut/YutGame.tsx")};import Board from ${source("src/components/common/weplay/yut/YutBoard.tsx")};import Frame from ${source("src/components/common/weplay/WeplayGameFrame.tsx")};import{getYutLobby,subscribeYutRoom,getLegalYutMoves}from ${source("src/lib/yut.ts")};
 function App(){const[room,setRoom]=useState(window.qa.room),[key,setKey]=useState(0),[mounted,setMounted]=useState(true);window.qa.remount=()=>setKey(old=>old+1);window.qa.unmount=()=>setMounted(false);useEffect(()=>{const off=subscribeYutRoom(null,null,setRoom);const timer=setInterval(()=>setRoom(old=>({...old})),35);return()=>{off();clearInterval(timer)}},[]);const board=new URLSearchParams(location.search).has('board');return board?<div className="board-fixture yut-game">{mounted&&<Board key={key} room={room} uid="qa" selectedPiece="1" onSelectPiece={()=>{}} moves={getLegalYutMoves(room,'qa')} onMove={()=>{}} disabled={room.status==='finished'} onMotionChange={value=>window.qa.motion.push({value,at:performance.now()})} onStep={index=>{const node=document.querySelector('.is-moving:not(.is-caught)'),style=getComputedStyle(node),bounds=node.closest('.yut-board').getBoundingClientRect(),facing=node.querySelector('.yut-pawn-facing');window.qa.steps.push({index,at:performance.now(),x:parseFloat(style.left)/bounds.width*720,y:parseFloat(style.top)/bounds.height*560,lift:new DOMMatrixReadOnly(style.transform).m42+node.offsetHeight*.88,facing:facing?.dataset.facing,mirror:facing?new DOMMatrixReadOnly(getComputedStyle(facing).transform).m11:null,pieceIds:node.dataset.pieceIds,movingGroups:document.querySelectorAll('.is-moving:not(.is-caught)').length});}}/>}</div>:<Frame theme="yut"><Game preview={new URLSearchParams(location.search).has("preview")} initialSettings={new URLSearchParams(location.search).has("preview")?{enabled:true,version:1,allowSolo:true,allowMultiplayer:true,allowPrivateRooms:true,defaultPlayerCount:Number(new URLSearchParams(location.search).get("players"))||2,throwSeconds:15,moveSeconds:60}:undefined} portal={new URLSearchParams(location.search).get("portal")==="teacher"?"teacher":"student"} onBack={()=>{}} music={{enabled:false,failed:false,start:()=>{},toggle:()=>{}}} onMusicActiveChange={()=>{}}/></Frame>};createRoot(document.getElementById('root')).render(<App/>);`;
@@ -134,13 +135,15 @@ const bundle = await build({
     {
       name: "qa",
       setup(b) {
+        b.onResolve({ filter: /(?:^|\/)WeplayRanking(?:\.tsx)?$/ }, () => ({ path: "ranking", namespace: "ranking-fixture" }));
+        b.onLoad({ filter: /.*/, namespace: "ranking-fixture" }, () => ({ contents: "export default function Ranking(){return null}", loader: "tsx" }));
         b.onResolve({ filter: /^\/assets\// }, (args) => ({
           path: args.path,
           external: true,
         }));
         b.onResolve(
           {
-            filter: /(?:^|\/)contexts\/AuthContext$|(?:^|\/)lib\/yut(?:\.ts)?$/,
+            filter: /(?:^|\/)contexts\/AuthContext$|(?:^|\/)lib\/(?:yut|weplayRanking)(?:\.ts)?$/,
           },
           () => ({ path: "service", namespace: "fixture" }),
         );
@@ -3299,6 +3302,8 @@ async function verifyBoardLayout() {
       });
       await page.evaluate(() => { window.qa.throwValue = 2; window.qa.holdThrow = true; });
       const action = page.locator(".yut-throw-button");
+      assert.equal(await page.locator('.yut-event').innerText(), '', label + ': preparing a throw hides the previous event caption');
+      if (width >= 1024) assert.equal(await page.getByRole('button', { name: '게임 전체 화면', exact: true }).isVisible(), true, 'desktop exposes fullscreen');
       await action.focus();
       await page.keyboard.down("Space");
       await page.waitForTimeout(80);
@@ -3306,6 +3311,7 @@ async function verifyBoardLayout() {
       await page.waitForFunction(() => window.qa.calls.some(call => call.action === "throw"));
       assert.equal(await page.evaluate(() => window.qa.room.phase), "throw", label + ": throw response remains pending during the delay check");
       assert.equal(await page.locator(".yut-throw-overlay").isVisible(), false, label + ": delayed response cannot leave the floating button over the toss animation");
+      assert.equal(await page.locator('.yut-action-dock').isVisible(), false, label + ': pending throw hides the competing bottom caption');
       verifyBoardGeometry(await boardGeometry(page, label + "-throw-pending"), initial, label + "-throw-pending");
       await page.evaluate(() => { window.qa.holdThrow = false; window.qa.releaseThrow(); });
       await page.waitForFunction(() => window.qa.room.phase === "move");
@@ -3398,7 +3404,7 @@ async function verifyInterfaceStability() {
     for (const text of ["상대 학생 님의 차례입니다.", "검증 학생(3학년 2반) 님의 2번 말이 두 칸 이동했습니다. 상대 학생(3학년 2반) 님의 차례입니다. 남은 말을 골라 다음 이동을 준비합니다."]) {
       await page.evaluate(text => {
         const qa = window.qa;
-        qa.emit({ ...qa.room, revision: qa.room.revision + 1, syncRevision: qa.room.syncRevision + 1, lastEvent: { kind: "move", atMs: Date.now(), text } });
+        qa.emit({ ...qa.room, turnUid: "other", revision: qa.room.revision + 1, syncRevision: qa.room.syncRevision + 1, lastEvent: { kind: "move", atMs: Date.now(), text } });
       }, text);
       await page.waitForTimeout(60);
       const geometry = await page.locator(".yut-event").evaluate(node => {
@@ -3785,8 +3791,8 @@ try {
           );
           const duration = ended.reactions[1].at - ended.reactions[0].at;
           assert.ok(
-            duration >= 1350 && duration < 1800,
-            `Capture reaction lasts 1400ms (observed ${duration}ms)`,
+            duration >= 850 && duration < 1300,
+            `Capture reaction lasts 900ms (observed ${duration}ms)`,
           );
           assert.deepEqual(
             ended.motion.map((item) => item.value),
@@ -3809,7 +3815,7 @@ try {
             duration,
           };
           report.checks.push(
-            `${width}x${height} ${reduced}: actual capture shows the victim after all five landings for 1400ms, holds the input gate, fits the viewport, and ignores repeat snapshots/remounts`,
+            `${width}x${height} ${reduced}: actual capture shows the victim after all five landings for 900ms, holds the input gate, fits the viewport, and ignores repeat snapshots/remounts`,
           );
           await page.close();
         }

@@ -1982,8 +1982,26 @@
   min-width: 120px;
 }
 .yut-floating-fullscreen {
-  display: none;
+  position: absolute;
+  z-index: 101;
+  right: 12px;
+  bottom: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid #d3b477;
+  border-radius: 6px;
+  background: #251c14ed;
+  color: #fff1d2;
+  box-shadow: 0 3px 12px #0009;
+  font-size: 12px;
 }
+.yut-floating-fullscreen svg { width: 20px; height: 20px; }
+.yut-action-dock[aria-hidden="true"] { visibility: hidden; pointer-events: none; }
 @media (max-width: 1023px) {
   .yut-floating-fullscreen {
     position: fixed;

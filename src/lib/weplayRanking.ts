@@ -9,6 +9,9 @@ export interface WeplayRanking {
     rank: number;
     classLabel?: string;
     studentLabel: string;
+    studentName?: string;
+    studentNumber?: string;
+    studentId?: string;
     score: number;
     isMe: boolean;
   }[];
@@ -137,15 +140,64 @@ export interface RhythmRankingEvent {
   kind: "center" | "rim";
   hand: "left" | "right";
 }
+export interface RhythmChallengeState {
+  weekId: string;
+  week: { id: string; startsAtMs: number; endsAtMs: number };
+  songId: string;
+  automaticSongId: string;
+  selection: "automatic" | "manual";
+  allowedDifficulties: ("normal" | "hard")[];
+  missLimit: number;
+  revision: number;
+  dailyFreeLimit: number;
+  paidCost: number;
+  freeRemaining: number;
+  dailyUsed: number;
+  dayId: string;
+  preview: boolean;
+}
+export const getRhythmChallengeState = (config: WeplayConfig) =>
+  call<RhythmChallengeState>("getRhythmChallengeState", config, {});
+export const saveRhythmChallengeSettings = (
+  config: WeplayConfig,
+  data: {
+    weekId: string;
+    selection: "automatic" | "manual";
+    songId: string;
+    missLimit: number;
+    expectedRevision: number;
+    requestId: string;
+  },
+) =>
+  call<
+    Omit<
+      RhythmChallengeState,
+      "freeRemaining" | "dailyUsed" | "dayId" | "preview"
+    >
+  >("saveRhythmChallengeSettings", config, data);
 export const startRhythmRankingGame = (
   config: WeplayConfig,
-  data: { songId: string; difficulty: string; requestId: string },
-) => call<{ sessionId: string }>("startRhythmRankingGame", config, data);
+  data: {
+    songId: string;
+    difficulty: string;
+    requestId: string;
+    paid: boolean;
+  },
+) =>
+  call<{
+    sessionId: string;
+    songId: string;
+    difficulty: "normal" | "hard";
+    missLimit: number;
+    weekId: string;
+    freeRemaining: number;
+    chargedCost: number;
+  }>("startRhythmRankingGame", config, { ...data, challengeVersion: 1 });
 export const finishRhythmRankingGame = async (
   config: WeplayConfig,
-  data: { sessionId: string; events: RhythmRankingEvent[] },
+  data: { sessionId: string; events: RhythmRankingEvent[]; endTime: number },
 ) => {
-  const result = await call<{ score: number }>(
+  const result = await call<{ score: number; rankingSkipped?: boolean }>(
     "finishRhythmRankingGame",
     config,
     data,

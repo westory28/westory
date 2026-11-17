@@ -489,11 +489,44 @@ for (let index = 0; index < 100; index++)
   longCombo = core.applyJudgement(longCombo, "perfect");
 assert.equal(
   longCombo.score,
-  100000,
-  "Combo accumulation adds no score multiplier",
+  116500,
+  "Threshold strikes earn their new fever bonus",
 );
 assert.equal(longCombo.combo, 100);
 assert.equal(longCombo.maxCombo, 100);
+for (const [combo, tier, points] of [[9, 0, 1000], [10, 1, 1050], [20, 2, 1100], [50, 3, 1250], [100, 4, 1500]]) {
+  assert.equal(core.getFeverTier(combo), tier);
+  const prior = { ...core.createScore(), combo: combo - 1 };
+  assert.equal(core.applyJudgement(prior, "perfect").score, points);
+}
+const broken = core.applyJudgement(longCombo, "miss");
+assert.equal(core.applyJudgement({ ...core.createScore(), combo: 9 }, "good").score, 683, "Fractional fever points round to a whole displayed point");
+assert.equal(core.applyJudgement({ ...core.createScore(), combo: 49 }, "good").score, 813);
+assert.equal(core.applyJudgement({ ...core.createScore(), combo: 99 }, "ok").score, 450);
+assert.equal(core.getFeverTier(broken.combo), 0);
+assert.equal(core.applyJudgement(broken, "good").score - broken.score, 650);
+const failureChart = Array.from({ length: 60 }, (_, index) => ({ id: `limit-${index}`, time: 3 + index, kind: "center", hand: "left" }));
+const noInputFailure = core.replayRhythmPerformance(failureChart, [], 100, 30);
+assert.equal(noInputFailure.score.miss, 30);
+assert.equal(noInputFailure.terminated, true);
+assert(Math.abs(noInputFailure.endedAt - 32.16) < 1e-6);
+assert.equal(core.replayRhythmPerformance(failureChart, [], noInputFailure.endedAt, 30).terminated, true, "Exact server replay of client termination remains terminal");
+const wrongInputs = Array.from({ length: 30 }, (_, index) => ({ time: 3 + index * 0.001, kind: "rim", hand: "right" }));
+const mashFailure = core.replayRhythmPerformance(failureChart, wrongInputs, 3.029, 30);
+assert.equal(mashFailure.score.miss, 30);
+assert.equal(mashFailure.processedEvents, 30);
+assert.equal(mashFailure.terminated, true);
+const extraAfterFailure = core.replayRhythmPerformance(failureChart, [...wrongInputs, { time: 4, kind: "center", hand: "left" }], 5, 30);
+assert.equal(extraAfterFailure.processedEvents, 30);
+assert.equal(extraAfterFailure.score.score, 0);
+const practiceNoLimit = core.replayRhythmPerformance(failureChart, [], 100);
+assert.equal(practiceNoLimit.terminated, false);
+assert.equal(practiceNoLimit.score.miss, 60);
+const perfectChart = Array.from({ length: 100 }, (_, index) => ({ id: `perfect-${index}`, time: 3 + index * .25, kind: "center", hand: index % 2 ? "right" : "left" }));
+const perfectReplay = core.replayRhythmPerformance(perfectChart, perfectChart.map(note => ({ time: note.time, kind: note.kind, hand: note.hand })), 30, 30);
+assert.equal(perfectReplay.score.score, longCombo.score);
+assert.equal(perfectReplay.score.miss, 0);
+assert.equal(perfectReplay.processedEvents, 100);
 assert.equal(
   emptyScore.score,
   0,
@@ -925,7 +958,7 @@ assert.equal(
 );
 assert.equal(resumeDeadlines.size, 0);
 console.log(
-  "Rhythm checks passed: four scores, chart density/determinism, alternating hands, earliest eligible note matching, all-chart 159/160ms late and jittered phrases, 220ms mistake recovery and extended mash blocking, count-in/outro exclusions, touch boundaries, unchanged scoring, audio scheduling/pause/mute/teardown, resume timeout/rejection/late fulfillment/disposal/replacement races, unsupported browser and server authorization (pending/allowed/denied/error/canceled/timeout).",
+  "Rhythm checks passed: four scores, chart density/determinism, alternating hands, earliest eligible note matching, all-chart 159/160ms late and jittered phrases, 220ms mistake recovery and extended mash blocking, count-in/outro exclusions, touch boundaries, fever scoring/reset and exact challenge limit replay, audio scheduling/pause/mute/teardown, resume timeout/rejection/late fulfillment/disposal/replacement races, unsupported browser and server authorization (pending/allowed/denied/error/canceled/timeout).",
 );
 
 if (process.argv.includes("--audio-render")) {

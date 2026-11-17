@@ -11,6 +11,8 @@ import { InlineLoading } from "../../LoadingState";
 import { prepareWeplayIntroAudio } from "../weplayIntroAudio";
 import useRhythmPublication from "./useRhythmPublication";
 import RhythmOpening from "./RhythmOpening";
+import RhythmChallengeSettings from "../RhythmChallengeSettings";
+import WeplayWeeklyRewards from "../WeplayWeeklyRewards";
 import "./rhythm.css";
 import "../../portalPage.css";
 
@@ -152,7 +154,10 @@ export default function RhythmGameEntry({
         />
       )}
       {teacher && !preview && (
-        <p>1인 연습 · 4곡 · 위스 및 학생 기록 반영 없음</p>
+        <>
+          <RhythmChallengeSettings />
+          <WeplayWeeklyRewards gameId="gungdeok-rock" />
+        </>
       )}
     </div>
   );

@@ -441,6 +441,8 @@
   font-weight: 700;
 }
 .rhythm-scorebar strong {
+  display: inline-block;
+  transform-origin: center;
   font-size: 32px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -545,8 +547,8 @@
 .rhythm-note {
   position: absolute;
   top: 50%;
-  width: clamp(48px, 7.5cqh, 72px);
-  height: clamp(48px, 7.5cqh, 72px);
+  width: clamp(72px, 8cqw, 106px);
+  height: clamp(72px, 8cqw, 106px);
   transform: translate(-50%, -50%);
   will-change: left;
 }
@@ -1145,7 +1147,7 @@
   }
   .rhythm-play-field {
     padding-top: 8px;
-    grid-template-rows: clamp(84px, 26cqh, 116px) minmax(0, 1fr);
+    grid-template-rows: clamp(108px, 28cqh, 136px) minmax(0, 1fr);
   }
   .rhythm-lane-wrap {
     margin: 0 24px;
@@ -1162,8 +1164,8 @@
     width: 60px;
   }
   .rhythm-note {
-    width: 44px;
-    height: 44px;
+    width: clamp(72px, 8cqw, 106px);
+    height: clamp(72px, 8cqw, 106px);
   }
   .rhythm-note span {
     font-size: 10px;
@@ -1451,7 +1453,9 @@
   border-radius: 50%;
   background: #f5e8bce8;
   color: var(--rh-ink);
-  font-size: clamp(20px, 3.3cqh, 28px);
+  font-family: "Noto Sans KR", system-ui, sans-serif;
+  font-size: clamp(24px, 3.3cqw, 36px);
+  font-synthesis: weight;
   line-height: 1;
   font-weight: 900;
   box-shadow: 0 1px 2px #352c2633;
@@ -1464,13 +1468,13 @@
   line-height: 1.2;
 }
 .rhythm-feedback--perfect {
-  color: #8d5200;
-  font-size: clamp(36px, 5cqw, 64px);
-  filter: drop-shadow(0 0 6px #e5b51e88);
+  color: #facc15;
+  font-size: clamp(44px, 6.5cqw, 76px);
+  filter: drop-shadow(0 3px 0 #8d5200) drop-shadow(0 0 6px #e5b51e88);
 }
 .rhythm-feedback--good {
-  color: var(--rh-green);
-  font-size: clamp(28px, 4cqw, 48px);
+  color: #fff8df;
+  font-size: clamp(38px, 5.5cqw, 68px);
 }
 .rhythm-feedback--ok {
   color: var(--rh-blue);
@@ -1479,6 +1483,103 @@
 .rhythm-feedback--miss {
   color: var(--rh-red);
   font-size: clamp(32px, 4.5cqw, 54px);
+}
+.rhythm-feedback--perfect,
+.rhythm-feedback--good {
+  left: 22%;
+  top: 3%;
+  line-height: 1.1;
+  -webkit-text-stroke: 1.5px var(--rh-green);
+  paint-order: stroke fill;
+  text-shadow:
+    2px 2px 0 var(--rh-green),
+    -2px -2px 0 var(--rh-green),
+    4px 5px 0 var(--rh-paper),
+    5px 6px 0 var(--rh-green);
+}
+.rhythm-feedback--perfect::before,
+.rhythm-feedback--good::before {
+  content: "✦";
+  position: absolute;
+  left: -0.5em;
+  top: -0.2em;
+  font-size: 0.55em;
+  color: var(--rh-gold);
+}
+.rhythm-feedback--perfect::after,
+.rhythm-feedback--good::after {
+  content: "✦";
+  position: absolute;
+  right: -0.5em;
+  top: 0.15em;
+  font-size: 0.45em;
+  color: var(--rh-gold);
+}
+.rhythm-feedback small {
+  -webkit-text-stroke: 0;
+  color: var(--rh-green);
+  text-shadow: 1px 1px 0 var(--rh-paper), -1px -1px 0 var(--rh-paper);
+}
+.rhythm-mode-options {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.rhythm-mode-options .rhythm-tool {
+  min-width: 80px;
+  min-height: 44px;
+  padding: 8px 16px;
+  font-family: "Noto Sans KR", system-ui, sans-serif;
+  font-weight: 800;
+}
+.rhythm-mode-options [aria-pressed="true"] {
+  color: var(--rh-paper);
+  background: var(--rh-green);
+}
+.rhythm-challenge-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 8px;
+  font-family: "Noto Sans KR", system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+}
+.rhythm-miss-counter strong {
+  color: var(--rh-red);
+}
+.rhythm-game[data-fever="1"] { --rh-fever: #facc15; }
+.rhythm-game[data-fever="2"] { --rh-fever: #fb923c; }
+.rhythm-game[data-fever="3"] { --rh-fever: #f43f5e; }
+.rhythm-game[data-fever="4"] { --rh-fever: #facc15; }
+.rhythm-fever-aura {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 48px;
+  background: var(--rh-fever);
+  opacity: 0.42;
+  filter: blur(12px);
+  animation: rhythm-fever-breathe 2.4s ease-in-out infinite;
+}
+.rhythm-fever-aura--belt {
+  inset: -8px -8px 16px;
+}
+.rhythm-fever-aura--drum {
+  bottom: -10%;
+  left: 50%;
+  width: min(80cqw, 205cqh);
+  height: min(43cqw, 108cqh);
+  transform: translateX(-50%);
+  border-radius: 50% 50% 0 0;
+}
+.rhythm-game[data-fever="4"] .rhythm-fever-aura {
+  background: conic-gradient(#f43f5e, #fb923c, #facc15, #4ade80, #38bdf8, #a78bfa, #f43f5e);
+}
+.rhythm-game[data-fever]:not([data-fever="0"]) .rhythm-combo strong {
+  text-shadow: 0 0 12px var(--rh-fever);
+}
+@keyframes rhythm-fever-breathe {
+  50% { opacity: 0.26; }
 }
 .rhythm-hit-effect--perfect {
   color: var(--rh-gold);
@@ -1591,7 +1692,7 @@
   color: var(--rh-blue);
 }
 .rhythm-score-arrival {
-  animation: rhythm-score-arrival 280ms ease-out;
+  animation: rhythm-score-arrival 240ms ease-out;
 }
 @keyframes rhythm-collect {
   0% {
@@ -1619,8 +1720,11 @@
   }
 }
 @keyframes rhythm-score-arrival {
+  0%, 100% {
+    transform: scale(1);
+  }
   40% {
-    transform: scale(1.2);
+    transform: scale(1.14);
     color: var(--rh-red);
   }
 }

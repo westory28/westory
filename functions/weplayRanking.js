@@ -6,6 +6,8 @@ const { readGameSettings } = require('./weplayCore');
 const { LIMIT, root, weeklyBoardId, weekAt, studentLabel, prepareRankingUpdate } = require('./weplayRankingStore');
 const { RHYTHM_SONGS } = require('./rhythmRankingCore/rhythmSongs');
 const { createChart, createScore, judgeInput, applyJudgement, HIT_WINDOW_SECONDS } = require('./rhythmRankingCore/rhythmCore');
+const { createStudentWisWallet } = require('./studentWisWallet');
+const { PAID_COST, ALLOWED_DIFFICULTIES, readSettings, challengeFor, dailyUsage, desiredSettings } = require('./rhythmChallenge');
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const fail = (code, message) => { throw new HttpsError(code, message); };
@@ -54,7 +56,24 @@ function replayRhythm(song, difficulty, events) {
   return { ...score, noteCount: chart.length };
 }
 
+function replayChallenge(song, difficulty, events, endTime, missLimit) {
+  if (!Array.isArray(events) || events.length > 5000 || !Number.isSafeInteger(missLimit) || missLimit < 1 || missLimit > 300)
+    fail('invalid-argument', '연주 기록을 확인하지 못했습니다. 다시 연주해 주세요.');
+  let previous = -1;
+  for (const event of events) {
+    if (!event || !Number.isFinite(event.time) || event.time < -0.5 || event.time < previous
+      || event.time > endTime + 0.000001 || !['center', 'rim'].includes(event.kind) || !['left', 'right'].includes(event.hand))
+      fail('invalid-argument', '연주 기록을 확인하지 못했습니다. 다시 연주해 주세요.');
+    previous = event.time;
+  }
+  const { replayRhythmPerformance } = require('./rhythmRankingCore/rhythmCore');
+  const result = replayRhythmPerformance(createChart(song, difficulty), events, endTime, missLimit);
+  if (result.processedEvents !== events.length) fail('invalid-argument', '종료된 도전의 추가 입력은 기록할 수 없습니다.');
+  return result;
+}
+
 function createWeplayRankingHandlers({ db, assertSession = assertScoreWorkflowSession, now = Date.now }) {
+  const wallet = createStudentWisWallet({ db, actorUid: 'system:rhythm-challenge' });
   // Only ranking payloads are cached. Authorization, publication and semester
   // checks always read fresh server state, including cache hits. Never cache errors.
   const cache = new Map();
@@ -85,7 +104,7 @@ function createWeplayRankingHandlers({ db, assertSession = assertScoreWorkflowSe
     const manager = allowManager && (email === ADMIN_EMAIL || profile.role === 'teacher'
       || (profile.role === 'staff' && profile.teacherPortalEnabled === true
         && Array.isArray(profile.staffPermissions) && profile.staffPermissions.includes('lesson_read')));
-    if (manager) return { uid, manager: true, revision: `teacher:${manifest.revision}` };
+    if (manager) return { uid, manager: true, canWrite: email === ADMIN_EMAIL || profile.role === 'teacher', revision: `teacher:${manifest.revision}` };
     if (profile.role !== 'student') fail('permission-denied', '게임을 이용할 권한이 없습니다.');
     if (!allowManager && (Object.hasOwn(request.data || {}, 'classId') || request.data?.includeClasses === true)) fail('permission-denied', '본인의 연주만 기록할 수 있습니다.');
     assertStudentMenuVisible(config, ['weplay', menuKeys[gameId]]);
@@ -148,32 +167,116 @@ function createWeplayRankingHandlers({ db, assertSession = assertScoreWorkflowSe
     let payload;
     if (view === 'class' && !target.classId) payload = { rows: [], updatedAtMs: now() };
     else payload = await cached(boundary, async () => {
-      const board = (await db.doc(`${root(scope)}/weplay_weekly_rankings/${weeklyBoardId(gameId, category, target.classId, week.id)}`).get()).data();
-      return { rows: board?.rows || [], updatedAtMs: board?.updatedAtMs || now(), ...(board?.trackingSinceMs ? { trackingSinceMs: board.trackingSinceMs } : {}) };
+      const storedCategory = gameId === 'gungdeok-rock' ? `challenge:${category}` : category;
+      const board = (await db.doc(`${root(scope)}/weplay_weekly_rankings/${weeklyBoardId(gameId, storedCategory, target.classId, week.id)}`).get()).data();
+      const rows = (board?.rows || []).slice(0, LIMIT);
+      // Older weekly projections contain masked labels. Resolve only those exact
+      // displayed users, once per bounded payload cache; never scan a roster.
+      const legacy = rows.filter(row => /[○*]/.test(row.studentLabel || ''));
+      const profiles = new Map();
+      if (legacy.length) {
+        const snapshots = await db.getAll(...legacy.map(row => db.doc(`users/${row.uid}`)), {
+          fieldMask: ['name', 'studentName', 'studentNumber', 'number'],
+        });
+        snapshots.forEach(snapshot => profiles.set(snapshot.id, snapshot.data() || {}));
+      }
+      const namedRows = rows.map(row => {
+        const profile = profiles.get(row.uid);
+        const parts = /^(?:(\d+)번\s+)?(.*)$/.exec(profile ? studentLabel(profile) : String(row.studentLabel || ''));
+        const recordedNumber = /^(\d+)번\s+/.exec(String(row.studentLabel || ''))?.[1];
+        const studentNumber = recordedNumber || parts?.[1] || '', studentName = parts?.[2] || '학생';
+        const classParts = /^(\d+)학년\s+(\d+)반$/.exec(row.classLabel || '');
+        const studentId = classParts && studentNumber
+          ? `${classParts[1]}${classParts[2].padStart(2, '0')}${studentNumber.padStart(2, '0')}` : studentNumber;
+        return { ...row, studentLabel: studentName, studentName, studentNumber, studentId };
+      });
+      return { rows: namedRows, updatedAtMs: board?.updatedAtMs || now(), ...(board?.trackingSinceMs ? { trackingSinceMs: board.trackingSinceMs } : {}) };
     }, request.data?.refresh === true);
     return { ...payload, gameId, category, week, period: { startsAtMs: week.startsAtMs, endsAtMs: week.endsAtMs }, view,
       limit: LIMIT, cacheTtlMs: Math.min(CACHE_MS, Math.max(0, week.endsAtMs - now())), scoreLabel: gameId === 'joseon-yut' ? '승' : '점',
       selectedClassId: target.classId, ...(target.classes ? { classes: target.classes } : {}),
-      rows: payload.rows.map((row, index) => ({ rank: index + 1, studentLabel: row.studentLabel, classLabel: row.classLabel || '', score: row.score, isMe: !actor.manager && row.uid === actor.uid })) };
+      rows: payload.rows.map((row, index) => ({ rank: index + 1, studentLabel: row.studentLabel, studentName: row.studentName,
+        studentNumber: row.studentNumber, studentId: row.studentId, classLabel: row.classLabel || '', score: row.score, isMe: !actor.manager && row.uid === actor.uid })) };
+  };
+  const settingsRef = scope => db.doc(`${root(scope)}/rhythm_challenge_settings/current`);
+  const getRhythmChallengeState = async request => {
+    await assertSession(request);
+    const scope = scopeFrom(request.data);
+    const actor = await authority(db, request, scope, 'gungdeok-rock', true);
+    const atMs = now();
+    const refs = [settingsRef(scope)];
+    if (!actor.manager) refs.push(db.doc(`${root(scope)}/rhythm_players/${actor.uid}`));
+    const snapshots = await db.getAll(...refs);
+    return { ...challengeFor(readSettings(snapshots[0].data()), weekAt(atMs)),
+      ...dailyUsage(snapshots[1]?.data(), atMs), preview: !!actor.manager };
+  };
+  const saveRhythmChallengeSettings = async request => {
+    await assertSession(request);
+    const scope = scopeFrom(request.data), atMs = now(), week = weekAt(atMs);
+    if (!identifier(request.data?.requestId) || !Number.isSafeInteger(request.data.expectedRevision)
+      || request.data.expectedRevision < 0) fail('invalid-argument', '저장 요청을 다시 확인해 주세요.');
+    const desired = desiredSettings(request.data, week), fingerprint = hash(JSON.stringify(desired));
+    return db.runTransaction(async transaction => {
+      const actor = await authority(transaction, request, scope, 'gungdeok-rock', true);
+      if (!actor.manager || !actor.canWrite) fail('permission-denied', '도전 설정을 변경할 권한이 없습니다.');
+      const receiptRef = db.doc(`${root(scope)}/rhythm_challenge_settings_requests/${hash(`${actor.uid}\n${request.data.requestId}`)}`);
+      const [savedSnap, receiptSnap] = await transaction.getAll(settingsRef(scope), receiptRef);
+      const receipt = receiptSnap.data(), current = readSettings(savedSnap.data());
+      if (receipt) {
+        if (receipt.fingerprint !== fingerprint) fail('invalid-argument', '같은 저장 요청의 내용은 바꿀 수 없습니다.');
+        return receipt.result;
+      }
+      if (JSON.stringify({ missLimit: current.missLimit, override: current.override }) === JSON.stringify(desired))
+        return challengeFor(current, week);
+      if (current.revision !== request.data.expectedRevision) fail('aborted', '다른 곳에서 설정이 바뀌었습니다. 다시 불러온 뒤 저장해 주세요.');
+      const next = { ...desired, revision: current.revision + 1 }, result = challengeFor(next, week);
+      transaction.set(settingsRef(scope), { ...next, schemaVersion: 1, updatedAtMs: atMs, updatedBy: actor.uid });
+      transaction.create(receiptRef, { fingerprint, result, updatedAtMs: atMs, updatedBy: actor.uid });
+      return result;
+    });
   };
   const startRhythmRankingGame = async request => {
     await assertSession(request);
-    const scope = scopeFrom(request.data), choice = rhythmChoice(request.data?.songId, request.data?.difficulty);
-    if (!identifier(request.data?.requestId)) fail('invalid-argument', '연주 요청을 다시 확인해 주세요.');
+    const scope = scopeFrom(request.data), atMs = now();
+    const choice = rhythmChoice(request.data?.songId, request.data?.difficulty);
+    if (!identifier(request.data?.requestId) || request.data?.challengeVersion !== 1
+      || typeof request.data?.paid !== 'boolean') fail('invalid-argument', '새 도전 화면에서 다시 시작해 주세요.');
+    if (!ALLOWED_DIFFICULTIES.includes(choice.difficulty)) fail('invalid-argument', '도전은 자진모리 또는 휘모리 장단을 선택해 주세요.');
     return db.runTransaction(async transaction => {
       const actor = await authority(transaction, request, scope, 'gungdeok-rock');
-      const sessionId = hash(`${actor.uid}\n${request.data.requestId}`), runRef = db.doc(`${root(scope)}/rhythm_players/${actor.uid}`);
+      const sessionId = hash(`${actor.uid}\n${request.data.requestId}`);
+      const runRef = db.doc(`${root(scope)}/rhythm_challenge_sessions/${sessionId}`);
+      const playerRef = db.doc(`${root(scope)}/rhythm_players/${actor.uid}`);
       const existing = (await transaction.get(runRef)).data();
-      if (existing?.sessionId === sessionId) {
-        if (existing.category !== choice.category) fail('invalid-argument', '같은 연주 요청의 곡과 장단은 바꿀 수 없습니다.');
-        return { sessionId };
+      if (existing) {
+        if (existing.uid !== actor.uid || existing.category !== choice.category || existing.paidAccepted !== request.data.paid)
+          fail('invalid-argument', '같은 도전 요청의 내용은 바꿀 수 없습니다.');
+        return existing.startResult;
       }
-      const atMs = now();
-      if (existing && atMs < existing.startedAtMs + 5000) fail('resource-exhausted', '잠시 후 다시 시작해 주세요.');
-      transaction.set(runRef, { sessionId, uid: actor.uid, classId: actor.classId, enrollmentId: actor.enrollmentId,
+      const [settingsSnap, playerSnap] = await transaction.getAll(settingsRef(scope), playerRef);
+      const player = playerSnap.data();
+      const challenge = challengeFor(readSettings(settingsSnap.data()), weekAt(atMs));
+      if (choice.song.id !== challenge.songId) fail('failed-precondition', '이번 주 도전 곡이 바뀌었습니다. 다시 확인해 주세요.');
+      if (player?.challengeStartedAtMs && atMs < player.challengeStartedAtMs + 5000)
+        fail('resource-exhausted', '잠시 후 다시 도전해 주세요.');
+      const usage = dailyUsage(player, atMs), chargedCost = usage.freeRemaining > 0 ? 0 : PAID_COST;
+      if (chargedCost && !request.data.paid) fail('failed-precondition', '오늘의 무료 도전을 모두 사용했습니다. 50위스 도전을 선택해 주세요.');
+      const loaded = chargedCost ? await wallet.read(transaction, scope, actor.uid) : null;
+      if (loaded && loaded.wallet.balance < chargedCost) fail('failed-precondition', '보유 위스가 부족합니다.');
+      const startResult = { sessionId, songId: choice.song.id, difficulty: choice.difficulty,
+        missLimit: challenge.missLimit, weekId: challenge.weekId, chargedCost,
+        freeRemaining: Math.max(0, usage.freeRemaining - 1) };
+      const balanceAfter = loaded ? wallet.write(transaction, scope, actor.uid, -chargedCost, 'rhythm_challenge_cost', sessionId,
+        '덩기덕 쿵더Rock 추가 도전', loaded, runRef.path) : null;
+      transaction.create(runRef, { sessionId, challengeVersion: 1, paidAccepted: request.data.paid,
+        ...(loaded ? { canonical: true, delta: -chargedCost, balanceAfter } : {}),
+        uid: actor.uid, classId: actor.classId, enrollmentId: actor.enrollmentId,
         songId: choice.song.id, difficulty: choice.difficulty, category: choice.category, duration: choice.song.duration,
+        missLimit: challenge.missLimit, weekId: challenge.weekId, settingsRevision: challenge.revision, startResult,
         startedAtMs: atMs, expiresAtMs: atMs + SESSION_MS, status: 'active' });
-      return { sessionId };
+      transaction.set(playerRef, { challengeDayId: usage.dayId, challengeDailyUsed: usage.dailyUsed + 1,
+        challengeStartedAtMs: atMs, challengeSessionId: sessionId }, { merge: true });
+      return startResult;
     });
   };
   const finishRhythmRankingGame = async request => {
@@ -183,14 +286,21 @@ function createWeplayRankingHandlers({ db, assertSession = assertScoreWorkflowSe
     if (typeof sessionId !== 'string' || !/^[a-f0-9]{64}$/.test(sessionId)) fail('invalid-argument', '연주 기록을 확인해 주세요.');
     const result = await db.runTransaction(async transaction => {
       const actor = await authority(transaction, request, scope, 'gungdeok-rock');
-      const runRef = db.doc(`${root(scope)}/rhythm_players/${actor.uid}`), run = (await transaction.get(runRef)).data();
+      const runRef = db.doc(`${root(scope)}/rhythm_challenge_sessions/${sessionId}`), run = (await transaction.get(runRef)).data();
       if (!run || run.sessionId !== sessionId || run.uid !== actor.uid || run.classId !== actor.classId || run.enrollmentId !== actor.enrollmentId) fail('failed-precondition', '현재 연주 기록을 확인하지 못했습니다. 다시 연주해 주세요.');
       if (run.status === 'finished') return run.result;
       const atMs = receivedAtMs;
-      if (atMs < run.startedAtMs + (run.duration - 1) * 1000 || atMs > run.expiresAtMs) fail('failed-precondition', '연주를 끝까지 마친 뒤 기록할 수 있습니다.');
-      const choice = rhythmChoice(run.songId, run.difficulty), score = replayRhythm(choice.song, choice.difficulty, request.data?.events);
-      const ranking = score.score > 0 ? await prepareRankingUpdate({ db, transaction, scope, gameId: 'gungdeok-rock', category: choice.category, actor, score: score.score, atMs }) : null;
-      const value = { sessionId, ...score };
+      const endTime = request.data?.endTime;
+      if (!Number.isFinite(endTime) || endTime < 0 || endTime > run.duration + 0.01
+        || atMs < run.startedAtMs + (endTime - 1) * 1000 || atMs > run.expiresAtMs)
+        fail('failed-precondition', '도전 종료 시각을 확인하지 못했습니다.');
+      const choice = rhythmChoice(run.songId, run.difficulty);
+      const replay = replayChallenge(choice.song, choice.difficulty, request.data?.events, endTime, run.missLimit);
+      if (!replay.terminated && endTime < run.duration - 0.01) fail('failed-precondition', '도전을 마친 뒤 기록할 수 있습니다.');
+      const score = { ...replay.score, noteCount: createChart(choice.song, choice.difficulty).length };
+      const rankingSkipped = run.weekId !== weekAt(atMs).id;
+      const ranking = score.score > 0 && !rankingSkipped ? await prepareRankingUpdate({ db, transaction, scope, gameId: 'gungdeok-rock', category: `challenge:${choice.category}`, actor, score: score.score, atMs }) : null;
+      const value = { sessionId, ...score, terminated: replay.terminated, rankingSkipped };
       ranking?.apply();
       transaction.update(runRef, { status: 'finished', result: value, finishedAtMs: atMs });
       return value;
@@ -200,7 +310,7 @@ function createWeplayRankingHandlers({ db, assertSession = assertScoreWorkflowSe
     cache.clear();
     return result;
   };
-  return { getWeplayRanking, startRhythmRankingGame, finishRhythmRankingGame };
+  return { getWeplayRanking, getRhythmChallengeState, saveRhythmChallengeSettings, startRhythmRankingGame, finishRhythmRankingGame };
 }
 
-module.exports = { createWeplayRankingHandlers, replayRhythm, CACHE_MS };
+module.exports = { createWeplayRankingHandlers, replayRhythm, replayChallenge, CACHE_MS };

@@ -278,13 +278,21 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     const generatedCode = ['create', 'match'].includes(action) ? Array.from({ length: 6 }, () => alphabet[random(alphabet.length)]).join('') : '';
     // Draw once before transaction retries; a transaction retry cannot reroll.
     const sticks = action === 'throw' ? Array.from({ length: 4 }, () => random(2) === 1) : null;
-    const weightedSticks = action === 'throw' ? core.sampleYutSticks(data.power, () => random(0x100000000) / 0x100000000) : null;
+    const throwDraws = action === 'throw' ? Array.from({ length: 4 }, () => random(0x100000000) / 0x100000000) : null;
     return db.runTransaction(async (transaction) => {
+      // Reuse only this transaction's document snapshots. Starting a four-player
+      // room otherwise rereads the actor and shared classrooms several times.
+      // Each transaction retry creates a fresh cache; no authority crosses requests.
+      const documentReads = new Map();
+      const reader = { get: (reference) => {
+        if (!documentReads.has(reference.path)) documentReads.set(reference.path, transaction.get(reference));
+        return documentReads.get(reference.path);
+      } };
       // Resolve independent reads together. Every authorization read remains in
       // this transaction; no cached permission can outlive an account/policy change.
       const playerRef = ref(scope, 'yut_players', request.auth.uid);
       const [actor, playerSnapshot, roomSnapshot] = await Promise.all([
-        authority(transaction, request, scope), transaction.get(playerRef),
+        authority(reader, request, scope), reader.get(playerRef),
         identifier(data.roomId) ? transaction.get(ref(scope, 'yut_rooms', data.roomId)) : Promise.resolve(null),
       ]);
       const receivedAt = now(), player = playerSnapshot.data() || {};
@@ -298,7 +306,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
         if (old && !modeAllowed(actor, old)) fail('permission-denied', '지금은 이 게임 모드가 열려 있지 않습니다.');
         let room = null;
         if (old?.participantUids?.includes(actor.uid) && !expired(old, receivedAt) && matchesMembership(old, actor)) {
-          const refreshed = await refreshRoomNames(transaction, scope, old, actor);
+          const refreshed = await refreshRoomNames(reader, scope, old, actor);
           persistNames(transaction, scope, old, refreshed);
           room = publicRoom(refreshed);
         }
@@ -315,7 +323,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
               if (!actor.manager && current.visibility !== 'public' && current.status === 'waiting' && privateUsed(player, koreaDay(receivedAt)) >= 5) fail('resource-exhausted', '오늘의 비밀 방 5판을 모두 이용했습니다.');
               // Record even a no-op reconnect: a delayed retry after leaving
               // must not silently join or create a room again.
-              let refreshed = await refreshRoomNames(transaction, scope, current, actor);
+              let refreshed = await refreshRoomNames(reader, scope, current, actor);
               if (current.status === 'waiting' && current.hostUid === actor.uid) {
                 refreshed = core.touchYutHostActivity(refreshed, actor.uid, receivedAt);
                 refreshed.syncRevision = (refreshed.syncRevision ?? refreshed.revision) + 1;
@@ -379,7 +387,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
         }
         room.enrollmentIds = { ...(room.enrollmentIds || {}), [actor.uid]: actor.enrollmentId };
         room.enrollmentSlotIds = { ...(room.enrollmentSlotIds || {}), [actor.uid]: actor.slotId };
-        room = await refreshRoomNames(transaction, scope, room, actor);
+        room = await refreshRoomNames(reader, scope, room, actor);
       } else {
         roomId = data.roomId;
         room = roomSnapshot.data();
@@ -392,7 +400,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
         if (['start', 'close'].includes(action) && room.hostUid !== actor.uid && !(action === 'close' && actor.canWrite)) fail('permission-denied', '방장만 시작하거나 방을 닫을 수 있습니다.');
         if (action === 'claimReward' && (actor.manager || room.status !== 'finished' || room.finishReason !== 'completion'
           || room.winnerUid !== actor.uid || room.reward?.status !== 'pending')) fail('failed-precondition', '완주한 우승자의 미지급 보상만 다시 받을 수 있습니다.');
-        room = await refreshRoomNames(transaction, scope, room, actor);
+        room = await refreshRoomNames(reader, scope, room, actor);
         if (action === 'kick') {
           // Read the pointer before any writes; a later room pointer is never cleared.
           removedPlayer = await transaction.get(ref(scope, 'yut_players', data.targetUid));
@@ -402,7 +410,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
           // but each may belong to a different class. Their independent checks
           // run together instead of adding a database round trip per participant.
           const [rewardPolicy] = await Promise.all([rewards.snapshot(transaction, scope), Promise.all(room.players.map(async (member) => {
-            const memberProfile = (await transaction.get(db.doc(`users/${member.uid}`))).data() || {};
+            const memberProfile = (await reader.get(db.doc(`users/${member.uid}`))).data() || {};
             if (memberProfile.isDeleted || memberProfile.deletedAt || memberProfile.weplayDeletionPending
               || (Object.hasOwn(memberProfile, 'registrationApprovalStatus') && memberProfile.registrationApprovalStatus !== 'APPROVED')) fail('failed-precondition', '참가자 정보가 변경되었습니다. 대기실을 다시 만들어 주세요.');
             if (memberProfile.role !== 'student' && memberProfile.role !== 'teacher'
@@ -414,13 +422,13 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
               const slotId = room.enrollmentSlotIds?.[member.uid];
               if (!identifier(slotId)) fail('failed-precondition', '참가자의 수강 정보를 확인해 주세요.');
               const [enrollmentSnapshot, slotSnapshot] = await Promise.all([
-                transaction.get(db.doc(`semester_enrollments/${enrollmentId}`)), transaction.get(db.doc(`semester_enrollment_slots/${slotId}`)),
+                reader.get(db.doc(`semester_enrollments/${enrollmentId}`)), reader.get(db.doc(`semester_enrollment_slots/${slotId}`)),
               ]);
               const enrollment = enrollmentSnapshot.data() || {}, slot = slotSnapshot.data() || {};
               if (enrollment.studentUid !== member.uid || enrollment.semesterId !== scope.id
                 || enrollment.enrollmentStatus !== 'ACTIVE' || enrollment.readOnly === true || slot.studentUid !== member.uid
                 || slot.semesterId !== scope.id || slot.activeEnrollmentId !== enrollmentId || (slot.status !== undefined && slot.status !== 'ACTIVE')) fail('failed-precondition', '참가자의 학급 정보가 변경되었습니다. 대기실을 다시 만들어 주세요.');
-              await readClass(transaction, scope, enrollment.classId);
+              await readClass(reader, scope, enrollment.classId);
               if (room.visibility !== 'public' && !room.privatePlayChargedAtMs) {
                 const memberRef = ref(scope, 'yut_players', member.uid);
                 const memberPlayer = member.uid === actor.uid ? player : (await transaction.get(memberRef)).data() || {};
@@ -438,7 +446,11 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
           if (action === 'kick') room = core.kickYutPlayer(room, actor.uid, data.targetUid, receivedAt);
           if (action === 'start') room = core.startYutGame(room, receivedAt);
           if (action === 'start' && room.visibility !== 'public') room.privatePlayChargedAtMs = receivedAt;
-          if (action === 'throw') room = core.throwYut(room, actor.uid, room.rulesVersion === 2 ? weightedSticks : sticks, receivedAt, data.power);
+          if (action === 'throw') {
+            let drawIndex = 0;
+            const weightedSticks = core.sampleYutSticks(data.power, () => throwDraws[drawIndex++], room.players.find((member) => member.uid === actor.uid)?.lastThrow?.value);
+            room = core.throwYut(room, actor.uid, room.rulesVersion === 2 ? weightedSticks : sticks, receivedAt, data.power);
+          }
           if (action === 'move') room = core.moveYut(room, actor.uid, data.pieceId, data.route, receivedAt, data.stack);
           if (action === 'skip') room = core.skipYutTurn(room, receivedAt);
           if (action === 'leave') room = core.leaveYutRoom(room, actor.uid, receivedAt);

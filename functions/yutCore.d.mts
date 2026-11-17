@@ -20,8 +20,8 @@ export interface YutRoom {
   createdAtMs: number; updatedAtMs: number; hostActivityAtMs?: number; expiresAtMs: number;
 }
 export interface YutMove { pieceId: string; route: YutRoute; targetNode: YutNode; stackSize: number; path?: YutNode[]; canStack?: boolean; stack?: boolean }
-export function getYutThrowProbabilities(power?: number): number[];
-export function sampleYutSticks(power?: number, random?: () => number): boolean[];
+export function getYutThrowProbabilities(power?: number, previousValue?: number): number[];
+export function sampleYutSticks(power?: number, random?: () => number, previousValue?: number): boolean[];
 export const YUT_TURN_MS: number;
 export const YUT_THROW_ANIMATION_MS: number;
 export const YUT_MOVE_ANIMATION_MS: number;

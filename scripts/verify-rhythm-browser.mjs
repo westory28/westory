@@ -21,7 +21,7 @@ try {
       ),
   );
 }
-const evidence = path.join(root, "output/rhythm-browser-20261115");
+const evidence = path.join(root, "output/rhythm-browser-20261117");
 await fs.mkdir(evidence, { recursive: true });
 const modulePath = (value) =>
   JSON.stringify(path.join(root, value).replaceAll("\\", "/"));
@@ -32,6 +32,7 @@ const query=new URLSearchParams(location.search),teacher=query.has('teacher');
 const qa=window.rhythmQA={
  hidden:false,online:true,hold:false,pending:[],failure:false,reads:[],saves:[],toasts:[],rankingCalls:[],
  publication:{enabled:query.has('open'),revision:query.has('open')?1:0},audio:[],hits:[],time:null,saveFailure:false,
+ challenge:{songId:'eolssu-run',automaticSongId:'eolssu-run',selection:'automatic',revision:0,allowedDifficulties:['normal','hard'],missLimit:30,freeRemaining:3,paidCost:50,weekId:'2026-11-16',week:{startsAtMs:1794754800000,endsAtMs:1795359600000},dailyFreeLimit:3,dailyUsed:0,preview:teacher},finishFailure:false,settingsFailure:false,weeklyPlans:{},weeklyFailure:false,
  auth:{config:{year:'2026',semester:'2',showQuiz:true,showScore:true,showLesson:true},menuConfig:{student:[],teacher:[]},configReady:true,menuConfigReady:true,authGeneration:1,authPhase:'ready',
  currentUser:{uid:teacher?'qa-teacher':'qa-student',email:teacher?'teacher@yongshin-ms.ms.kr':'2630001@yongshin-ms.ms.kr'},
  userData:{role:teacher?'teacher':'student',registrationApprovalStatus:'APPROVED'}}
@@ -61,15 +62,26 @@ export async function saveRhythmPublication(config,enabled,expectedRevision){
 export const useAppToast=()=>({showToast:value=>qa.toasts.push(value)});
 export const getHistoryDictionaryCallable=async name=>async data=>{
  qa.rankingCalls.push({name,data:structuredClone(data)});
- if(name==='startRhythmRankingGame')return {data:{sessionId:data.requestId}};
- if(name==='finishRhythmRankingGame')return {data:{score:0}};
- if(name==='getWeplayRanking')return {data:{gameId:data.gameId,category:data.category,rows:[],updatedAtMs:Date.now(),scoreLabel:'점'}};
+ if(name==='getWeplayWeeklyRewards'||name==='saveWeplayWeeklyRewards'){
+   const key=[data.gameId,data.category,data.weekId].join('/');
+   const current=qa.weeklyPlans[key]||{tiers:[],revision:0,status:'unscheduled',paidCount:0,paidWis:0,skippedCount:0,week:{endsAtMs:Date.now()+7*86400000}};
+   if(name==='getWeplayWeeklyRewards')return {data:structuredClone(current)};
+   if(qa.weeklyFailure)throw new Error('검증용 보상 저장 실패');
+   const saved=qa.weeklyPlans[key]={...current,tiers:structuredClone(data.tiers),revision:current.revision+1,status:data.tiers.length?'scheduled':'disabled'};
+   return {data:structuredClone(saved)};
+ }
+ if(name==='getRhythmChallengeState')return {data:{...qa.challenge}};
+ if(name==='saveRhythmChallengeSettings'){if(qa.settingsFailure)throw new Error('검증용 설정 저장 실패');qa.challenge={...qa.challenge,...data,revision:qa.challenge.revision+1};return {data:{...qa.challenge}};}
+ if(name==='startRhythmRankingGame'){qa.challenge.freeRemaining=Math.max(0,qa.challenge.freeRemaining-1);return {data:{...qa.challenge,...data,sessionId:data.requestId,chargedCost:data.paid?50:0}};}
+ if(name==='finishRhythmRankingGame'){if(qa.finishFailure)throw new Error('검증용 기록 실패');return {data:{score:0}};}
+ if(name==='getWeplayRanking')return {data:{gameId:data.gameId,category:data.category,rows:[],classes:[],updatedAtMs:Date.now(),scoreLabel:'점'}};
  throw new Error('Unexpected callable '+name);
 };
 `;
 const harness = `
 import React from 'react';import{createRoot}from'react-dom/client';import{MemoryRouter}from'react-router-dom';
 import Entry from ${modulePath("src/components/common/weplay/rhythm/RhythmGameEntry.tsx")};
+import WeeklyRewards from ${modulePath("src/components/common/weplay/WeplayWeeklyRewards.tsx")};
 import {RhythmAudio} from ${modulePath("src/components/common/weplay/rhythm/rhythmAudio.ts")};
 import {RHYTHM_SONGS} from ${modulePath("src/components/common/weplay/rhythm/rhythmSongs.ts")};
 import {createChart} from ${modulePath("src/components/common/weplay/rhythm/rhythmCore.ts")};
@@ -83,7 +95,8 @@ RhythmAudio.prototype.start=async function(...args){qa.audio.push(this);return o
 const originalHit=RhythmAudio.prototype.hit;
 RhythmAudio.prototype.hit=function(kind){qa.hits.push(kind);return originalHit.call(this,kind)};
 qa.audioStates=()=>qa.audio.map(player=>player.state);
-createRoot(document.getElementById('root')).render(<MemoryRouter><Entry portal={new URLSearchParams(location.search).has('teacher')?'teacher':'student'}/></MemoryRouter>);
+const query=new URLSearchParams(location.search);
+createRoot(document.getElementById('root')).render(<MemoryRouter>{query.has('rewards')?<main className='ws-page'><WeeklyRewards gameId={query.get('rewards')}/></main>:<Entry portal={query.has('teacher')?'teacher':'student'}/>}</MemoryRouter>);
 `;
 const bundled = await build({
   stdin: { contents: harness, loader: "tsx", resolveDir: root },
@@ -109,6 +122,8 @@ const bundled = await build({
     {
       name: "rhythm-synthetic-services",
       setup(plugin) {
+        if (!process.argv.includes('--rewards-only')) plugin.onResolve({filter: /\/WeplayWeeklyRewards(?:\.tsx)?$/}, () => ({path:'teacher-settings',namespace:'isolated-panel'}));
+        plugin.onLoad({filter: /.*/, namespace:'isolated-panel'}, () => ({contents:'export default function Panel(){return null}',loader:'js'}));
         plugin.onResolve(
           {
             filter:
@@ -186,7 +201,7 @@ const pageFor = async (width = 1280, height = 900, fallback = true) => {
   });
   activePage = page;
   page.rhythmHasTouch = width <= 844;
-  page.setDefaultTimeout(6000);
+  page.setDefaultTimeout(15000);
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("response", (response) => {
     if (response.url().includes("/assets/weplay/rhythm/")) {
@@ -646,7 +661,7 @@ const antiSpamCheck = async () => {
     await page.keyboard.press(physicalNoteKey(fastNotes[index]));
     assert.equal(
       await score(page),
-      (index + 1) * 1000,
+      (index + 1) * 1000 + Math.max(0, index - 8) * 50,
       "valid fast notes retain full score",
     );
     assert.equal(await combo(page), index + 1, "valid fast notes retain combo");
@@ -656,7 +671,7 @@ const antiSpamCheck = async () => {
     await page.keyboard.press(physicalNoteKey(last));
   assert.equal(
     await score(page),
-    fastCount * 1000,
+    fastCount * 1000 + (fastCount - 9) * 50,
     "duplicate physical taps add no points",
   );
   assert.equal(await combo(page), 0, "duplicate physical taps reset combo");
@@ -856,7 +871,195 @@ const assertLayout = async (page, label) => {
     assert.match(result.matrix, /matrix\(0, 1, -1, 0,/, "clockwise canvas");
   return result;
 };
+if (process.argv.includes('--rewards-only')) {
+  try {
+    for (const width of [390, 768, 1280]) for (const gameId of ['history-rain','joseon-yut','gungdeok-rock']) {
+      const page = await pageFor(width, 900);
+      await page.goto(`${base}/?teacher&rewards=${gameId}`);
+      const rewards = page.locator('.weplay-weekly-rewards');
+      const summary = rewards.locator('summary');
+      await summary.waitFor();
+      assert.equal(await summary.getAttribute('aria-expanded'), 'false');
+      assert.equal(await summary.locator('svg[aria-hidden="true"]').count(), 1);
+      assert.equal(await page.evaluate(() => window.rhythmQA.rankingCalls.length), 0, 'closed rewards fetch nothing');
+      await summary.click();
+      assert.equal(await summary.getAttribute('aria-expanded'), 'true');
+      const save = rewards.getByRole('button', {name:'보상 설정 저장'});
+      await save.waitFor();
+      assert.equal(await save.isDisabled(), true);
+      let reads = 1;
+      assert.equal(await page.evaluate(() => window.rhythmQA.rankingCalls.length), reads);
+      const categories = await rewards.getByLabel('보상 랭킹').locator('option').count();
+      if (categories > 1) {
+        await rewards.getByLabel('보상 랭킹').selectOption({index:1});
+        reads++;
+        await page.waitForFunction(count => window.rhythmQA.rankingCalls.length === count, reads);
+        await save.waitFor();
+      }
+      const previousWeek = await rewards.getByLabel('보상 주차').inputValue();
+      const nextWeek = new Date(Date.parse(previousWeek+'T00:00:00Z')+7*86400000).toISOString().slice(0,10);
+      await rewards.getByLabel('보상 주차').fill(nextWeek);
+      reads++;
+      await page.waitForFunction(count => window.rhythmQA.rankingCalls.length === count, reads);
+      await rewards.getByRole('button', {name:'보상 구간 추가'}).click();
+      await rewards.getByLabel('1구간 마지막 순위').fill('1');
+      await rewards.getByLabel('1구간 지급 위스').fill('100');
+      await rewards.getByRole('button', {name:'보상 구간 추가'}).click();
+      await rewards.getByLabel('2구간 마지막 순위').fill('5');
+      await rewards.getByLabel('2구간 지급 위스').fill('50');
+      assert.equal(await page.evaluate(() => window.rhythmQA.rankingCalls.length), reads, 'tier drafts fetch nothing');
+      await save.click();
+      await page.waitForFunction(() => window.rhythmQA.toasts.length === 1);
+      assert.equal(await save.isDisabled(), true);
+      await rewards.getByLabel('1구간 지급 위스').fill('110');
+      await page.evaluate(() => window.rhythmQA.weeklyFailure=true);
+      await save.click();
+      await rewards.getByText('검증용 보상 저장 실패').waitFor();
+      const failed = await page.evaluate(() => window.rhythmQA.rankingCalls.at(-1).data);
+      await page.evaluate(() => window.rhythmQA.weeklyFailure=false);
+      await save.click();
+      await page.waitForFunction(() => window.rhythmQA.toasts.length === 2);
+      assert.deepEqual(await page.evaluate(() => window.rhythmQA.rankingCalls.at(-1).data), failed, 'reward save retry preserves request');
+      assert.equal(await page.evaluate(() => window.rhythmQA.rankingCalls.length), reads+3);
+      const layout = await rewards.evaluate(node => {
+        const r=node.getBoundingClientRect();
+        return {left:r.left,right:r.right,width:innerWidth,overflow:document.documentElement.scrollWidth>innerWidth,summaryBackground:getComputedStyle(node.querySelector('summary')).backgroundColor,background:getComputedStyle(node).backgroundColor};
+      });
+      assert(layout.left>=0 && layout.right<=layout.width && !layout.overflow, JSON.stringify(layout));
+      assert.equal(layout.summaryBackground,'rgba(0, 0, 0, 0)');
+      assert.equal(layout.background,'rgba(0, 0, 0, 0)');
+      await shot(page, `rewards-${gameId}-${width}`);
+      checks.push({width,gameId,reads,saves:3,layout,retrySameRequest:true});
+      await page.close();
+    }
+    assert.deepEqual(errors, []);
+    assert.deepEqual(external, []);
+    await fs.writeFile(path.join(evidence,'rewards-report.json'),JSON.stringify({checks,errors,external},null,2));
+    console.log(JSON.stringify({rewardsPassed:checks.length,errors,external}));
+  } finally {
+    await browser.close();
+    await new Promise(resolve => server.close(resolve));
+  }
+  process.exit(0);
+}
+if (process.argv.includes('--settings-only')) {
+  try {
+    for (const width of [390, 768, 1280]) {
+      const page = await pageFor(width, 900);
+      await page.goto(`${base}/?teacher`);
+      const settings = page.locator('.rhythm-challenge-settings');
+      await settings.getByRole('button', { name: '도전 설정 저장' }).waitFor();
+      const save = settings.getByRole('button', { name: '도전 설정 저장' });
+      assert.equal(await save.isDisabled(), true);
+      assert.equal(await page.evaluate(() => window.rhythmQA.rankingCalls.length), 1);
+      assert.equal(await settings.getByRole('combobox').nth(1).isDisabled(), true);
+      await settings.getByRole('combobox').nth(0).selectOption('manual');
+      await settings.getByRole('combobox').nth(1).selectOption('harvest-yard');
+      await settings.getByLabel('아이쿠 종료 횟수').fill('25');
+      assert.equal(await page.evaluate(() => window.rhythmQA.rankingCalls.length), 1, 'draft edits have no requests');
+      await save.click();
+      await page.waitForFunction(() => window.rhythmQA.toasts.length === 1);
+      assert.equal(await save.isDisabled(), true);
+      assert.equal(await page.evaluate(() => window.rhythmQA.rankingCalls.length), 2);
+      await settings.getByLabel('아이쿠 종료 횟수').fill('0');
+      assert.equal(await save.isDisabled(), true);
+      await settings.getByLabel('아이쿠 종료 횟수').fill('26');
+      await page.evaluate(() => window.rhythmQA.settingsFailure = true);
+      await save.click();
+      await settings.getByText('검증용 설정 저장 실패', { exact: false }).waitFor();
+      const failed = await page.evaluate(() => window.rhythmQA.rankingCalls.at(-1).data);
+      await page.evaluate(() => window.rhythmQA.settingsFailure = false);
+      await save.click();
+      await page.waitForFunction(() => window.rhythmQA.toasts.length === 2);
+      assert.deepEqual(await page.evaluate(() => window.rhythmQA.rankingCalls.at(-1).data), failed, 'retry keeps idempotency key');
+      const layout = await settings.evaluate(node => {
+        const r = node.getBoundingClientRect(), title = node.querySelector('h2');
+        return {left:r.left,right:r.right,width:innerWidth,titleBackground:getComputedStyle(title).backgroundColor,overflow:document.documentElement.scrollWidth>innerWidth};
+      });
+      assert(layout.left >= 0 && layout.right <= layout.width && !layout.overflow);
+      assert.equal(layout.titleBackground, 'rgba(0, 0, 0, 0)');
+      await shot(page, `settings-${width}`);
+      checks.push({width, layout, reads:1, saves:3, unchangedSaveDisabled:true, retrySameRequest:true});
+      await page.close();
+    }
+    assert.deepEqual(errors, []);
+    assert.deepEqual(external, []);
+    await fs.writeFile(path.join(evidence, 'settings-report.json'), JSON.stringify({checks,errors,external}, null, 2));
+    console.log(JSON.stringify({settingsPassed:checks.length,errors,external}));
+  } finally {
+    await browser.close();
+    await new Promise(resolve => server.close(resolve));
+  }
+  process.exit(0);
+}
 try {
+  const challengePage = await pageFor();
+  await challengePage.goto(`${base}/?open`);
+  await phase(challengePage, "ready");
+  assert.equal(await challengePage.locator('.rhythm-mode-options [aria-pressed="true"]').textContent(), "연습");
+  await challengePage.locator('.rhythm-song').nth(1).click();
+  await start(challengePage);
+  const feverNotes = await challengePage.evaluate(() => window.rhythmQA.chart(1, "normal"));
+  let expectedFeverScore = 0;
+  for (let index = 0; index < 100; index++) {
+    await time(challengePage, feverNotes[index].time);
+    await challengePage.keyboard.press(physicalNoteKey(feverNotes[index]));
+    const hit = index + 1;
+    expectedFeverScore += hit >= 100 ? 1500 : hit >= 50 ? 1250 : hit >= 20 ? 1100 : hit >= 10 ? 1050 : 1000;
+    if ([10, 20, 50, 100].includes(hit)) {
+      assert.equal(await score(challengePage), expectedFeverScore);
+      assert.equal(await challengePage.locator('.rhythm-game').getAttribute('data-fever'), String([10, 20, 50, 100].indexOf(hit) + 1));
+      assert.equal(await challengePage.locator('.rhythm-fever-aura').count(), 2);
+      await shot(challengePage, `fever-${hit}`);
+    }
+  }
+  assert.equal(expectedFeverScore, 116500);
+  await challengePage.keyboard.press(physicalNoteKey(feverNotes[99]));
+  assert.equal(await challengePage.locator('.rhythm-game').getAttribute('data-fever'), '0');
+  assert.equal(await challengePage.locator('.rhythm-fever-aura').count(), 0);
+  assert.equal(await challengePage.evaluate(() => window.rhythmQA.rankingCalls.length), 0, 'practice has zero ranking network requests');
+  await resetToLobby(challengePage);
+  await challengePage.getByRole('button', { name: '도전', exact: true }).click();
+  await challengePage.locator('.rhythm-game[data-mode="challenge"]').waitFor();
+  assert.equal(await challengePage.locator('.rhythm-song').count(), 1);
+  assert.equal(await challengePage.locator('.rhythm-difficulty button').count(), 2);
+  await time(challengePage, 0);
+  await challengePage.getByRole('button', { name: '도전 시작', exact: true }).click();
+  await phase(challengePage, 'playing');
+  const challengeNote = feverNotes[0];
+  await time(challengePage, challengeNote.time);
+  await challengePage.evaluate(() => window.rhythmQA.finishFailure = true);
+  const wrongKey = challengeNote.kind === 'center' ? 'x' : 'ArrowRight';
+  for (let count = 0; count < 30; count++) await challengePage.keyboard.press(wrongKey);
+  await phase(challengePage, 'result');
+  assert.equal(await challengePage.locator('.rhythm-result h2').textContent(), '도전 종료');
+  await challengePage.getByRole('button', { name: '기록 다시 저장' }).waitFor();
+  let calls = await challengePage.evaluate(() => window.rhythmQA.rankingCalls);
+  assert.equal(calls.filter(call => call.name === 'getRhythmChallengeState').length, 1);
+  assert.equal(calls.filter(call => call.name === 'startRhythmRankingGame').length, 1);
+  assert.equal(calls.filter(call => call.name === 'finishRhythmRankingGame').length, 1);
+  const finishRequest = calls.find(call => call.name === 'finishRhythmRankingGame').data;
+  assert.equal(finishRequest.events.length, 30);
+  assert.equal(calls.find(call => call.name === 'startRhythmRankingGame').data.paid, false);
+  await challengePage.evaluate(() => window.rhythmQA.finishFailure = false);
+  await challengePage.getByRole('button', { name: '기록 다시 저장' }).click();
+  await frames(challengePage);
+  calls = await challengePage.evaluate(() => window.rhythmQA.rankingCalls);
+  assert.deepEqual(calls.filter(call => call.name === 'finishRhythmRankingGame').at(-1).data, finishRequest, 'finish retries preserve the same events and endTime');
+  await resetToLobby(challengePage);
+  await challengePage.evaluate(() => window.rhythmQA.challenge.freeRemaining = 0);
+  await challengePage.getByRole('button', { name: '도전', exact: true }).click();
+  await challengePage.getByRole('button', { name: '50위스로 도전', exact: true }).waitFor();
+  await time(challengePage, 0);
+  await challengePage.getByRole('button', { name: '50위스로 도전', exact: true }).click();
+  await phase(challengePage, 'playing');
+  calls = await challengePage.evaluate(() => window.rhythmQA.rankingCalls);
+  assert.equal(calls.filter(call => call.name === 'startRhythmRankingGame').at(-1).data.paid, true);
+  await time(challengePage, feverNotes[29].time + .17);
+  await phase(challengePage, 'result');
+  await shot(challengePage, 'challenge-limit');
+  checks.push({ name: 'fever and challenge', fever: [10, 20, 50, 100], score: expectedFeverScore, practiceRequests: 0, challengeStateRequests: 2, challengeStarts: 2, limit: 30, retrySameRequest: true, paidExplicit: true });
+  await challengePage.close();
   await antiSpamCheck();
   for (const [width, height] of [
     [1440, 1000],
@@ -913,14 +1116,14 @@ try {
     await localFontCheck(page, ".rhythm-song-panel", /Yeon Sung/);
     const rankingLauncher = page.getByRole("button", { name: "랭킹", exact: true });
     await rankingLauncher.click();
-    await page.getByText("아직 기록이 없습니다.").waitFor();
+    await page.getByText("이번 주 기록이 없습니다.").waitFor();
     const rankingBounds = await page.locator('.weplay-ranking-dialog').boundingBox();
     assert(rankingBounds && rankingBounds.x >= 0 && rankingBounds.y >= 0 && rankingBounds.x + rankingBounds.width <= width + 1 && rankingBounds.y + rankingBounds.height <= height + 1, `${label}: ranking remains inside rotated/native game`);
     await shot(page, `${label}-ranking`);
     await page.getByRole('button', { name: '랭킹 닫기' }).click();
     assert.equal(await page.evaluate(() => window.rhythmQA.rankingCalls.filter(call => call.name === 'getWeplayRanking').length), 1);
     await rankingLauncher.click();
-    await page.getByText('아직 기록이 없습니다.').waitFor();
+    await page.getByText('이번 주 기록이 없습니다.').waitFor();
     assert.equal(await page.evaluate(() => window.rhythmQA.rankingCalls.filter(call => call.name === 'getWeplayRanking').length), 1, 'reopen reuses ranking');
     await page.keyboard.press('Escape');
     if (portrait) assert.equal(await page.locator('.rhythm-game--rotated').count(), 1, 'ranking Escape preserves fullscreen');
@@ -1081,7 +1284,7 @@ try {
     await start(page);
     await rankingLauncher.click();
     await phase(page, 'paused');
-    await page.getByText('아직 기록이 없습니다.').waitFor();
+    await page.getByText('이번 주 기록이 없습니다.').waitFor();
     const hitsBeforeRankingKey = await hitCount(page);
     await page.getByLabel('랭킹 장단', { exact: true }).focus();
     await page.keyboard.press('ArrowRight');

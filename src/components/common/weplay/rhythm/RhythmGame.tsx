@@ -11,6 +11,8 @@ import { useAuth } from "../../../../contexts/AuthContext";
 import {
   startRhythmRankingGame,
   finishRhythmRankingGame,
+  getRhythmChallengeState,
+  type RhythmChallengeState,
   type RhythmRankingEvent,
 } from "../../../../lib/weplayRanking";
 import WeplayRanking from "../WeplayRanking";
@@ -30,6 +32,9 @@ import {
   COUNT_IN_SECONDS,
   HIT_WINDOW_SECONDS,
   applyJudgement,
+  advanceMissedNotes,
+  FEVER_BONUSES,
+  getFeverTier,
   classifyDrumHit,
   createChart,
   createScore,
@@ -58,7 +63,6 @@ const JUDGEMENT_TEXT = {
   ok: "좋다",
   miss: "어이쿠",
 };
-const JUDGEMENT_POINTS = { perfect: 1000, good: 650, ok: 300, miss: 0 };
 const HIT_SPOTS = [
   { kind: "rim", hand: "left", x: 0.28, y: 0.12, key: "Z" },
   { kind: "rim", hand: "right", x: 0.72, y: 0.12, key: "X" },
@@ -74,6 +78,7 @@ type CollectedNote = {
   y: number;
   dx: number;
   dy: number;
+  points: number;
 };
 
 export default function RhythmGame({
@@ -90,12 +95,24 @@ export default function RhythmGame({
     difficulty: string;
     sessionId?: string;
     events: RhythmRankingEvent[];
+    endTime?: number;
+    missLimit: number;
+    paid: boolean;
   } | null>(null);
   const rankingSaveBusy = useRef(false);
   const [rankingSave, setRankingSave] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
   const [songId, setSongId] = useState(RHYTHM_SONGS[0].id);
+  const [mode, setMode] = useState<"practice" | "challenge">("practice");
+  const [challenge, setChallenge] = useState<RhythmChallengeState | null>(null);
+  const [challengeLoading, setChallengeLoading] = useState(false);
+  const challengeLoadingRef = useRef(false);
+  const [feedbackPoints, setFeedbackPoints] = useState(0);
+  const [failedChallenge, setFailedChallenge] = useState(false);
+  const [rankingSkipped, setRankingSkipped] = useState(false);
+  const runMissLimit = useRef(Infinity);
+  const runEndTime = useRef(0);
   const [difficulty, setDifficulty] = useState<RhythmDifficulty>("normal");
   const [phase, setPhase] = useState<Phase>("ready");
   const phaseRef = useRef<Phase>("ready");
@@ -153,6 +170,31 @@ export default function RhythmGame({
     phaseRef.current = value;
     setPhase(value);
   }, []);
+
+  const selectChallenge = async () => {
+    if (challengeLoadingRef.current || !playableRef.current) return;
+    const token = generation.current;
+    challengeLoadingRef.current = true;
+    setChallengeLoading(true);
+    setError("");
+    try {
+      const state = await getRhythmChallengeState(config);
+      if (token !== generation.current) return;
+      setChallenge(state);
+      rankingRun.current = null;
+      setSongId(state.songId);
+      setDifficulty((current) => (current === "hard" ? "hard" : "normal"));
+      setMode("challenge");
+    } catch {
+      if (token === generation.current)
+        setError(
+          "이번 주 도전을 확인하지 못했습니다. 도전 버튼을 다시 눌러 주세요.",
+        );
+    } finally {
+      challengeLoadingRef.current = false;
+      if (token === generation.current) setChallengeLoading(false);
+    }
+  };
 
   useEffect(() => onWeplayAudioMutedChange(setMuted), []);
   useEffect(() => {
@@ -225,11 +267,16 @@ export default function RhythmGame({
     };
   }, [pause]);
 
-  const start = async () => {
+  const start = async (paid = false) => {
     if (
       phaseRef.current === "starting" ||
       !playableRef.current ||
       portraitRef.current
+    )
+      return;
+    if (
+      mode === "challenge" &&
+      (!challenge || (challenge.freeRemaining === 0 && !paid && !preview))
     )
       return;
     const newRun = phaseRef.current !== "ready";
@@ -244,6 +291,12 @@ export default function RhythmGame({
     setElapsed(0);
     setFeedback("");
     setFeedbackGrade(null);
+    setFeedbackPoints(0);
+    setFailedChallenge(false);
+    setRankingSkipped(false);
+    runMissLimit.current =
+      mode === "challenge" ? challenge!.missLimit : Infinity;
+    runEndTime.current = 0;
     setCollected([]);
     setHandStrikes({});
     setArrivalId(0);
@@ -254,6 +307,7 @@ export default function RhythmGame({
     setRankingSave("idle");
     if (
       !preview &&
+      mode === "challenge" &&
       (newRun ||
         !rankingRun.current ||
         rankingRun.current.songId !== songId ||
@@ -264,13 +318,16 @@ export default function RhythmGame({
         songId,
         difficulty,
         events: [],
+        missLimit: challenge!.missLimit,
+        paid,
       };
     }
+    if (mode === "practice" || preview) rankingRun.current = null;
     try {
       await player.start(
         song,
         muted ? 0 : 0.65,
-        preview
+        preview || mode === "practice"
           ? undefined
           : async () => {
               const run = rankingRun.current!;
@@ -278,10 +335,18 @@ export default function RhythmGame({
                 requestId: run.requestId,
                 songId: run.songId,
                 difficulty: run.difficulty,
+                paid: run.paid,
               });
               if (token !== generation.current || rankingRun.current !== run)
                 return false;
               run.sessionId = saved.sessionId;
+              run.missLimit = saved.missLimit;
+              runMissLimit.current = saved.missLimit;
+              setChallenge((state) =>
+                state
+                  ? { ...state, freeRemaining: saved.freeRemaining }
+                  : state,
+              );
               run.events = [];
               return playableRef.current;
             },
@@ -301,12 +366,18 @@ export default function RhythmGame({
           block: "start",
           behavior: "instant",
         });
-    } catch {
+    } catch (reason) {
       if (token !== generation.current) return;
       player.dispose();
       setGamePhase("ready");
+      const code =
+        typeof reason === "object" && reason && "code" in reason
+          ? String(reason.code)
+          : "";
       setError(
-        "연주를 시작하지 못했습니다. 연결 상태와 소리 설정을 확인한 뒤 다시 시작해 주세요.",
+        code.includes("resource-exhausted")
+          ? "무료 도전 횟수 또는 위스 잔액을 확인해 주세요."
+          : "연주를 시작하지 못했습니다. 연결 상태를 확인한 뒤 다시 시작해 주세요.",
       );
     }
   };
@@ -356,23 +427,34 @@ export default function RhythmGame({
     rankingSaveBusy.current = true;
     setRankingSave("saving");
     try {
-      await finishRhythmRankingGame(config, {
+      const result = await finishRhythmRankingGame(config, {
         sessionId: run.sessionId,
         events: run.events,
+        endTime: run.endTime ?? runEndTime.current,
       });
-      if (rankingRun.current === run) setRankingSave("saved");
+      if (rankingRun.current === run) {
+        setRankingSave("saved");
+        setRankingSkipped(result.rankingSkipped === true);
+      }
     } catch {
       if (rankingRun.current === run) setRankingSave("error");
     } finally {
       rankingSaveBusy.current = false;
     }
   }, [preview, config?.year, config?.semester]);
-  const finish = useCallback(() => {
-    audio.current?.stop();
-    setGamePhase("result");
-    setFeedback("");
-    void saveRanking();
-  }, [setGamePhase, saveRanking]);
+  const finish = useCallback(
+    (endTime: number, failed = false) => {
+      if (phaseRef.current === "result") return;
+      runEndTime.current = endTime;
+      if (rankingRun.current) rankingRun.current.endTime = endTime;
+      setFailedChallenge(failed);
+      audio.current?.stop();
+      setGamePhase("result");
+      setFeedback("");
+      void saveRanking();
+    },
+    [setGamePhase, saveRanking],
+  );
   useEffect(() => {
     if (phase !== "playing") return;
     let raf = 0;
@@ -383,23 +465,28 @@ export default function RhythmGame({
         return;
       }
       const time = audio.current.currentTime;
-      let next = scoreRef.current;
-      for (const note of chart) {
-        if (note.time >= time - offset / 1000 - HIT_WINDOW_SECONDS) break;
-        if (judged.current.has(note.id)) continue;
-        judged.current.add(note.id);
-        next = applyJudgement(next, "miss");
+      const advanced = advanceMissedNotes(
+        chart,
+        judged.current,
+        scoreRef.current,
+        time - offset / 1000,
+        runMissLimit.current,
+      );
+      const next = advanced.score;
+      if (next !== scoreRef.current) {
         setFeedback(JUDGEMENT_TEXT.miss);
         setFeedbackGrade("miss");
         setFeedbackId((value) => value + 1);
-      }
-      if (next !== scoreRef.current) {
         scoreRef.current = next;
         setScore(next);
       }
       setElapsed(time);
+      if (advanced.terminated) {
+        finish(advanced.endedAt, true);
+        return;
+      }
       if (time >= song.duration + Math.max(0, offset / 1000)) {
-        finish();
+        finish(song.duration);
         return;
       }
       raf = requestAnimationFrame(tick);
@@ -419,6 +506,25 @@ export default function RhythmGame({
       )
         return;
       const now = audio.current.currentTime;
+      const advanced = advanceMissedNotes(
+        chart,
+        judged.current,
+        scoreRef.current,
+        now - offset / 1000,
+        runMissLimit.current,
+      );
+      if (advanced.score !== scoreRef.current) {
+        setScore(advanced.score);
+        setFeedback(JUDGEMENT_TEXT.miss);
+        setFeedbackGrade("miss");
+        setFeedbackId((value) => value + 1);
+      }
+      scoreRef.current = advanced.score;
+      if (advanced.terminated) {
+        setScore(advanced.score);
+        finish(advanced.endedAt, true);
+        return;
+      }
       if (rankingRun.current?.sessionId)
         rankingRun.current.events.push({
           time: now - offset / 1000,
@@ -454,11 +560,18 @@ export default function RhythmGame({
         },
       ]);
       if (judgement === "ignored") return;
+      const previousScore = scoreRef.current.score;
       scoreRef.current = applyJudgement(scoreRef.current, judgement);
+      const earnedPoints = scoreRef.current.score - previousScore;
+      setFeedbackPoints(earnedPoints);
       setScore(scoreRef.current);
       setFeedback(JUDGEMENT_TEXT[judgement]);
       setFeedbackGrade(judgement);
       setFeedbackId((value) => value + 1);
+      if (scoreRef.current.miss >= runMissLimit.current) {
+        finish(now - offset / 1000, true);
+        return;
+      }
       if (!note || judgement === "miss") return;
       const canvas = canvasRef.current;
       const source = canvas?.querySelector(`[data-note-id="${note.id}"]`);
@@ -490,12 +603,13 @@ export default function RhythmGame({
             y: origin.y * canvas.clientHeight,
             dx: (destination.x - origin.x) * canvas.clientWidth,
             dy: (destination.y - origin.y) * canvas.clientHeight,
+            points: earnedPoints,
           },
         ]);
       }
       judged.current.add(note.id);
     },
-    [chart, offset, stage.rotated],
+    [chart, offset, stage.rotated, finish],
   );
   useEffect(() => {
     if (!lastStrike) return;
@@ -573,11 +687,30 @@ export default function RhythmGame({
   const active =
     phase === "playing" || phase === "paused" || phase === "starting";
   const chartTime = elapsed - offset / 1000;
+  const canvasWidth = canvasRef.current?.clientWidth || stage.width;
+  const noteWidth = Math.min(106, Math.max(72, canvasWidth * 0.08));
+  const closestNoteGap = useMemo(
+    () =>
+      chart.reduce(
+        (gap, note, index) =>
+          index ? Math.min(gap, note.time - chart[index - 1].time) : gap,
+        2.4,
+      ),
+    [chart],
+  );
+  // Larger notes retain a clear gap even in the fastest chart on a small screen.
+  const laneTravelSeconds = Math.min(
+    2.4,
+    Math.max(
+      0.55,
+      ((canvasWidth - 64) * 0.78 * closestNoteGap) / (noteWidth + 8),
+    ),
+  );
   const upcoming = chart.filter(
     (note) =>
       !judged.current.has(note.id) &&
       note.time - chartTime >= -HIT_WINDOW_SECONDS &&
-      note.time - chartTime <= 2.4,
+      note.time - chartTime <= laneTravelSeconds,
   );
   const accuracyTotal = Math.max(
     chart.length,
@@ -589,6 +722,7 @@ export default function RhythmGame({
           100,
       )
     : 0;
+  const feverTier = getFeverTier(score.combo);
 
   return (
     <section
@@ -605,12 +739,14 @@ export default function RhythmGame({
       }
       tabIndex={-1}
       aria-label="덩기덕 쿵더Rock 경기장"
+      data-fever={active ? feverTier : 0}
+      data-mode={mode}
     >
       <div className="rhythm-canvas" ref={canvasRef}>
         <WeplayRanking
           gameId="gungdeok-rock"
           portal={preview ? "teacher" : "student"}
-          initialCategory={`${songId}:${difficulty}`}
+          initialCategory={`${songId}:${difficulty === "easy" ? "normal" : difficulty}`}
           disabled={
             !playable || phase === "starting" || rankingSave === "saving"
           }
@@ -638,6 +774,36 @@ export default function RhythmGame({
               <span className="rhythm-eyebrow">
                 {preview ? "교사 미리보기" : "덩기덕 쿵더Rock"}
               </span>
+              {phase === "ready" && (
+                <div
+                  className="rhythm-mode-options"
+                  role="group"
+                  aria-label="연주 방식"
+                >
+                  <button
+                    type="button"
+                    className="rhythm-tool"
+                    aria-pressed={mode === "practice"}
+                    disabled={challengeLoading}
+                    onClick={() => {
+                      setMode("practice");
+                      rankingRun.current = null;
+                      setError("");
+                    }}
+                  >
+                    연습
+                  </button>
+                  <button
+                    type="button"
+                    className="rhythm-tool"
+                    aria-pressed={mode === "challenge"}
+                    disabled={challengeLoading || !playable}
+                    onClick={() => void selectChallenge()}
+                  >
+                    {challengeLoading ? "확인 중…" : "도전"}
+                  </button>
+                </div>
+              )}
               <div className="rhythm-stage-tools">
                 {phase === "ready" && (
                   <details className="rhythm-calibration" ref={calibrationRef}>
@@ -680,11 +846,15 @@ export default function RhythmGame({
                     },
                     {
                       title: "소리와 판정",
-                      text: "소리가 늦게 들리면 시작 전에 판정 시차를 조절하세요. 점수는 이번 연주에만 표시됩니다.",
+                      text: "소리가 늦게 들리면 시작 전에 판정 시차를 조절하세요. 연습은 횟수 제한 없이 즐기고, 도전 기록은 이번 주 랭킹에 반영됩니다.",
                     },
                     {
                       title: "판정과 점수",
                       text: "지화자 좋다! 1,000점 · 얼씨구 650점 · 좋다 300점. 잘못 치거나 놓치면 어이쿠, 콤보가 끊깁니다. 연타를 멈추고 다음 박자에 맞춰 치세요.",
+                    },
+                    {
+                      title: "피버",
+                      text: "10·20·50·100콤보부터 각각 5%·10%·25%·50%의 추가 점수를 얻습니다. 어이쿠가 나오면 피버가 끝납니다.",
                     },
                   ]}
                 />
@@ -752,8 +922,13 @@ export default function RhythmGame({
                 </div>
                 <div className="rhythm-song-panel">
                   <fieldset className="rhythm-songs">
-                    <legend>오늘의 장단</legend>
-                    {RHYTHM_SONGS.map((item) => (
+                    <legend>
+                      {mode === "challenge" ? "이번 주 도전곡" : "오늘의 장단"}
+                    </legend>
+                    {RHYTHM_SONGS.filter(
+                      (item) =>
+                        mode === "practice" || item.id === challenge?.songId,
+                    ).map((item) => (
                       <button
                         type="button"
                         key={item.id}
@@ -785,7 +960,9 @@ export default function RhythmGame({
                   </fieldset>
                   <fieldset className="rhythm-difficulty">
                     <legend>장단</legend>
-                    {DIFFICULTIES.map((item) => (
+                    {DIFFICULTIES.filter(
+                      (item) => mode === "practice" || item.id !== "easy",
+                    ).map((item) => (
                       <button
                         type="button"
                         key={item.id}
@@ -796,14 +973,37 @@ export default function RhythmGame({
                       </button>
                     ))}
                   </fieldset>
+                  {mode === "challenge" && challenge && (
+                    <div className="rhythm-challenge-status">
+                      <span>
+                        {preview
+                          ? "체험 · 횟수/위스 차감 없음"
+                          : `오늘 무료 ${challenge.freeRemaining}/3회`}
+                      </span>
+                      <span>어이쿠 {challenge.missLimit}회면 종료</span>
+                    </div>
+                  )}
                   <div className="rhythm-start-row">
                     <button
                       type="button"
                       className="rhythm-primary rhythm-start-button"
-                      disabled={!playable}
-                      onClick={() => void start()}
+                      disabled={!playable || challengeLoading}
+                      onClick={() =>
+                        void start(
+                          mode === "challenge" &&
+                            !preview &&
+                            challenge?.freeRemaining === 0,
+                        )
+                      }
                     >
-                      연주 시작 <RhythmIcon name="play" />
+                      {mode === "practice"
+                        ? "연주 시작"
+                        : preview
+                          ? "도전 체험 시작"
+                          : challenge?.freeRemaining === 0
+                            ? "50위스로 도전"
+                            : "도전 시작"}{" "}
+                      <RhythmIcon name="play" />
                     </button>
                   </div>
                 </div>
@@ -814,12 +1014,13 @@ export default function RhythmGame({
                 <div className="rhythm-result-paper">
                   <span className="rhythm-eyebrow">{song.title}</span>
                   <h2 ref={resultRef} tabIndex={-1}>
-                    한 판, 얼쑤!
+                    {failedChallenge ? "도전 종료" : "한 판, 얼쑤!"}
                   </h2>
                   <strong className="rhythm-result-score">
                     {score.score.toLocaleString()}
                     <small>점</small>
                   </strong>
+                  {failedChallenge && <p>어이쿠 {runMissLimit.current}회</p>}
                   <dl>
                     {[
                       ["정확도", `${accuracy}%`, ""],
@@ -848,13 +1049,23 @@ export default function RhythmGame({
                       type="button"
                       className="rhythm-primary"
                       disabled={!playable || rankingSave === "saving"}
-                      onClick={() => void start()}
+                      onClick={() => {
+                        if (mode === "challenge") {
+                          reset();
+                          void selectChallenge();
+                        } else void start();
+                      }}
                     >
                       한 번 더
                     </button>
                   </div>
                   {!preview && rankingSave === "saving" && (
                     <p role="status">기록을 저장하고 있습니다.</p>
+                  )}
+                  {rankingSkipped && (
+                    <p role="status">
+                      주차가 바뀌어 이번 연주는 랭킹에 반영되지 않습니다.
+                    </p>
                   )}
                   {!preview && rankingSave === "error" && (
                     <div role="alert">
@@ -890,12 +1101,25 @@ export default function RhythmGame({
                     </strong>
                   </div>
                   <div className="rhythm-combo" data-hot={score.combo >= 10}>
-                    <span>이어치기</span>
+                    <span>
+                      {feverTier
+                        ? `피버 +${FEVER_BONUSES[feverTier] * 100}%`
+                        : "이어치기"}
+                    </span>
                     <strong key={score.combo}>
                       {score.combo}
                       <small>콤보</small>
                     </strong>
                   </div>
+                  {mode === "challenge" && (
+                    <div className="rhythm-miss-counter">
+                      <span>어이쿠</span>
+                      <strong>
+                        {score.miss}
+                        <small>/{runMissLimit.current}</small>
+                      </strong>
+                    </div>
+                  )}
                 </div>
                 <progress
                   className="rhythm-progress"
@@ -905,6 +1129,12 @@ export default function RhythmGame({
                 />
                 <div className="rhythm-play-field">
                   <div className="rhythm-lane-wrap">
+                    {feverTier > 0 && (
+                      <div
+                        className="rhythm-fever-aura rhythm-fever-aura--belt"
+                        aria-hidden="true"
+                      />
+                    )}
                     <div
                       className="rhythm-lanes"
                       role="img"
@@ -926,7 +1156,7 @@ export default function RhythmGame({
                           data-note-id={note.id}
                           className={`rhythm-note rhythm-note--${note.kind}`}
                           style={{
-                            left: `${14 + ((note.time - chartTime) / 2.4) * 78}%`,
+                            left: `${14 + ((note.time - chartTime) / laneTravelSeconds) * 78}%`,
                           }}
                         >
                           <RhythmNoteArt kind={note.kind} />
@@ -949,6 +1179,12 @@ export default function RhythmGame({
                     </div>
                   </div>
                   <div className="rhythm-drum-zone">
+                    {feverTier > 0 && (
+                      <div
+                        className="rhythm-fever-aura rhythm-fever-aura--drum"
+                        aria-hidden="true"
+                      />
+                    )}
                     <div className="rhythm-stage-mascot" ref={mascotRef}>
                       <RhythmMascot />
                     </div>
@@ -964,18 +1200,17 @@ export default function RhythmGame({
                       {elapsed >= COUNT_IN_SECONDS &&
                         feedbackGrade &&
                         feedbackGrade !== "miss" && (
-                          <small>
-                            +{JUDGEMENT_POINTS[feedbackGrade].toLocaleString()}
-                          </small>
+                          <small>+{feedbackPoints.toLocaleString()}</small>
                         )}
                     </div>
-                    {score.combo > 0 && score.combo % 10 === 0 && (
+                    {[10, 20, 50, 100].includes(score.combo) && (
                       <div
                         key={score.combo}
                         className="rhythm-combo-cheer"
                         aria-hidden="true"
                       >
-                        {score.combo}연속, 신명 난다!
+                        {score.combo}콤보 · 피버 +
+                        {FEVER_BONUSES[feverTier] * 100}%
                       </div>
                     )}
                     <div className="rhythm-drum-crop">
@@ -1213,7 +1448,7 @@ export default function RhythmGame({
               <b className="rhythm-note-hand">
                 {note.hand === "left" ? "왼" : "오"}
               </b>
-              <strong>+{JUDGEMENT_POINTS[note.grade].toLocaleString()}</strong>
+              <strong>+{note.points.toLocaleString()}</strong>
             </div>
           ))}
         </div>

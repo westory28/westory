@@ -20,7 +20,6 @@ import { RHYTHM_SONGS } from "./rhythm/rhythmSongs";
 import "./weplay-ranking.css";
 
 const rhythms = [
-  { id: "easy", label: "중모리" },
   { id: "normal", label: "자진모리" },
   { id: "hard", label: "휘모리" },
 ];
@@ -409,7 +408,7 @@ export default function WeplayRanking({
                   ? "온라인 완주 우승"
                   : gameId === "history-rain"
                     ? "도전 최고 점수"
-                    : "곡·장단별 최고 점수"}
+                    : "도전 곡·장단별 최고 점수"}
                 {` · ${formatDate(period.startsAtMs)}–${formatDate(period.endsAtMs - 1)}`}
               </p>
               {data?.trackingSinceMs &&
@@ -431,7 +430,7 @@ export default function WeplayRanking({
                   <thead>
                     <tr>
                       <th scope="col">순위</th>
-                      <th scope="col">학급</th>
+                      <th scope="col">학번</th>
                       <th scope="col">이름</th>
                       <th scope="col">
                         {gameId === "joseon-yut" ? "승수" : "점수"}
@@ -475,15 +474,9 @@ export default function WeplayRanking({
                             {row.rank}
                             <small>위</small>
                           </td>
+                          <td>{row.studentId || row.studentNumber || "—"}</td>
                           <td>
-                            {row.classLabel ||
-                              classOptions.find(
-                                (option) => option.id === classId,
-                              )?.label ||
-                              "—"}
-                          </td>
-                          <td>
-                            {row.studentLabel}
+                            {row.studentName || row.studentLabel}
                             {row.isMe && <em>나</em>}
                           </td>
                           <td>

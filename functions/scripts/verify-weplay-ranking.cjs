@@ -17,7 +17,7 @@ const sourceRoot = process.env.WEPLAY_RANKING_SOURCE_ROOT ? path.resolve(process
 const fromSource = file => require(path.join(sourceRoot, file));
 const { createWeplayRankingHandlers, replayRhythm } = fromSource('weplayRanking');
 const { prepareRankingUpdate, weeklyBoardId, weekAt } = fromSource('weplayRankingStore');
-const { createChart } = fromSource('rhythmRankingCore/rhythmCore');
+const { createChart, replayRhythmPerformance } = fromSource('rhythmRankingCore/rhythmCore');
 const { RHYTHM_SONGS } = fromSource('rhythmRankingCore/rhythmSongs');
 const db = getFirestore(), scope = { year: '2026', semester: '2' }, base = 'years/2026/semesters/2';
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -47,9 +47,9 @@ const wrapRef = ref => new Proxy(ref, { get(target, key) {
 } });
 const instrumented = {
   doc: name => wrapRef(db.doc(name)), collection: name => wrapQuery(db.collection(name)),
-  getAll: async (...refs) => { metrics.reads += refs.length; return db.getAll(...refs); },
+  getAll: async (...refs) => { metrics.reads += refs.filter(ref => typeof ref.path === 'string').length; return db.getAll(...refs); },
   runTransaction: callback => db.runTransaction(transaction => callback(new Proxy(transaction, { get(target, key) {
-    if (key === 'getAll') return async (...refs) => { metrics.reads += refs.length; return target.getAll(...refs); };
+    if (key === 'getAll') return async (...refs) => { metrics.reads += refs.filter(ref => typeof ref.path === 'string').length; return target.getAll(...refs); };
     if (key === 'get') return async ref => { metrics.reads++; return target.get(ref); };
     if (['set', 'create', 'update', 'delete'].includes(key)) return (...args) => { metrics.writes++; return target[key](...args); };
     const value = target[key]; return typeof value === 'function' ? value.bind(target) : value;
@@ -59,7 +59,7 @@ const api = createWeplayRankingHandlers({ db: instrumented, now: () => atMs, ass
 const get = async name => (await db.doc(name).get()).data();
 const deny = (promise, code) => assert.rejects(promise, error => error.code === code);
 const counts = {};
-const weeklyPath = (gameId, category, classId = '', time = atMs) => `${base}/weplay_weekly_rankings/${weeklyBoardId(gameId, category, classId, weekAt(time).id)}`;
+const weeklyPath = (gameId, category, classId = '', time = atMs) => `${base}/weplay_weekly_rankings/${weeklyBoardId(gameId, gameId === 'gungdeok-rock' ? `challenge:${category}` : category, classId, weekAt(time).id)}`;
 async function seed() {
   assert.equal((await fetch(`http://${host}/emulator/v1/projects/${projectId}/databases/(default)/documents`, { method: 'DELETE' })).ok, true);
   const docs = {
@@ -70,6 +70,7 @@ async function seed() {
     'semester_classes/class-two': { semesterId: '2026-2', status: 'ACTIVE', grade: '3', classNumber: '2' },
     [`${base}/weplay_games/joseon-yut`]: { enabled: true, version: 1 },
     [`${base}/rhythm_publication/gungdeok-rock`]: { enabled: true, revision: 1, schemaVersion: 1, updatedAt: Timestamp.now() },
+    [`${base}/rhythm_challenge_settings/current`]: { schemaVersion: 1, revision: 1, missLimit: 30, override: { weekId: weekAt(atMs).id, songId: 'arirang' } },
     [`${base}/weplay_meta/current`]: { periodId: 'period-one' },
     [`${base}/weplay_periods/period-one`]: { startsAtMs: atMs - 1000, endsAtMs: atMs + 3600000 },
   };
@@ -80,10 +81,13 @@ async function seed() {
     docs[`semester_enrollment_slots/slot_${hash('2026-2\n' + uid).slice(0, 40)}`] = { semesterId: '2026-2', studentUid: uid, activeEnrollmentId: `en-${uid}`, status: 'ACTIVE' };
     docs[`semester_enrollments/en-${uid}`] = { semesterId: '2026-2', studentUid: uid, classId: uid === 'other' ? 'class-two' : 'class-one', enrollmentStatus: 'ACTIVE' };
   }
-  for (let i = 0; i < 60; i++) docs[`${base}/weplay_periods/period-one/entries/e${i}`] = { uid: i ? `synthetic-${i}` : 'a', classKey: '3-1', difficulty: 'mild', studentLabel: '합○○○', score: 10000 - i, achievedAtMs: atMs - 500 };
+  for (let i = 0; i < 60; i++) {
+    docs[`${base}/weplay_periods/period-one/entries/e${i}`] = { uid: i ? `synthetic-${i}` : 'a', classKey: '3-1', difficulty: 'mild', studentLabel: '합○○○', score: 10000 - i, achievedAtMs: atMs - 500 };
+    if (i) docs[`users/synthetic-${i}`] = { name: '합성학생', studentNumber: String(i + 1) };
+  }
   docs[`${base}/weplay_periods/period-one/entries/other-class`] = { uid: 'other', classKey: '3-2', difficulty: 'mild', studentLabel: '타○○', score: 99999, achievedAtMs: atMs };
   const week = weekAt(atMs);
-  const rows = Array.from({ length: 60 }, (_, i) => ({ uid: i ? `synthetic-${i}` : 'a', studentLabel: '합○○○', classId: 'class-one', classLabel: '3학년 1반', score: 10000 - i, achievedAtMs: atMs - 500 }));
+  const rows = Array.from({ length: 60 }, (_, i) => ({ uid: i ? `synthetic-${i}` : 'a', studentLabel: i ? '합○○○' : '7번 합○○○', classId: 'class-one', classLabel: '3학년 1반', score: 10000 - i, achievedAtMs: atMs - 500 }));
   const otherRow = { uid: 'other', studentLabel: '타○○', classId: 'class-two', classLabel: '3학년 2반', score: 99999, achievedAtMs: atMs };
   for (const [classId, boardRows] of [['class-one', rows.slice(0, 50)], ['class-two', [otherRow]], ['', [otherRow, ...rows].slice(0, 50)]]) {
     docs[weeklyPath('history-rain', 'mild', classId)] = { schemaVersion: 2, gameId: 'history-rain', category: 'mild', classId, week, rows: boardRows, updatedAtMs: atMs };
@@ -95,10 +99,10 @@ async function main() {
   for (const song of RHYTHM_SONGS) for (const difficulty of ['easy', 'normal', 'hard']) {
     const chart = createChart(song, difficulty), events = chart.map(({ time, kind, hand }) => ({ time, kind, hand }));
     const score = replayRhythm(song, difficulty, events);
-    assert.equal(score.score, chart.length * 1000); assert.equal(score.maxCombo, chart.length); assert.equal(score.miss, 0);
+    assert.equal(score.score, replayRhythmPerformance(chart, events, song.duration).score.score); assert.equal(score.maxCombo, chart.length); assert.equal(score.miss, 0);
     assert.equal(replayRhythm(song, difficulty, []).score, 0);
   }
-  const song = RHYTHM_SONGS[0], chart = createChart(song, 'easy');
+  const song = RHYTHM_SONGS[0], chart = createChart(song, 'normal');
   const events = chart.map(({ time, kind, hand }) => ({ time, kind, hand }));
   for (const bad of [[{ ...events[0], time: Infinity }], [...events].reverse(), Array(5001).fill(events[0]), [{ ...events[0], hand: 'forged' }]]) assert.throws(() => replayRhythm(song, 'easy', bad), error => error.code === 'invalid-argument');
   const naval = { gameId: 'history-rain', category: 'mild', view: 'class', classId: 'class-one' };
@@ -106,7 +110,9 @@ async function main() {
   reset(); const first = await api.getWeplayRanking(request('a', naval)); counts.navalCold = { ...metrics };
   assert.equal(first.rows.length, 50); assert.equal(first.rows[0].isMe, true); assert.equal(first.rows[0].score, 10000);
   assert.equal(JSON.stringify(first).includes('synthetic-'), false); assert.equal(JSON.stringify(first).includes('uid'), false);
-  assert.equal(metrics.reads, 10); assert.equal(metrics.queries, 0); assert.equal(metrics.writes, 0); assert.equal(metrics.guardReads, 3);
+  assert.equal(first.rows[0].studentName, '합성학생'); assert.equal(first.rows[0].studentNumber, '7', 'preserve the number recorded with the ranking class'); assert.equal(first.rows[0].studentId, '30107');
+  assert.ok(first.rows.every(row => !/[○*]/.test(row.studentName)), 'legacy masked labels are resolved to full names');
+  assert.equal(metrics.reads, 60, '10 scoped reads plus exactly the 50 displayed legacy profiles'); assert.equal(metrics.queries, 0); assert.equal(metrics.writes, 0); assert.equal(metrics.guardReads, 3);
   reset(); await Promise.all([api.getWeplayRanking(request('b', naval)), api.getWeplayRanking(request('a', naval))]); counts.navalWarmTwo = { ...metrics };
   assert.equal(metrics.reads, 18); assert.equal(metrics.queries, 0); assert.equal(metrics.writes, 0); assert.equal(metrics.guardReads, 6);
   const isolated = await api.getWeplayRanking(request('a', { ...naval, classId: 'class-two' })); assert.equal(isolated.rows.length, 1); assert.equal(isolated.rows[0].score, 99999);
@@ -121,15 +127,15 @@ async function main() {
   await db.doc(`application_sessions/a/sessions/${authTime}`).update({ status: 'revoked' });
   await deny(api.getWeplayRanking(request('a', naval)), 'unauthenticated');
   await db.doc(`application_sessions/a/sessions/${authTime}`).update({ status: 'active' });
-  const startReq = request('a', { songId: song.id, difficulty: 'easy', requestId: randomUUID() });
-  reset(); const started = await api.startRhythmRankingGame(startReq); counts.rhythmStart = { ...metrics }; assert.equal(metrics.writes, 1);
+  const startReq = request('a', { songId: song.id, difficulty: 'normal', requestId: randomUUID(), challengeVersion: 1, paid: false });
+  reset(); const started = await api.startRhythmRankingGame(startReq); counts.rhythmStart = { ...metrics }; assert.equal(metrics.writes, 2);
   reset(); assert.deepEqual(await api.startRhythmRankingGame(startReq), started); counts.rhythmStartRetry = { ...metrics }; assert.equal(metrics.writes, 0);
-  const finishReq = request('a', { sessionId: started.sessionId, events });
+  const finishReq = request('a', { sessionId: started.sessionId, events, endTime: song.duration });
   await deny(api.finishRhythmRankingGame(finishReq), 'failed-precondition');
   atMs += Math.ceil(song.duration * 1000);
-  reset(); const finished = await api.finishRhythmRankingGame(finishReq); counts.rhythmFinish = { ...metrics }; assert.equal(metrics.writes, 4); assert.equal(finished.score, chart.length * 1000);
+  reset(); const finished = await api.finishRhythmRankingGame(finishReq); counts.rhythmFinish = { ...metrics }; assert.equal(metrics.writes, 4); assert.equal(finished.score, replayRhythmPerformance(chart, events, song.duration).score.score);
   reset(); assert.deepEqual(await api.finishRhythmRankingGame(finishReq), finished); counts.rhythmFinishRetry = { ...metrics }; assert.equal(metrics.writes, 0);
-  const rhythmArgs = { gameId: 'gungdeok-rock', category: `${song.id}:easy` };
+  const rhythmArgs = { gameId: 'gungdeok-rock', category: `${song.id}:normal` };
   reset(); const board = await api.getWeplayRanking(request('a', rhythmArgs)); counts.rhythmRankCold = { ...metrics }; assert.equal(metrics.reads, 9); assert.equal(board.rows[0].score, finished.score);
   reset(); await api.getWeplayRanking(request('a', rhythmArgs)); counts.rhythmRankWarm = { ...metrics }; assert.equal(metrics.reads, 8);
   failNextBoardRead = true;
@@ -139,14 +145,14 @@ async function main() {
   await deny(api.getWeplayRanking(request('a', rhythmArgs)), 'permission-denied');
   await deny(api.finishRhythmRankingGame(finishReq), 'permission-denied');
   await db.doc(`${base}/rhythm_publication/gungdeok-rock`).update({ enabled: true, revision: 3 });
-  const newStart = await api.startRhythmRankingGame(request('a', { songId: song.id, difficulty: 'easy', requestId: randomUUID() }));
+  const newStart = await api.startRhythmRankingGame(request('a', { songId: song.id, difficulty: 'normal', requestId: randomUUID(), challengeVersion: 1, paid: false }));
   atMs += 5001;
-  const replacement = await api.startRhythmRankingGame(request('a', { songId: song.id, difficulty: 'easy', requestId: randomUUID() }));
+  const replacement = await api.startRhythmRankingGame(request('a', { songId: song.id, difficulty: 'normal', requestId: randomUUID(), challengeVersion: 1, paid: false }));
   assert.notEqual(newStart.sessionId, replacement.sessionId);
-  await deny(api.finishRhythmRankingGame(request('a', { sessionId: newStart.sessionId, events })), 'failed-precondition');
+  await deny(api.finishRhythmRankingGame(request('a', { sessionId: newStart.sessionId, events, endTime: song.duration })), 'failed-precondition');
   atMs += Math.ceil(song.duration * 1000);
-  reset(); await api.finishRhythmRankingGame(request('a', { sessionId: replacement.sessionId, events: [] })); counts.zeroFinish = { ...metrics }; assert.equal(metrics.writes, 1);
-  assert.equal((await get(weeklyPath('gungdeok-rock', `${song.id}:easy`, 'class-one'))).rows[0].score, finished.score);
+  reset(); await api.finishRhythmRankingGame(request('a', { sessionId: replacement.sessionId, events: [], endTime: song.duration })); counts.zeroFinish = { ...metrics }; assert.equal(metrics.writes, 1);
+  assert.equal((await get(weeklyPath('gungdeok-rock', `${song.id}:normal`, 'class-one'))).rows[0].score, finished.score);
   // Atomic winner projection independently verifies bounded storage, increments,
   // class separation and no-op best records without scanning any collection.
   reset(); await instrumented.runTransaction(async transaction => {
@@ -233,14 +239,14 @@ async function verifyTeacherRanking() {
   assert.equal(initial.selectedClassId, 'class-one'); assert.equal(initial.rows.length, 50);
   assert.equal(initial.rows.every(row => !row.isMe), true); assert.equal(metrics.writes, 0);
   // Catalog and the one selected ranking query only; no users/enrollments scan.
-  assert.equal(metrics.queries, 1); assert.equal(metrics.reads, 8); assert.equal(metrics.guardReads, 3);
+  assert.equal(metrics.queries, 1); assert.equal(metrics.reads, 58, '8 scoped reads plus 50 legacy profile reads'); assert.equal(metrics.guardReads, 3);
   reset();
   const second = await api.getWeplayRanking(request('teacher', { ...naval, classId: 'class-two' })); counts.teacherSelectedClass = { ...metrics };
   assert.equal(second.selectedClassId, 'class-two'); assert.equal(second.classes, undefined); assert.equal(second.rows[0].score, 99999);
-  assert.equal(metrics.reads, 6); assert.equal(metrics.queries, 0); assert.equal(metrics.writes, 0);
+  assert.equal(metrics.reads, 7, 'selected class adds only its one legacy profile'); assert.equal(metrics.queries, 0); assert.equal(metrics.writes, 0);
   reset(); await api.getWeplayRanking(request('teacher', { ...naval, classId: 'class-two' })); counts.teacherSelectedWarm = { ...metrics };
   assert.equal(metrics.reads, 5); assert.equal(metrics.queries, 0); assert.equal(metrics.guardReads, 3); assert.equal(metrics.writes, 0);
-  for (const actor of ['teacher', 'admin', 'staff-allowed']) for (const choice of [naval, hidden, { gameId: 'gungdeok-rock', category: 'arirang:easy' }]) {
+  for (const actor of ['teacher', 'admin', 'staff-allowed']) for (const choice of [naval, hidden, { gameId: 'gungdeok-rock', category: 'arirang:normal' }]) {
     reset(); const result = await api.getWeplayRanking(request(actor, { ...choice, classId: 'class-one' }));
     assert.equal(result.selectedClassId, 'class-one'); assert.equal(result.rows.length > 0, true); assert.equal(metrics.writes, 0);
   }
@@ -260,7 +266,7 @@ async function verifyTeacherRanking() {
   await deny(api.getWeplayRanking(request('staff-allowed', { ...naval, classId: 'class-two' })), 'permission-denied');
   await db.doc('users/staff-allowed').update({ staffPermissions: ['lesson_read'] });
   for (const actor of ['teacher', 'admin', 'staff-allowed']) {
-    reset(); await deny(api.startRhythmRankingGame(request(actor, { songId: 'arirang', difficulty: 'easy', requestId: randomUUID() })), 'permission-denied');
+    reset(); await deny(api.startRhythmRankingGame(request(actor, { songId: 'arirang', difficulty: 'normal', requestId: randomUUID(), challengeVersion: 1, paid: false })), 'permission-denied');
     await deny(api.finishRhythmRankingGame(request(actor, { sessionId: 'a'.repeat(64), events: [] })), 'permission-denied');
     assert.equal(metrics.writes, 0);
   }
@@ -296,16 +302,18 @@ async function verifyWeeklyTransitions() {
   const before = await api.getWeplayRanking(request('a', { gameId: 'history-rain', category: 'mild' }));
   assert.equal(before.week.id, priorWeek.id); assert.equal(before.cacheTtlMs, 500);
   const song = RHYTHM_SONGS[0];
-  const start = await api.startRhythmRankingGame(request('a', { songId: song.id, difficulty: 'easy', requestId: randomUUID() }));
+  await db.doc(`${base}/rhythm_players/a`).update({ challengeDailyUsed: 0 });
+  const start = await api.startRhythmRankingGame(request('a', { songId: song.id, difficulty: 'normal', requestId: randomUUID(), challengeVersion: 1, paid: false }));
   atMs = rollover + Math.ceil(song.duration * 1000);
   const after = await api.getWeplayRanking(request('a', { gameId: 'history-rain', category: 'mild' }));
   assert.notEqual(after.week.id, priorWeek.id); assert.deepEqual(after.rows, []);
-  const event = createChart(song, 'easy')[0];
-  const finishRequest = request('a', { sessionId: start.sessionId, events: [{ time: event.time, kind: event.kind, hand: event.hand }] });
+  const event = createChart(song, 'normal')[0];
+  const finishRequest = request('a', { sessionId: start.sessionId, events: [{ time: event.time, kind: event.kind, hand: event.hand }], endTime: song.duration });
   const score = await api.finishRhythmRankingGame(finishRequest);
   assert.equal(score.score, 1000);
-  assert.equal((await get(weeklyPath('gungdeok-rock', `${song.id}:easy`))).rows[0].score, 1000, 'lower score in the new week replaces no historical best');
-  assert.equal((await get(weeklyPath('gungdeok-rock', `${song.id}:easy`, '', rollover - 1))).rows[0].score > 1000, true);
+  assert.equal(score.rankingSkipped, true, 'previous weekly song cannot enter the new week ranking');
+  assert.equal(await get(weeklyPath('gungdeok-rock', `${song.id}:normal`)), undefined);
+  assert.equal((await get(weeklyPath('gungdeok-rock', `${song.id}:normal`, '', rollover - 1))).rows[0].score > 1000, true);
   reset(); await api.finishRhythmRankingGame(finishRequest); assert.equal(metrics.writes, 0, 'cross-week finish replay writes nothing');
   const actor = { uid: 'a', classId: 'class-one', classLabel: '3학년 1반', rankingLabel: '합○○○' };
   const updateWins = (score, extra = {}, target = actor) => instrumented.runTransaction(async transaction => {

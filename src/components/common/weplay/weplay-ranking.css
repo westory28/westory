@@ -33,13 +33,14 @@ button.weplay-ranking-launch.weplay-ranking--rhythm { border: 3px solid #164c35;
 .weplay-ranking-options button[aria-pressed="true"] { color: var(--rank-paper); background: var(--rank-accent); border-color: var(--rank-accent); font-weight: 700; }
 .weplay-ranking-dialog .weplay-ranking-metric { margin: 8px 0; color: inherit; font: inherit; font-size: 14px; }
 .weplay-ranking-content { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-.weplay-ranking-dialog .weplay-ranking-table { display: table; width: 100%; table-layout: fixed; margin: 0; border-collapse: collapse; color: var(--rank-ink); background: transparent; font: inherit; text-align: left; }
+.weplay-ranking-dialog .weplay-ranking-table { display: table; width: 100%; table-layout: fixed; margin: 0; border-collapse: collapse; color: var(--rank-ink); background: transparent; font-family: "Noto Sans KR", sans-serif; text-align: center; }
 .weplay-ranking-table thead { position: sticky; top: 0; z-index: 1; background: var(--rank-paper); }
-.weplay-ranking-dialog .weplay-ranking-table th, .weplay-ranking-dialog .weplay-ranking-table td { height: 48px; padding: 8px 4px; border: 0; border-bottom: 1px solid var(--rank-line); color: inherit; background: transparent; font-size: 14px; text-align: left; vertical-align: middle; overflow-wrap: anywhere; }
+.weplay-ranking-dialog .weplay-ranking-table th, .weplay-ranking-dialog .weplay-ranking-table td { height: 48px; padding: 8px; border: 0; border-bottom: 1px solid var(--rank-line); color: inherit; background: transparent; font-size: 14px; text-align: center; vertical-align: middle; overflow-wrap: anywhere; }
 .weplay-ranking-table th:first-child { width: 16%; }
-.weplay-ranking-table th:nth-child(2) { width: 30%; }
+.weplay-ranking-table th:nth-child(2) { width: 28%; }
+.weplay-ranking-table th:nth-child(3) { width: 30%; }
 .weplay-ranking-table th:last-child { width: 26%; }
-.weplay-ranking-dialog .weplay-ranking-table :is(th, td):last-child { text-align: right; }
+.weplay-ranking-dialog .weplay-ranking-table thead th { font-weight: 700; text-align: center; }
 .weplay-ranking-rows > tr.is-me { outline: 2px solid var(--rank-accent); outline-offset: -2px; }
 .weplay-ranking-dialog .weplay-ranking-table .weplay-ranking-place { color: var(--rank-accent); font-size: 20px; font-weight: 700; }
 .weplay-ranking-dialog .weplay-ranking-table td.weplay-ranking-state { height: auto; padding: 24px 8px; text-align: center; }

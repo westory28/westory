@@ -82,7 +82,11 @@ export function previewYutCommand(
       room,
       uid,
       room.rulesVersion === 2
-        ? sampleYutSticks(data.power ?? 0.65, random)
+        ? sampleYutSticks(
+            data.power ?? 0.65,
+            random,
+            room.players.find((player) => player.uid === uid)?.lastThrow?.value,
+          )
         : Array.from({ length: 4 }, () => random() < 0.5),
       nowMs,
       data.power ?? 0.65,

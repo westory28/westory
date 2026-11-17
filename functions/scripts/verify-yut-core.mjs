@@ -68,13 +68,13 @@ test('legacy matches retain independent 5-second throw / 25-second move deadline
   assert.equal(skipYutTurn(room, room.turnDeadlineMs).turnUid, 'b');
   const throwAt = room.phaseStartsAtMs + 4999;
   room = throwYut(room, 'a', [true, false, false, false], throwAt);
-  assert.equal(room.phaseStartsAtMs, throwAt + 3600);
+  assert.equal(room.phaseStartsAtMs, throwAt + 2400);
   assert.equal(room.turnDeadlineMs, room.phaseStartsAtMs + 25000);
   assert.throws(() => coreMoveYut(room, 'a', '1', 'outer', room.phaseStartsAtMs - 1));
   const moveAt = room.phaseStartsAtMs;
   room = coreMoveYut(room, 'a', '1', 'outer', moveAt);
-  assert.equal(room.phaseStartsAtMs, moveAt + 1500);
-  assert.equal(room.turnDeadlineMs, moveAt + 1500 + 5000);
+  assert.equal(room.phaseStartsAtMs, moveAt + 1100);
+  assert.equal(room.turnDeadlineMs, moveAt + 1100 + 5000);
   assert.deepEqual(room.lastEvent.move, { uid: 'a', pieceId: '1', route: 'outer', path: ['o1'], capturedUids: [] });
 });
 
@@ -110,7 +110,7 @@ test('v2 same-tile pieces stay independent and keep their routes until explicit 
   assert.equal(separate.players[0].pieces.every(piece => !piece.stackId), true);
   assert.equal(separate.players[0].pieces[1].lane, 'a');
   assert.equal(separate.lastEvent.move.stacked, false);
-  assert.equal(separate.phaseStartsAtMs, at + 1500);
+  assert.equal(separate.phaseStartsAtMs, at + 1100);
   separate.turnUid = 'a'; separate.phase = 'throw';
   const separatedRoll = roll(separate, 1);
   assert.equal(getLegalYutMoves(separatedRoll, 'a').every(move => move.stackSize === 1), true);
@@ -121,23 +121,23 @@ test('v2 same-tile pieces stay independent and keep their routes until explicit 
   assert.ok(stacked.players[0].pieces[0].stackId);
   assert.equal(stacked.lastEvent.move.stacked, true);
   assert.equal(stacked.turnUid, 'b');
-  assert.equal(stacked.phaseStartsAtMs, at + 2100);
-  assert.equal(stacked.turnDeadlineMs, at + 2100 + 5000);
-  assert.throws(() => throwYut(stacked, 'b', [true, false, false, false], at + 2099), /연출/);
-  assert.equal(throwYut(stacked, 'b', [true, false, false, false], at + 2100).phase, 'move');
+  assert.equal(stacked.phaseStartsAtMs, at + 1500);
+  assert.equal(stacked.turnDeadlineMs, at + 1500 + 5000);
+  assert.throws(() => throwYut(stacked, 'b', [true, false, false, false], at + 1499), /연출/);
+  assert.equal(throwYut(stacked, 'b', [true, false, false, false], at + 1500).phase, 'move');
   stacked.turnUid = 'a'; stacked.phase = 'throw';
   stacked = roll(stacked, 1);
   assert.equal(getLegalYutMoves(stacked, 'a').every(move => move.stackSize === 2), true);
   stacked = moveYut(stacked, 'a', '2', 'a', now + 3);
   assert.deepEqual(stacked.lastEvent.move.movingPieceIds, ['1', '2']);
   assert.deepEqual(stacked.players[0].pieces.map(piece => piece.node), ['a1', 'a1']);
-  assert.equal(stacked.phaseStartsAtMs, stacked.lastEvent.atMs + 1500, 'moving an existing stack does not repeat the stacking pose');
+  assert.equal(stacked.phaseStartsAtMs, stacked.lastEvent.atMs + 1100, 'moving an existing stack does not repeat the stacking pose');
   const invalid = roll(game(2, 2, 2), 1);
   assert.throws(() => coreMoveYut(invalid, 'a', '1', 'outer', invalid.phaseStartsAtMs, true), /업을 말/);
   assert.throws(() => coreMoveYut(thrown, 'a', '1', 'outer', at, 'yes'), /업을 말/);
 });
 
-test('new stacking reserves 2100ms for a bonus turn too; simultaneous capture uses the larger 2700ms grace', () => {
+test('new stacking reserves 1500ms for a bonus turn too; simultaneous capture uses the larger 1900ms grace', () => {
   for (const capture of [false, true]) {
     let room = game(2, 2, 2);
     room.players[0].pieces[0].node = 'o1'; room.players[0].pieces[1].node = 'o5';
@@ -146,7 +146,7 @@ test('new stacking reserves 2100ms for a bonus turn too; simultaneous capture us
     const at = room.phaseStartsAtMs;
     room = coreMoveYut(room, 'a', '1', 'outer', at, true);
     assert.equal(room.turnUid, 'a');
-    assert.equal(room.phaseStartsAtMs, at + (capture ? 2700 : 2100));
+    assert.equal(room.phaseStartsAtMs, at + (capture ? 1900 : 1500));
     assert.equal(room.turnDeadlineMs - room.phaseStartsAtMs, 5000);
     assert.equal(room.lastEvent.move.stacked, true);
   }
@@ -167,7 +167,7 @@ test('v2 capture reports both pieces and releases their group; a finishing stack
 });
 
 test('power probabilities interpolate exact weak/middle/strong tables and sampled faces match each outcome', () => {
-  const tables = [[30, 33, 22, 10, 5], [12, 25, 35, 18, 10], [8, 17, 25, 27, 23]];
+  const tables = [[33, 35, 24, 6, 2], [25, 34, 31, 7, 3], [20, 31, 35, 10, 4]];
   for (const [index, power] of [0.12, 0.56, 1].entries()) {
     assert.deepEqual(getYutThrowProbabilities(power), tables[index]);
     const counts = [0, 0, 0, 0, 0];
@@ -184,7 +184,27 @@ test('power probabilities interpolate exact weak/middle/strong tables and sample
   assert.deepEqual(getYutThrowProbabilities(0.34), tables[0].map((value, index) => (value + tables[1][index]) / 2));
   assert.deepEqual(getYutThrowProbabilities(0.78), tables[1].map((value, index) => (value + tables[2][index]) / 2));
 });
-test('captures reserve 2700ms for movement and reaction, then preserve the full configured throw time', () => {
+test('a previous yut or mo halves both bonus probabilities without biasing ordinary outcome proportions', () => {
+  for (const power of [0, .12, .34, .56, .65, .78, 1]) {
+    const base = getYutThrowProbabilities(power);
+    for (const previous of [4, 5]) {
+      const adjusted = getYutThrowProbabilities(power, previous);
+      assert.ok(Math.abs(adjusted.reduce((sum, value) => sum + value, 0) - 100) < 1e-10);
+      assert.equal(adjusted[3], base[3] / 2);
+      assert.equal(adjusted[4], base[4] / 2);
+      assert.ok(Math.abs(adjusted[0] / adjusted[1] - base[0] / base[1]) < 1e-10);
+      const counts = [0, 0, 0, 0, 0];
+      for (let sample = 0; sample < 10000; sample++) {
+        let calls = 0;
+        const sticks = sampleYutSticks(power, () => calls++ ? .4 : (sample + .5) / 10000, previous);
+        counts[(sticks.filter(Boolean).length || 5) - 1]++;
+      }
+      adjusted.forEach((probability, index) => assert.ok(Math.abs(counts[index] / 100 - probability) <= .011));
+    }
+    for (const previous of [undefined, 0, 1, 2, 3]) assert.deepEqual(getYutThrowProbabilities(power, previous), base);
+  }
+});
+test('captures reserve 1900ms for movement and reaction, then preserve the full configured throw time', () => {
   for (const throwSeconds of [3, 5, 15]) {
     for (let value = 1; value <= 5; value += 1) {
       let room = game();
@@ -197,14 +217,14 @@ test('captures reserve 2700ms for movement and reaction, then preserve the full 
       assert.equal(room.lastEvent.kind, 'capture');
       assert.equal(room.turnUid, 'a');
       assert.equal(room.extraThrows, value >= 4 ? 1 : 0);
-      assert.equal(room.phaseStartsAtMs, moveAt + 2700);
-      assert.equal(room.turnDeadlineMs, moveAt + 2700 + throwSeconds * 1000);
+      assert.equal(room.phaseStartsAtMs, moveAt + 1900);
+      assert.equal(room.turnDeadlineMs, moveAt + 1900 + throwSeconds * 1000);
       assert.throws(() => throwYut(room, 'a', [true, false, false, false], room.phaseStartsAtMs - 1), /연출/);
       assert.equal(throwYut(room, 'a', [true, false, false, false], room.phaseStartsAtMs).phase, 'move');
       assert.throws(() => skipYutTurn(room, room.turnDeadlineMs - 1));
       const skipped = skipYutTurn(room, room.turnDeadlineMs);
       assert.equal(skipped.turnUid, 'b');
-      assert.equal(skipped.phaseStartsAtMs, room.turnDeadlineMs + 1500);
+      assert.equal(skipped.phaseStartsAtMs, room.turnDeadlineMs + 1100);
     }
   }
 });
@@ -310,7 +330,7 @@ test('stack moves and captures all opposing stacked pieces; yut plus capture giv
   assert.equal(room.turnUid, 'a'); assert.equal(room.extraThrows, 1);
   room = moveYut(roll(room, 1), 'a', '1', 'outer', now + 3);
   assert.equal(room.turnUid, 'a'); assert.equal(room.extraThrows, 0);
-  assert.equal(room.phaseStartsAtMs, room.lastEvent.atMs + 1500);
+  assert.equal(room.phaseStartsAtMs, room.lastEvent.atMs + 1100);
   room = moveYut(roll(room, 1), 'a', '1', 'outer', now + 4);
   assert.equal(room.turnUid, 'b');
 });
@@ -370,7 +390,7 @@ test('every final approach completes on exact distance or overshoot for either i
           assert.equal(moved.turnUid, value >= 4 ? 'a' : 'b', context);
           assert.equal(moved.phase, 'throw', context);
           assert.equal(moved.extraThrows, 0, context);
-          assert.equal(moved.phaseStartsAtMs, thrown.phaseStartsAtMs + 1500, context);
+          assert.equal(moved.phaseStartsAtMs, thrown.phaseStartsAtMs + 1100, context);
           assert.equal(moved.turnDeadlineMs, moved.phaseStartsAtMs + 5000, context);
         }
       }

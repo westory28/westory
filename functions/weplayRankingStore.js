@@ -16,7 +16,7 @@ const compare = (a, b) => b.score - a.score || a.achievedAtMs - b.achievedAtMs |
 const studentLabel = (profile, enrollment = {}) => {
   const name = String(enrollment.studentName || profile.name || profile.studentName || '').trim();
   const number = String(enrollment.studentNumber || profile.studentNumber || profile.number || '').replace(/[^0-9]/g, '').slice(0, 3);
-  return `${number ? `${number}번 ` : ''}${name ? `${name[0]}${'○'.repeat(Math.min(3, Math.max(1, name.length - 1)))}` : '학생'}`;
+  return `${number ? `${number}번 ` : ''}${name || '학생'}`;
 };
 
 // Called before any transaction writes. A board is a bounded projection, never

@@ -1,0 +1,18 @@
+.weplay-weekly-rewards { margin-top: 24px; color: #1f2937; font-family: "Noto Sans KR", sans-serif; }
+.weplay-weekly-rewards > summary { display: flex; align-items: center; gap: 8px; list-style: none; min-height: 44px; padding: 8px 0; font-size: 18px; font-weight: 700; cursor: pointer; background: transparent; }
+.weplay-weekly-rewards > summary::-webkit-details-marker { display: none; }
+.weplay-weekly-rewards-chevron { flex: 0 0 16px; }
+.weplay-weekly-rewards[open] > summary .weplay-weekly-rewards-chevron { transform: rotate(90deg); }
+.weplay-weekly-rewards-controls, .weplay-weekly-rewards-tier, .weplay-weekly-rewards-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; }
+.weplay-weekly-rewards label { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+.weplay-weekly-rewards :is(input, select, button) { min-height: 44px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; color: #1f2937; background: #fff; }
+.weplay-weekly-rewards input[type="number"] { width: 104px; text-align: center; }
+.weplay-weekly-rewards input[type="date"] { width: 160px; }
+.weplay-weekly-rewards select { max-width: 100%; }
+.weplay-weekly-rewards button { cursor: pointer; }
+.weplay-weekly-rewards button:disabled { opacity: .5; cursor: default; }
+.weplay-weekly-rewards .is-primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+.weplay-weekly-rewards-status { font-size: 14px; font-weight: 600; }
+.weplay-weekly-rewards [role="alert"] { color: #b91c1c; font-size: 14px; }
+.weplay-weekly-rewards :focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
+@media (max-width: 480px) { .weplay-weekly-rewards-controls { align-items: stretch; } .weplay-weekly-rewards-controls label { max-width: 100%; } .weplay-weekly-rewards-controls select { min-width: 0; } .weplay-weekly-rewards-tier { gap: 8px; } .weplay-weekly-rewards input[type="number"] { width: 80px; } }

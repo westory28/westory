@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const { createHash, randomUUID } = require('node:crypto');
+const path = require('node:path');
 const projectId = 'demo-westory-session-yut';
 if (!/^(?:127\.0\.0\.1|localhost):\d+$/.test(process.env.FIRESTORE_EMULATOR_HOST || '') || (process.env.GCLOUD_PROJECT && process.env.GCLOUD_PROJECT !== projectId)) {
   throw new Error('Yut integration tests only run on the dedicated local demo emulator.');
@@ -12,6 +13,21 @@ process.env.WESTORY_APP_CHECK_MODE = 'DISABLED';
 const deployed = require('../index');
 const { getFirestore, Timestamp, FieldValue } = require('firebase-admin/firestore');
 const db = getFirestore(), base = 'years/2026/semesters/2';
+// Only the two command callables change in this release. Exercise the preserved
+// deployment's command/security dependencies without pretending that its older
+// bundle exports the separately deployed getYutPublication query.
+const commandSource = process.env.WEPLAY_YUT_SOURCE_ROOT ? path.resolve(process.env.WEPLAY_YUT_SOURCE_ROOT) : path.resolve(__dirname, '..');
+const commandModule = require(path.join(commandSource, 'yut'));
+const createTestYutHandlers = options => ({
+  ...require('../yut').createYutHandlers(options),
+  ...commandModule.createYutHandlers(options),
+});
+if (process.env.WEPLAY_YUT_SOURCE_ROOT) {
+  const prepared = commandModule.createYutHandlers({ db });
+  deployed.commandYutRoom.run = prepared.commandYutRoom;
+  if (deployed.commandYutRoomFast) deployed.commandYutRoomFast.run = prepared.commandYutRoom;
+  console.log('YUT prepared command source: ' + commandSource);
+}
 const signalRef = db.doc(`${base}/yut_management/current`);
 const readSignal = async () => (await signalRef.get()).data();
 async function assertSignalChanged(before, message) {
@@ -310,7 +326,7 @@ async function verifySpectatorRules(roomRef) {
     assert.equal((await deployed.getYutLobby.run(request('a'))).room.syncRevision, restored.syncRevision, 'unchanged names do not create repeated writes');
     assert.deepEqual(await readSignal(), afterRestoreSignal, 'unchanged lobby reads cannot cause a refresh loop');
     const identityReads = [], identityWrites = [];
-    const countedHandlers = require('../yut').createYutHandlers({
+    const countedHandlers = createTestYutHandlers({
       db: {
         doc: db.doc.bind(db), collection: db.collection.bind(db),
         runTransaction: callback => db.runTransaction(transaction => callback(new Proxy(transaction, {
@@ -387,7 +403,23 @@ async function verifySpectatorRules(roomRef) {
     await denied(roomCommand('b', room, 'start'));
     await denied(roomCommand('a', room, 'start'), ['failed-precondition']);
     for (const player of room.players.slice(1)) room = (await roomCommand(player.uid.slice(4), room, 'ready', { ready: true })).room;
-    room = (await roomCommand('a', room, 'start')).room;
+    await db.doc(`${base}/yut_players/${uid('a')}`).update({ lastCommandAtMs: 0 });
+    const startRequest = request('a', { action: 'start', requestKey: key(), roomId: room.id, expectedRevision: room.revision });
+    identityReads.length = 0; identityWrites.length = 0;
+    room = (await countedHandlers.commandYutRoom(startRequest)).room;
+    const readBudget = { start: { reads: identityReads.length, writes: identityWrites.length } };
+    for (const path of new Set(identityReads)) assert.equal(identityReads.filter(value => value === path).length, 1, `one transaction reads ${path} only once`);
+    identityReads.length = 0; identityWrites.length = 0;
+    const startRetry = await countedHandlers.commandYutRoom(startRequest);
+    assert.equal(startRetry.room.revision, room.revision);
+    assert.equal(identityWrites.length, 0, 'same start request is recovered without another mutation');
+    readBudget.retry = { reads: identityReads.length, writes: identityWrites.length };
+    await db.doc(`${base}/yut_players/${uid('a')}`).update({ lastCommandAtMs: 0 });
+    identityReads.length = 0; identityWrites.length = 0;
+    await denied(countedHandlers.commandYutRoom(request('a', { ...startRequest.data, requestKey: key() })), ['aborted']);
+    assert.equal(identityWrites.length, 0, 'stale start cannot change the room or command receipt');
+    readBudget.stale = { reads: identityReads.length, writes: identityWrites.length };
+    console.log('YUT_COMMAND_DOCUMENT_BUDGET excluding shared session guard: ' + JSON.stringify(readBudget));
     assert.equal(room.rulesVersion, 2); assert.equal(room.pieceCount, 2);
     assert.equal(room.players.every(player => player.pieces.length === 2), true);
     await denied(roomCommand('a', room, 'seat', { seat: 1, blocked: false }), ['failed-precondition']);
@@ -620,7 +652,7 @@ async function verifySpectatorRules(roomRef) {
       const startKey = key();
       privateRoom = (await roomCommand('qa', privateRoom, 'start', { requestKey: startKey })).room;
       assert.equal(privateRoom.turnDeadlineMs - privateRoom.phaseStartsAtMs, 5000);
-      assert.equal(privateRoom.phaseStartsAtMs - privateRoom.lastEvent.atMs, 2000);
+      assert.equal(privateRoom.phaseStartsAtMs - privateRoom.lastEvent.atMs, 1200);
       const startRetry = await deployed.commandYutRoom.run(request('qa', { action: 'start', requestKey: startKey, roomId: privateRoom.id, expectedRevision: privateRoom.revision - 1 }));
       assert.equal(startRetry.room.id, privateRoom.id);
       assert.equal((await deployed.getYutLobby.run(request('qa'))).privatePlaysRemaining, 5 - round);
@@ -641,7 +673,7 @@ async function verifySpectatorRules(roomRef) {
     const yesterday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date(Date.now() - 86400000));
     await db.doc(`${base}/yut_players/${uid('qa')}`).update({ privatePlayDay: yesterday, privatePlayCount: 5 });
     assert.equal((await deployed.getYutLobby.run(request('qa'))).privatePlaysRemaining, 5, 'a new Korean date restores the daily allowance');
-    const { createYutHandlers } = require('../yut');
+    const createYutHandlers = createTestYutHandlers;
     let boundaryTime = Date.parse(`${quotaDay}T14:59:59.999Z`);
     const boundaryHandlers = createYutHandlers({ db, now: () => boundaryTime });
     await db.doc(`${base}/yut_players/${uid('qa')}`).update({ privatePlayDay: quotaDay, privatePlayCount: 5 });
@@ -694,6 +726,19 @@ async function verifySpectatorRules(roomRef) {
     finishingRoom = (await roomCommand('admin', finishingRoom, 'move', { pieceId: '1', route: 'outer' })).room;
     assert.equal(finishingRoom.status, 'finished');
     assert.equal((await deployed.getYutManagement.run(request('teacher'))).rooms.some(entry => entry.id === finishingRoom.id), false, 'completion signal reload excludes the finished room immediately');
+    const probabilityRef = db.doc(`${base}/yut_rooms/probability-fixture`);
+    const probabilitySource = (await db.doc(`${base}/yut_rooms/${finishingRoom.id}`).get()).data();
+    const deterministic = createYutHandlers({ db, random: maximum => Math.floor(maximum * .91) });
+    for (const previousValue of [1, 4, 5]) {
+      const players = probabilitySource.players.map(player => ({ ...player, lastThrow: { value: previousValue, label: previousValue === 1 ? '도' : previousValue === 4 ? '윷' : '모', atMs: Date.now() - 1000 } }));
+      await probabilityRef.set({ ...probabilitySource, id: probabilityRef.id, status: 'playing', turnUid: uid('admin'), phase: 'throw', phaseStartsAtMs: 0, turnDeadlineMs: Date.now() + 60000, players });
+      await db.doc(`${base}/yut_players/${uid('admin')}`).update({ lastCommandAtMs: 0 });
+      const probabilityRequest = request('admin', { action: 'throw', roomId: probabilityRef.id, expectedRevision: probabilitySource.revision, requestKey: key(), power: 1, previousValue: 1 });
+      const result = await deterministic.commandYutRoom(probabilityRequest);
+      assert.equal(result.room.pendingThrow.value, previousValue === 1 ? 4 : 3, 'server applies its own prior outcome, ignoring a forged client previous value');
+      const replay = await deterministic.commandYutRoom(probabilityRequest);
+      assert.deepEqual(replay.room.pendingThrow, result.room.pendingThrow, 'a replay cannot reroll after the probability state changes');
+    }
     const sameTime = Date.now();
     const sameTimeHandlers = createYutHandlers({ db, now: () => sameTime });
     await sameTimeHandlers.saveYutSettings(request('teacher', { enabled: false, expectedVersion: modeSettings.version }));

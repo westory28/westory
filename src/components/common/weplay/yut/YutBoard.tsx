@@ -510,7 +510,7 @@ function MovingPawn({
           arrival.current(motion.id);
           finishedTimer = window.setTimeout(
             () => complete.current(motion.id),
-            motion.kind === "capture" ? 1400 : motion.boarding ? 700 : 300,
+            motion.kind === "capture" ? 900 : motion.boarding ? 450 : 180,
           );
         }
       } catch {
@@ -756,10 +756,10 @@ export default function YutBoard({
                   ? "capture"
                   : "land",
             travelMs: Math.min(
-              1100,
+              740,
               Math.max(
-                220,
-                (caught ? eventMove?.path?.length || 1 : path.length) * 220,
+                160,
+                (caught ? eventMove?.path?.length || 1 : path.length) * 160,
               ),
             ),
           };

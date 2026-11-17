@@ -96,6 +96,8 @@ const result = await build({
     {
       name: "network-fixture",
       setup(plugin) {
+        plugin.onResolve({filter: /\/(?:RhythmChallengeSettings|WeplayWeeklyRewards)$/}, () => ({path:'teacher-settings',namespace:'isolated-panel'}));
+        plugin.onLoad({filter: /.*/, namespace:'isolated-panel'}, () => ({contents:'export default function Panel(){return null}',loader:'js'}));
         plugin.onResolve(
           {
             filter:

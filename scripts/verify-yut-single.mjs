@@ -211,9 +211,9 @@ const high = previewYutCommand(
   powerRoom.phaseStartsAtMs + 1,
 );
 assert.equal(low.pendingThrow.value, 2);
-assert.equal(high.pendingThrow.value, 4);
+assert.equal(high.pendingThrow.value, 2);
 assert.equal(low.pendingThrow.sticks.filter(Boolean).length, 2);
-assert.equal(high.pendingThrow.sticks.filter(Boolean).length, 4);
+assert.equal(high.pendingThrow.sticks.filter(Boolean).length, 2);
 assert.equal(low.players[0].lastThrow.power, 0.12);
 assert.equal(high.players[0].lastThrow.power, 1);
 assert.equal(

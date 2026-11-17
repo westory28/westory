@@ -22,7 +22,7 @@ try {
 }
 const evidence = path.join(
   root,
-  "output/weplay-ranking-weekly-browser-20261116",
+  "output/weplay-ranking-browser-20261117",
 );
 await fs.mkdir(evidence, { recursive: true });
 const fixture = `
@@ -37,7 +37,7 @@ export const getHistoryDictionaryCallable=async name=>async data=>{
  qa.calls.push({name,data,uid:qa.auth.currentUser.uid});
  const classId=data.classId||'3_1';
  const period=window.rankingQA.service.getWeplayRankingWeek();
- const value={gameId:data.gameId,category:data.category,view:data.view,period,rows:Array.from({length:qa.empty?0:18},(_,i)=>({rank:i+1,classLabel:classId==='3_1'?'3학년 1반':'3학년 2반',studentLabel:classId==='3_2'?'박*생':(qa.auth.currentUser.uid==='student-b'?'이*생':'김*생'),score:1800-i*50,isMe:!teacher&&i===3})),updatedAtMs:Date.now(),scoreLabel:'점',selectedClassId:data.classId||'',...(data.includeClasses?{classes:[{id:'3_1',label:'3학년 1반'},{id:'3_2',label:'3학년 2반'}]}:{})};
+ const value={gameId:data.gameId,category:data.category,view:data.view,period,rows:Array.from({length:qa.empty?0:18},(_,i)=>({rank:i+1,classLabel:classId==='3_1'?'3학년 1반':'3학년 2반',studentId:String(30101+i),studentName:classId==='3_2'?'박합성학생':(qa.auth.currentUser.uid==='student-b'?'이합성학생':'김합성학생'),studentLabel:classId==='3_2'?'박합성학생':(qa.auth.currentUser.uid==='student-b'?'이합성학생':'김합성학생'),score:1800-i*50,isMe:!teacher&&i===3})),updatedAtMs:Date.now(),scoreLabel:'점',selectedClassId:data.classId||'',...(data.includeClasses?{classes:[{id:'3_1',label:'3학년 1반'},{id:'3_2',label:'3학년 2반'}]}:{})};
  if(qa.hold)await new Promise(resolve=>qa.pending.push(resolve));
  if(qa.fail)throw new Error('Synthetic network failure');
  return {data:value};
@@ -182,6 +182,27 @@ const auditTable = async (page, name) => {
     `${name}: persistent column headers`,
   );
   assert.equal(await page.locator(".weplay-ranking-table tbody").count(), 1);
+  const columns = await page.locator('.weplay-ranking-table').evaluate(table => {
+    const headers = Array.from(table.querySelectorAll('thead th'));
+    const cells = Array.from(table.querySelector('tbody tr')?.querySelectorAll('td:not([colspan])') || []);
+    const rotated = !!table.closest('.yut-game--rotated-fullscreen, .rhythm-game--rotated');
+    return headers.map((header, index) => {
+      const h = header.getBoundingClientRect(), cell = cells[index], c = cell?.getBoundingClientRect();
+      return { label:header.textContent, headerAlign:getComputedStyle(header).textAlign, align:cell && getComputedStyle(cell).textAlign, dx:c ? rotated ? Math.abs(h.y+h.height/2-c.y-c.height/2) : Math.abs(h.x+h.width/2-c.x-c.width/2) : 0, text:cell?.textContent, padding:cell ? [getComputedStyle(cell).paddingLeft,getComputedStyle(cell).paddingRight] : [] };
+    });
+  });
+  assert.deepEqual(columns.slice(0, 3).map(column => column.label), ['순위', '학번', '이름']);
+  for (const column of columns) {
+    assert.equal(column.headerAlign, 'center', `${name}: ${column.label} header centered`);
+    if (column.align) assert.equal(column.align, 'center', `${name}: ${column.label} cell centered`);
+    assert(column.dx < 1, `${name}: header and cell share center line`);
+    if (column.padding.length) assert.equal(...column.padding, `${name}: symmetric cell spacing`);
+  }
+  if (columns[1].text) {
+    assert.equal(columns[1].text, '30101');
+    assert.match(columns[2].text, /합성학생/);
+    assert(!columns[2].text.includes('*'), 'full name has no mask');
+  }
   const measure = await page
     .locator(".weplay-ranking-close")
     .evaluate((button) => {
@@ -366,7 +387,7 @@ try {
         await open(page);
         assert.match(
           await page.locator(".weplay-ranking-rows tr").first().innerText(),
-          /이\*생/,
+          /이합성학생/,
         );
         await close(page);
         await page.evaluate(() =>
@@ -432,7 +453,7 @@ try {
   await open(page);
   assert.match(
     await page.locator(".weplay-ranking-rows tr").first().innerText(),
-    /이\*생/,
+    /이합성학생/,
   );
   await page.close();
   for (const mode of ["naval", "yut"])
@@ -601,7 +622,7 @@ try {
       await page.waitForFunction(() =>
         document
           .querySelector(".weplay-ranking-rows")
-          ?.textContent.includes("박*생"),
+          ?.textContent.includes("박합성학생"),
       );
       assert.equal(await page.evaluate(() => window.rankingQA.calls.length), 2);
       assert.equal(
@@ -612,7 +633,7 @@ try {
       await page.waitForFunction(() =>
         document
           .querySelector(".weplay-ranking-rows")
-          ?.textContent.includes("김*생"),
+          ?.textContent.includes("김합성학생"),
       );
       assert.equal(
         await page.evaluate(() => window.rankingQA.calls.length),
@@ -849,7 +870,7 @@ try {
   await weekly.waitForFunction(() =>
     document
       .querySelector(".weplay-ranking-rows")
-      ?.textContent.includes("김*생"),
+      ?.textContent.includes("김합성학생"),
   );
   assert.equal(
     await weekly.evaluate(() => window.rankingQA.calls.length),

@@ -23,6 +23,13 @@
 }
 .weplay-game-frame__body { height: 100%; min-width: 0; overflow: auto; border-radius: inherit; }
 .weplay-game-frame__body[inert] { pointer-events: none; user-select: none; }
+.weplay-game-frame--naval { display: flex; flex-direction: column; }
+.weplay-game-frame--naval > .weplay-game-frame__body { flex: 1; min-height: 0; }
+.weplay-frame-fullscreen { flex: none; align-self: flex-end; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; min-width: 44px; padding: 8px 12px; margin-top: 4px; border: 1px solid #d8ae66; border-radius: 6px; background: #171e24; color: #fff8e8; font-size: 12px; }
+.weplay-frame-fullscreen svg { width: 20px; height: 20px; }
+.weplay-frame-fullscreen:focus-visible { outline: 3px solid #d8ae66; outline-offset: 2px; }
+.weplay-game-frame.weplay-game-frame--fullscreen { position: fixed; inset: 0; z-index: 10000; width: 100%; height: 100dvh; max-width: none; margin: 0; padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); border-radius: 0; background: #171e24; overflow: auto; overscroll-behavior: contain; }
+.weplay-game-frame--fullscreen .weplay-game-frame__body { overscroll-behavior: contain; }
 .weplay-game-frame .weplay-studio-intro { --intro-stage-height: var(--weplay-stage-height); height: 100%; }
 .weplay-game-frame .weplay-launch { min-height: 100%; margin: 0; }
 .weplay-game-frame .naval-game { display: flex; flex-direction: column; height: 100%; margin: 0; }

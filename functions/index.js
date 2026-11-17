@@ -5501,6 +5501,16 @@ const weplayRankingOptions = { region: REGION, maxInstances: 10, memory: '256MiB
 exports.getWeplayRanking = onCall(weplayRankingOptions, weplayRankingHandlers.getWeplayRanking);
 exports.startRhythmRankingGame = onCall(weplayRankingOptions, weplayRankingHandlers.startRhythmRankingGame);
 exports.finishRhythmRankingGame = onCall(weplayRankingOptions, weplayRankingHandlers.finishRhythmRankingGame);
+exports.getRhythmChallengeState = onCall(weplayRankingOptions, weplayRankingHandlers.getRhythmChallengeState);
+exports.saveRhythmChallengeSettings = onCall(weplayRankingOptions, weplayRankingHandlers.saveRhythmChallengeSettings);
+
+const weplayWeeklyRewardHandlers = require('./weplayWeeklyRewards').createWeplayWeeklyRewardHandlers({ db });
+exports.getWeplayWeeklyRewards = onCall(weplayRankingOptions, weplayWeeklyRewardHandlers.getWeplayWeeklyRewards);
+exports.saveWeplayWeeklyRewards = onCall(weplayRankingOptions, weplayWeeklyRewardHandlers.saveWeplayWeeklyRewards);
+exports.settleWeplayWeeklyRewards = onSchedule({
+  region: REGION, schedule: 'every 15 minutes', timeZone: 'Asia/Seoul',
+  maxInstances: 1, memory: '256MiB', timeoutSeconds: 540,
+}, weplayWeeklyRewardHandlers.settleWeplayWeeklyRewards);
 
 const yutHandlers = require('./yut').createYutHandlers({ db });
 exports.getYutPublication = onCall({ region: REGION, maxInstances: 10 }, yutHandlers.getYutPublication);

@@ -110,6 +110,19 @@ export interface RhythmScore {
   miss: number;
 }
 
+export const FEVER_BONUSES = [0, 0.05, 0.1, 0.25, 0.5] as const;
+export function getFeverTier(combo: number): 0 | 1 | 2 | 3 | 4 {
+  return combo >= 100
+    ? 4
+    : combo >= 50
+      ? 3
+      : combo >= 20
+        ? 2
+        : combo >= 10
+          ? 1
+          : 0;
+}
+
 export function createScore(): RhythmScore {
   return {
     score: 0,
@@ -127,13 +140,85 @@ export function applyJudgement(
   judgement: RhythmJudgement,
 ): RhythmScore {
   const combo = judgement === "miss" ? 0 : score.combo + 1;
-  const points = { perfect: 1000, good: 650, ok: 300, miss: 0 }[judgement];
+  const points = Math.round(
+    { perfect: 1000, good: 650, ok: 300, miss: 0 }[judgement] *
+      (1 + FEVER_BONUSES[getFeverTier(combo)]),
+  );
   return {
     ...score,
     score: score.score + points,
     combo,
     maxCombo: Math.max(score.maxCombo, combo),
     [judgement]: score[judgement] + 1,
+  };
+}
+
+/** Consume expired notes in chart order, stopping on the exact challenge limit. */
+export function advanceMissedNotes(
+  notes: readonly RhythmNote[],
+  judged: Set<string>,
+  initial: RhythmScore,
+  elapsed: number,
+  missLimit = Infinity,
+) {
+  let score = initial;
+  for (const note of notes) {
+    const deadline = note.time + HIT_WINDOW_SECONDS;
+    if (deadline + TIMING_EPSILON >= elapsed) break;
+    if (judged.has(note.id)) continue;
+    judged.add(note.id);
+    score = applyJudgement(score, "miss");
+    if (score.miss >= missLimit)
+      return {
+        score,
+        terminated: true,
+        endedAt: deadline + TIMING_EPSILON * 2,
+      };
+  }
+  return { score, terminated: false, endedAt: elapsed };
+}
+
+/** The server and browser share scoring and chronological challenge termination. */
+export function replayRhythmPerformance(
+  notes: readonly RhythmNote[],
+  events: readonly { time: number; kind: DrumKind; hand: DrumHand }[],
+  endTime: number,
+  missLimit = Infinity,
+) {
+  const judged = new Set<string>();
+  let score = createScore();
+  let recovery = 0;
+  let processedEvents = 0;
+  for (const event of events) {
+    if (event.time > endTime + TIMING_EPSILON) break;
+    const advanced = advanceMissedNotes(
+      notes,
+      judged,
+      score,
+      event.time,
+      missLimit,
+    );
+    score = advanced.score;
+    if (advanced.terminated) return { ...advanced, processedEvents };
+    const input = judgeInput(
+      notes,
+      judged,
+      event.kind,
+      event.hand,
+      event.time,
+      recovery,
+    );
+    recovery = input.blockedUntil;
+    processedEvents++;
+    if (input.judgement === "ignored") continue;
+    if (input.note) judged.add(input.note.id);
+    score = applyJudgement(score, input.judgement);
+    if (score.miss >= missLimit)
+      return { score, terminated: true, endedAt: event.time, processedEvents };
+  }
+  return {
+    ...advanceMissedNotes(notes, judged, score, endTime, missLimit),
+    processedEvents,
   };
 }
 

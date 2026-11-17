@@ -798,7 +798,7 @@ export default function YutGame({
   );
   useEffect(() => {
     if (!celebrating || paused) return;
-    const timer = window.setTimeout(() => setSettledThrow(landedThrow), 1350);
+    const timer = window.setTimeout(() => setSettledThrow(landedThrow), 750);
     return () => window.clearTimeout(timer);
   }, [celebrating, landedThrow, paused]);
   useEffect(() => {
@@ -1401,7 +1401,7 @@ export default function YutGame({
         }
       },
       Math.max(
-        room.phase === "throw" ? 650 : 900,
+        room.phase === "throw" ? 350 : 450,
         (room.phaseStartsAtMs || 0) - Date.now() + 30,
       ),
     );
@@ -2609,7 +2609,10 @@ export default function YutGame({
                   </div>
                 )}
               </div>
-              <div className="yut-action-dock">
+              <div
+                className="yut-action-dock"
+                aria-hidden={settling || pending === "throw" || undefined}
+              >
                 <div className="yut-action-status">
                   <div className="yut-throw-result" role="status">
                     {settling || pending === "throw" ? (
@@ -2776,6 +2779,7 @@ export default function YutGame({
             </div>
             <div className="yut-event" aria-live="polite">
               {resultVisible &&
+                primaryAction !== "throw" &&
                 !finishing &&
                 room.lastEvent.kind !== "throw" && (
                   <span>{room.lastEvent.text}</span>

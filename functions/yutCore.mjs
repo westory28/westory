@@ -1,11 +1,11 @@
 // Shared, deterministic rules. Online randomness and authority live in yut.js.
 export const YUT_TURN_MS = 5_000;
-export const YUT_THROW_ANIMATION_MS = 3_600;
-export const YUT_MOVE_ANIMATION_MS = 1_500;
-export const YUT_STACK_ANIMATION_MS = 2_100;
-// Up to 1.1s of tile hops, then a 1.4s capture reaction and a small frame margin.
-export const YUT_CAPTURE_ANIMATION_MS = 2_700;
-export const YUT_START_ANIMATION_MS = 2_000;
+export const YUT_THROW_ANIMATION_MS = 2_400;
+export const YUT_MOVE_ANIMATION_MS = 1_100;
+export const YUT_STACK_ANIMATION_MS = 1_500;
+// Up to .74s of tile hops, then a .9s capture reaction and a frame margin.
+export const YUT_CAPTURE_ANIMATION_MS = 1_900;
+export const YUT_START_ANIMATION_MS = 1_200;
 export const YUT_ROOM_MS = 24 * 60 * 60_000;
 export const YUT_WAITING_MS = 10 * 60_000;
 export const YUT_ROLES = ['sa', 'nong', 'gong', 'sang'];
@@ -13,14 +13,21 @@ export const YUT_EMOTE_KINDS = ['hello', 'nice', 'oops', 'wow', 'thanks', 'gg', 
 export const YUT_EMOTE_COOLDOWN_MS = 5_000;
 export const YUT_EMOTE_VISIBLE_MS = 4_000;
 const labels = ['', '도', '개', '걸', '윷', '모'];
-const probabilityAnchors = [[30, 33, 22, 10, 5], [12, 25, 35, 18, 10], [8, 17, 25, 27, 23]];
-export function getYutThrowProbabilities(power = 0.65) {
+const probabilityAnchors = [[33, 35, 24, 6, 2], [25, 34, 31, 7, 3], [20, 31, 35, 10, 4]];
+export function getYutThrowProbabilities(power = 0.65, previousValue = 0) {
   const strength = Math.max(0, Math.min(1, Math.round(((Number.isFinite(power) ? power : 0.65) - 0.12) / 0.88 * 1e12) / 1e12));
   const segment = strength <= 0.5 ? 0 : 1, fraction = strength <= 0.5 ? strength * 2 : (strength - 0.5) * 2;
-  return probabilityAnchors[segment].map((value, index) => value + (probabilityAnchors[segment + 1][index] - value) * fraction);
+  const probabilities = probabilityAnchors[segment].map((value, index) => value + (probabilityAnchors[segment + 1][index] - value) * fraction);
+  if (previousValue === 4 || previousValue === 5) {
+    const bonus = probabilities[3] + probabilities[4], ordinary = 100 - bonus;
+    for (let index = 0; index < 3; index += 1) probabilities[index] *= (ordinary + bonus / 2) / ordinary;
+    probabilities[3] /= 2;
+    probabilities[4] /= 2;
+  }
+  return probabilities;
 }
-export function sampleYutSticks(power = 0.65, random = Math.random) {
-  const probabilities = getYutThrowProbabilities(power);
+export function sampleYutSticks(power = 0.65, random = Math.random, previousValue = 0) {
+  const probabilities = getYutThrowProbabilities(power, previousValue);
   const draw = random() * 100;
   let cumulative = 0, value = 5;
   for (let index = 0; index < probabilities.length; index += 1) {

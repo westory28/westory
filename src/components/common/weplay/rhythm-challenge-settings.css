@@ -1,0 +1,41 @@
+.rhythm-challenge-settings {
+  margin: 24px 0;
+  background: transparent;
+}
+.rhythm-challenge-settings h2 {
+  margin: 0 0 16px;
+  background: transparent;
+  box-shadow: none;
+}
+.rhythm-challenge-settings form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+.rhythm-challenge-settings label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.rhythm-challenge-settings select,
+.rhythm-challenge-settings input,
+.rhythm-challenge-settings button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  font: inherit;
+}
+.rhythm-challenge-settings input { width: 80px; }
+.rhythm-challenge-settings button {
+  color: var(--ws-text, #111827);
+  background: var(--ws-surface, #fff);
+}
+.rhythm-challenge-settings button:disabled { opacity: .5; }
+.rhythm-challenge-week { font-size: 14px; }
+@media (max-width: 480px) {
+  .rhythm-challenge-settings form { align-items: flex-start; }
+  .rhythm-challenge-settings label { flex-wrap: wrap; }
+  .rhythm-challenge-settings select { max-width: 100%; }
+}
