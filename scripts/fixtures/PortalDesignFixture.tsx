@@ -9,6 +9,8 @@ import PortalWorkspace, {
 } from "../../src/components/common/PortalWorkspace";
 import HistoryMaps from "../../src/components/common/HistoryMaps";
 import Settings from "../../src/pages/teacher/Settings";
+import TeacherPointManagementLayout from "../../src/pages/teacher/components/points/TeacherPointManagementLayout";
+import { TEACHER_POINT_TAB_LABELS } from "../../src/constants/pointLabels";
 import Note from "../../src/pages/student/lesson/Note";
 import ThinkCloud from "../../src/pages/student/lesson/ThinkCloud";
 import { historyAtlasDataset } from "../../src/data/historyAtlasContent";
@@ -108,6 +110,8 @@ function Fixture() {
     : "teacher";
   const [collapsed, setCollapsed] = useState(false);
   const kind = new URLSearchParams(window.location.search).get("kind") || "map";
+  const pointTab = new URLSearchParams(location.search).get("tab") || "overview";
+  const pointLabel = TEACHER_POINT_TAB_LABELS[pointTab as keyof typeof TEACHER_POINT_TAB_LABELS] || TEACHER_POINT_TAB_LABELS.overview;
   return (
     <PortalWorkspaceFooterProvider>
       <div
@@ -120,7 +124,19 @@ function Fixture() {
           onToggleSidebar={() => setCollapsed(!collapsed)}
         />
         <main className="min-h-0 w-full flex-1">
-          {kind === "learning" ? (
+          {kind === "wis-management" ? (
+            <TeacherPointManagementLayout>
+              <div className="ws-page">
+                <header className="ws-page-header"><h1>{pointLabel}</h1></header>
+                <section className="ws-surface">
+                  <h2>선택한 관리 화면</h2>
+                  <p data-testid="selected-management">{pointLabel}</p>
+                  <p>학생별 위스 현황과 지급 내역을 확인하는 긴 한글 검증 자료</p>
+                  <button type="button">자료 확인</button>
+                </section>
+              </div>
+            </TeacherPointManagementLayout>
+          ) : kind === "learning" ? (
             location.pathname.endsWith("/think-cloud") ? (
               <ThinkCloud />
             ) : (

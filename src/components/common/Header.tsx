@@ -333,6 +333,14 @@ const Header: React.FC<{
 
     const queryParams = new URLSearchParams(query || "");
     const currentParams = new URLSearchParams(location.search);
+    if (
+      path === "/teacher/points" &&
+      !query &&
+      ["overview", "grant", "policy", "ranks"].includes(
+        currentParams.get("tab") || "overview",
+      )
+    )
+      return path.length * 10 + 100;
     if (path === HISTORY_DICTIONARY_PATH && useTeacherSidebar) {
       const canWrite = canWriteLessonManagement(userData, currentUser?.email);
       const panel = getHistoryDictionaryPanel(currentParams, canWrite);
@@ -498,6 +506,7 @@ const Header: React.FC<{
   const consolidateWisGroup = (
     group: TeacherSidebarGroup | undefined,
     shops: TeacherSidebarGroup["children"],
+    nestedManagement = true,
   ) => {
     if (!group) return;
     const isHall = (child: { resolvedUrl: string }) =>
@@ -509,8 +518,10 @@ const Header: React.FC<{
         ? [
             {
               name: "위스 관리",
-              resolvedUrl: management[0].resolvedUrl,
-              children: management,
+              resolvedUrl: nestedManagement
+                ? management[0].resolvedUrl
+                : "/teacher/points",
+              ...(nestedManagement ? { children: management } : {}),
             },
           ]
         : []),
@@ -522,6 +533,7 @@ const Header: React.FC<{
   consolidateWisGroup(
     teacherSidebarGroups.find((group) => group.id === "points"),
     shopChildren,
+    false,
   );
   const dictionaryChild = resolvedTeacherMenus
     .flatMap((item) => item.resolvedChildren)

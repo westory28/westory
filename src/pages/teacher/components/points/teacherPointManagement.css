@@ -1,0 +1,7 @@
+.teacher-wis-management-workspace > .teacher-sub-content {
+  padding: 0;
+}
+
+.teacher-wis-management-workspace > .teacher-sub-content > div {
+  min-height: 0;
+}

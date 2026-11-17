@@ -22,7 +22,7 @@ try {
       ),
   );
 }
-const evidence = path.join(root, "output/yut-policy-20261018");
+const evidence = path.join(root, "output/weplay-policy-20261117");
 await fs.mkdir(evidence, { recursive: true });
 const core = require(path.join(root, "functions/weplayCore.js"));
 const initialPolicy = { ...structuredClone(core.DEFAULT_POLICY), version: 3 };
@@ -32,10 +32,10 @@ const modulePath = (value) =>
 const service = `
 import {useSyncExternalStore} from 'react';
 const listeners=new Set(),query=new URLSearchParams(location.search),scenario=query.get('case')||'normal';
-const qa=window.yutPolicyQA={calls:[],policies:{'2':${JSON.stringify(initialPolicy)},'1':{...${JSON.stringify(initialPolicy)},version:8,challengeCost:77,yutWinnerReward:{enabled:true,amount:11}}},state:{config:{year:'2026',semester:'2'},currentUser:{uid:'policy-teacher'},canManage:scenario!=='readonly',active:scenario!=='inactive'},holdRead:scenario==='pending-read',failRead:scenario==='load-error',holdSave:false,failSave:false};
+const qa=window.yutPolicyQA={calls:[],policies:{'2':${JSON.stringify(initialPolicy)},'1':{...${JSON.stringify(initialPolicy)},version:8,challengeCost:77,yutWinnerReward:{enabled:true,amount:11}}},state:{config:{year:'2026',semester:'2'},currentUser:{uid:'policy-teacher'},canRead:scenario!=='denied',canManage:scenario!=='readonly',active:scenario!=='inactive',gameId:'joseon-yut',authGeneration:1},holdRead:scenario==='pending-read',failRead:scenario==='load-error',holdSave:false,failSave:false};
 qa.setState=patch=>{qa.state={...qa.state,...patch};listeners.forEach(fn=>fn());};
 export const useQA=()=>useSyncExternalStore(fn=>{listeners.add(fn);return()=>listeners.delete(fn)},()=>qa.state);
-export const useAuth=()=>useQA();
+export const useAuth=()=>{const state=useQA();return {...state,userData:{role:'staff',staffPermissions:!state.canRead?['lesson_read']:state.canManage?['point_manage']:['point_read']}};};
 export const getHistoryDictionaryCallable=async name=>async data=>{
  qa.calls.push({name,data:structuredClone(data)});const key=data.semester;
  if(name==='getWeplayPolicy'){
@@ -61,7 +61,7 @@ import Panel from ${modulePath("src/pages/teacher/components/points/WeplayPolicy
 import {AppToastProvider} from ${modulePath("src/components/common/AppToastProvider.tsx")};
 import ${modulePath("src/assets/index.css")};
 import {useQA} from 'fixture:service';
-function App(){const state=useQA();return <main style={{maxWidth:1100,margin:'0 auto',padding:16}}><h1>위스 운영 정책</h1><form onSubmit={event=>{event.preventDefault();window.yutPolicyQA.outerSubmitted=true;}}><Panel {...state}/></form></main>;}
+function App(){const state=useQA();return <main style={{maxWidth:1100,margin:'0 auto',padding:16}}><h1>게임별 위스 설정</h1><form onSubmit={event=>{event.preventDefault();window.yutPolicyQA.outerSubmitted=true;}}><Panel gameId={state.gameId} active={state.active}/></form></main>;}
 createRoot(document.getElementById('root')).render(<AppToastProvider><App/></AppToastProvider>);
 `;
 const bundle = await build({
@@ -72,7 +72,7 @@ const bundle = await build({
   platform: "browser",
   target: "es2022",
   outfile: path.join(os.tmpdir(), "yut-policy-qa.js"),
-  loader: { ".svg": "dataurl", ".woff2": "dataurl" },
+  loader: { ".svg": "dataurl", ".woff2": "dataurl", ".webp": "dataurl" },
   define: { "process.env.NODE_ENV": '"production"' },
   plugins: [
     {
@@ -132,6 +132,17 @@ await page.route("**/*", (route) =>
 );
 const go = async (scenario) => {
   await page.goto(base + "/?case=" + scenario);
+  await page.waitForFunction(() => !!window.yutPolicyQA);
+  assert.equal(await page.evaluate(() => window.yutPolicyQA.calls.length), 0,
+    "Collapsed policy makes no server request");
+  if (scenario !== "denied") {
+    const surfaces = await page.locator(".weplay-policy, .weplay-policy > summary").evaluateAll(elements =>
+      elements.map(element => { const style = getComputedStyle(element); return [style.backgroundColor, style.boxShadow, style.borderTopWidth]; }));
+    assert.deepEqual(surfaces, [["rgba(0, 0, 0, 0)", "none", "0px"], ["rgba(0, 0, 0, 0)", "none", "0px"]],
+      "Collapsed game setting and title remain transparent without a card or shadow");
+  }
+  if (!["inactive", "denied"].includes(scenario))
+    await page.locator(".weplay-policy > summary").click();
 };
 const amount = () =>
   page.getByRole("spinbutton", {
@@ -141,7 +152,7 @@ const amount = () =>
 const toggle = () =>
   page.getByRole("checkbox", { name: "멀티플레이 1등 위스 지급", exact: true });
 const save = () =>
-  page.getByRole("button", { name: "위플레이 정책 저장", exact: true });
+  page.getByRole("button", { name: "보상 설정 저장", exact: true });
 const saved = async () => {
   const toast = page.getByRole("group", {
     name: "정책 저장 완료",
@@ -170,6 +181,8 @@ const saveCalls = () =>
 try {
   await go("normal");
   await amount().waitFor();
+  assert.equal(await page.locator("#weplay-cost, #weplay-ranking-period").count(), 0,
+    "Yut exposes only its own reward fields");
   assert.equal(await toggle().isChecked(), false);
   assert.equal(await amount().inputValue(), "0");
   assert.equal(await save().isDisabled(), true);
@@ -328,9 +341,7 @@ try {
   );
 
   await go("pending-read");
-  await page
-    .getByText("위플레이 정책을 불러오는 중입니다.", { exact: true })
-    .waitFor();
+  await page.locator('.weplay-policy[aria-busy="true"]').waitFor();
   await page.evaluate(() =>
     window.yutPolicyQA.setState({ config: { year: "2026", semester: "1" } }),
   );
@@ -355,8 +366,11 @@ try {
   await page.keyboard.press("Escape");
   await go("inactive");
   assert.equal(await page.evaluate(() => window.yutPolicyQA.calls.length), 0);
+  await go("denied");
+  assert.equal(await page.locator(".weplay-policy").count(), 0);
+  assert.equal(await page.evaluate(() => window.yutPolicyQA.calls.length), 0);
   checks.push(
-    "Stale reads are ignored; load retry works; read-only cannot save; inactive policy makes no read.",
+    "Stale reads are ignored; load retry works; read-only cannot save; inactive, collapsed and unauthorized policies make no read.",
   );
 
   await go("normal");
@@ -380,8 +394,29 @@ try {
     });
   }
   checks.push(
-    "390/768/1280/1366px render without page overflow; numeric input has a 44px target.",
+    "390/768/1280/1366px render without page overflow; numeric input has a 44px target; collapsed section and title have transparent computed background with no border or shadow.",
   );
+  await save().click();
+  await saved();
+  await page.evaluate(() => window.yutPolicyQA.setState({ gameId: "history-rain" }));
+  const cost = page.getByRole("spinbutton", { name: "도전 비용 (위스)", exact: true });
+  await cost.waitFor();
+  assert.equal(await page.locator("#weplay-yut-winner-amount").count(), 0,
+    "Naval exposes no Yut reward controls");
+  assert.equal(await page.locator("#weplay-ranking-period").count(), 1,
+    "Active classroom-ranking settings stay manageable in their own game");
+  await cost.fill("7");
+  await save().click();
+  await saved();
+  assert.deepEqual(await page.evaluate(() => window.yutPolicyQA.saved.policy.yutWinnerReward),
+    { enabled: true, amount: 25 });
+  assert.equal(await page.evaluate(() => window.yutPolicyQA.saved.policy.challengeCost), 7);
+  for (const width of [390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+    await page.screenshot({ path: path.join(evidence, `naval-policy-${width}.png`), fullPage: true });
+  }
+  checks.push("Game-specific controls: Yut save preserves naval fields; naval save preserves Yut values; shared version conflicts remain protected; both game settings fit 390/768/1280px.");
   assert.deepEqual(errors, []);
   await fs.writeFile(
     path.join(evidence, "report.json"),

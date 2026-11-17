@@ -1,7 +1,7 @@
 /**
  * Real portal header/sidebar, sub-navigation, maps and repository CSS.
  * Synthetic identities/read services only; all network requests stay on localhost.
- * Run with --serve for a persistent fixture, or --kind=map|tabs|tree|settings|learning to narrow QA.
+ * Run with --serve for a persistent fixture, or --kind=map|tabs|tree|settings|learning|wis-management to narrow QA.
  * --portal=student|teacher isolates one portal when continuing a verification run.
  * --kind=core-points exercises the student worksheet with delayed synthetic commands.
  */
@@ -277,7 +277,7 @@ const sizes = [
 ];
 const kinds = kindFilter
   ? [kindFilter]
-  : ["map", "tabs", "tree", "settings", "learning"];
+  : ["map", "tabs", "tree", "settings", "learning", "wis-management"];
 async function noOverflow(page, label) {
   const size = await page.evaluate(() => ({
     scroll: document.documentElement.scrollWidth,
@@ -287,6 +287,64 @@ async function noOverflow(page, label) {
     size.scroll <= size.viewport + 1,
     `${label}: horizontal overflow ${size.scroll}/${size.viewport}`,
   );
+}
+async function verifyWisManagement(page, width, label) {
+  await page.goto(`${origin}/?kind=wis-management#/teacher/points`);
+  const navigation = page.locator('.teacher-wis-management-workspace > .teacher-sub-navigation');
+  const content = page.locator('.teacher-wis-management-workspace > .teacher-sub-content');
+  const menu = navigation.locator('nav[aria-label="위스 관리 메뉴"]');
+  const toggle = navigation.locator('.teacher-settings-menu-toggle');
+  const mobile = width < 768;
+  await navigation.waitFor();
+  assert.equal(await menu.isVisible(), !mobile);
+  const navBox = await navigation.boundingBox();
+  const contentBox = await content.boundingBox();
+  assert(mobile ? navBox.y + navBox.height <= contentBox.y + 1 : navBox.x + navBox.width <= contentBox.x + 1,
+    'Management uses a desktop left sidebar and a mobile disclosure');
+  const sections = [
+    ['overview', '위스 현황'], ['grant', '지급 및 환수'], ['policy', '운영 정책'], ['ranks', '등급 관리'],
+  ];
+  if (mobile) await toggle.press('Enter');
+  assert.deepEqual(await menu.locator('a > span').allTextContents(), sections.map(([, name]) => name));
+  if (mobile) await toggle.press('Enter');
+  for (const [tab, name] of sections) {
+    if (mobile) await toggle.press('Enter');
+    const link = menu.getByRole('link', { name, exact: true, includeHidden: true });
+    await link.focus();
+    const box = await link.boundingBox();
+    assert(box.width >= 44 && box.height >= 44, `${name}: target is at least 44px`);
+    await link.press('Enter');
+    await page.waitForFunction((expected) => document.querySelector('[data-testid="selected-management"]')?.textContent === expected, name);
+    assert.equal(await link.getAttribute('aria-current'), 'page');
+    if (mobile) {
+      assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+      assert.equal(await toggle.evaluate(el => el === document.activeElement), true, 'Closing the menu restores keyboard focus');
+    }
+    await noOverflow(page, `${label}-${tab}`);
+  }
+  await page.goBack();
+  await page.waitForFunction(() => location.hash.endsWith('tab=policy'));
+  assert.equal(await menu.getByRole('link', { name: '운영 정책', exact: true, includeHidden: true }).getAttribute('aria-current'), 'page');
+  await page.goForward();
+  await page.waitForFunction(() => location.hash.endsWith('tab=ranks'));
+  assert.equal(await menu.getByRole('link', { name: '등급 관리', exact: true, includeHidden: true }).getAttribute('aria-current'), 'page');
+  if (mobile) {
+    await toggle.press('Enter');
+    await menu.getByRole('link').first().focus();
+    await page.keyboard.press('Escape');
+    assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+    assert.equal(await toggle.evaluate(el => el === document.activeElement), true);
+  }
+  const titleStyle = await content.locator('header.ws-page-header').evaluate(el => ({
+    background: getComputedStyle(el).backgroundColor,
+    position: getComputedStyle(el).position,
+    shadow: getComputedStyle(el).boxShadow,
+  }));
+  assert.equal(titleStyle.background, 'rgba(0, 0, 0, 0)');
+  assert.equal(titleStyle.position, 'static');
+  assert.equal(titleStyle.shadow, 'none');
+  await page.screenshot({ path: path.join(evidence, `${label}.png`), fullPage: true });
+  checks.push({ label, leftSidebar: !mobile, mobileDisclosure: mobile, keyboard: true, backForward: true, titleStyle });
 }
 async function verifyStudentLearning(page, label) {
   const url = (path, mode = "") =>
@@ -623,23 +681,30 @@ async function sidebarChecks(page, portal, width) {
     false,
     "Opening another upper menu closes the old group",
   );
-  const management = sidebar.getByRole("button", { name: "위스 관리", exact: true });
+  const management = sidebar.getByRole(portal === "teacher" ? "link" : "button", { name: "위스 관리", exact: true });
   assert.equal(await sidebar.getByRole("button", { name: "위스 마을", exact: true }).count(), 0);
+  if (portal === "teacher") {
+    assert.equal(await sidebar.getByRole("button", { name: "위스 관리", exact: true }).count(), 0);
+    for (const label of ["위스 현황", "지급 및 환수", "운영 정책", "등급 관리"]) {
+      assert.equal(await sidebar.getByRole("link", { name: label, exact: true }).count(), 0, `${label} belongs to the internal management menu`);
+    }
+    await navigateLink("위스 관리");
+    for (const tab of ["overview", "grant", "policy", "ranks"]) {
+      await navigateHash(`#/teacher/points?tab=${tab}`);
+      await expanded(points, true, "A management deep link keeps Wis open");
+      assert.equal(await management.getAttribute("aria-current"), "page", `The management link is active for ${tab}`);
+    }
+  } else {
   const managementPanel = sidebar.locator(`#${await management.getAttribute("aria-controls")}`);
   await management.press("Enter");
   await expanded(management, true, "Wis management opens as a nested group");
   assert.deepEqual(
     await managementPanel.getByRole("link").allTextContents(),
-    portal === "teacher" ? ["위스 현황", "지급 및 환수", "운영 정책", "등급 관리"] : ["내 위스"],
+    ["내 위스"],
   );
-  await navigateLink(portal === "teacher" ? "위스 현황" : "내 위스");
+  await navigateLink("내 위스");
   await expanded(points, true, "The newly selected group remains open");
   await expanded(management, true, "Selecting management preserves both ancestors");
-  if (portal === "teacher") {
-    const grant = await navigateLink("지급 및 환수");
-    await expanded(management, true, "Management sibling navigation keeps its group open");
-    if (!mobile) assert(await grant.evaluate((el) => el === document.activeElement));
-  }
   await management.press("Enter");
   await expanded(management, false, "Nested management can be folded manually");
   assert.equal(await managementPanel.locator('a:not([tabindex="-1"])').count(), 0);
@@ -651,10 +716,12 @@ async function sidebarChecks(page, portal, width) {
     await sidebar.getByRole("button", { name: "메뉴 펼치기", exact: true }).click();
   }
   await expanded(management, false, "Unchanged route preserves a nested manual fold");
-  if (portal === "student") await navigateHash("#/student/points?tab=hall-of-fame");
+  await navigateHash("#/student/points?tab=hall-of-fame");
+  }
   const managementHash = portal === "teacher" ? "#/teacher/points?tab=policy" : "#/student/points";
   await navigateHash(managementHash);
-  await expanded(management, true, "Direct management links reveal both ancestors");
+  if (portal === "student") await expanded(management, true, "Direct management links reveal both ancestors");
+  else assert.equal(await management.getAttribute("aria-current"), "page");
   const queryLink = await navigateLink(
     portal === "teacher" ? "명예의 전당 관리" : "명예의 전당",
   );
@@ -668,17 +735,20 @@ async function sidebarChecks(page, portal, width) {
       await queryLink.evaluate((el) => el === document.activeElement),
       "Query-only navigation preserves child focus",
     );
-  await expanded(management, false, "Hall of fame is directly under Wis, outside management");
+  if (portal === "student") await expanded(management, false, "Hall of fame is directly under Wis, outside management");
+  else assert.equal(await management.getAttribute("aria-current"), null, "Hall of fame is outside management");
   await page.goBack();
   await page.waitForFunction((hash) => location.hash === hash, managementHash);
   await checkMobileReturn();
   await expanded(points, true, "Back to management opens Wis");
-  await expanded(management, true, "Back to management restores the nested group");
+  if (portal === "student") await expanded(management, true, "Back to management restores the nested group");
+  else assert.equal(await management.getAttribute("aria-current"), "page", "Back restores the management selection");
   await page.goForward();
   await page.waitForFunction((hash) => location.hash === hash, `#/${portal}/points?tab=hall-of-fame`);
   await checkMobileReturn();
   await expanded(points, true, "Forward to hall keeps Wis open");
-  await expanded(management, false, "Forward to hall closes management");
+  if (portal === "student") await expanded(management, false, "Forward to hall closes management");
+  else assert.equal(await management.getAttribute("aria-current"), null, "Forward restores the hall selection");
   const currentHash =
     portal === "teacher"
       ? "#/teacher/points?tab=products"
@@ -758,11 +828,11 @@ async function sidebarChecks(page, portal, width) {
   const wis = sidebar.locator(`#${portal}-menu-points`);
   assert.equal(await sidebar.locator(`#${portal}-menu-shop`).count(), 0);
   const directWisLinks = wis.locator(":scope > .teacher-sidebar-submenu-clip > .teacher-sidebar-children > a");
-  assert.equal(await directWisLinks.count(), portal === "teacher" ? 4 : 3);
+  assert.equal(await directWisLinks.count(), portal === "teacher" ? 5 : 3);
   assert.deepEqual(
     await directWisLinks.allTextContents(),
     portal === "teacher"
-      ? ["명예의 전당 관리", "위스 상점", "아바타 상점", "위스피(WsPI)"]
+      ? ["위스 관리", "명예의 전당 관리", "위스 상점", "아바타 상점", "위스피(WsPI)"]
       : ["명예의 전당", "위스 상점", "아바타 상점"],
   );
   if (portal === "teacher") {
@@ -772,7 +842,7 @@ async function sidebarChecks(page, portal, width) {
       await wis.getByRole("link", { name: "위스피(WsPI)", exact: true }).getAttribute("aria-current"),
       "page",
     );
-    assert.equal(await managementPanel.locator('a[href*="tab=stocks"]').count(), 0);
+    assert.equal(await management.getAttribute('aria-current'), null);
     await navigateHash("#/teacher/points?tab=requests");
   } else {
     assert.equal(await sidebar.locator('a[href*="tab=stocks"]').count(), 0);
@@ -818,7 +888,8 @@ async function sidebarChecks(page, portal, width) {
     queryNavigation: true,
     backForward: true,
     manualFold: true,
-    nestedWisManagement: true,
+    nestedWisManagement: portal === "student",
+    directWisManagement: portal === "teacher",
     mobileFocus: mobile,
     sessionBadgeAbsent: true,
     accountControlsAccessible: true,
@@ -828,7 +899,7 @@ try {
   for (const portal of portalFilter ? [portalFilter] : ["teacher", "student"])
     for (const kind of kinds)
       for (const [width, height] of sizes) {
-        if (portal === "student" && kind === "settings") continue;
+        if (portal === "student" && ["settings", "wis-management"].includes(kind)) continue;
         if (portal === "teacher" && kind === "learning") continue;
         if (
           kind === "core-points" &&
@@ -850,7 +921,9 @@ try {
         try {
           if (kind !== "learning" && kind !== "core-points")
             await page.goto(`${origin}/?kind=${kind}#/${portal}/lesson/maps`);
-          if (kind === "core-points") {
+          if (kind === "wis-management") {
+            await verifyWisManagement(page, width, label);
+          } else if (kind === "core-points") {
             await verifyCorePointClicks(page, origin);
             checks.push({ label, rapidClicks: true, retries: true });
           } else if (kind === "learning") {
@@ -1080,6 +1153,7 @@ try {
           // Keep every body layout check, but exercise navigation once per viewport.
           const sidebarViewport = `${portal}:${width}`;
           if (kind !== "core-points" && !checkedSidebarViewports.has(sidebarViewport)) {
+            if (kind === "wis-management") await page.goto(`${origin}/?kind=${kind}#/${portal}/lesson/maps`);
             await sidebarChecks(page, portal, width);
             checkedSidebarViewports.add(sidebarViewport);
           }

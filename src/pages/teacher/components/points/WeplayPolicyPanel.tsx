@@ -15,12 +15,12 @@ import {
   type WeplayPolicy,
   type WeplayRankRewards,
 } from "../../../../lib/weplay";
-import type { SystemConfig } from "../../../../types";
+import { canManagePoints, canReadPoints } from "../../../../lib/permissions";
+import { isSemesterArchive } from "../../../../lib/semesterArchive";
 import "./WeplayPolicyPanel.css";
 
 interface WeplayPolicyPanelProps {
-  config: Pick<SystemConfig, "year" | "semester"> | null;
-  canManage: boolean;
+  gameId: "history-rain" | "joseon-yut";
   active: boolean;
 }
 
@@ -136,21 +136,26 @@ const NumberField = ({
 );
 
 const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
-  config,
-  canManage,
+  gameId,
   active,
 }) => {
-  const { menuConfig, currentUser } = useAuth();
+  const { config, menuConfig, currentUser, userData, authGeneration } =
+    useAuth();
+  const canRead = canReadPoints(userData, currentUser?.email);
+  const canManage =
+    !isSemesterArchive && canManagePoints(userData, currentUser?.email);
+  const isYut = gameId === "joseon-yut";
+  const [open, setOpen] = useState(false);
   const { showToast } = useAppToast();
   const scope = useMemo(
     () => getYearSemester(config),
     [config?.year, config?.semester],
   );
-  const scopeKey = `${currentUser?.uid}/${scope.year}/${scope.semester}/${canManage}`;
+  const scopeKey = `${currentUser?.uid}/${authGeneration}/${scope.year}/${scope.semester}/${canRead}/${canManage}/${gameId}`;
   const scopeReady = Boolean(config?.year && config?.semester);
   const currentScope = useRef(scopeKey);
   currentScope.current = scopeKey;
-  const panelRef = useRef<HTMLElement>(null);
+  const panelRef = useRef<HTMLDetailsElement>(null);
   const savingRef = useRef(false);
   const saveGeneration = useRef(0);
   const [loadedScope, setLoadedScope] = useState("");
@@ -179,7 +184,7 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
   }, [scopeKey]);
 
   useEffect(() => {
-    if (!active || loadedScope === scopeKey) return;
+    if (!active || !open || !canRead || loadedScope === scopeKey) return;
     if (!scopeReady) {
       setLoading(false);
       setLoadError("현재 학기를 확인하지 못했습니다. 새로고침해 주세요.");
@@ -211,7 +216,16 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [active, loadedScope, retryKey, scope, scopeKey, scopeReady]);
+  }, [
+    active,
+    open,
+    canRead,
+    loadedScope,
+    retryKey,
+    scope,
+    scopeKey,
+    scopeReady,
+  ]);
 
   const dirty = Boolean(
     draft &&
@@ -238,6 +252,7 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
     if (
       !canManage ||
       !active ||
+      !open ||
       !scopeReady ||
       !draft ||
       !savedPolicy ||
@@ -280,35 +295,41 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
     const nextPolicy: WeplayPolicy = {
       ...savedPolicy,
       version: savedPolicy.version ?? 0,
-      enabled: draft.enabled,
-      yutWinnerReward: {
-        enabled: draft.yutWinnerReward.enabled,
-        amount: parseInteger(
-          "weplay-yut-winner-amount",
-          draft.yutWinnerReward.amount,
-          10000,
-        ),
-      },
-      challengeCost: parseInteger("weplay-cost", draft.challengeCost, 10000),
-      dailyChallengeLimit: parseInteger(
-        "weplay-daily-limit",
-        draft.dailyChallengeLimit,
-        20,
-      ),
-      resultRewards: draft.resultRewards.map((reward) => ({
-        minCorrect: reward.minCorrect,
-        amount: parseInteger(
-          `weplay-reward-${reward.minCorrect}`,
-          reward.amount,
-          10000,
-        ),
-      })),
-      rankingPeriod: draft.rankingPeriod,
-      rankingRewards: {
-        mild: parseRankRewards("mild"),
-        medium: parseRankRewards("medium"),
-        spicy: parseRankRewards("spicy"),
-      },
+      enabled: isYut ? savedPolicy.enabled : draft.enabled,
+      yutWinnerReward: isYut
+        ? {
+            enabled: draft.yutWinnerReward.enabled,
+            amount: parseInteger(
+              "weplay-yut-winner-amount",
+              draft.yutWinnerReward.amount,
+              10000,
+            ),
+          }
+        : (savedPolicy.yutWinnerReward ?? { enabled: false, amount: 0 }),
+      challengeCost: isYut
+        ? savedPolicy.challengeCost
+        : parseInteger("weplay-cost", draft.challengeCost, 10000),
+      dailyChallengeLimit: isYut
+        ? savedPolicy.dailyChallengeLimit
+        : parseInteger("weplay-daily-limit", draft.dailyChallengeLimit, 20),
+      resultRewards: isYut
+        ? savedPolicy.resultRewards
+        : draft.resultRewards.map((reward) => ({
+            minCorrect: reward.minCorrect,
+            amount: parseInteger(
+              `weplay-reward-${reward.minCorrect}`,
+              reward.amount,
+              10000,
+            ),
+          })),
+      rankingPeriod: isYut ? savedPolicy.rankingPeriod : draft.rankingPeriod,
+      rankingRewards: isYut
+        ? savedPolicy.rankingRewards
+        : {
+            mild: parseRankRewards("mild"),
+            medium: parseRankRewards("medium"),
+            spicy: parseRankRewards("spicy"),
+          },
     };
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) {
@@ -369,11 +390,15 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
   const disabled = !canManage || saving || !active || conflict;
   const ready = scopeReady && loadedScope === scopeKey && draft && savedPolicy;
 
+  if (!canRead) return null;
+
   return (
-    <section
+    <details
       ref={panelRef}
       className="weplay-policy"
       hidden={!active}
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
       aria-labelledby="weplay-policy-title"
       aria-busy={loading || saving}
       onKeyDown={(event) => {
@@ -387,8 +412,22 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
         }
       }}
     >
-      <header className="weplay-policy__header">
-        <h3 id="weplay-policy-title">위플레이</h3>
+      <summary className="weplay-policy__header" aria-expanded={open}>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          aria-hidden="true"
+          className="weplay-policy__chevron"
+        >
+          <path d="m6 3 5 5-5 5" />
+        </svg>
+        <span id="weplay-policy-title" className="weplay-policy__title">
+          {isYut ? "온라인 우승 보상" : "위스 도전·학급 순위 보상"}
+        </span>
         {ready && (
           <span
             className={
@@ -398,7 +437,7 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
             {dirty ? "저장되지 않은 변경사항" : "저장된 정책과 동일"}
           </span>
         )}
-      </header>
+      </summary>
 
       {loading && <LoadingOverlay />}
       {loadError && (
@@ -421,204 +460,212 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
               위플레이 정책을 수정할 권한이 없습니다.
             </p>
           )}
-          <fieldset className="weplay-policy__group">
-            <legend>마우저구 윷놀이</legend>
-            <div className="weplay-policy__toggle-row">
-              <label className="weplay-policy__toggle">
-                <input
-                  type="checkbox"
-                  disabled={disabled}
-                  checked={draft.yutWinnerReward.enabled}
-                  onChange={(event) =>
-                    updateDraft((previous) => ({
-                      ...previous,
-                      yutWinnerReward: {
-                        ...previous.yutWinnerReward,
-                        enabled: event.target.checked,
-                      },
-                    }))
-                  }
-                />
-                <span>멀티플레이 1등 위스 지급</span>
-              </label>
-              <InfoHelp label="윷놀이 1등 지급 기준">
-                온라인에서 완주한 1등 학생에게만 지급합니다. 싱글, 교사 체험,
-                다른 참가자의 이탈로 끝난 판은 제외됩니다. 변경한 정책은 다음
-                판부터 적용되며, 0위스는 지급하지 않습니다.
-              </InfoHelp>
-            </div>
-            <div className="weplay-policy__grid">
-              <NumberField
-                id="weplay-yut-winner-amount"
-                label="1등 지급액"
-                accessibleLabel="윷놀이 1등 지급액"
-                value={draft.yutWinnerReward.amount}
-                disabled={disabled}
-                error={errors["weplay-yut-winner-amount"]}
-                onChange={(amount) =>
-                  updateDraft((previous) => ({
-                    ...previous,
-                    yutWinnerReward: { ...previous.yutWinnerReward, amount },
-                  }))
-                }
-              />
-            </div>
-          </fieldset>
-          <fieldset className="weplay-policy__group" disabled={disabled}>
-            <legend>{getWeplayGameTitle(menuConfig)} · 위스 도전</legend>
-            <p className="weplay-policy__notice">
-              변경한 정책은 다음 판부터 적용됩니다. 진행 중인 판은 시작할 때의
-              정책을 따릅니다.
-            </p>
-            <label className="weplay-policy__toggle">
-              <input
-                type="checkbox"
-                checked={draft.enabled}
-                onChange={(event) =>
-                  updateDraft((previous) => ({
-                    ...previous,
-                    enabled: event.target.checked,
-                  }))
-                }
-              />
-              <span>위스 도전 허용</span>
-            </label>
-            <div className="weplay-policy__grid">
-              <NumberField
-                id="weplay-cost"
-                label="도전 비용"
-                value={draft.challengeCost}
-                disabled={disabled}
-                error={errors["weplay-cost"]}
-                onChange={(challengeCost) =>
-                  updateDraft((previous) => ({ ...previous, challengeCost }))
-                }
-              />
-              <NumberField
-                id="weplay-daily-limit"
-                label="하루 도전 횟수"
-                suffix="회"
-                max={20}
-                value={draft.dailyChallengeLimit}
-                disabled={disabled}
-                error={errors["weplay-daily-limit"]}
-                onChange={(dailyChallengeLimit) =>
-                  updateDraft((previous) => ({
-                    ...previous,
-                    dailyChallengeLimit,
-                  }))
-                }
-              />
-            </div>
-            <h4>결과별 지급액</h4>
-            <p className="weplay-policy__notice">
-              종료 시 지급하는 금액입니다. 실제 위스 증감은 지급액에서 도전
-              비용을 뺀 값입니다. 전체 일반 단어의 성공 비율로 정산하며,
-              필살기는 전투 점수에만 반영됩니다.
-            </p>
-            <div className="weplay-policy__rewards">
-              {draft.resultRewards.map((reward, index) => {
-                const next = draft.resultRewards[index + 1]?.minCorrect;
-                const label =
-                  next === undefined
-                    ? `성공률 ${reward.minCorrect * 5}% 이상`
-                    : `성공률 ${reward.minCorrect * 5}% 이상 ${next * 5}% 미만`;
-                return (
-                  <NumberField
-                    key={reward.minCorrect}
-                    id={`weplay-reward-${reward.minCorrect}`}
-                    label={label}
-                    value={reward.amount}
+          {isYut && (
+            <fieldset className="weplay-policy__group">
+              <legend>마우저구 윷놀이</legend>
+              <div className="weplay-policy__toggle-row">
+                <label className="weplay-policy__toggle">
+                  <input
+                    type="checkbox"
                     disabled={disabled}
-                    error={errors[`weplay-reward-${reward.minCorrect}`]}
-                    onChange={(amount) =>
+                    checked={draft.yutWinnerReward.enabled}
+                    onChange={(event) =>
                       updateDraft((previous) => ({
                         ...previous,
-                        resultRewards: previous.resultRewards.map((entry) =>
-                          entry.minCorrect === reward.minCorrect
-                            ? { ...entry, amount }
-                            : entry,
-                        ),
+                        yutWinnerReward: {
+                          ...previous.yutWinnerReward,
+                          enabled: event.target.checked,
+                        },
                       }))
                     }
                   />
-                );
-              })}
-            </div>
-          </fieldset>
-
-          <fieldset className="weplay-policy__group" disabled={disabled}>
-            <legend>난이도별 학급 랭킹 보상</legend>
-            <p className="weplay-policy__notice">
-              집계 기간과 순위 보상 변경은 다음 랭킹 기간부터 적용됩니다. 기간이
-              끝난 뒤 확정 순위에 한 번만 지급합니다.
-            </p>
-            {period && (
-              <div className="weplay-policy__current-period">
-                <span>현재 기간 · {formatPeriod(period)}</span>
-                {difficultyFields.map(({ key, label }) => (
-                  <span key={key}>
-                    {label} · 1위{" "}
-                    {period.rankingRewards[key].first.toLocaleString("ko-KR")}
-                    위스 · 2위{" "}
-                    {period.rankingRewards[key].second.toLocaleString("ko-KR")}
-                    위스 · 3위{" "}
-                    {period.rankingRewards[key].third.toLocaleString("ko-KR")}
-                    위스
-                  </span>
-                ))}
+                  <span>멀티플레이 1등 위스 지급</span>
+                </label>
+                <InfoHelp label="윷놀이 1등 지급 기준">
+                  온라인에서 완주한 1등 학생에게만 지급합니다. 싱글, 교사 체험,
+                  다른 참가자의 이탈로 끝난 판은 제외됩니다. 변경한 정책은 다음
+                  판부터 적용되며, 0위스는 지급하지 않습니다.
+                </InfoHelp>
               </div>
-            )}
-            <div className="weplay-policy__field">
-              <label htmlFor="weplay-ranking-period">집계 기간</label>
-              <select
-                id="weplay-ranking-period"
-                value={draft.rankingPeriod}
-                onChange={(event) =>
-                  updateDraft((previous) => ({
-                    ...previous,
-                    rankingPeriod: event.target
-                      .value as WeplayPolicy["rankingPeriod"],
-                  }))
-                }
-              >
-                <option value="weekly">주간</option>
-                <option value="monthly">월간</option>
-              </select>
-            </div>
-            {difficultyFields.map(
-              ({ key: difficulty, label: difficultyLabel }) => (
-                <div className="weplay-policy__difficulty" key={difficulty}>
-                  <h4>{difficultyLabel}</h4>
-                  <div className="weplay-policy__rewards">
-                    {rankFields.map(({ key, label }) => (
-                      <NumberField
-                        key={key}
-                        id={`weplay-rank-${difficulty}-${key}`}
-                        label={`${label} 보상`}
-                        accessibleLabel={`${difficultyLabel} ${label} 보상`}
-                        value={draft.rankingRewards[difficulty][key]}
-                        disabled={disabled}
-                        error={errors[`weplay-rank-${difficulty}-${key}`]}
-                        onChange={(amount) =>
-                          updateDraft((previous) => ({
-                            ...previous,
-                            rankingRewards: {
-                              ...previous.rankingRewards,
-                              [difficulty]: {
-                                ...previous.rankingRewards[difficulty],
-                                [key]: amount,
-                              },
-                            },
-                          }))
-                        }
-                      />
-                    ))}
-                  </div>
+              <div className="weplay-policy__grid">
+                <NumberField
+                  id="weplay-yut-winner-amount"
+                  label="1등 지급액"
+                  accessibleLabel="윷놀이 1등 지급액"
+                  value={draft.yutWinnerReward.amount}
+                  disabled={disabled}
+                  error={errors["weplay-yut-winner-amount"]}
+                  onChange={(amount) =>
+                    updateDraft((previous) => ({
+                      ...previous,
+                      yutWinnerReward: { ...previous.yutWinnerReward, amount },
+                    }))
+                  }
+                />
+              </div>
+            </fieldset>
+          )}
+          {!isYut && (
+            <fieldset className="weplay-policy__group" disabled={disabled}>
+              <legend>{getWeplayGameTitle(menuConfig)} · 위스 도전</legend>
+              <p className="weplay-policy__notice">
+                변경한 정책은 다음 판부터 적용됩니다. 진행 중인 판은 시작할 때의
+                정책을 따릅니다.
+              </p>
+              <label className="weplay-policy__toggle">
+                <input
+                  type="checkbox"
+                  checked={draft.enabled}
+                  onChange={(event) =>
+                    updateDraft((previous) => ({
+                      ...previous,
+                      enabled: event.target.checked,
+                    }))
+                  }
+                />
+                <span>위스 도전 허용</span>
+              </label>
+              <div className="weplay-policy__grid">
+                <NumberField
+                  id="weplay-cost"
+                  label="도전 비용"
+                  value={draft.challengeCost}
+                  disabled={disabled}
+                  error={errors["weplay-cost"]}
+                  onChange={(challengeCost) =>
+                    updateDraft((previous) => ({ ...previous, challengeCost }))
+                  }
+                />
+                <NumberField
+                  id="weplay-daily-limit"
+                  label="하루 도전 횟수"
+                  suffix="회"
+                  max={20}
+                  value={draft.dailyChallengeLimit}
+                  disabled={disabled}
+                  error={errors["weplay-daily-limit"]}
+                  onChange={(dailyChallengeLimit) =>
+                    updateDraft((previous) => ({
+                      ...previous,
+                      dailyChallengeLimit,
+                    }))
+                  }
+                />
+              </div>
+              <h4>결과별 지급액</h4>
+              <p className="weplay-policy__notice">
+                종료 시 지급하는 금액입니다. 실제 위스 증감은 지급액에서 도전
+                비용을 뺀 값입니다. 전체 일반 단어의 성공 비율로 정산하며,
+                필살기는 전투 점수에만 반영됩니다.
+              </p>
+              <div className="weplay-policy__rewards">
+                {draft.resultRewards.map((reward, index) => {
+                  const next = draft.resultRewards[index + 1]?.minCorrect;
+                  const label =
+                    next === undefined
+                      ? `성공률 ${reward.minCorrect * 5}% 이상`
+                      : `성공률 ${reward.minCorrect * 5}% 이상 ${next * 5}% 미만`;
+                  return (
+                    <NumberField
+                      key={reward.minCorrect}
+                      id={`weplay-reward-${reward.minCorrect}`}
+                      label={label}
+                      value={reward.amount}
+                      disabled={disabled}
+                      error={errors[`weplay-reward-${reward.minCorrect}`]}
+                      onChange={(amount) =>
+                        updateDraft((previous) => ({
+                          ...previous,
+                          resultRewards: previous.resultRewards.map((entry) =>
+                            entry.minCorrect === reward.minCorrect
+                              ? { ...entry, amount }
+                              : entry,
+                          ),
+                        }))
+                      }
+                    />
+                  );
+                })}
+              </div>
+            </fieldset>
+          )}
+
+          {!isYut && (
+            <fieldset className="weplay-policy__group" disabled={disabled}>
+              <legend>난이도별 학급 랭킹 보상</legend>
+              <p className="weplay-policy__notice">
+                집계 기간과 순위 보상 변경은 다음 랭킹 기간부터 적용됩니다.
+                기간이 끝난 뒤 확정 순위에 한 번만 지급합니다.
+              </p>
+              {period && (
+                <div className="weplay-policy__current-period">
+                  <span>현재 기간 · {formatPeriod(period)}</span>
+                  {difficultyFields.map(({ key, label }) => (
+                    <span key={key}>
+                      {label} · 1위{" "}
+                      {period.rankingRewards[key].first.toLocaleString("ko-KR")}
+                      위스 · 2위{" "}
+                      {period.rankingRewards[key].second.toLocaleString(
+                        "ko-KR",
+                      )}
+                      위스 · 3위{" "}
+                      {period.rankingRewards[key].third.toLocaleString("ko-KR")}
+                      위스
+                    </span>
+                  ))}
                 </div>
-              ),
-            )}
-          </fieldset>
+              )}
+              <div className="weplay-policy__field">
+                <label htmlFor="weplay-ranking-period">집계 기간</label>
+                <select
+                  id="weplay-ranking-period"
+                  value={draft.rankingPeriod}
+                  onChange={(event) =>
+                    updateDraft((previous) => ({
+                      ...previous,
+                      rankingPeriod: event.target
+                        .value as WeplayPolicy["rankingPeriod"],
+                    }))
+                  }
+                >
+                  <option value="weekly">주간</option>
+                  <option value="monthly">월간</option>
+                </select>
+              </div>
+              {difficultyFields.map(
+                ({ key: difficulty, label: difficultyLabel }) => (
+                  <div className="weplay-policy__difficulty" key={difficulty}>
+                    <h4>{difficultyLabel}</h4>
+                    <div className="weplay-policy__rewards">
+                      {rankFields.map(({ key, label }) => (
+                        <NumberField
+                          key={key}
+                          id={`weplay-rank-${difficulty}-${key}`}
+                          label={`${label} 보상`}
+                          accessibleLabel={`${difficultyLabel} ${label} 보상`}
+                          value={draft.rankingRewards[difficulty][key]}
+                          disabled={disabled}
+                          error={errors[`weplay-rank-${difficulty}-${key}`]}
+                          onChange={(amount) =>
+                            updateDraft((previous) => ({
+                              ...previous,
+                              rankingRewards: {
+                                ...previous.rankingRewards,
+                                [difficulty]: {
+                                  ...previous.rankingRewards[difficulty],
+                                  [key]: amount,
+                                },
+                              },
+                            }))
+                          }
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ),
+              )}
+            </fieldset>
+          )}
 
           {feedback && (
             <p
@@ -647,12 +694,12 @@ const WeplayPolicyPanel: React.FC<WeplayPolicyPanelProps> = ({
               disabled={disabled || !dirty}
               onClick={() => void handleSave()}
             >
-              {saving ? "저장 중…" : "위플레이 정책 저장"}
+              {saving ? "저장 중…" : "보상 설정 저장"}
             </button>
           </footer>
         </>
       )}
-    </section>
+    </details>
   );
 };
 

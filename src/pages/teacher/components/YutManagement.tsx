@@ -30,6 +30,7 @@ import { acquirePageScrollLock } from "../../../lib/pageScrollLock";
 import PortalWorkspace from "../../../components/common/PortalWorkspace";
 import YutGameEntry from "../../../components/common/weplay/YutGameEntry";
 import WeplayWeeklyRewards from "../../../components/common/weplay/WeplayWeeklyRewards";
+import WeplayPolicyPanel from "./points/WeplayPolicyPanel";
 import YutSpectator from "./YutSpectator";
 import useYutMonitoring from "./useYutMonitoring";
 import WeplayMusicButton from "../../../components/common/weplay/WeplayMusicButton";
@@ -1047,6 +1048,7 @@ export default function YutManagement() {
         </>
       )}
       <WeplayWeeklyRewards gameId="joseon-yut" />
+      <WeplayPolicyPanel gameId="joseon-yut" active />
     </PortalWorkspace>
   );
 }

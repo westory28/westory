@@ -2,16 +2,14 @@ import PortalWorkspace from "../../../../components/common/PortalWorkspace";
 import NumericInput from "../../../../components/common/NumericInput";
 import React from "react";
 import TeacherSubNavigation from "../TeacherSubNavigation";
-import WeplayPolicyPanel from "./WeplayPolicyPanel";
 import {
   POINT_POLICY_FIELD_HELPERS,
   POINT_POLICY_FIELD_LABELS,
 } from "../../../../constants/pointLabels";
 import { formatWisAmount } from "../../../../lib/pointFormatters";
-import type { PointPolicy, SystemConfig } from "../../../../types";
+import type { PointPolicy } from "../../../../types";
 
 interface PointPolicyTabProps {
-  config: Pick<SystemConfig, "year" | "semester"> | null;
   active: boolean;
   requestedSectionId?: string | null;
   policy: PointPolicy;
@@ -62,11 +60,6 @@ const policySections: PolicySectionItem[] = [
     id: "policy-control",
     label: "운영 제어",
     iconClassName: "fas fa-sliders-h",
-  },
-  {
-    id: "policy-weplay",
-    label: "위플레이",
-    iconClassName: "fas fa-gamepad",
   },
 ];
 
@@ -262,7 +255,6 @@ const SectionPanel = ({
 );
 
 const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
-  config,
   active,
   requestedSectionId,
   policy,
@@ -283,7 +275,6 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
   const activeSection = policySections.find(
     (item) => item.id === activeSectionId,
   )!;
-  const isWeplaySection = activeSectionId === "policy-weplay";
 
   React.useEffect(() => {
     if (
@@ -300,7 +291,7 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        if (!isWeplaySection) onSubmit();
+        onSubmit();
       }}
     >
       <PortalWorkspace
@@ -341,13 +332,7 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
             </div>
           )}
           <div className="ws-page-header">
-            <div
-              className={
-                isWeplaySection
-                  ? "hidden"
-                  : "flex flex-col gap-3 sm:flex-row sm:items-center"
-              }
-            >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div
                 className={[
                   "rounded-lg border px-4 py-2.5 text-sm font-semibold",
@@ -362,7 +347,7 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
               </div>
               <button
                 type="submit"
-                disabled={!canManage || isWeplaySection}
+                disabled={!canManage}
                 className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-lg bg-blue-600 px-5 text-sm font-extrabold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
               >
                 운영 정책 저장
@@ -370,7 +355,7 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
             </div>
           </div>
 
-          {!isWeplaySection && saveFeedbackMessage && saveFeedbackTone && (
+          {saveFeedbackMessage && saveFeedbackTone && (
             <div
               className={`rounded-lg px-4 py-3 text-sm font-semibold ${feedbackToneClassName[saveFeedbackTone]}`}
             >
@@ -378,13 +363,7 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
             </div>
           )}
 
-          <div
-            className={
-              isWeplaySection
-                ? "hidden"
-                : "grid grid-cols-1 gap-4 xl:grid-cols-3"
-            }
-          >
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <QuickPolicyToggle
               badge="전체 자동 보상"
               title={POINT_POLICY_FIELD_LABELS.autoRewardEnabled}
@@ -426,11 +405,6 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
             />
           </div>
 
-          <WeplayPolicyPanel
-            config={config}
-            canManage={canManage}
-            active={active && isWeplaySection}
-          />
           {activeSectionId === "policy-auto-reward" && (
             <SectionPanel
               id="policy-auto-reward"

@@ -49,6 +49,7 @@ import { prepareWeplayIntroAudio } from "../../components/common/weplay/weplayIn
 import WeplayGameFrame from "../../components/common/weplay/WeplayGameFrame";
 import WeplayRanking from "../../components/common/weplay/WeplayRanking";
 import WeplayWeeklyRewards from "../../components/common/weplay/WeplayWeeklyRewards";
+import WeplayPolicyPanel from "./components/points/WeplayPolicyPanel";
 import { withWeplayRequestTimeout } from "../../components/common/weplay/requestTimeout";
 
 export default function ManageWeplay() {
@@ -577,6 +578,9 @@ function NavalWeplayManagement() {
               )}
               <div hidden={previewView}>
                 {!previewView && <WeplayWeeklyRewards gameId="history-rain" />}
+                {!previewView && (
+                  <WeplayPolicyPanel gameId="history-rain" active />
+                )}
                 {!canWrite && (
                   <p className="teacher-weplay-notice">
                     읽기 전용입니다. 게임 체험은 이용할 수 있습니다.

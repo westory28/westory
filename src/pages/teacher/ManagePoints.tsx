@@ -68,6 +68,7 @@ import PointsOverviewTab from "./components/points/PointsOverviewTab";
 import HallOfFameManagementTab from "./components/points/HallOfFameManagementTab";
 import TeacherWisStocks from "./components/points/TeacherWisStocks";
 import TeacherAvatarShopPage from "./components/points/TeacherAvatarShopPage";
+import TeacherPointManagementLayout from "./components/points/TeacherPointManagementLayout";
 import PortalSubNavigation from "../../components/common/PortalSubNavigation";
 import { isTeacherAvatarShop } from "../../lib/avatarRoutes";
 
@@ -2171,7 +2172,7 @@ const ManagePoints: React.FC = () => {
     );
   }
 
-  return (
+  const content = (
     <div className="flex min-h-screen flex-col bg-gray-50">
       <main
         className={
@@ -2343,7 +2344,6 @@ const ManagePoints: React.FC = () => {
           {!loading && activeTab !== "stocks" && (
             <div hidden={activeTab !== "policy"}>
               <PointPolicyTab
-                config={config}
                 active={activeTab === "policy"}
                 requestedSectionId={searchParams.get("section")}
                 policy={policyDraft}
@@ -2483,6 +2483,11 @@ const ManagePoints: React.FC = () => {
         </div>
       </main>
     </div>
+  );
+  return ["overview", "grant", "policy", "ranks"].includes(activeTab) ? (
+    <TeacherPointManagementLayout>{content}</TeacherPointManagementLayout>
+  ) : (
+    content
   );
 };
 

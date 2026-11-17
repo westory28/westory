@@ -150,13 +150,16 @@ for (const small of [false, true]) {
   const wis = submenu(html, "teacher", "points");
   assert(html.includes('aria-label="위스"'));
   assert(!html.includes('aria-label="위스 마을"') && !html.includes('id="teacher-menu-shop"'));
-  assert(wis.includes('aria-label="위스 관리"'), "Management is nested inside Wis");
-  assert.equal(urls(wis).length, 8, "Wis contains four management leaves, hall and three shops");
+  assert.match(wis, /<a[^>]*href="#\/teacher\/points"[^>]*>위스 관리<\/a>/, "Management is one direct link inside Wis");
+  assert.equal(urls(wis).length, 5, "Wis contains management, hall and three shops");
   assert(wis.includes("위스 상점") && wis.includes("아바타 상점") && wis.includes("위스피(WsPI)"));
   assert.equal(urls(wis).filter(url => url === "/teacher/points?tab=stocks").length, 1);
-  const teacherManagement = wis.match(/class="teacher-sidebar-nested-menu"[^>]*>([\s\S]*?)<\/div>/)?.[1] || "";
-  assert.deepEqual(urls(teacherManagement), ["/teacher/points", "/teacher/points?tab=grant", "/teacher/points?tab=policy", "/teacher/points?tab=ranks"]);
-  assert(!teacherManagement.includes("hall-of-fame"), "Hall remains directly under Wis");
+  assert(!wis.includes('class="teacher-sidebar-nested-menu"'), "Management leaves are shown in the page sidebar");
+  for (const tab of ["overview", "grant", "policy", "ranks"]) {
+    location.search = `?tab=${tab}`;
+    assert.match(submenu(render("teacher"), "teacher", "points"), /<a(?=[^>]*href="#\/teacher\/points")(?=[^>]*aria-current="page")[^>]*>/, `${tab} bookmark selects management`);
+  }
+  location.search = "?tab=stocks";
   assert(!wis.includes("tab=requests"), "Purchase requests are an internal shop tab");
   assert.match(wis, /<a(?=[^>]*href="#\/teacher\/points\?tab=stocks")(?=[^>]*aria-current="page")[^>]*>/);
   location.search = "?tab=requests";
@@ -202,4 +205,4 @@ for (const small of [false, true]) {
   assert(!urls(render('student')).includes('/student/wispi'), 'Only interface visibility hides an already published market');
   marketPublished = false;
 }
-console.log("PASS: student/teacher route separation, configured labels, unified Wis and nested management, preserved bookmarks, point/avatar permissions, closed student WsPI, mobile/desktop/collapsed navigation; no backend calls.");
+console.log("PASS: student/teacher route separation, configured labels, unified Wis with direct teacher management and nested student management, preserved bookmarks, point/avatar permissions, closed student WsPI, mobile/desktop/collapsed navigation; no backend calls.");
