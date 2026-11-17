@@ -10,6 +10,7 @@ export function useFloatingLauncherVisibility(
   ref: RefObject<HTMLButtonElement>,
   enabled: boolean,
   panelOpen = false,
+  hideOnControlOverlap = true,
 ) {
   const pendingFocus = useRef(false);
   const remeasure = useRef<(() => void) | null>(null);
@@ -46,6 +47,7 @@ export function useFloatingLauncherVisibility(
             visible(element),
         );
       const overlaps =
+        hideOnControlOverlap &&
         !blocked &&
         Array.from(document.querySelectorAll<HTMLElement>(controls)).some(
           (control) => {
@@ -112,7 +114,7 @@ export function useFloatingLauncherVisibility(
       window.visualViewport?.removeEventListener("resize", schedule);
       launcher.removeAttribute("data-launcher-obscured");
     };
-  }, [ref, enabled, panelOpen]);
+  }, [ref, enabled, panelOpen, hideOnControlOverlap]);
 
   // Dialogs close after the React state update. Restore focus only once their
   // scroll lock and modal layer have released the launcher.

@@ -9,6 +9,7 @@ import { build } from "esbuild";
 
 const require = createRequire(import.meta.url);
 const root = process.cwd();
+const entryOnly = process.argv.includes("--entry-only");
 const playwright = require(
   process.env.PLAYWRIGHT_MODULE_PATH ||
     path.join(
@@ -61,6 +62,7 @@ const service = `
 import {useSyncExternalStore} from 'react';
 const params=new URLSearchParams(location.search), teacher=params.get('role')!=='student';
 const authListeners=new Set(), gates=new Set(), clone=value=>JSON.parse(JSON.stringify(value));
+let authVersion=1;
 const settings={enabled:!params.has('closed'),revision:1,acceptingQuestions:true,storiesVisible:true,teacherQuestionNotifications:true,studentReplyNotifications:true,warning:{enabled:true,title:'질문 전 약속',body:'학습 내용만 질문해 주세요. 사담과 도배는 질문 제한 사유가 됩니다.',revision:1},allowedSources:['lesson','dictionary','mock','formative','diagnostic'],defaultRestrictionMs:3600000};
 const row=(id,studentId,label,question,reply='',emoji='book')=>({id,studentId,studentLabel:label,profileEmojiId:emoji,source:{kind:'lesson',title:'조선 전기의 대외 관계',unitId:'unit-a'},question,reply,publicQuestion:'교린은 어떤 관계인가요?',publicReply:'이웃 나라와의 관계를 살펴보세요.',selected:!!reply,createdAt:1794300000000+Number(id.replace(/\\D/g,''))*1000,updatedAt:1794300000000,revision:1});
 export const qa=window.gongsinLiveQa={teacher,user:{uid:teacher?'teacher-a':'student-a',email:'fixture@example.invalid'},config:{year:'2026',semester:'2'},reads:[],writes:[],toasts:[],listenerCount:0,listenerStopped:0,settings,ack:params.has('ack')?1:0,restriction:params.has('restricted')?{until:Date.now()+3600000,reason:'학습과 관계없는 대화 반복'}:null,rows:[row('q1','student-a','예시 학생 A','4군 6진의 위치가 궁금해요.','압록강과 두만강을 먼저 찾아보세요.'),row('q2','student-a','예시 학생 A','교린 관계의 근거를 어떻게 찾아요?'),row('q3','student-b','다른 학생 B','다른 학생의 비공개 질문이므로 학생 A에게 보이면 안 됩니다.')],receipts:new Map(),failRead:params.has('read-error')?'state':'',failAction:'',holdAction:'',holdRead:'',commitThenFail:false};
@@ -73,8 +75,12 @@ if(params.has('avatar-event')){
 }
 qa.setGate=enabled=>{settings.enabled=enabled;settings.revision++;gates.forEach(cb=>cb({data:()=>({enabled,revision:settings.revision})}));};
 qa.switchAccount=uid=>{qa.user={uid,email:'fixture@example.invalid'};auth.currentUser=qa.user;authListeners.forEach(cb=>cb());};
+qa.renewSession=()=>{qa.authGeneration++;authVersion++;authListeners.forEach(cb=>cb());};
+qa.switchSemester=semester=>{qa.config={year:'2026',semester};authVersion++;authListeners.forEach(cb=>cb());};
+qa.authGeneration=1;
+if(qa.failRead&&!teacher)qa.failRead='bootstrap';
 export const auth={currentUser:qa.user},db={};
-export const useAuth=()=>{useSyncExternalStore(cb=>{authListeners.add(cb);return()=>authListeners.delete(cb)},()=>qa.user);return {currentUser:qa.user,user:qa.user,userData:{uid:qa.user.uid,role:teacher?'teacher':'student'},config:qa.config,configReady:true,interfaceConfig:{footerText:'Westory'},menuConfig:null};};
+export const useAuth=()=>{useSyncExternalStore(cb=>{authListeners.add(cb);return()=>authListeners.delete(cb)},()=>qa.user);useSyncExternalStore(cb=>{authListeners.add(cb);return()=>authListeners.delete(cb)},()=>authVersion);return {currentUser:qa.user,user:qa.user,authGeneration:qa.authGeneration,userData:{uid:qa.user.uid,role:teacher?'teacher':'student'},config:qa.config,configReady:true,interfaceConfig:{footerText:'Westory'},menuConfig:null};};
 export const useAppToast=()=>({showToast:value=>qa.toasts.push(value)});
 export const doc=(_db,...segments)=>({path:segments.join('/')});
 export const getDoc=async()=>{throw Error('Unexpected Firestore get in offline fixture')};
@@ -85,7 +91,8 @@ export const getHttpsCallable=async name=>async input=>{
   qa.reads.push(clone(input));const uid=qa.user.uid;
   if(qa.failRead===input.mode){qa.failRead='';throw Error('합성 읽기 실패. 다시 시도해 주세요.');}
   let result;
-  if(input.mode==='state')result={role:teacher?'teacher':'student',settings:clone(settings),canManageSettings:teacher,restriction:clone(qa.restriction),acknowledgedWarningRevision:qa.ack};
+  if(input.mode==='bootstrap'){if(teacher||!settings.enabled)throw Error('지금은 질문함을 이용할 수 없습니다.');const rows=qa.rows.filter(q=>q.studentId===uid);result={state:{role:'student',settings:clone(settings),canManageSettings:false,restriction:clone(qa.restriction),acknowledgedWarningRevision:qa.ack},questions:{items:clone(rows.slice(0,20)),nextCursor:rows.length>20?'20':null}};}
+  else if(input.mode==='state')result={role:teacher?'teacher':'student',settings:clone(settings),canManageSettings:teacher,restriction:clone(qa.restriction),acknowledgedWarningRevision:qa.ack};
   else if(input.mode==='questions'){let rows=qa.rows.filter(q=>teacher?(!input.studentId||q.studentId===input.studentId):q.studentId===uid);if(input.filter==='waiting')rows=rows.filter(q=>!q.reply);if(input.filter==='selected')rows=rows.filter(q=>q.selected);const start=Number(input.cursor||0),size=teacher&&!input.studentId?30:20;result={items:clone(rows.slice(start,start+size)),nextCursor:start+size<rows.length?String(start+size):null};}
   else if(input.mode==='detail'){const question=qa.rows.find(q=>q.id===input.questionId&&(teacher||q.studentId===uid));if(!question)throw Error('이 질문을 볼 수 없습니다.');result={question:clone(question)};}
   else if(input.mode==='stories')result={items:[{id:'public-1',question:'교린은 어떤 관계인가요?',answer:'이웃 나라와의 관계를 살펴보세요.',source:{kind:'lesson',unitId:'unit-a',title:'조선 전기의 대외 관계'}}],nextCursor:null};
@@ -247,6 +254,184 @@ async function acknowledge(page) {
   await dialog.getByRole("button", { name: "확인하고 시작하기" }).click();
   await dialog.waitFor({ state: "hidden" });
 }
+async function verifyEntryBoundaries() {
+  const failed = await pageAt("?role=student&ack&read-error");
+  await failed.getByRole("alert").waitFor();
+  await failed
+    .getByRole("button", { name: "다시 불러오기", exact: true })
+    .click();
+  await failed.locator(".gsm-thread").first().waitFor();
+  assert.deepEqual(
+    await failed.evaluate(() =>
+      window.gongsinLiveQa.reads.map((row) => row.mode),
+    ),
+    ["bootstrap", "bootstrap"],
+    "Initial failure and explicit retry issue exactly one bootstrap each",
+  );
+  assert.equal(
+    await failed.evaluate(() => window.gongsinLiveQa.writes.length),
+    0,
+  );
+  await failed.close();
+  checks.push(
+    "initial bootstrap failure recovers with one explicit retry and zero writes",
+  );
+  const closed = await pageAt("?role=student&ack&closed");
+  await closed
+    .getByText("지금은 질문함을 이용할 수 없습니다.", { exact: true })
+    .waitFor();
+  assert.equal(
+    await closed.evaluate(() => window.gongsinLiveQa.reads.length),
+    0,
+    "Closed publication does not start a personal bootstrap",
+  );
+  assert.equal(await closed.locator(".gsm-thread").count(), 0);
+  await closed.close();
+  const gateFailed = await pageAt("?role=student&ack&gate-error");
+  const gateRefresh = gateFailed.getByRole("button", {
+    name: "질문함 새로고침",
+    exact: true,
+  });
+  await gateFailed
+    .getByText("질문함을 확인하지 못했습니다. 새로고침해 주세요.", {
+      exact: true,
+    })
+    .waitFor();
+  assert.equal(
+    await gateFailed.evaluate(() => window.gongsinLiveQa.reads.length),
+    0,
+    "failed public gate blocks personal reads",
+  );
+  await gateFailed.evaluate(() => {
+    window.gongsinLiveQa.gateRecovered = true;
+    window.refreshMarker = true;
+  });
+  await gateRefresh.click();
+  await gateFailed.locator(".gsm-thread").first().waitFor();
+  assert.equal(
+    await gateFailed.evaluate(() => window.refreshMarker),
+    true,
+    "gate retry does not reload the document",
+  );
+  assert.deepEqual(
+    await gateFailed.evaluate(() =>
+      window.gongsinLiveQa.reads.map((row) => row.mode),
+    ),
+    ["bootstrap"],
+  );
+  assert.equal(
+    await gateFailed.evaluate(
+      () =>
+        window.gongsinLiveQa.listenerCount -
+        window.gongsinLiveQa.listenerStopped,
+    ),
+    1,
+    "retry restores one shared listener",
+  );
+  await gateFailed.close();
+  const renewed = await pageAt("?role=student&ack&gate-error");
+  await renewed
+    .getByText("질문함을 확인하지 못했습니다. 새로고침해 주세요.", {
+      exact: true,
+    })
+    .waitFor();
+  assert.equal(
+    await renewed.evaluate(() => window.gongsinLiveQa.reads.length),
+    0,
+  );
+  await renewed.evaluate(() => {
+    window.gongsinLiveQa.gateRecovered = true;
+    window.gongsinLiveQa.renewSession();
+  });
+  await renewed.locator(".gsm-thread").first().waitFor();
+  assert.deepEqual(
+    await renewed.evaluate(() => ({
+      reads: window.gongsinLiveQa.reads.map((row) => row.mode),
+      active:
+        window.gongsinLiveQa.listenerCount -
+        window.gongsinLiveQa.listenerStopped,
+      writes: window.gongsinLiveQa.writes.length,
+    })),
+    { reads: ["bootstrap"], active: 1, writes: 0 },
+    "Same UID with renewed application session gets a fresh gate and one bootstrap",
+  );
+  await renewed.close();
+  const semesterRace = await pageAt("?role=student&ack");
+  await semesterRace.locator(".gsm-thread").first().waitFor();
+  await semesterRace.evaluate(() => {
+    window.gongsinLiveQa.holdRead = "bootstrap";
+  });
+  await semesterRace
+    .getByRole("button", { name: "질문함 새로고침", exact: true })
+    .click();
+  await semesterRace.waitForFunction(
+    () => typeof window.gongsinLiveQa.releaseRead === "function",
+  );
+  await semesterRace.evaluate(() => {
+    const qa = window.gongsinLiveQa;
+    qa.rows = [
+      {
+        ...qa.rows[0],
+        id: "new-semester",
+        question: "새 학기에만 보이는 질문",
+      },
+    ];
+    qa.switchSemester("1");
+  });
+  await semesterRace
+    .getByText("새 학기에만 보이는 질문", { exact: true })
+    .waitFor();
+  await semesterRace.evaluate(() => window.gongsinLiveQa.releaseRead());
+  await semesterRace.waitForTimeout(100);
+  assert.equal(
+    await semesterRace
+      .getByText("교린 관계의 근거를 어떻게 찾아요?", { exact: true })
+      .count(),
+    0,
+    "Late bootstrap cannot restore old-semester questions",
+  );
+  assert.deepEqual(
+    await semesterRace.evaluate(() =>
+      window.gongsinLiveQa.reads.map((row) => ({
+        mode: row.mode,
+        semesterId: row.semesterId,
+      })),
+    ),
+    [
+      { mode: "bootstrap", semesterId: "2026-2" },
+      { mode: "bootstrap", semesterId: "2026-2" },
+      { mode: "bootstrap", semesterId: "2026-1" },
+    ],
+  );
+  assert.equal(
+    await semesterRace.evaluate(
+      () =>
+        window.gongsinLiveQa.listenerCount -
+        window.gongsinLiveQa.listenerStopped,
+    ),
+    1,
+  );
+  await semesterRace.close();
+  checks.push(
+    "failed public listener retries in place; renewed same-UID session reconnects; one shared listener and one bootstrap; stale semester bootstrap is rejected",
+  );
+}
+if (entryOnly) {
+  try {
+    await verifyEntryBoundaries();
+    assert.deepEqual(errors, []);
+    assert.deepEqual(external, []);
+    await fs.writeFile(
+      path.join(evidence, "report.json"),
+      JSON.stringify({ pass: true, checks, errors, external }, null, 2),
+    );
+    console.log(JSON.stringify({ pass: true, evidence, checks }, null, 2));
+  } finally {
+    await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+  process.exit(0);
+}
 try {
   for (const role of ["teacher", "student"]) {
     for (const [width, height] of [
@@ -368,14 +553,16 @@ try {
       const readCounts = await page.evaluate(() => {
         const qa = window.gongsinLiveQa;
         return {
+          bootstrap: qa.reads.filter((x) => x.mode === "bootstrap").length,
           state: qa.reads.filter((x) => x.mode === "state").length,
           questions: qa.reads.filter((x) => x.mode === "questions").length,
           writes: qa.writes.length,
         };
       });
       assert.deepEqual(readCounts, {
-        state: 1,
-        questions: role === "teacher" ? 2 : 1,
+        bootstrap: role === "teacher" ? 0 : 1,
+        state: role === "teacher" ? 1 : 0,
+        questions: role === "teacher" ? 2 : 0,
         writes: 0,
       });
       requestCounts.push({ role, width, phase: "initial", ...readCounts });
@@ -867,10 +1054,7 @@ try {
         writes: window.gongsinLiveQa.writes.length,
       })),
       {
-        reads: [
-          { mode: "state", studentId: null },
-          { mode: "questions", studentId: null },
-        ],
+        reads: [{ mode: "bootstrap", studentId: null }],
         writes: 0,
       },
     );
@@ -976,59 +1160,7 @@ try {
     /학습과 관계없는 대화/,
   );
   await restricted.close();
-  const failed = await pageAt("?role=student&ack&read-error");
-  await failed.getByRole("alert").waitFor();
-  await failed
-    .getByRole("button", { name: "다시 불러오기", exact: true })
-    .click();
-  await failed.locator(".gsm-thread").first().waitFor();
-  await failed.close();
-  checks.push("restriction disables composer; initial read error recovers");
-  const gateFailed = await pageAt("?role=student&ack&gate-error");
-  const gateRefresh = gateFailed.getByRole("button", {
-    name: "질문함 새로고침",
-    exact: true,
-  });
-  await gateFailed
-    .getByText("질문함을 확인하지 못했습니다. 새로고침해 주세요.", {
-      exact: true,
-    })
-    .waitFor();
-  assert.equal(
-    await gateFailed.evaluate(() => window.gongsinLiveQa.reads.length),
-    0,
-    "failed public gate blocks personal reads",
-  );
-  await gateFailed.evaluate(() => {
-    window.gongsinLiveQa.gateRecovered = true;
-    window.refreshMarker = true;
-  });
-  await gateRefresh.click();
-  await gateFailed.locator(".gsm-thread").first().waitFor();
-  assert.equal(
-    await gateFailed.evaluate(() => window.refreshMarker),
-    true,
-    "gate retry does not reload the document",
-  );
-  assert.deepEqual(
-    await gateFailed.evaluate(() =>
-      window.gongsinLiveQa.reads.map((row) => row.mode),
-    ),
-    ["state", "questions"],
-  );
-  assert.equal(
-    await gateFailed.evaluate(
-      () =>
-        window.gongsinLiveQa.listenerCount -
-        window.gongsinLiveQa.listenerStopped,
-    ),
-    1,
-    "retry restores one shared listener",
-  );
-  await gateFailed.close();
-  checks.push(
-    "failed public listener retries in place, one shared listener, then only current student state/questions reads",
-  );
+  await verifyEntryBoundaries();
   const paged = await pageAt("?role=teacher&many");
   await paged.locator(".gsm-thread").first().waitFor();
   const initialReads = await paged.evaluate(
@@ -1452,7 +1584,8 @@ try {
   await race.evaluate(() => window.gongsinLiveQa.switchAccount("student-b"));
   await race.waitForFunction(
     () =>
-      window.gongsinLiveQa.reads.filter((x) => x.mode === "state").length >= 2,
+      window.gongsinLiveQa.reads.filter((x) => x.mode === "bootstrap").length >=
+      2,
   );
   await race.evaluate(() => window.gongsinLiveQa.releaseMutation());
   await race.waitForTimeout(100);

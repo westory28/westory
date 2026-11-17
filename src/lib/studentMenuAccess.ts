@@ -410,6 +410,9 @@ export const getStudentRouteAccess = (
 ): StudentRouteAccess => {
   const pathname = normalizePathname(target.pathname);
   if (!pathname.startsWith("/student")) return { allowed: true };
+  // This launcher-only route has its own live publication gate and server checks.
+  // It deliberately has no sidebar entry; menu membership must not redirect it.
+  if (pathname === "/student/gongsinmoongo") return { allowed: true };
   if (isAlwaysAllowedStudentPath(pathname)) return { allowed: true };
 
   if (!config || !menuConfig) {
