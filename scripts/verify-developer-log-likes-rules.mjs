@@ -142,7 +142,7 @@ const expectDenied = async (path, label, action) => {
   checks++;
 };
 
-// Same SDK transaction shape as DeveloperLog.toggleLike: two document reads,
+// Previous clients still use this SDK transaction shape: two document reads,
 // then an own-like create/delete paired with the exact counter delta.
 const toggle = async (uid, path) => {
   const db = clients[uid];
@@ -190,7 +190,7 @@ const directLikeBatch = async (uid, path, liked, options = {}) => {
   if (liked) batch.set(likeRef, { uid: likeUid, createdAt: serverTimestamp() });
   else batch.delete(likeRef);
   batch.update(doc(db, path), {
-    likeCount: options.count ?? (liked ? 1 : 0),
+    likeCount: options.count ?? increment(liked ? 1 : -1),
   });
   metrics.directBatchAttempts++;
   metrics.directBatchStagedWrites += 2;
@@ -303,6 +303,30 @@ try {
       await assertState(path, 0, []);
       console.log(
         `PASS concurrent students: exact count after add and cancel at ${path}.`,
+      );
+
+      const beforeBatchReads = metrics.requestedDocumentReads;
+      await Promise.all([
+        directLikeBatch("student-a", path, true),
+        directLikeBatch("student-b", path, true),
+      ]);
+      await assertState(path, 2, ["student-a", "student-b"]);
+      await expectDenied(path, "replayed add cannot award a second like", () =>
+        directLikeBatch("student-a", path, true),
+      );
+      await Promise.all([
+        directLikeBatch("student-a", path, false),
+        directLikeBatch("student-b", path, false),
+      ]);
+      await assertState(path, 0, []);
+      await expectDenied(
+        path,
+        "replayed removal cannot reduce the count again",
+        () => directLikeBatch("student-a", path, false),
+      );
+      assert.equal(metrics.requestedDocumentReads, beforeBatchReads);
+      console.log(
+        `PASS atomic batch: concurrent add/cancel, rejected replay, zero pre-reads at ${path}.`,
       );
 
       const student = clients["student-a"];

@@ -4,7 +4,7 @@ import InfoHelp from "../../../../components/common/InfoHelp";
 import RefreshButton from "../../../../components/common/RefreshButton";
 import WisStockReturnHistoryChart from "./WisStockReturnHistoryChart";
 import {
-  getWisStockInvestmentHistory,
+  getWisStockInvestmentHistories,
   wisStockInvestmentHistoryError,
   type WisStockInvestmentHistory,
 } from "../../../../lib/wisStockInvestmentHistoryClient";
@@ -21,12 +21,6 @@ const money = (value: number | undefined) =>
 const signed = (value: number) => `${value > 0 ? "+" : ""}${money(value)}`;
 const direction = (value: number | undefined) =>
   !value ? "flat" : value > 0 ? "up" : "down";
-const studentName = (name: string, masked: boolean) =>
-  masked
-    ? `${name.slice(0, 1)}${"•".repeat(Math.min(3, Math.max(1, name.length - 1)))}`
-    : name;
-const returnLabel = (value: number) =>
-  `${value > 0 ? "+" : ""}${value.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}%`;
 const time = new Intl.DateTimeFormat("ko-KR", {
   month: "numeric",
   day: "numeric",
@@ -57,14 +51,10 @@ export default function WisStockInvestmentBoard({
   const [classKey, setClassKey] = useState("all");
   const [sort, setSort] = useState("class");
   const [page, setPage] = useState(0);
-  const [maskNames, setMaskNames] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [pageFullscreen, setPageFullscreen] = useState(false);
   const [screenError, setScreenError] = useState("");
-  const [historyStudentKey, setHistoryStudentKey] = useState("");
-  const [history, setHistory] = useState<WisStockInvestmentHistory | null>(
-    null,
-  );
+  const [histories, setHistories] = useState<WisStockInvestmentHistory[]>([]);
   const [historyError, setHistoryError] = useState("");
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyRetry, setHistoryRetry] = useState(0);
@@ -165,28 +155,33 @@ export default function WisStockInvestmentBoard({
   const totals = data?.totals;
   const ready = data?.status === "READY";
   const live = !error && ready && connection === "CONNECTED";
-  const historyStudent = live
-    ? data.rows.find((row) => row.studentKey === historyStudentKey) ||
-      data.rows[0]
-    : undefined;
-  const activeHistoryKey = historyStudent?.studentKey || "";
+  const topReturns = useMemo(
+    () => (live ? topWisStockHoldingReturns(data?.rows || []) : []),
+    [data, live],
+  );
+  // Sort the membership key so a rank-only change does not repeat history reads.
+  const historyKeys = JSON.stringify(
+    topReturns.map((row) => row.studentKey).sort(),
+  );
+  const sourceRevision = live ? data.sourceRevision : 0;
   useEffect(() => {
     let active = true;
-    setHistory(null);
+    const studentKeys: string[] = JSON.parse(historyKeys);
+    setHistories([]);
     setHistoryError("");
-    setHistoryLoading(Boolean(live && activeHistoryKey));
-    if (!live || !activeHistoryKey) return;
+    setHistoryLoading(Boolean(live && studentKeys.length));
+    if (!live || !studentKeys.length) return;
     const [grade = "", classNumber = ""] =
       classKey === "all" ? [] : classKey.split(":");
-    void getWisStockInvestmentHistory({
+    void getWisStockInvestmentHistories({
       year,
       semester,
       grade,
       classNumber,
-      studentKey: activeHistoryKey,
+      studentKeys,
     })
       .then((next) => {
-        if (active) setHistory(next);
+        if (active) setHistories(next);
       })
       .catch((failure) => {
         if (active) setHistoryError(wisStockInvestmentHistoryError(failure));
@@ -197,26 +192,69 @@ export default function WisStockInvestmentBoard({
     return () => {
       active = false;
     };
-  }, [year, semester, classKey, live, activeHistoryKey, historyRetry]);
-  const visibleHistory =
-    history?.studentKey === activeHistoryKey &&
-    history.semesterId === `${year}-${semester}`
-      ? history
-      : null;
-  const topReturns = useMemo(
-    () => (live ? topWisStockHoldingReturns(data?.rows || []) : []),
-    [data, live],
-  );
-  const returnMinimum = Math.min(
-    0,
-    ...topReturns.map((row) => row.returnPercent),
-  );
-  const returnMaximum = Math.max(
-    0,
-    ...topReturns.map((row) => row.returnPercent),
-  );
-  const returnRange = returnMaximum - returnMinimum || 1;
-  const zeroPosition = (-returnMinimum / returnRange) * 100;
+  }, [
+    year,
+    semester,
+    classKey,
+    live,
+    historyKeys,
+    sourceRevision,
+    historyRetry,
+  ]);
+  useEffect(() => {
+    if (!live || !data) return;
+    // Keep real quote observations without rereading immutable trade ledgers.
+    setHistories((previous) =>
+      previous.map((history) => {
+        const row = data.rows.find(
+          (item) => item.studentKey === history.studentKey,
+        );
+        if (!row || data.asOfMs <= history.asOfMs) return history;
+        return {
+          ...history,
+          asOfMs: data.asOfMs,
+          priceRevision: data.priceRevision,
+          points: [
+            ...history.points,
+            {
+              atMs: data.asOfMs,
+              holdingValue: row.holdingValue,
+              holdingCostBasis: row.holdingCostBasis,
+            },
+          ],
+        };
+      }),
+    );
+  }, [data, live]);
+  const historySeries = topReturns.map((row) => {
+    const history = histories.find(
+      (item) =>
+        item.studentKey === row.studentKey &&
+        item.semesterId === `${year}-${semester}`,
+    );
+    return {
+      studentKey: row.studentKey,
+      studentName: row.displayName,
+      studentLabel: `${row.grade}-${row.classNumber} · ${row.studentNumber}번`,
+      returnPercent: row.returnPercent,
+      // The latest point is the actual scoped board observation, not an
+      // interpolated or synthetic past return. Price updates add no requests.
+      observations: history
+        ? [
+            ...history.points,
+            ...(data && data.asOfMs > history.asOfMs
+              ? [
+                  {
+                    atMs: data.asOfMs,
+                    holdingValue: row.holdingValue,
+                    holdingCostBasis: row.holdingCostBasis,
+                  },
+                ]
+              : []),
+          ]
+        : [],
+    };
+  });
   const status = error
     ? "연결 오류"
     : connection === "PAUSED"
@@ -242,7 +280,6 @@ export default function WisStockInvestmentBoard({
       }
       return;
     }
-    setMaskNames(true);
     try {
       if (root.current?.requestFullscreen)
         await root.current.requestFullscreen();
@@ -295,20 +332,12 @@ export default function WisStockInvestmentBoard({
             ))}
           </select>
         </label>
-        <label className="wis-investment-board__mask">
-          <input
-            type="checkbox"
-            checked={maskNames}
-            onChange={(event) => setMaskNames(event.target.checked)}
-          />
-          이름 숨김
-        </label>
         <InfoHelp label="투자 현황 기준">
           <p>
             주식 계좌의 현금에는 매수 예약금이 포함됩니다. 총자산은 계좌 현금과
             체결된 주식 평가액의 합계입니다. 평가손익은 매수 수수료를 포함한
             보유 원가와 비교하며, 실현손익과 구분합니다. 일반 지갑의 위스는
-            포함하지 않습니다. 전체 화면에서는 이름을 먼저 숨깁니다.
+            포함하지 않습니다.
           </p>
         </InfoHelp>
         <button
@@ -362,113 +391,27 @@ export default function WisStockInvestmentBoard({
         >
           <div className="wis-investment-board__returns-heading">
             <h3>보유 수익률 상위 5명</h3>
-            <InfoHelp label="보유 수익률 기준">
+            <InfoHelp label="보유 수익률 변화 기준">
               <p>
-                현재 보유 주식의 평가손익을 매수 수수료가 포함된 보유 원가로
-                나눈 비율입니다. 계좌 현금과 이미 매도한 주식의 실현손익은
-                제외합니다. 선택한 학급에서 보유 원가가 있는 학생만 비교하며,
-                같은 비율은 학급·번호 순으로 표시합니다.
+                선택한 학급의 현재 보유 수익률 상위 5명을 비교합니다. 그때
+                보유한 주식의 평가손익을 수수료가 포함된 보유 원가로 나눈
+                비율이며, 실제 체결 내역과 저장된 시세로 계산합니다. 계좌 현금과
+                실현손익은 제외하며, 보유 주식이나 시세 기록이 없는 구간은 선을
+                잇지 않습니다.
               </p>
             </InfoHelp>
-          </div>
-          {topReturns.length ? (
-            <>
-              <div
-                className="wis-investment-board__returns-axis"
-                aria-hidden="true"
-              >
-                <span>학생</span>
-                <div>
-                  <span style={{ left: `${zeroPosition}%` }}>0%</span>
-                </div>
-                <span>수익률</span>
-              </div>
-              <ol className="wis-investment-board__returns-list">
-                {topReturns.map((row, index) => (
-                  <li key={row.studentKey}>
-                    <div className="wis-investment-board__returns-student">
-                      <span>{index + 1}</span>
-                      <div>
-                        <strong>
-                          {studentName(row.displayName, maskNames)}
-                        </strong>
-                        <small>
-                          {row.grade}-{row.classNumber} · {row.studentNumber}번
-                        </small>
-                      </div>
-                    </div>
-                    <div
-                      className="wis-investment-board__returns-track"
-                      aria-hidden="true"
-                    >
-                      <span
-                        className="wis-investment-board__returns-zero"
-                        style={{ left: `${zeroPosition}%` }}
-                      />
-                      <span
-                        className={`wis-investment-board__returns-bar is-${direction(row.returnPercent)}`}
-                        style={{
-                          left: `${((Math.min(0, row.returnPercent) - returnMinimum) / returnRange) * 100}%`,
-                          width: `${(Math.abs(row.returnPercent) / returnRange) * 100}%`,
-                        }}
-                      />
-                    </div>
-                    <strong
-                      className={`wis-investment-board__returns-value is-${direction(row.returnPercent)}`}
-                    >
-                      {returnLabel(row.returnPercent)}
-                    </strong>
-                  </li>
-                ))}
-              </ol>
-            </>
-          ) : (
-            <p className="wis-investment-board__returns-empty">
-              보유 주식이 있는 학생이 없습니다.
-            </p>
-          )}
-        </section>
-      )}
-      {live && (
-        <section
-          className="wis-investment-board__history"
-          aria-label="학생별 보유 수익률 변화"
-        >
-          <div className="wis-investment-board__history-heading">
-            <h3>학생별 보유 수익률 변화</h3>
-            <InfoHelp label="수익률 변화 기준">
-              <p>
-                그때 보유한 주식의 평가손익을 매수 수수료가 포함된 보유 원가로
-                나눈 비율입니다. 실제 체결 내역과 저장된 시세로 계산하며, 계좌
-                현금과 이미 매도한 주식의 실현손익은 제외합니다. 보유 주식이나
-                시세 기록이 없는 구간은 선을 잇지 않습니다.
-              </p>
-            </InfoHelp>
-            {historyStudent && (
-              <label>
-                <span className="sr-only">수익률 확인 학생</span>
-                <select
-                  aria-label="수익률 확인 학생"
-                  value={activeHistoryKey}
-                  onChange={(event) => setHistoryStudentKey(event.target.value)}
-                >
-                  {data.rows.map((row) => (
-                    <option key={row.studentKey} value={row.studentKey}>
-                      {row.grade}-{row.classNumber} · {row.studentNumber}번{" "}
-                      {studentName(row.displayName, maskNames)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
             <RefreshButton
               label="수익률 기록 새로고침"
-              disabled={!historyStudent}
+              disabled={!topReturns.length}
               loading={historyLoading}
               onClick={() => setHistoryRetry((value) => value + 1)}
             />
           </div>
-          {historyError ? (
+          {!topReturns.length ? (
+            <p className="wis-investment-board__returns-empty">
+              보유 주식이 있는 학생이 없습니다.
+            </p>
+          ) : historyError ? (
             <div className="wis-stocks__error" role="alert">
               <p>{historyError}</p>
               <button
@@ -482,25 +425,8 @@ export default function WisStockInvestmentBoard({
             <p className="wis-return-history__notice" role="status">
               수익률 기록을 확인하고 있습니다.
             </p>
-          ) : visibleHistory?.points.length && historyStudent ? (
-            <>
-              <div className="wis-investment-board__history-time">
-                <span>조회 기준 {time.format(visibleHistory.asOfMs)}</span>
-              </div>
-              <WisStockReturnHistoryChart
-                observations={visibleHistory.points}
-                studentName={studentName(historyStudent.displayName, maskNames)}
-              />
-              {visibleHistory.incompleteBeforeMs !== null && (
-                <p className="wis-return-history__notice">
-                  이전 시세가 없는 구간은 표시하지 않습니다.
-                </p>
-              )}
-            </>
           ) : (
-            <p className="wis-return-history__notice">
-              아직 수익률 기록이 없습니다.
-            </p>
+            <WisStockReturnHistoryChart series={historySeries} />
           )}
         </section>
       )}
@@ -557,7 +483,7 @@ export default function WisStockInvestmentBoard({
                     {row.grade}-{row.classNumber}
                   </td>
                   <td>{row.studentNumber}</td>
-                  <td>{studentName(row.displayName, maskNames)}</td>
+                  <td>{row.displayName}</td>
                   <td>{money(row.stockCash)}</td>
                   <td>{money(row.reservedCash)}</td>
                   <td>{row.holdingCount}개</td>

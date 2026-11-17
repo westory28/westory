@@ -143,12 +143,12 @@ export function finalizeWisStockOrder(input) {
   if (!context(input)) return result(input.order);
   const o = input.order, e = input.execution;
   if (!record(e) || !['serviceAllowed', 'authorized', 'scopeActive', 'marketHalted'].every(key => typeof e[key] === 'boolean')
-    || !['ACTIVE', 'HALTED', 'SELL_ONLY'].includes(e.tradingStatus) || !valid(e.haltedUntilMs))
+    || !['ACTIVE', 'HALTED', 'SELL_ONLY', 'GRADUATED'].includes(e.tradingStatus) || !valid(e.haltedUntilMs))
     fail('WIS_STOCK_ORDER_INVALID', '현재 집행 권한과 거래 상태를 확인해 주세요.');
   // The frozen contract survives quote expiry, market revision/fee/price
   // changes, and the daily session closing. Actual execution gates do not.
   const stop = !e.serviceAllowed ? 'SERVICE_CLOSED' : !e.authorized ? 'AUTHORITY_REVOKED' : !e.scopeActive ? 'SCOPE_CHANGED'
-    : e.marketHalted ? 'MARKET_HALTED' : (e.tradingStatus === 'HALTED' || e.haltedUntilMs > input.nowMs) ? 'STOCK_HALTED'
+    : e.tradingStatus === 'GRADUATED' ? 'STOCK_GRADUATED' : e.marketHalted ? 'MARKET_HALTED' : (e.tradingStatus === 'HALTED' || e.haltedUntilMs > input.nowMs) ? 'STOCK_HALTED'
       : o.side === 'BUY' && e.tradingStatus === 'SELL_ONLY' ? 'SELL_ONLY' : '';
   if (stop) return cancelled(input, stop);
   if (input.nowMs < o.dueAtMs) fail('WIS_STOCK_ORDER_NOT_DUE', '아직 주문 처리 대기 중입니다.');

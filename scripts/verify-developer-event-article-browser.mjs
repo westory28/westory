@@ -117,8 +117,8 @@ ${pieces.get("hasEventArticleMarkup")}
 ${pieces.get("EventArticleEditor")}
 const source='<article class="westory-event-article"><figure><img src="/banner.png" width="1200" height="675" alt="수행평가 안내 이미지"></figure><h2>반별 수행평가 일정</h2><p>핵심 범위 <strong>붕당 · 여씨향약</strong></p><div class="westory-event-table" role="region" aria-label="반별 수행평가 일정" tabindex="0"><table><thead><tr><th scope="col">학급</th><th scope="col">날짜</th><th scope="col">교시</th></tr></thead><tbody><tr><td>3학년 1반</td><td>10월 30일(금)</td><td>5교시</td></tr><tr><td>3학년 10반</td><td>10월 29일(목)</td><td>4교시</td></tr></tbody></table></div><h2>준비 사항</h2><ul><li>검정색 볼펜을 준비해 주세요.</li><li>위스토리 문제 많이 풀기</li></ul><blockquote><p><strong>꼭 확인해 주세요</strong></p><p>평가 일정과 핵심 범위를 확인합니다.</p></blockquote></article>';
 const base={id:'fixture',title:'역사 수행평가 안내',summary:'수행평가의 일정과 준비 사항입니다.',version:'',category:'notice',images:[],isPinned:false,viewCount:0,likeCount:0,createdByName:'검증 교사'};
-const activeCardImageIndex=0,liked=false,canManage=false,pendingMutation=false,cardSwipeStartRef={current:null};
-const renderCategoryBadge=()=>null,getDisplayTitle=p=>p.title,formatDate=()=> '2026.10.25';
+const activeCardImageIndex=0,liked=false,canManage=false,canLike=false,pendingMutation=false,pendingLikeScope=null,likeScope='fixture',userData={role:'teacher'},cardSwipeStartRef={current:null};
+const renderCategoryBadge=()=>null,getDisplayTitle=p=>p.title,formatDate=()=> '2026.10.25',toDate=()=>null;
 const Link=({to,...props})=><a href={to} {...props}/>;
 const toggleLike=()=>{},navigate=()=>{},startEdit=()=>{},deletePost=()=>{},moveCardImage=()=>{},setActiveCardImageIndex=()=>{},handleCardSwipeStart=()=>{},handleCardSwipeEnd=()=>{};
 ${pieces.get("renderPostDetail")}
@@ -172,10 +172,15 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/developerEventArticles.css") {
     res.setHeader("Content-Type", "text/css;charset=utf-8");
     res.end(
-      await fs.readFile(
+      (await fs.readFile(
         path.join(root, "src/pages/developerEventArticles.css"),
         "utf8",
-      ),
+      )) +
+        "\n" +
+        (await fs.readFile(
+          path.join(root, "src/pages/developerLog.css"),
+          "utf8",
+        )),
     );
     return;
   }

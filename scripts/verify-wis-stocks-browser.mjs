@@ -29,7 +29,7 @@ export const activateWisStockCatalogPlan=async(scope,expectedRevision,startsAtMs
 export const watchWisStockListings=(scope,next,failed)=>{qa.watches=(qa.watches||0)+1;qa.activeWatches=(qa.activeWatches||0)+1;qa.listingNext=next;qa.listingFail=failed;next(qa.market.stocks.map(stock=>stock.id).sort());return()=>{qa.activeWatches--;qa.listingNext=null;qa.listingFail=null}};
 export const isWisStockRevisionConflict=error=>error.details?.reason==='WIS_STOCK_REVISION_CONFLICT';
 export const wisStockErrorMessage=error=>error.message;
-export const getWisStockInvestmentHistory=async()=>{throw Error('Unexpected investment history read')};
+export const getWisStockInvestmentHistories=async()=>{throw Error('Unexpected investment history read')};
 export const wisStockInvestmentHistoryError=error=>error.message;
 export const watchWisStockInvestmentBoard=(scope,next,state)=>{state('CONNECTED');next({status:'NOT_READY',semesterId:scope.year+'-'+scope.semester,grade:'',classNumber:'',revision:0,asOfMs:0,sourceRevision:0,priceRevision:0,classes:[],rows:[],totals:null});return()=>{}};
 `;
@@ -48,6 +48,16 @@ const assertClickable=async locator=>{await locator.scrollIntoViewIfNeeded();ass
 const choose=async page=>{await page.locator('.wis-stocks__row').filter({hasText:'합성'}).first().press('Enter');await page.getByRole('button',{name:/^종목 (편집|설정 보기)$/}).press('Enter');};
 const assertLayout=async(page,width)=>{const layout=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,width:innerWidth,titleBackground:getComputedStyle(document.querySelector('.teacher-settings-heading')).backgroundColor,tabsBackground:getComputedStyle(document.querySelector('.teacher-settings-navigation')).backgroundColor,headers:document.querySelectorAll('.wis-stocks header').length}));assert(layout.scroll<=width,JSON.stringify(layout));assert.equal(layout.titleBackground,'rgba(0, 0, 0, 0)');assert.equal(layout.tabsBackground,'rgba(0, 0, 0, 0)');assert.equal(layout.headers,0);assert.equal(await page.locator('.teacher-settings-sections.ws-page-tabs').evaluate(element=>getComputedStyle(element).borderBottomWidth),'0px');for(const section of await page.locator('.wis-stock-rules__section').all())assert.equal(await section.evaluate(element=>getComputedStyle(element).borderTopWidth),'0px');};
 try {
+  for(const width of [320,390,768,1280]) {
+    const graduation=await open(width);await enter(graduation);await choose(graduation);const status=graduation.getByRole('combobox',{name:/^거래 상태/});await status.selectOption('GRADUATED');
+    graduation.once('dialog',dialog=>dialog.dismiss());await graduation.getByRole('button',{name:'변경 저장',exact:true}).click();assert.equal(await graduation.evaluate(()=>window.stockQa.saves),0);
+    let confirmation='';graduation.once('dialog',async dialog=>{confirmation=dialog.message();await dialog.accept();});await graduation.getByRole('button',{name:'변경 저장',exact:true}).click();await graduation.waitForFunction(()=>window.stockQa.market.stocks[0].settings.tradingStatus==='GRADUATED');
+    assert.match(confirmation,/마지막 가격인 130 위스/);assert.match(confirmation,/되돌릴 수 없습니다/);assert.equal(await graduation.evaluate(()=>window.stockQa.saves),1);assert.equal(await status.isDisabled(),true);assert.equal(await graduation.getByLabel('종목명',{exact:true}).isDisabled(),true);assert.equal(await graduation.getByRole('button',{name:'변경 저장',exact:true}).isDisabled(),true);await assertLayout(graduation,width);await graduation.screenshot({path:path.join(evidence,'graduation-readonly-'+width+'.png'),fullPage:true});await graduation.close();
+  }
+  checks.push('Graduation at 320/390/768/1280px: confirm includes last price and irreversible settlement; cancel sends no save, accept sends exactly one synthetic save, completed graduation locks editor and submit.');
+  const newStock=await open();await enter(newStock);await newStock.getByRole('button',{name:'새 종목 추가',exact:true}).click();assert.equal(await newStock.getByRole('combobox',{name:/^거래 상태/}).locator('option[value="GRADUATED"]').count(),0);await newStock.close();
+  checks.push('New instrument cannot be registered as already graduated.');
+  if(!process.argv.includes('--graduation-only')) {
   for (const width of [320,390,768,1280,1440]) {
     const overview=await open(width);
     await overview.evaluate(()=>{const q=window.stockQa;const at=1794787200000;q.market.updatedAtMs=at+3600000;q.market.marketIndex={baseValue:1000,baseAtMs:at,value:1023.456,previousClose:1000,updatedAtMs:at+3600000,history:[{atMs:at,value:1000},{atMs:at+3600000,value:1023.456}]};const first=q.market.stocks[0];first.settings.description='곡물과 도구를 생산하고 교역하며 성장하는 역사 기업입니다.';first.price=110;first.updatedAtMs=at+3600000;first.history=[{atMs:at,price:100},{atMs:at+3600000,price:110}];for(let i=1;i<30;i++){const s=structuredClone(first);s.id='stock_'+String(i+1).padStart(24,'0');s.settings.name='합성 기업 '+i;s.price=100+i;s.history[1].price=s.price;s.settings.description='다른 기업의 합성 설명입니다.';q.market.stocks.push(s)}q.market.stocks[1].price=100;q.market.stocks[1].history=[{atMs:at-66*3600000,price:120},{atMs:at,price:90},{atMs:at+3600000,price:100}];});
@@ -218,6 +228,7 @@ try {
   }
   checks.push('Five widths: 80 individual drafts, six-week late-Joseon/value filters, loaded logos, no seventh week, no additional reads, pending reservations lock source/cohort, one explicit individual registration only.');
   await fs.writeFile(path.join(evidence,'catalog-performance.json'),JSON.stringify(catalogPerf,null,2));
+  }
   }
     assert.deepEqual(errors,[]);await fs.writeFile(path.join(evidence,process.argv.includes('--schedule-only')?'schedule-summary.json':'summary.json'),JSON.stringify({checks,errors},null,2));console.log(JSON.stringify({evidence,checks},null,2));
 } finally {await browser.close();await new Promise(resolve=>server.close(resolve));}

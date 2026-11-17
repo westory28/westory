@@ -99,6 +99,8 @@ function readMarket(snapshot, scope) {
   const validStock = stock => {
     try { normalizeSettings(stock.settings); } catch { return false; }
     return /^stock_[a-f0-9]{24}$/.test(stock.id) && safeInt(stock.price, stock.settings.minimumPrice, stock.settings.maximumPrice)
+      && (stock.settings.tradingStatus !== 'GRADUATED' || (record(stock.graduation)
+        && stock.graduation.unitPrice === stock.price && safeInt(stock.graduation.atMs, 1, Number.MAX_SAFE_INTEGER)))
       && safeInt(stock.updatedAtMs, 0, Number.MAX_SAFE_INTEGER) && safeInt(stock.nextTickAtMs, 0, Number.MAX_SAFE_INTEGER)
       && Array.isArray(stock.history) && stock.history.length > 0 && stock.history.length <= HISTORY_LIMIT
       && stock.history.every(point => safeInt(point.atMs, 0, Number.MAX_SAFE_INTEGER) && safeInt(point.price, 1, MAX_PRICE));
@@ -177,7 +179,7 @@ function advanceMarket(market, atMs) {
   let changed = false;
   const stocks = market.stocks.map(stock => {
     const settings = normalizeSettings(stock.settings);
-    if (!settings.automatic || settings.tradingStatus === 'HALTED' || stock.nextTickAtMs > atMs || (stock.haltedUntilMs || 0) > atMs) return stock;
+    if (!settings.automatic || ['HALTED', 'GRADUATED'].includes(settings.tradingStatus) || stock.nextTickAtMs > atMs || (stock.haltedUntilMs || 0) > atMs) return stock;
     const slot = Math.floor(atMs / (stock.settings.intervalHours * HOUR));
     const dayOpenPrice = stock.dayKey === dayKey ? stock.dayOpenPrice : stock.price;
     const bounds = wisStockDailyBounds(dayOpenPrice, rules.dailyPriceLimitBps);
@@ -285,6 +287,10 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
         || settings.lotSize !== previous.settings.lotSize)) {
         fail('failed-precondition', '처음 개장한 뒤에는 발행 수량과 거래 단위를 변경할 수 없습니다.', 'WIS_STOCK_SUPPLY_LOCKED');
       }
+      if ((!previous && settings.tradingStatus === 'GRADUATED')
+        || (previous?.settings.tradingStatus === 'GRADUATED' && JSON.stringify(previous.settings) !== JSON.stringify(settings))) {
+        fail('failed-precondition', '졸업한 종목의 설정은 변경할 수 없습니다.', 'WIS_STOCK_GRADUATED');
+      }
       if (previous && JSON.stringify(previous.settings) === JSON.stringify(settings)) {
         return { ...managementState(market), savedStockId: previous.id, duplicate: false, changed: false };
       }
@@ -299,6 +305,15 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       }
       if (previous && previous.settings.growthProfile !== settings.growthProfile) {
         stock.priceModel = { version: 1, anchorAtMs: atMs, anchorPrice: previous.price };
+      }
+      if (previous && previous.settings.tradingStatus !== 'GRADUATED' && settings.tradingStatus === 'GRADUATED') {
+        // The market transaction freezes its final quote and durably queues all
+        // settlements. The job survives delayed triggers, task failures and a
+        // semester switch; each account receives an atomic receipt of its own.
+        stock.graduation = { unitPrice: previous.price, atMs };
+        tx.create(db.doc(`wis_stock_graduations/${scope.semesterId}_${id}`), {
+          schemaVersion: 1, ...scope, stockId: id, unitPrice: previous.price, atMs, status: 'PENDING',
+        });
       }
       const updated = updateWisStockIndex(market, { ...market, priceSeed: market.priceSeed || newPriceSeed,
         stocks: previous ? market.stocks.map(item => item.id === id ? stock : item) : [...market.stocks, stock],

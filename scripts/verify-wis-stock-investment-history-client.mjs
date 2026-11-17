@@ -11,7 +11,7 @@ const compiled = await build({entryPoints:['src/lib/wisStockInvestmentHistoryCli
  plugin.onResolve({filter:/^\.\/firebase$|^\.\/historyDictionarySession$/},()=>({path:'stub',namespace:'fixture'}));
  plugin.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:stub}));
 }}]});
-const {getWisStockInvestmentHistory:get}=await import(`data:text/javascript;base64,${Buffer.from(compiled.outputFiles[0].text).toString('base64')}`);
+const {getWisStockInvestmentHistory:get,getWisStockInvestmentHistories:getMany}=await import(`data:text/javascript;base64,${Buffer.from(compiled.outputFiles[0].text).toString('base64')}`);
 const qa=globalThis.historyClientQa;
 const scope={year:'2026',semester:'2',grade:'3',classNumber:'1',studentKey:'student_000000000000000000000001'};
 const result=extra=>({semesterId:'2026-2',studentKey:scope.studentKey,grade:'3',classNumber:'1',asOfMs:10000,sourceRevision:4,priceRevision:6,
@@ -30,6 +30,25 @@ const epoch=get(scope);await tick();qa.epoch++;qa.pending.shift().resolve({data:
 const failed=get(scope);await tick();qa.pending.shift().reject(new Error('network'));await assert.rejects(failed,/network/);
 const retry=get(scope);await tick();qa.pending.shift().resolve({data:result()});await retry;
 const count=qa.calls.length;qa.auth.currentUser=null;await assert.rejects(get(scope),/로그인/);assert.equal(qa.calls.length,count);
+// Bounded multi-student requests share a flight regardless of ranking order.
+qa.auth.currentUser=qa.user;
+const {studentKey,...baseScope}=scope;
+const keys=[studentKey,'student_000000000000000000000002'];
+const batch=extra=>({semesterId:'2026-2',histories:keys.map(studentKey=>result({studentKey})),...extra});
+const batchCount=qa.calls.length;
+const firstBatch=getMany({...baseScope,studentKeys:keys}),sameBatch=getMany({...baseScope,studentKeys:[...keys].reverse()});
+await tick();assert.equal(qa.calls.length,batchCount+1);qa.pending.shift().resolve({data:batch()});assert.deepEqual(await firstBatch,await sameBatch);
+for(const studentKeys of [[],[...keys,keys[0]],Array.from({length:6},(_,i)=>'student_'+String(i).padStart(24,'0')),['bad']]){
+ const count=qa.calls.length;await assert.rejects(getMany({...baseScope,studentKeys}),/대상/);assert.equal(qa.calls.length,count);
+}
+for(const extra of [{semesterId:'2027-1'},{histories:[result()]},{histories:[result(),result()]},
+ {histories:[result(),result({studentKey:keys[1],classNumber:'2'})]},
+ {histories:[result(),result({studentKey:'student_000000000000000000000003'})]}]){
+ const pending=getMany({...baseScope,studentKeys:keys});await tick();qa.pending.shift().resolve({data:batch(extra)});await assert.rejects(pending,/범위/);
+}
+const batchOwner=getMany({...baseScope,studentKeys:keys});await tick();qa.auth.currentUser=null;qa.pending.shift().resolve({data:batch()});await assert.rejects(batchOwner,/로그인/);qa.auth.currentUser=qa.user;
+const batchFail=getMany({...baseScope,studentKeys:keys});await tick();qa.pending.shift().reject(new Error('network'));await assert.rejects(batchFail,/network/);
+const batchRetry=getMany({...baseScope,studentKeys:keys});await tick();qa.pending.shift().resolve({data:batch()});assert.equal((await batchRetry).length,2);
 // Exercise the real app factory: mocking only the SDK prevents a valid history
 // client from silently calling the default Seoul region instead of its US export.
 const routeStub = `
@@ -52,4 +71,4 @@ for(const [name,region] of [['getWisStockInvestmentHistory','us-central1'],['get
  const call=await getHttpsCallable(name);const routed=await call({probe:true});
  assert.deepEqual(routed.data,{name,region,input:{probe:true}},name+' callable region');
 }
-console.log(JSON.stringify({passed:14,scopedCalls:count,productionReads:0,productionWrites:0,checks:'in-flight sharing, explicit refresh/retry, stale owner/session rejection, response scope/number/gap validation, actual Firebase factory routes new/existing Wispi to US and preserves Seoul default'}));
+console.log(JSON.stringify({passed:22,scopedCalls:qa.calls.length,productionReads:0,productionWrites:0,checks:'in-flight sharing, explicit refresh/retry, stale owner/session rejection, response scope/number/gap validation, actual Firebase factory routes new/existing Wispi to US and preserves Seoul default'}));

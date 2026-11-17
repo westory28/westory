@@ -25,6 +25,7 @@ const date = new Intl.DateTimeFormat("ko-KR", {
 });
 const historyLabels: Record<StudentWisStockHistoryEntry["kind"], string> = {
   DEPOSIT: "입금",
+  EVENT_BONUS: "위스피 이벤트 보상",
   WITHDRAW: "출금",
   ORDER_ACCEPTED: "주문 접수",
   ORDER_FILLED: "체결",
@@ -149,7 +150,7 @@ export default function StudentWisStockAccountPanel({
         error: false,
         text:
           direction === "DEPOSIT"
-            ? `${money(parsed)} 위스를 주식 지갑에 입금했습니다.`
+            ? `${money(parsed)} 위스를 주식 지갑에 입금했습니다.${result.bonusAmount ? ` 이벤트 보상 ${money(result.bonusAmount)} 위스도 지급되었습니다.` : ""}`
             : `${money(parsed)} 위스를 출금했습니다.${result.receipt?.withdrawnProfit ? ` 누적 위스에 수익 ${money(result.receipt.withdrawnProfit)} 위스가 반영되었습니다.` : ""}`,
       });
     } catch (error) {
@@ -362,7 +363,9 @@ export default function StudentWisStockAccountPanel({
                   <li key={entry.id}>
                     <div>
                       <strong>
-                        {historyLabels[entry.kind] || "거래 내역"}
+                        {entry.automaticSettlement === "GRADUATION"
+                          ? "종목 졸업 정산"
+                          : historyLabels[entry.kind] || "거래 내역"}
                         {entry.side
                           ? ` · ${entry.side === "BUY" ? "매수" : "매도"}`
                           : ""}

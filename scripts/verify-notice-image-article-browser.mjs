@@ -59,8 +59,8 @@ import {createRoot} from 'react-dom/client';
 import NoticeImageArticle,{hasNoticeImageArticleMarkup} from './src/components/common/NoticeImageArticle';
 ${parts.get("hasEventArticleMarkup")}
 ${parts.get("stripHtml")}
-const activeCardImageIndex=0,liked=false,canManage=false,cardSwipeStartRef={current:null};
-const renderCategoryBadge=()=>null,getDisplayTitle=p=>p.title,formatDate=()=> '2026.10.26';
+const activeCardImageIndex=0,liked=false,canManage=false,canLike=false,pendingMutation=false,pendingLikeScope=null,likeScope='fixture',userData={role:'teacher'},cardSwipeStartRef={current:null};
+const renderCategoryBadge=()=>null,getDisplayTitle=p=>p.title,formatDate=()=> '2026.10.26',toDate=()=>null;
 const Link=({to,...props})=><a href={to} {...props}/>;
 const toggleLike=()=>{},navigate=()=>{},startEdit=()=>{},deletePost=()=>{},moveCardImage=()=>{},setActiveCardImageIndex=()=>{},handleCardSwipeStart=()=>{},handleCardSwipeEnd=()=>{};
 ${parts.get("renderPostDetail")}
@@ -84,9 +84,14 @@ const stylesheet = await fs.readFile(
   path.join(root, "src/pages/developerEventArticles.css"),
   "utf8",
 );
+const detailStylesheet = await fs.readFile(
+  path.join(root, "src/pages/developerLog.css"),
+  "utf8",
+);
 const html = `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
 *{box-sizing:border-box}body{margin:0;font:16px/1.6 'Malgun Gothic',sans-serif;background:#f9fafb;color:#1f2937}nav{display:flex;gap:8px;flex-wrap:wrap;padding:8px}button{font:inherit}main{padding:16px;max-width:1152px;margin:auto}h1{font-size:24px;word-break:keep-all}img{max-width:100%}.p-5{padding:20px}.py-8{padding-block:32px}.bg-white{background:white}.flex{display:flex}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.gap-4{gap:16px}.gap-3{gap:12px}.gap-2{gap:8px}.border-b{border-bottom:1px solid #e5e7eb}.pb-6{padding-bottom:24px}.mt-4{margin-top:16px}.hidden{display:none}.min-w-0{min-width:0}.grid{display:grid;gap:32px}.overflow-hidden{overflow:hidden}.shrink-0{flex-shrink:0}.w-full{width:100%}.h-full{height:100%}.rounded-2xl{border-radius:16px}output{display:block}figure{margin:24px 0}.developer-log-rich-text img{border-radius:12px}.developer-log-event-layout{min-width:0}
 ${stylesheet}
+${detailStylesheet}
 </style><div id="root"></div><script type="module" src="/fixture.js"></script></html>`;
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url, "http://127.0.0.1").pathname;

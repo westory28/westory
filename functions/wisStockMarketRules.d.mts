@@ -6,7 +6,7 @@ export interface WisStockMarketRules {
   quoteTtlSeconds: number; maxSlippageBps: number; automaticPrices: boolean;
   dailyPriceLimitBps: number; circuitBreakerBps: number; circuitBreakerMinutes: number; halted: boolean;
 }
-export interface WisStockTradingSettings { issuedShares: number; lotSize: number; tradingStatus: 'ACTIVE' | 'HALTED' | 'SELL_ONLY'; }
+export interface WisStockTradingSettings { issuedShares: number; lotSize: number; tradingStatus: 'ACTIVE' | 'HALTED' | 'SELL_ONLY' | 'GRADUATED'; }
 export interface WisStockQuotePortfolio {
   cashBalance: number; holdingQuantity: number; holdingPrincipal: number; holdingCostBasis: number;
   portfolioValue: number; dayKey: string; dailyBuyAmount: number; dailyOrderCount: number;

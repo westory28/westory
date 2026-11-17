@@ -129,6 +129,7 @@ export default function TeacherWisStocks({
     [error, setError] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const selected = market?.stocks.find((stock) => stock.id === selectedId);
+  const graduated = selected?.settings.tradingStatus === "GRADUATED";
   const dirty =
     selectedId !== null &&
     JSON.stringify(draft) !==
@@ -309,7 +310,16 @@ export default function TeacherWisStocks({
       loading ||
       conflict ||
       !canManage ||
+      graduated ||
       (selected && !dirty)
+    )
+      return;
+    if (
+      selected &&
+      draft.tradingStatus === "GRADUATED" &&
+      !window.confirm(
+        `${selected.settings.name} 종목을 졸업 처리하시겠습니까?\n예약 주문을 취소하고, 학생들의 보유 주식을 마지막 가격인 ${selected.price.toLocaleString("ko-KR")} 위스로 전량 정산하여 주식 지갑에 입금합니다. 졸업 처리는 되돌릴 수 없습니다.`,
+      )
     )
       return;
     const sequence = ++generation.current,
@@ -807,7 +817,7 @@ export default function TeacherWisStocks({
                   닫기
                 </button>
               </div>
-              <fieldset disabled={!canManage || saving || loading}>
+              <fieldset disabled={!canManage || saving || loading || graduated}>
                 {!selected && (
                   <label className="wis-stocks__wide">
                     <span>
@@ -948,6 +958,11 @@ export default function TeacherWisStocks({
                     <option value="ACTIVE">매수·매도 가능</option>
                     <option value="SELL_ONLY">매도만 가능</option>
                     <option value="HALTED">거래 정지</option>
+                    {selected && (
+                      <option value="GRADUATED">
+                        종목 졸업 · 마지막 가격으로 정산
+                      </option>
+                    )}
                   </select>
                 </label>
                 <label className="wis-stocks__wide">
@@ -1073,6 +1088,7 @@ export default function TeacherWisStocks({
                       saving ||
                       loading ||
                       conflict ||
+                      graduated ||
                       (!dirty && Boolean(selected))
                     }
                   >

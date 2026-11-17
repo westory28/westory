@@ -42,7 +42,7 @@ export function normalizeWisStockTradingSettings(input = {}) {
   if (!record(input) || Object.keys(input).some(key => !Object.hasOwn(DEFAULT_WIS_STOCK_TRADING_SETTINGS, key))
     || !int(value.issuedShares, 1, 1000000000) || !int(value.lotSize, 1, 1000000)
     || value.lotSize > value.issuedShares || value.issuedShares % value.lotSize !== 0
-    || !['ACTIVE', 'HALTED', 'SELL_ONLY'].includes(value.tradingStatus)) {
+    || !['ACTIVE', 'HALTED', 'SELL_ONLY', 'GRADUATED'].includes(value.tradingStatus)) {
     reject('WIS_STOCK_INPUT_INVALID', '발행 수량·거래 단위·거래 상태를 확인해 주세요.');
   }
   return value;
@@ -98,6 +98,7 @@ export function quoteWisStockOrder(input) {
   if (BigInt(p.portfolioValue) < BigInt(p.cashBalance) + BigInt(positionValue)) bad();
   if (rules.halted) reject('WIS_STOCK_MARKET_HALTED', '시장이 일시 정지되어 있습니다.');
   if (!isWisStockTradingSession(rules, nowMs)) reject('WIS_STOCK_TRADING_CLOSED', '설정된 거래 요일과 시간이 아닙니다.');
+  if (settings.tradingStatus === 'GRADUATED') reject('WIS_STOCK_GRADUATED', '졸업한 종목은 마지막 가격으로 자동 정산됩니다.');
   if (settings.tradingStatus === 'HALTED' || (stock.haltedUntilMs || 0) > nowMs) reject('WIS_STOCK_INSTRUMENT_HALTED', '이 종목은 일시 정지되어 있습니다.');
   if (side === 'BUY' && settings.tradingStatus === 'SELL_ONLY') reject('WIS_STOCK_SELL_ONLY', '이 종목은 매도만 허용합니다.');
   if (nowMs - quote.atMs > rules.quoteTtlSeconds * 1000) reject('WIS_STOCK_QUOTE_EXPIRED', '시세의 유효 시간이 지났습니다. 새로 확인해 주세요.');

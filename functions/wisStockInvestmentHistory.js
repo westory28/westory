@@ -15,9 +15,13 @@ const fail = (reason, message = '학생 수익률 이력을 확인하지 못했�
 function createWisStockInvestmentHistory({ db, now = Date.now, assertSession = assertScoreWorkflowSession }) {
   return async request => {
     const authority = await assertSession(request), input = request.data;
+    const batch = Array.isArray(input?.studentKeys);
+    const studentKeys = batch ? input.studentKeys : [input?.studentKey];
     if (!input || typeof input !== 'object' || Array.isArray(input)
-      || Object.keys(input).some(key => !['year', 'semester', 'grade', 'classNumber', 'studentKey', '_session'].includes(key))
-      || typeof input.studentKey !== 'string' || !/^student_[a-f0-9]{24}$/.test(input.studentKey))
+      || Object.keys(input).some(key => !['year', 'semester', 'grade', 'classNumber', 'studentKey', 'studentKeys', '_session'].includes(key))
+      || (batch && Object.hasOwn(input, 'studentKey')) || (!batch && Object.hasOwn(input, 'studentKeys'))
+      || studentKeys.length < 1 || studentKeys.length > 5 || new Set(studentKeys).size !== studentKeys.length
+      || studentKeys.some(key => typeof key !== 'string' || !/^student_[a-f0-9]{24}$/.test(key)))
       fail('WIS_STOCK_INPUT_INVALID', undefined, 'invalid-argument');
     let scope;
     try { scope = normalizeWisStockInvestmentBoardScope(input); } catch { fail('WIS_STOCK_INPUT_INVALID', undefined, 'invalid-argument'); }
@@ -52,35 +56,41 @@ function createWisStockInvestmentHistory({ db, now = Date.now, assertSession = a
         || !Number.isSafeInteger(pointer.revision) || pointer.revision < 1 || manifest.revision !== pointer.revision)
         fail('WIS_STOCK_SCOPE_CHANGED', '현재 학기에서 다시 조회해 주세요.');
       const board = parseWisStockInvestmentBoardSnapshot(boardSnap.exists ? boardSnap.data() : null, scope);
-      const selected = board.rows.find(row => row.studentKey === input.studentKey);
-      if (!selected) fail('WIS_STOCK_INVESTMENT_STUDENT_UNAVAILABLE', '선택한 범위에서 학생의 투자 현황을 찾을 수 없습니다.', 'not-found');
-      const accounts = await tx.get(db.collection(`${root}/wis_stock_accounts`).where('studentKey', '==', input.studentKey)
-        .select('schemaVersion', 'semesterId', 'accountId', 'studentKey', 'studentUid', 'grade', 'classNumber', 'boardEligible', 'revision', 'positions').limit(2));
-      if (accounts.size !== 1) fail('WIS_STOCK_INVESTMENT_HISTORY_INVALID');
-      const account = accounts.docs[0].data();
-      if (account.schemaVersion !== 1 || account.semesterId !== scope.semesterId || account.studentKey !== input.studentKey
-        || account.boardEligible === false || account.grade !== selected.grade || account.classNumber !== selected.classNumber
-        || typeof account.studentUid !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(account.studentUid)
-        || account.accountId !== accountIdFor(scope.semesterId, account.studentUid) || account.accountId !== accounts.docs[0].id
-        || account.studentKey !== `student_${createHash('sha256').update(account.studentUid).digest('hex').slice(0, 24)}`)
-        fail('WIS_STOCK_INVESTMENT_HISTORY_INVALID');
-      // Equality filters use Firestore's existing single-field index merge.
-      // Read every filled trade for this one account; never truncate analysis.
-      const entries = await tx.get(db.collection(`${root}/wis_stock_history`).where('accountId', '==', account.accountId)
-        .where('kind', '==', 'ORDER_FILLED').select('accountId', 'studentUid', 'semesterId', 'kind', 'sequence', 'atMs',
-          'stockId', 'side', 'quantity', 'unitPrice', 'fee', 'stockCashDelta', 'realizedPnl'));
-      const fills = entries.docs.map(doc => {
-        const row = doc.data();
-        if (row.accountId !== account.accountId || row.studentUid !== account.studentUid || row.semesterId !== scope.semesterId
-          || row.kind !== 'ORDER_FILLED') fail('WIS_STOCK_INVESTMENT_HISTORY_INVALID');
-        return row;
-      });
+      const histories = [];
+      // Authority, semester, scoped board and prices are read once for up to
+      // five displayed students. Each ledger query remains account-scoped.
       const market = readMarket(marketSnap, scope);
-      let series;
-      try { series = buildWisStockInvestmentHistorySeries({ account, fills, stocks: market.stocks, asOfMs }); }
-      catch (error) { fail(error.reason || 'WIS_STOCK_INVESTMENT_HISTORY_INVALID', error.message); }
-      return { semesterId: scope.semesterId, studentKey: input.studentKey, grade: selected.grade, classNumber: selected.classNumber,
-        asOfMs, sourceRevision: account.revision, priceRevision: market.revision, ...series };
+      for (const studentKey of studentKeys) {
+        const selected = board.rows.find(row => row.studentKey === studentKey);
+        if (!selected) fail('WIS_STOCK_INVESTMENT_STUDENT_UNAVAILABLE', '선택한 범위에서 학생의 투자 현황을 찾을 수 없습니다.', 'not-found');
+        const accounts = await tx.get(db.collection(`${root}/wis_stock_accounts`).where('studentKey', '==', studentKey)
+          .select('schemaVersion', 'semesterId', 'accountId', 'studentKey', 'studentUid', 'grade', 'classNumber', 'boardEligible', 'revision', 'positions').limit(2));
+        if (accounts.size !== 1) fail('WIS_STOCK_INVESTMENT_HISTORY_INVALID');
+        const account = accounts.docs[0].data();
+        if (account.schemaVersion !== 1 || account.semesterId !== scope.semesterId || account.studentKey !== studentKey
+          || account.boardEligible === false || account.grade !== selected.grade || account.classNumber !== selected.classNumber
+          || typeof account.studentUid !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(account.studentUid)
+          || account.accountId !== accountIdFor(scope.semesterId, account.studentUid) || account.accountId !== accounts.docs[0].id
+          || account.studentKey !== `student_${createHash('sha256').update(account.studentUid).digest('hex').slice(0, 24)}`)
+          fail('WIS_STOCK_INVESTMENT_HISTORY_INVALID');
+        // Equality filters use Firestore's existing single-field index merge.
+        // Read every filled trade for this one account; never truncate analysis.
+        const entries = await tx.get(db.collection(`${root}/wis_stock_history`).where('accountId', '==', account.accountId)
+          .where('kind', '==', 'ORDER_FILLED').select('accountId', 'studentUid', 'semesterId', 'kind', 'sequence', 'atMs',
+            'stockId', 'side', 'quantity', 'unitPrice', 'fee', 'stockCashDelta', 'realizedPnl'));
+        const fills = entries.docs.map(doc => {
+          const row = doc.data();
+          if (row.accountId !== account.accountId || row.studentUid !== account.studentUid || row.semesterId !== scope.semesterId
+            || row.kind !== 'ORDER_FILLED') fail('WIS_STOCK_INVESTMENT_HISTORY_INVALID');
+          return row;
+        });
+        let series;
+        try { series = buildWisStockInvestmentHistorySeries({ account, fills, stocks: market.stocks, asOfMs }); }
+        catch (error) { fail(error.reason || 'WIS_STOCK_INVESTMENT_HISTORY_INVALID', error.message); }
+        histories.push({ semesterId: scope.semesterId, studentKey: studentKey, grade: selected.grade, classNumber: selected.classNumber,
+          asOfMs, sourceRevision: account.revision, priceRevision: market.revision, ...series });
+      }
+      return batch ? { semesterId: scope.semesterId, histories } : histories[0];
     }, { readOnly: true });
   };
 }

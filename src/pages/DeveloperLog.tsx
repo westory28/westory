@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./developerEventArticles.css";
+import "./developerLog.css";
 import { sanitizeRichHtml } from "../lib/sanitizeRichHtml";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -7,12 +8,10 @@ import {
   deleteDoc,
   doc,
   getDoc,
-  increment,
   limit,
   onSnapshot,
   orderBy,
   query,
-  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -44,6 +43,7 @@ import {
   uploadDeveloperLogImage,
 } from "../lib/developerLogImages";
 import { isDeveloperUser } from "../lib/permissions";
+import { setDeveloperLogLike } from "../lib/developerLogLikes";
 
 type SortMode = "latest" | "views" | "likes";
 
@@ -53,6 +53,7 @@ interface FormState {
   category: DeveloperLogCategory;
   summary: string;
   bodyHtml: string;
+  action: "wispi" | "";
   isPinned: boolean;
   images: DeveloperLogImage[];
 }
@@ -63,6 +64,7 @@ const EMPTY_FORM: FormState = {
   category: "feature",
   summary: "",
   bodyHtml: "",
+  action: "",
   isPinned: false,
   images: [],
 };
@@ -131,6 +133,7 @@ const buildDraftPost = (
   category: form.category,
   summary: form.summary.trim(),
   bodyHtml: form.bodyHtml,
+  action: form.action,
   images: form.images,
   isPinned: form.isPinned,
   viewCount: 0,
@@ -200,6 +203,11 @@ const DeveloperLog: React.FC = () => {
   );
   const [detailLoading, setDetailLoading] = useState(false);
   const [liked, setLiked] = useState(false);
+  const [pendingLikeScope, setPendingLikeScope] = useState<string | null>(null);
+  const likeScope = `${currentUser?.uid || ""}:${postId || ""}`;
+  const activeLikeScope = useRef(likeScope);
+  activeLikeScope.current = likeScope;
+  const likeRequest = useRef<{ scope: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [pendingMutation, setPendingMutation] = useState(false);
   const mutationLock = useRef(false);
@@ -225,6 +233,16 @@ const DeveloperLog: React.FC = () => {
   const [sortMode, setSortMode] = useState<SortMode>("latest");
 
   useEffect(() => {
+    likeRequest.current = null;
+    setPendingLikeScope(null);
+    return () => {
+      likeRequest.current = null;
+    };
+  }, [likeScope]);
+
+  useEffect(() => {
+    if (postId) return;
+    setListLoading(true);
     const q = query(
       getDeveloperLogItemsCollection(),
       orderBy("publishedAt", "desc"),
@@ -252,21 +270,30 @@ const DeveloperLog: React.FC = () => {
     );
 
     return () => unsubscribe();
-  }, [showToast]);
+  }, [postId, currentUser?.uid, showToast]);
 
   useEffect(() => {
     if (!postId) {
-      if (mode !== "write") setMode("list");
+      setMode((prev) => (prev === "write" ? prev : "list"));
       setSelectedPost(null);
       return;
     }
 
-    setMode((prev) => (prev === "edit" ? "edit" : "detail"));
+    let cancelled = false;
+    setMode((prev) => (prev === "edit" && canManage ? "edit" : "detail"));
     setDetailLoading(true);
+    setSelectedPost(null);
+    setLiked(false);
     const postRef = getDeveloperLogPostRef(postId);
 
-    void getDoc(postRef)
-      .then(async (snapshot) => {
+    void Promise.all([
+      getDoc(postRef),
+      currentUser && canLike
+        ? getDoc(doc(postRef, "likes", currentUser.uid))
+        : Promise.resolve(null),
+    ])
+      .then(([snapshot, likeSnapshot]) => {
+        if (cancelled) return;
         if (!snapshot.exists()) {
           setSelectedPost(null);
           showToast({
@@ -285,16 +312,12 @@ const DeveloperLog: React.FC = () => {
           category: post.category,
           summary: post.summary,
           bodyHtml: post.bodyHtml,
+          action: post.action || "",
           isPinned: post.isPinned,
           images: post.images,
         });
 
-        if (currentUser) {
-          const likeSnap = await getDoc(
-            doc(getDeveloperLogPostRef(post.id), "likes", currentUser.uid),
-          );
-          setLiked(likeSnap.exists());
-        }
+        setLiked(likeSnapshot?.exists() || false);
 
         const viewedKey = `${VIEWED_STORAGE_PREFIX}${post.id}`;
         if (
@@ -315,14 +338,20 @@ const DeveloperLog: React.FC = () => {
         }
       })
       .catch((error) => {
+        if (cancelled) return;
         console.error("Failed to load developer log:", error);
         showToast({
           tone: "error",
           title: "게시글을 불러오지 못했습니다.",
         });
       })
-      .finally(() => setDetailLoading(false));
-  }, [currentUser, mode, navigate, postId, showToast]);
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.uid, canLike, canManage, navigate, postId, showToast]);
 
   useEffect(() => {
     const previews = newImageFiles.map((file) => URL.createObjectURL(file));
@@ -389,6 +418,7 @@ const DeveloperLog: React.FC = () => {
       category: selectedPost.category,
       summary: selectedPost.summary,
       bodyHtml: selectedPost.bodyHtml,
+      action: selectedPost.action || "",
       isPinned: selectedPost.isPinned,
       images: selectedPost.images,
     });
@@ -509,6 +539,7 @@ const DeveloperLog: React.FC = () => {
         category: form.category,
         summary: form.summary.trim(),
         bodyHtml: form.bodyHtml,
+        action: form.action,
         images: nextImages,
         isPinned: form.isPinned,
         updatedAt: serverTimestamp(),
@@ -516,6 +547,9 @@ const DeveloperLog: React.FC = () => {
 
       if (editingPost) {
         await updateDoc(postRef, payload);
+        setSelectedPost((prev) =>
+          prev?.id === editingPost.id ? { ...prev, ...payload } : prev,
+        );
       } else {
         await setDoc(postRef, {
           ...payload,
@@ -605,7 +639,13 @@ const DeveloperLog: React.FC = () => {
   };
 
   const toggleLike = async () => {
-    if (saving || mutationLock.current) return;
+    if (
+      saving ||
+      mutationLock.current ||
+      detailLoading ||
+      likeRequest.current?.scope === likeScope
+    )
+      return;
     if (!currentUser || !selectedPost || !canLike) {
       showToast({
         tone: "info",
@@ -614,62 +654,52 @@ const DeveloperLog: React.FC = () => {
       return;
     }
 
-    const postRef = getDeveloperLogPostRef(selectedPost.id);
-    const likeRef = doc(postRef, "likes", currentUser.uid);
+    const previous = { liked, likeCount: selectedPost.likeCount };
+    const desiredLiked = !liked;
+    const request = { scope: likeScope };
+    likeRequest.current = request;
+    setPendingLikeScope(likeScope);
+    setLiked(desiredLiked);
+    setSelectedPost((prev) =>
+      prev && prev.id === selectedPost.id
+        ? {
+            ...prev,
+            likeCount: Math.max(0, prev.likeCount + (desiredLiked ? 1 : -1)),
+          }
+        : prev,
+    );
 
-    mutationLock.current = true;
-    setPendingMutation(true);
-    try {
-      await runTransaction(db, async (transaction) => {
-        const [postSnap, likeSnap] = await Promise.all([
-          transaction.get(postRef),
-          transaction.get(likeRef),
-        ]);
-        if (!postSnap.exists()) throw new Error("게시글이 없습니다.");
-
-        const currentLikeCount = Math.max(
-          0,
-          Number(postSnap.data().likeCount || 0),
-        );
-        if (likeSnap.exists()) {
-          transaction.delete(likeRef);
-          transaction.update(postRef, {
-            likeCount: currentLikeCount > 0 ? increment(-1) : 0,
-          });
-          return;
-        }
-
-        transaction.set(likeRef, {
-          uid: currentUser.uid,
-          createdAt: serverTimestamp(),
-        });
-        // Apply the delta on the server so concurrent likes do not submit a
-        // stale absolute count that fails the exact-delta security rule.
-        transaction.update(postRef, { likeCount: increment(1) });
-      });
-
-      setLiked((prev) => !prev);
+    const result = await setDeveloperLogLike(
+      getDeveloperLogPostRef(selectedPost.id),
+      currentUser.uid,
+      desiredLiked,
+    );
+    // A response from another account or article must never change this screen.
+    if (
+      likeRequest.current !== request ||
+      activeLikeScope.current !== request.scope
+    )
+      return;
+    const state =
+      "state" in result ? result.state : !result.confirmed ? previous : null;
+    if (state) {
+      setLiked(state.liked);
       setSelectedPost((prev) =>
-        prev
-          ? {
-              ...prev,
-              likeCount: liked
-                ? Math.max(0, prev.likeCount - 1)
-                : prev.likeCount + 1,
-            }
+        prev && prev.id === selectedPost.id
+          ? { ...prev, likeCount: state.likeCount }
           : prev,
       );
-    } catch (error: any) {
-      console.error("Failed to toggle developer log like:", error);
+    }
+    if (!result.confirmed) {
+      console.error("Failed to toggle developer log like:", result.error);
       showToast({
         tone: "error",
         title: "좋아요 처리에 실패했습니다.",
-        message: error?.message,
+        message: "잠시 후 다시 눌러 주세요.",
       });
-    } finally {
-      mutationLock.current = false;
-      setPendingMutation(false);
     }
+    likeRequest.current = null;
+    setPendingLikeScope(null);
   };
 
   const renderCategoryBadge = (category: string) => {
@@ -728,10 +758,10 @@ const DeveloperLog: React.FC = () => {
 
     return (
       <article
-        className={`rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7 lg:p-8${imageArticle || (post.category === "event" && imageCount > 0) ? " developer-log-image-post" : ""}`}
+        className={`developer-log-post rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7 lg:p-8${imageArticle || (post.category === "event" && imageCount > 0) ? " developer-log-image-post" : ""}`}
       >
         {pendingMutation && <LoadingOverlay />}
-        <div className="flex flex-col gap-4 border-b border-gray-200 pb-6 lg:flex-row lg:items-start lg:justify-between">
+        <div className="border-b border-gray-200 pb-4">
           <div className="min-w-0">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               {post.isPinned && (
@@ -750,46 +780,64 @@ const DeveloperLog: React.FC = () => {
                 {post.summary}
               </p>
             )}
-            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-semibold text-slate-500">
-              <span>
-                <i className="fas fa-user mr-2" aria-hidden="true"></i>
+            <div className="developer-log-meta mt-4 text-slate-500">
+              <span className="developer-log-meta-author">
+                <i className="fas fa-user" aria-hidden="true"></i>
                 {post.createdByName || "개발자"}
               </span>
-              <span>
-                <i className="far fa-calendar-alt mr-2" aria-hidden="true"></i>
+              <time
+                className="developer-log-meta-date"
+                dateTime={toDate(post.publishedAt)?.toISOString()}
+              >
+                <i className="far fa-calendar-alt" aria-hidden="true"></i>
                 {formatDate(post.publishedAt)}
+              </time>
+              <span aria-label={`조회수 ${post.viewCount}`}>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  aria-hidden="true"
+                >
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                <span className="developer-log-meta-label">조회수</span>{" "}
+                {post.viewCount}
               </span>
-              <span>
-                <i className="far fa-eye mr-2" aria-hidden="true"></i>
-                조회수 {post.viewCount}
-              </span>
+              <button
+                type="button"
+                onClick={() => void toggleLike()}
+                disabled={preview || !canLike || pendingLikeScope === likeScope}
+                aria-label="좋아요"
+                aria-pressed={!preview && liked}
+                aria-busy={!preview && pendingLikeScope === likeScope}
+                className={`developer-log-like inline-flex items-center justify-center rounded-full border font-bold transition ${
+                  liked
+                    ? "border-rose-200 bg-rose-50 text-rose-600"
+                    : "border-gray-200 bg-white text-blue-700 hover:border-blue-200 hover:bg-blue-50"
+                } ${preview ? "cursor-default opacity-80" : ""}`}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill={liked ? "currentColor" : "none"}
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  aria-hidden="true"
+                >
+                  <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z" />
+                </svg>
+                <span className="developer-log-meta-label">좋아요</span>
+                <span className="developer-log-like-count" aria-live="polite">
+                  {post.likeCount}
+                </span>
+              </button>
             </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-3">
-            {!preview && (
-              <span className="hidden text-sm font-semibold text-slate-500 sm:inline">
-                학생은 좋아요만 누를 수 있습니다.
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => void toggleLike()}
-              disabled={preview}
-              className={`inline-flex h-11 items-center justify-center gap-2 rounded-full border px-5 text-sm font-black transition ${
-                liked
-                  ? "border-rose-200 bg-rose-50 text-rose-600"
-                  : "border-gray-200 bg-white text-blue-700 hover:border-blue-200 hover:bg-blue-50"
-              } ${preview ? "cursor-default opacity-80" : ""}`}
-            >
-              <i
-                className={liked ? "fas fa-heart" : "far fa-heart"}
-                aria-hidden="true"
-              ></i>
-              좋아요
-            </button>
-            <span className="min-w-8 text-center text-sm font-black text-slate-700">
-              {post.likeCount}
-            </span>
           </div>
         </div>
 
@@ -840,7 +888,7 @@ const DeveloperLog: React.FC = () => {
             </div>
           ) : (
             <div
-              className="developer-log-rich-text min-w-0"
+              className="developer-log-rich-text developer-log-body-copy min-w-0"
               dangerouslySetInnerHTML={{
                 __html: sanitizeRichHtml(post.bodyHtml),
               }}
@@ -949,6 +997,22 @@ const DeveloperLog: React.FC = () => {
             </div>
           )}
         </div>
+
+        {post.action === "wispi" && (
+          <div className="developer-log-cta">
+            <Link
+              to={
+                userData?.role === "teacher"
+                  ? "/teacher/points?tab=stocks"
+                  : "/student/wispi"
+              }
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-bold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+            >
+              위스피 하러 가기
+              <i className="fas fa-arrow-right" aria-hidden="true"></i>
+            </Link>
+          </div>
+        )}
 
         {!preview && (
           <div className="flex flex-col gap-3 border-t border-gray-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
@@ -1303,20 +1367,36 @@ const DeveloperLog: React.FC = () => {
                 <span className="text-sm font-black text-slate-700">
                   게시 옵션
                 </span>
-                <label className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-bold text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={form.isPinned}
-                    onChange={(event) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        isPinned: event.target.checked,
-                      }))
-                    }
-                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  목록 상단에 고정
-                </label>
+                <div className="flex flex-wrap items-center gap-4">
+                  <label className="flex min-h-11 items-center gap-3 text-sm font-bold text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={form.isPinned}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          isPinned: event.target.checked,
+                        }))
+                      }
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    목록 상단에 고정
+                  </label>
+                  <label className="flex min-h-11 items-center gap-3 text-sm font-bold text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={form.action === "wispi"}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          action: event.target.checked ? "wispi" : "",
+                        }))
+                      }
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    위스피 이동 버튼
+                  </label>
+                </div>
               </div>
             </div>
           ) : (

@@ -82,6 +82,7 @@ export interface StudentWisStockState {
     reservedCash: number;
     outstandingPrincipal: number;
     lastDepositAtMs: number;
+    eventBonusTotal?: number;
     positions: StudentWisStockPosition[];
     pendingOrders: StudentWisStockOrder[];
     recentOrders: StudentWisStockOrder[];
@@ -96,6 +97,7 @@ export interface StudentWisStockHistoryEntry {
   id: string;
   kind:
     | "DEPOSIT"
+    | "EVENT_BONUS"
     | "WITHDRAW"
     | "ORDER_ACCEPTED"
     | "ORDER_FILLED"
@@ -110,6 +112,8 @@ export interface StudentWisStockHistoryEntry {
   stockCashDelta: number;
   mainCashDelta: number;
   earnedDelta: number;
+  campaignId?: string;
+  automaticSettlement?: "GRADUATION";
 }
 export interface StudentWisStockHistoryPage {
   semesterId: string;
@@ -120,6 +124,7 @@ export interface StudentWisStockHistoryPage {
 export interface StudentWisStockMutation {
   changed: boolean;
   duplicate: boolean;
+  bonusAmount?: number;
   state: StudentWisStockState;
   order?: StudentWisStockOrder;
   receipt?: { withdrawnProfit?: number; principalReturned?: number };

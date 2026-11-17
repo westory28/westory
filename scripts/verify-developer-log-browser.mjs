@@ -18,6 +18,7 @@ await fs.mkdir(evidence, { recursive: true });
 const imp = (file) =>
   JSON.stringify(path.join(root, file).replaceAll("\\", "/"));
 const service = `
+import {useSyncExternalStore} from 'react';
 import {MENUS} from ${imp("src/constants/menus.ts")};
 const identity=new URLSearchParams(location.search).get('identity')||'student';
 const email=identity==='developer'?'westoria28@gmail.com':'fixture@example.invalid';
@@ -25,24 +26,25 @@ const user={uid:'fixture-user',email,getIdTokenResult:async()=>({claims:{auth_ti
 const userData={uid:user.uid,email,name:'화면 검증',role:identity==='student'||identity==='staff'?'student':'teacher',teacherPortalEnabled:identity==='staff',staffPermissions:identity==='staff'?['lesson_read']:[]};
 export const config={year:'2026',semester:'2',showLesson:true,showQuiz:true,showScore:true};
 const state={currentUser:user,userData,config,loading:false,authPhase:'ready',configReady:true,menuConfigReady:true,interfaceConfigReady:true,settingsLoadedAt:Date.now(),menuConfig:MENUS,interfaceConfig:{},logout:async()=>{},refreshConfig:async()=>{},refreshMenuConfig:async()=>{}};
-export const useAuth=()=>state;export const auth={currentUser:user};
+export const useAuth=()=>{useSyncExternalStore(callback=>{window.addEventListener('fixture-auth-change',callback);return()=>window.removeEventListener('fixture-auth-change',callback)},()=>state.currentUser);return state};export const auth={currentUser:user};
 export const preloadStudentWeplay=()=>{};
+export const useStudentWisStockStatus=()=>({data:{studentOpen:true},loading:false});
 export const resolveStudentProfileEmoji=()=>({rank:null,allowedEmojiIds:['smile'],entry:{id:'smile',emoji:'😀'}});
 export const loadStudentRankPromotionSnapshot=async()=>({wallet:{balance:0},rank:null,policy:{rankPolicy:null}});export const getPointRankDefaultEmojiValue=()=>"😀";
 const toast={showToast(value){window.developerLogQa.toasts.push(value)}};export const useAppToast=()=>toast;
 export const db={};export const collection=(...args)=>({path:args.map(x=>x?.path||x).join('/'),kind:'collection'});export const doc=(...args)=>{if(args.length===1&&args[0].kind==='collection'){const id='fixture-created';window.developerLogQa.reservations.push(id);return{path:args[0].path+'/'+id,id}}const path=args.map(x=>x?.path||x).join('/');return{path,id:path.split('/').at(-1)}};export const query=(ref)=>ref;export const orderBy=()=>null;export const limit=()=>null;export const serverTimestamp=()=>null;export const increment=(value)=>({increment:value});
-const post={title:'개발자 일지 화면 개선',category:'feature',summary:'포털 탐색 유지',bodyHtml:'<p>교사와 학생 포털에서 개발자 일지를 확인합니다.</p>',publishedAt:new Date('2026-10-20T00:00:00Z'),viewCount:3,likeCount:2};
-const eventPost={...post,title:'아바타 콘테스트',category:'event',summary:'나의 아바타를 소개해 주세요.',bodyHtml:'<p>옷장에서 저장한 아바타와 소개를 보내세요. 계정당 1회, 교사가 확인한 뒤 100위스를 지급합니다.</p>',images:[{imageUrl:'/poster.svg',imageStoragePath:'fixture/poster.webp',imageWidth:1086,imageHeight:1448,imageByteSize:100,imageMimeType:'image/webp',alt:'아바타 콘테스트 포스터',order:0}]};
-window.developerLogQa={writes:[],reads:0,reservations:[],toasts:[],uploads:0,documents:{'fixture-event':eventPost}};
+const post={title:'개발자 일지 화면 개선',createdByName:'방재석',category:'feature',summary:'포털 탐색 유지',bodyHtml:'<p>교사와 학생 포털에서 개발자 일지를 확인합니다.</p>',publishedAt:new Date('2026-11-14T00:00:00Z'),viewCount:3,likeCount:2};
+const eventPost={...post,action:'wispi',title:'아바타 콘테스트',category:'event',summary:'나의 아바타를 소개해 주세요.',bodyHtml:'<p>옷장에서 저장한 아바타와 소개를 보내세요. 계정당 1회, 교사가 확인한 뒤 100위스를 지급합니다.</p>',images:[{imageUrl:'/poster.svg',imageStoragePath:'fixture/poster.webp',imageWidth:1086,imageHeight:1448,imageByteSize:100,imageMimeType:'image/webp',alt:'아바타 콘테스트 포스터',order:0}]};
+window.developerLogQa={writes:[],reads:0,reservations:[],toasts:[],uploads:0,liked:false,documents:{'fixture-post':post,'fixture-event':eventPost},switchAccount(){state.currentUser={...user,uid:'fixture-second'};state.userData={...userData,uid:'fixture-second'};auth.currentUser=state.currentUser;window.dispatchEvent(new Event('fixture-auth-change'));}};
 export const onSnapshot=(ref,callback)=>{window.developerLogQa.reads++;callback({docs:[{id:'fixture-post',data:()=>post},{id:'fixture-event',data:()=>eventPost}]});return()=>{}};
-export const getDoc=async(ref)=>{window.developerLogQa.reads++;const id=ref.path.split('/').at(-1);return{id,exists:()=>['fixture-post','fixture-event','fixture-created'].includes(id),data:()=>id==='fixture-event'?eventPost:id==='fixture-created'?window.developerLogQa.created:post}};export const getDocFromServer=getDoc;
+export const getDoc=async(ref)=>{const qa=window.developerLogQa;qa.reads++;if(qa.failReads)throw Error('synthetic-read-failure');const id=ref.path.split('/').at(-1);return{id,exists:()=>ref.path.includes('/likes/')?qa.liked:['fixture-post','fixture-event','fixture-created'].includes(id),data:()=>id==='fixture-event'?eventPost:id==='fixture-created'?qa.created:post}};export const getDocFromServer=getDoc;
 const forbidWrite=async()=>{window.developerLogQa.writes.push('blocked');throw Error('Fixture writes disabled')};
 export const deleteDoc=forbidWrite,addDoc=forbidWrite;
 export const setDoc=async(ref,data)=>{const qa=window.developerLogQa;if(!qa.allowWrites)return forbidWrite();qa.writes.push({op:'set',id:ref.id,data});if(qa.failPublish){qa.failPublish=false;throw Error('synthetic-publish-failure')}qa.documents[ref.id]=structuredClone(data);qa.created=data;};
 export const updateDoc=async(ref,data)=>{const qa=window.developerLogQa;if(!qa.allowWrites)return forbidWrite();qa.writes.push({op:'update',id:ref.id,data});Object.assign(qa.documents[ref.id]||qa.created,data)};
 export const tryDeleteDeveloperLogImage=async(path)=>{if(!window.developerLogQa.allowWrites)return forbidWrite();window.developerLogQa.writes.push({op:'delete-image',path});return true};
 export const uploadDeveloperLogImage=async({postId})=>{const qa=window.developerLogQa;if(!qa.allowWrites)return forbidWrite();const index=++qa.uploads;qa.writes.push({op:'upload',id:postId,index});if(qa.holdUpload)await new Promise(resolve=>qa.releaseUpload=resolve);if(qa.failUploadAt===index)throw Error('synthetic-upload-failure');return{...eventPost.images[0],imageStoragePath:'fixture/upload-'+index+'.webp'}};
-export const runTransaction=async()=>{if(!window.developerLogQa.deferWrites)return forbidWrite();window.developerLogQa.writes.push('local-transaction');await new Promise((resolve,reject)=>Object.assign(window.developerLogQa,{resolve,reject}));};
+export const writeBatch=()=>{let desired,delta;return{set(){desired=true},delete(){desired=false},update(ref,data){delta=data.likeCount.increment},async commit(){const qa=window.developerLogQa;if(!qa.deferWrites)return forbidWrite();qa.writes.push('local-batch');await new Promise((resolve,reject)=>Object.assign(qa,{resolve(){qa.liked=desired;post.likeCount+=delta;resolve()},reject}));}}};
 `;
 const entry = `
 import React from 'react';import {createRoot} from 'react-dom/client';
@@ -73,7 +75,7 @@ const built = await build({
         plugin.onResolve(
           {
             filter:
-              /firebase\/firestore$|lib\/(firebase|developerLogImages|weplayPreload|studentProfileEmoji|pointRankPromotion|pointRanks)$|contexts\/AuthContext$|(?:common\/|\.\/)AppToastProvider$/,
+              /firebase\/firestore$|(?:lib\/|\.\/)firebase$|lib\/(developerLogImages|weplayPreload|studentProfileEmoji|pointRankPromotion|pointRanks)$|hooks\/useStudentWisStocks$|contexts\/AuthContext$|(?:common\/|\.\/)AppToastProvider$/,
           },
           () => ({ path: "service", namespace: "fixture" }),
         );
@@ -160,7 +162,7 @@ try {
   });
   const checks = [];
   for (const identity of ["student", "developer", "teacher", "staff"]) {
-    for (const width of [390, 768, 1280]) {
+    for (const width of [320, 390, 768, 1280]) {
       const page = await browser.newPage({ viewport: { width, height: 900 } });
       const errors = [];
       page.on("pageerror", (error) => errors.push(error.message));
@@ -170,6 +172,10 @@ try {
           : route.abort(),
       );
       for (const mode of ["list", "detail"]) {
+        const readsBeforeNavigation =
+          mode === "detail"
+            ? await page.evaluate(() => window.developerLogQa.reads)
+            : 0;
         const pathname = `/developer-log${mode === "detail" ? "/fixture-post" : ""}`;
         await page.goto(`${origin}/?identity=${identity}#${pathname}`);
         await page
@@ -265,19 +271,51 @@ try {
           [],
         );
         assert.deepEqual(errors, []);
+        assert.equal(
+          (await page.evaluate(() => window.developerLogQa.reads)) -
+            readsBeforeNavigation,
+          mode === "list"
+            ? 1
+            : identity === "student" || identity === "staff"
+              ? 2
+              : 1,
+          "Detail reads only post and eligible own like; no list subscription",
+        );
+        if (mode === "detail")
+          assert.equal(
+            await page.getByRole("link", { name: "위스피 하러 가기" }).count(),
+            0,
+            "Existing posts have no unsolicited CTA",
+          );
         if (identity === "student" && width === 390 && mode === "detail") {
           await page.evaluate(() => {
             window.developerLogQa.deferWrites = true;
           });
-          await page
-            .getByRole("button", { name: "좋아요", exact: true })
-            .click();
-          await page
-            .getByRole("status", { name: "처리 중", exact: true })
-            .waitFor();
+          const likeButton = page.getByRole("button", {
+            name: "좋아요",
+            exact: true,
+          });
+          const beforeReads = await page.evaluate(
+            () => window.developerLogQa.reads,
+          );
+          await likeButton.click();
+          assert.equal(
+            await likeButton.getAttribute("aria-pressed"),
+            "true",
+            "Optimistic feedback before server ack",
+          );
+          assert.equal(
+            await page.locator(".developer-log-like-count").innerText(),
+            "3",
+          );
+          assert.equal(
+            await likeButton.isDisabled(),
+            true,
+            "Duplicate clicks blocked synchronously",
+          );
           assert.equal(
             await page.locator(".ws-loading-container-overlay").count(),
-            1,
+            0,
           );
           assert.equal(await page.locator(".ws-loading-screen").count(), 0);
           assert.equal(
@@ -290,26 +328,64 @@ try {
             "Pending mutation preserves the current article DOM",
           );
           await page.evaluate(() => window.developerLogQa.resolve());
-          await page
-            .locator(".ws-loading-container-overlay")
-            .waitFor({ state: "detached" });
-          await page
-            .getByRole("button", { name: "좋아요", exact: true })
-            .click();
-          await page.locator(".ws-loading-container-overlay").waitFor();
+          await page.waitForFunction(
+            () =>
+              document.querySelector(".developer-log-like")?.disabled === false,
+          );
+          assert.equal(
+            await page.evaluate(() => window.developerLogQa.reads),
+            beforeReads,
+            "Successful batch has zero pre/post reads",
+          );
+          await likeButton.click();
+          assert.equal(await likeButton.getAttribute("aria-pressed"), "false");
           await page.evaluate(() =>
             window.developerLogQa.reject(new Error("synthetic-write-failure")),
           );
-          await page
-            .locator(".ws-loading-container-overlay")
-            .waitFor({ state: "detached" });
+          await page.waitForFunction(
+            () =>
+              document.querySelector(".developer-log-like")?.disabled === false,
+          );
+          assert.equal(
+            await likeButton.getAttribute("aria-pressed"),
+            "true",
+            "Rejected mutation restores server state",
+          );
+          assert.equal(
+            await page.locator(".developer-log-like-count").innerText(),
+            "3",
+          );
+          assert.equal(
+            await page.evaluate(() => window.developerLogQa.reads),
+            beforeReads + 2,
+            "Only error reconciliation reads post + own like",
+          );
+          await likeButton.click();
+          await page.evaluate(() => window.developerLogQa.resolve());
+          await page.waitForFunction(
+            () =>
+              document.querySelector(".developer-log-like")?.disabled === false,
+          );
+          assert.equal(
+            await likeButton.getAttribute("aria-pressed"),
+            "false",
+            "Retry applies intended removal once",
+          );
+          assert.equal(
+            await page.locator(".developer-log-like-count").innerText(),
+            "2",
+          );
+          assert.equal(
+            await page.evaluate(() => window.developerLogQa.reads),
+            beforeReads + 2,
+          );
           assert.equal(
             await page.locator("#root").evaluate((node) => node.inert),
             false,
           );
           assert.deepEqual(
             await page.evaluate(() => window.developerLogQa.writes),
-            ["local-transaction", "local-transaction"],
+            ["local-batch", "local-batch", "local-batch"],
             "One existing command per click; no polling or extra writes",
           );
           checks.push({
@@ -317,7 +393,70 @@ try {
             pending: true,
             successReleased: true,
             errorReleased: true,
-            calls: 2,
+            calls: 3,
+            normalReads: 0,
+            recoveryReads: 2,
+          });
+          const toastCount = await page.evaluate(
+            () => window.developerLogQa.toasts.length,
+          );
+          await likeButton.click();
+          await page.evaluate(() => {
+            const qa = window.developerLogQa;
+            qa.liked = true;
+            qa.documents["fixture-post"].likeCount += 1;
+            qa.reject(new Error("synthetic-lost-response"));
+          });
+          await page.waitForFunction(
+            () =>
+              document.querySelector(".developer-log-like")?.disabled === false,
+          );
+          assert.equal(await likeButton.getAttribute("aria-pressed"), "true");
+          assert.equal(
+            await page.evaluate(() => window.developerLogQa.toasts.length),
+            toastCount,
+            "Lost response reconciles successful intent without false failure",
+          );
+          await likeButton.click();
+          await page.evaluate(() => {
+            window.developerLogQa.failReads = true;
+            window.developerLogQa.reject(new Error("synthetic-offline"));
+          });
+          await page.waitForFunction(
+            () =>
+              document.querySelector(".developer-log-like")?.disabled === false,
+          );
+          assert.equal(
+            await likeButton.getAttribute("aria-pressed"),
+            "true",
+            "Offline rollback preserves last displayed state",
+          );
+          await page.evaluate(() => {
+            window.developerLogQa.failReads = false;
+          });
+          await likeButton.click();
+          await page.evaluate(() => {
+            window.developerLogQa.liked = false;
+            window.developerLogQa.switchAccount();
+          });
+          await page.waitForFunction(
+            () =>
+              document.querySelector(".developer-log-like")?.disabled === false,
+          );
+          assert.equal(await likeButton.getAttribute("aria-pressed"), "false");
+          await page.evaluate(() =>
+            window.developerLogQa.reject(new Error("old-account-response")),
+          );
+          await page.waitForTimeout(50);
+          assert.equal(
+            await likeButton.getAttribute("aria-pressed"),
+            "false",
+            "Old account response cannot overwrite new account",
+          );
+          checks.push({
+            lostResponse: true,
+            offlineRollback: true,
+            accountSwitch: true,
           });
         }
         checks.push({
@@ -346,6 +485,14 @@ try {
         `${origin}/?identity=${identity}#/developer-log/fixture-event`,
       );
       const image = page.locator(".developer-log-event-images img");
+      assert.equal(
+        await page
+          .getByRole("link", { name: "위스피 하러 가기" })
+          .getAttribute("href"),
+        identity === "student"
+          ? "#/student/wispi"
+          : "#/teacher/points?tab=stocks",
+      );
       await image.waitFor();
       await image.evaluate((img) => img.decode());
       assert.equal(
@@ -371,6 +518,37 @@ try {
       await page
         .getByText(/계정당 1회, 교사가 확인한 뒤 100위스를 지급합니다/)
         .waitFor();
+      const layout = await page
+        .locator(".developer-log-post")
+        .evaluate((article) => {
+          const meta = article.querySelector(".developer-log-meta");
+          const parts = [...meta.children].map((node) =>
+            node.getBoundingClientRect(),
+          );
+          const date = article.querySelector(".developer-log-meta-date");
+          const body = article.querySelector(".developer-log-body-copy");
+          const paragraph = body.querySelector("p").getBoundingClientRect();
+          const bounds = article.getBoundingClientRect();
+          return {
+            centers: parts.map((box) => box.top + box.height / 2),
+            dateWhiteSpace: getComputedStyle(date).whiteSpace,
+            leftInset: paragraph.left - bounds.left,
+            rightInset: bounds.right - paragraph.right,
+            buttonHeight: article
+              .querySelector(".developer-log-like")
+              .getBoundingClientRect().height,
+          };
+        });
+      assert(
+        Math.max(...layout.centers) - Math.min(...layout.centers) < 2,
+        `${identity}/${width}: metadata stays on one row`,
+      );
+      assert.equal(layout.dateWhiteSpace, "nowrap");
+      assert(
+        layout.leftInset >= 20 && layout.rightInset >= 20,
+        `${identity}/${width}: readable prose inset ${JSON.stringify(layout)}`,
+      );
+      assert(layout.buttonHeight >= 44);
       const before = await page.evaluate(() => window.developerLogQa.reads);
       await page
         .getByRole("button", {
@@ -405,6 +583,8 @@ try {
         expanded: true,
         extraReads: 0,
         writes: 0,
+        metadataOneRow: true,
+        proseInset: layout.leftInset,
       });
       await page.close();
     }
@@ -436,6 +616,7 @@ try {
   const eventBody =
     "옷장에서 내 아바타를 저장하고 소개를 보내 주세요. 계정당 1회 참여할 수 있으며, 교사가 확인한 뒤 100위스를 지급합니다.";
   await writer.getByLabel("본문", { exact: true }).fill(eventBody);
+  await writer.getByLabel("위스피 이동 버튼", { exact: true }).check();
   await writer.locator('input[type="file"]').setInputFiles({
     name: "event.png",
     mimeType: "image/png",
@@ -470,6 +651,13 @@ try {
   assert.equal(saved.images.length, 1);
   assert.equal(saved.title, "나만의 아바타 콘테스트 — 참여하고 100위스 받자!");
   assert.equal(saved.bodyHtml, eventBody);
+  assert.equal(saved.action, "wispi");
+  assert.equal(
+    await writer
+      .getByRole("link", { name: "위스피 하러 가기" })
+      .getAttribute("href"),
+    "#/teacher/points?tab=stocks",
+  );
   checks.push({
     eventWriting: true,
     categoryDefault: "event",
@@ -602,6 +790,20 @@ try {
     assert.equal(result.title, "업로드 재시도 이벤트");
     assert.equal(result.bodyHtml, eventBody);
     assert.equal(result.images.length, editing ? 3 : 2);
+    await page
+      .getByRole("heading", { name: "업로드 재시도 이벤트", exact: true })
+      .waitFor();
+    if (editing) {
+      assert.equal(
+        result.action,
+        "wispi",
+        "Editing preserves the configured action",
+      );
+      assert.equal(
+        await page.getByRole("link", { name: "위스피 하러 가기" }).count(),
+        1,
+      );
+    }
     assert.equal(
       completed.reservations.length,
       editing ? 0 : 1,

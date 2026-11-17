@@ -50,6 +50,7 @@ export interface DeveloperLogPost {
   category: DeveloperLogCategory;
   summary: string;
   bodyHtml: string;
+  action?: "wispi" | "";
   images: DeveloperLogImage[];
   isPinned: boolean;
   viewCount: number;
@@ -75,6 +76,7 @@ export const normalizeDeveloperLogPost = (
   category: getDeveloperLogCategoryMeta(raw?.category).value,
   summary: String(raw?.summary || "").trim(),
   bodyHtml: String(raw?.bodyHtml || "").trim(),
+  action: raw?.action === "wispi" ? "wispi" : "",
   images: Array.isArray(raw?.images)
     ? raw.images
         .map((image: any, index: number) => ({

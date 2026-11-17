@@ -1,0 +1,74 @@
+.developer-log-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.developer-log-meta > span,
+.developer-log-meta > time {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.developer-log-meta .developer-log-like {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 12px;
+  gap: 6px;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.developer-log-like[aria-busy="true"] {
+  cursor: progress;
+}
+
+.developer-log-like:focus-visible {
+  outline: 2px solid var(--color-primary, #2563eb);
+  outline-offset: 2px;
+}
+
+.developer-log-post .developer-log-body-copy {
+  overflow-wrap: anywhere;
+}
+
+.developer-log-cta {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 24px;
+}
+
+@media (max-width: 639px) {
+  .developer-log-meta {
+    gap: 4px 8px;
+    font-size: 12px;
+  }
+
+  .developer-log-meta > span,
+  .developer-log-meta > time {
+    gap: 4px;
+  }
+
+  .developer-log-meta-label,
+  .developer-log-meta-author > i,
+  .developer-log-meta-date > i {
+    display: none;
+  }
+
+  .developer-log-meta .developer-log-like {
+    padding-inline: 8px;
+    gap: 4px;
+  }
+
+  /* Image posters stay full width; the accompanying prose has its own inset. */
+  .developer-log-image-post
+    .developer-log-event-layout
+    > .developer-log-body-copy {
+    padding-inline: 20px;
+  }
+}

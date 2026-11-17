@@ -23,7 +23,7 @@ export interface WisStockSettings {
   automatic: boolean;
   issuedShares: number;
   lotSize: number;
-  tradingStatus: "ACTIVE" | "HALTED" | "SELL_ONLY";
+  tradingStatus: "ACTIVE" | "HALTED" | "SELL_ONLY" | "GRADUATED";
   growthProfile?: "HISTORICAL" | "VALUE";
 }
 export interface WisStock {

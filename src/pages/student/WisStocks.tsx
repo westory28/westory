@@ -244,6 +244,7 @@ export default function StudentWisStocks() {
   const instrumentReady =
     !!selected &&
     selected.settings.tradingStatus !== "HALTED" &&
+    selected.settings.tradingStatus !== "GRADUATED" &&
     !(side === "BUY" && selected.settings.tradingStatus === "SELL_ONLY") &&
     (!selected.haltedUntilMs ||
       !account.data ||
@@ -272,6 +273,8 @@ export default function StudentWisStocks() {
     }
     if (!selected) return "주문할 종목을 선택해 주세요.";
     if (!instrumentReady) {
+      if (selected.settings.tradingStatus === "GRADUATED")
+        return "졸업한 종목입니다. 보유 주식은 마지막 가격으로 정산됩니다.";
       if (selected.settings.tradingStatus === "SELL_ONLY" && side === "BUY")
         return "이 종목은 매도만 가능합니다.";
       if (selected.settings.tradingStatus === "HALTED")
