@@ -1,7 +1,8 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { createHash } = require('node:crypto');
-const { nextWisStockModelPrice, sampleWisStockPriceStep, wisStockPriceModelAnchor } = require('../wisStockPriceModel');
+const { nextWisStockModelPrice, sampleWisStockPriceStep, wisStockPriceModelAnchor,
+  wisStockSector, sampleWisStockMarketFactors, wisStockPreviousMarketReturn, wisStockMarketStress } = require('../wisStockPriceModel');
 const HOUR = 3600000, FIRST = Date.parse('2026-11-16T00:00:00Z');
 const stock = (patch = {}) => ({ id: 'stock_000000000000000000000001', price: 10000,
   priceModel: { version: 1, anchorAtMs: FIRST, anchorPrice: 10000 }, history: [{ atMs: FIRST, price: 10000 }],
@@ -165,4 +166,136 @@ test('VALUE growth direction also holds across low/high configured volatility ra
     assert(ratios[12] > 1.1, `volatility ${volatilityBps}: ${ratios[12]}`);
     assert(ratios.filter(ratio => ratio > 1).length >= 20);
   }
+});
+
+test('catalog industry mapping links construction/steel and tech/electronics without relabeling historical companies', () => {
+  const catalog = require('../wisStockCatalog.json');
+  const classify = name => wisStockSector({ ...stock(), id: catalog.find(entry => entry.name === name).id });
+  for (const name of ['움집홈즈', '한양건설', '인조인프라', '철든소재']) assert.equal(classify(name), 'CONSTRUCTION_STEEL');
+  for (const name of ['담로링크', '별눈옵틱스', '고려베스트테크', '집현전일렉트로닉']) assert.equal(classify(name), 'TECH_ELECTRONICS');
+  for (const name of ['매일증권', '해피인베스트먼트', '노론홀딩스', '상평페이']) assert.equal(classify(name), 'FINANCE');
+  for (const name of ['돌끝테크', '농사직설푸드', '소힘모빌리티']) assert.equal(classify(name), 'OTHER');
+  assert.equal(wisStockSector(stock({ name: '돌끝테크' })), 'OTHER');
+  assert.equal(wisStockSector(stock({ name: '철든소재' })), 'CONSTRUCTION_STEEL');
+  assert.equal(wisStockSector(stock({ name: '새제철' })), 'CONSTRUCTION_STEEL');
+  assert.equal(wisStockSector(stock({ name: '새테크' })), 'TECH_ELECTRONICS');
+  assert.equal(wisStockSector(stock({ name: '새은행' })), 'FINANCE');
+  assert.equal(wisStockSector(stock({ name: '새테크', sector: '농업·식품' })), 'OTHER');
+  assert.equal(catalog.filter(entry => wisStockSector({ ...stock(), id: entry.id }) === 'CONSTRUCTION_STEEL').length, 6);
+  assert.equal(catalog.filter(entry => wisStockSector({ ...stock(), id: entry.id }) === 'TECH_ELECTRONICS').length, 4);
+});
+
+test('market and sector factors share calendar time across 1/6/24-hour instruments and retain scope boundaries', () => {
+  const atMs = FIRST + 7 * HOUR, factors = [1, 6, 24].map(intervalHours => sampleWisStockMarketFactors(
+    stock({ intervalHours, name: '새건설' }), '2026-2', Math.floor(atMs / (intervalHours * HOUR)), 'time-seed', { atMs }));
+  assert.deepEqual(factors[0], factors[1]); assert.deepEqual(factors[1], factors[2]);
+  const alignedAt = FIRST + 24 * HOUR;
+  const aligned = [1, 6, 24].map(intervalHours => sampleWisStockMarketFactors(
+    stock({ intervalHours, name: '새제철' }), '2026-2', alignedAt / (intervalHours * HOUR), 'time-seed'));
+  assert.deepEqual(aligned[0], aligned[1]); assert.deepEqual(aligned[1], aligned[2]);
+  assert.notDeepEqual(factors[0], sampleWisStockMarketFactors(stock({ name: '새건설' }), '2026-1', 0, 'time-seed', { atMs }));
+  assert.notDeepEqual(factors[0], sampleWisStockMarketFactors(stock({ name: '새건설' }), '2026-2', 0, 'another-seed', { atMs }));
+  assert.equal(factors[0].market, sampleWisStockMarketFactors(stock({ name: '새전자' }), '2026-2', 0, 'time-seed', { atMs }).market);
+  for (const bad of [NaN, Infinity, -1]) assert.throws(() => sampleWisStockMarketFactors(stock(), '2026-2', 0, '', { atMs: bad }), RangeError);
+  for (const bad of [NaN, Infinity, -0.1, 1]) assert.throws(() => sampleWisStockMarketFactors(stock(), '2026-2', 0, '', { sampler: () => bad }), RangeError);
+});
+
+test('private server samples produce stronger within-industry returns without forcing equal direction', () => {
+  const { nextPrice } = require('../wisStocks');
+  const catalog = require('../wisStockCatalog.json');
+  const samples = ['한양건설', '철든소재', '고려베스트테크', '집현전일렉트로닉'].map(name => ({
+    ...stock({ name }), id: catalog.find(entry => entry.name === name).id,
+  }));
+  const pairs = [], cross = [];
+  for (let seed = 0; seed < 8; seed++) {
+    const moves = samples.map(s => Array.from({ length: 2400 }, (_, slot) => nextPrice(s, '2026-2', slot, `sector-${seed}`) - 10000));
+    const unrelated = correlation(moves[0], moves[2]); cross.push(unrelated);
+    for (const [a, b] of [[0, 1], [2, 3]]) {
+      const related = correlation(moves[a], moves[b]); pairs.push(related);
+      assert(related > 0.20 && related > unrelated + 0.15, `${seed}: related=${related}; different=${unrelated}`);
+      const opposite = moves[a].filter((move, index) => move * moves[b][index] < 0).length;
+      assert(opposite > 2400 * 0.15, 'Related stocks retain independent losses and gains');
+      assert.notDeepEqual(moves[a], moves[b]);
+    }
+  }
+  console.log(JSON.stringify({ sectorSeeds: 8, hourlySamplesPerSeed: 2400,
+    linkedCorrelationRange: [Math.min(...pairs), Math.max(...pairs)], unrelatedCorrelationRange: [Math.min(...cross), Math.max(...cross)] }));
+});
+
+test('finance reacts more to the common market and to strictly prior committed index observations', () => {
+  const atMs = FIRST + 3 * HOUR;
+  const history = [{ atMs: FIRST, value: 1000 }, { atMs: FIRST + HOUR, value: 1050 },
+    { atMs: FIRST + 3 * HOUR, value: 500 }, { atMs: FIRST + 4 * HOUR, value: 1 }];
+  const index = { history }, before = JSON.stringify(index);
+  assert(Math.abs(wisStockPreviousMarketReturn(index, atMs) - 500) < 0.000001);
+  assert.equal(wisStockPreviousMarketReturn(undefined, atMs), 0);
+  assert.equal(wisStockPreviousMarketReturn({ history: [history[0]] }, atMs), 0);
+  assert.equal(JSON.stringify(index), before);
+  const financial = stock({ name: '새증권' }), ordinary = stock({ name: '새식품' });
+  const financialFactor = sampleWisStockMarketFactors(financial, '2026-2', 0, '', { atMs, sampler: () => 0.75 });
+  const ordinaryFactor = sampleWisStockMarketFactors(ordinary, '2026-2', 0, '', { atMs, sampler: () => 0.75 });
+  assert(financialFactor.contribution > ordinaryFactor.contribution * 2);
+  const move = (s, priorMarketReturnBps) => sampleWisStockPriceStep(s, '2026-2', 100, '', () => 0.5, 1000,
+    { atMs, priorMarketReturnBps, sampler: () => 0.5 }).movementBps;
+  assert(move(financial, 500) > move(financial, 0)); assert(move(financial, 0) > move(financial, -500));
+  assert.equal(move(ordinary, 500), move(ordinary, -500));
+});
+
+test('common volatility clusters and bounded selloff uncertainty decays without guaranteeing a rebound', () => {
+  const index = { history: [{ atMs: FIRST, value: 1000 }, { atMs: FIRST + HOUR, value: 850 }] };
+  const immediate = wisStockMarketStress(index, FIRST + 2 * HOUR), later = wisStockMarketStress(index, FIRST + 14 * HOUR);
+  assert(immediate > 0 && immediate < 0.35); assert(later > 0 && later < immediate);
+  assert.equal(wisStockMarketStress(index, FIRST + HOUR), 0, 'Same-tick observation is excluded');
+  assert.equal(wisStockMarketStress(index, FIRST + 50 * HOUR), 0);
+  assert.equal(wisStockMarketStress({ history: index.history.map((p, i) => ({ ...p, value: 1000 + i * 100 })) }, FIRST + 2 * HOUR), 0);
+  const factors = Array.from({ length: 2400 }, (_, slot) => sampleWisStockMarketFactors(stock({ name: '새건설' }), '2026-2', slot, 'volatility'));
+  const volatility = factors.map(f => f.volatilityScale);
+  assert(correlation(volatility.slice(1), volatility.slice(0, -1)) > 0.95);
+  assert(Math.min(...volatility) < 0.65 && Math.max(...volatility) > 1.5);
+  for (const sampler of [() => 0.25, () => 0.75]) {
+    const calm = sampleWisStockMarketFactors(stock({ name: '새건설' }), '2026-2', 0, '', { sampler });
+    const stressed = sampleWisStockMarketFactors(stock({ name: '새건설' }), '2026-2', 0, '', { sampler, marketStress: immediate });
+    assert(Math.abs(stressed.contribution) > Math.abs(calm.contribution));
+    assert.equal(Math.sign(stressed.contribution), Math.sign(calm.contribution));
+  }
+  assert.equal(sampleWisStockPriceStep(stock({ name: '새증권', volatilityBps: 0, trendBps: 17 }), '2026-2', 0, '', undefined, 1000,
+    { marketStress: immediate, priorMarketReturnBps: -1000, sampler: () => { throw Error('Must not sample a manually fixed price'); } }).movementBps, 17);
+});
+
+test('server prices are order-independent and only append a current observation after a missed interval', () => {
+  const { advanceMarket, normalizeSettings, blankMarket } = require('../wisStocks');
+  const atMs = FIRST + 25 * HOUR;
+  const make = (id, name, extra = {}) => ({ ...stock(), id, settings: normalizeSettings({ ...stock({ name }).settings,
+    description: '', period: '', automatic: true, ...extra }),
+    updatedAtMs: FIRST, nextTickAtMs: FIRST + HOUR });
+  const stocks = [make('a', '한양건설'), make('b', '새제철'), make('c', '새전자'), make('d', '새증권'),
+    make('halt', '정지제철', { tradingStatus: 'HALTED' }), make('graduated', '졸업전자', { tradingStatus: 'GRADUATED' }),
+    make('manual', '수동건설', { automatic: false })];
+  const market = { ...blankMarket({ semesterId: '2026-2' }), stocks, priceSeed: 'a'.repeat(64),
+    marketIndex: { history: [{ atMs: FIRST, value: 1000 }, { atMs: FIRST + HOUR, value: 900 }] } };
+  const before = JSON.stringify(market), advanced = advanceMarket(market, atMs);
+  const reordered = advanceMarket({ ...market, stocks: [...stocks].reverse() }, atMs);
+  assert.deepEqual([...advanced.stocks].sort((a, b) => a.id.localeCompare(b.id)), [...reordered.stocks].sort((a, b) => a.id.localeCompare(b.id)));
+  assert.equal(JSON.stringify(market), before);
+  assert.deepEqual(advanceMarket(market, atMs), advanced, 'Retry uses deterministic factors');
+  assert.equal(advanceMarket(advanced, atMs), advanced, 'Already advanced interval remains a no-op');
+  let changed = 0;
+  for (let i = 0; i < stocks.length; i++) {
+    const next = advanced.stocks[i], previous = stocks[i];
+    assert.deepEqual(next.history.slice(0, previous.history.length), previous.history);
+    assert.deepEqual(next.priceModel, previous.priceModel);
+    if (i >= 4) assert.deepEqual(next, previous);
+    if (next !== previous && !next.haltedUntilMs) {
+      changed++;
+      assert.equal(next.history.length, previous.history.length + 1);
+      assert.equal(next.history.at(-1).atMs, atMs);
+    }
+  }
+  assert(changed > 0);
+});
+
+test('CommonJS production bridge and ESM browser import expose the same pure pricing functions', async () => {
+  const esm = await import('../wisStockPriceModel.mjs');
+  assert.equal(esm.nextWisStockModelPrice, nextWisStockModelPrice);
+  assert.equal(esm.sampleWisStockMarketFactors, sampleWisStockMarketFactors);
 });

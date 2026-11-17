@@ -63,7 +63,9 @@ function rowsAndClasses(raw, scope) {
   }
   if (scope.grade && (classes.length !== 1 || !keys.has(classKey(scope)))) fail();
   const rows = raw.rows.map(item => {
-    if (!exact(item, rowFields) || typeof item.studentKey !== 'string' || !/^student_[a-f0-9]{24}$/.test(item.studentKey)
+    if (!(exact(item, rowFields) || exact(item, [...rowFields, 'accountRevision']))
+      || (Object.hasOwn(item, 'accountRevision') && !int(item.accountRevision))
+      || typeof item.studentKey !== 'string' || !/^student_[a-f0-9]{24}$/.test(item.studentKey)
       || studentKeys.has(item.studentKey) || !classValid(item) || !keys.has(classKey(item))
       || typeof item.studentNumber !== 'string' || !/^[1-9][0-9]?$/.test(item.studentNumber)
       || typeof item.displayName !== 'string' || item.displayName !== item.displayName.trim()
@@ -129,7 +131,8 @@ export function buildWisStockInvestmentBoard(input) {
     classes: input.classes, rows: input.rows, totals: {} };
   const parsed = inspect(raw, scope);
   raw.classes = parsed.classes;
-  raw.rows = parsed.rows.map(row => Object.fromEntries(rowFields.map(key => [key, row[key]])));
+  raw.rows = parsed.rows.map(row => Object.fromEntries(
+    (Object.hasOwn(row, 'accountRevision') ? [...rowFields, 'accountRevision'] : rowFields).map(key => [key, row[key]])));
   raw.totals = parsed.totals;
   parseWisStockInvestmentBoardSnapshot(raw, scope);
   return raw;

@@ -249,7 +249,8 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
       const holdingValue = sum(positions.map(([id, p]) => { if (!safe(prices[id], 1)) fail('WIS_STOCK_PRICE_MISSING'); return multiply(p.quantity, prices[id]); }));
       if (next.boardEligible === false) rows.delete(next.studentKey);
       else rows.set(next.studentKey, { studentKey: next.studentKey, grade: next.grade, classNumber: next.classNumber,
-        studentNumber: next.studentNumber, displayName: next.displayName, stockCash: next.stockCash, reservedCash: next.reservedCash,
+        studentNumber: next.studentNumber, displayName: next.displayName, accountRevision: next.revision,
+        stockCash: next.stockCash, reservedCash: next.reservedCash,
         holdingCount: positions.length, holdingValue, holdingCostBasis: sum(positions.map(([, p]) => p.costBasis)), realizedPnl: next.cumulativeRealizedPnl });
       touchedClasses.add(`${next.grade}_${next.classNumber}`);
     }

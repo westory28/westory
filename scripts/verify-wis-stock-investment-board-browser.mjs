@@ -56,7 +56,8 @@ qa.push=(mode='READY',revision=1)=>{for(const listener of listeners.filter(item=
  const scope=listener.scope;let raw=null;
  if(mode!=='NOT_READY')raw=build({scope,revision,asOfMs:1794787200000+revision*1000,sourceRevision:revision,priceRevision:revision,
  classes:scope.grade?[{grade:scope.grade,classNumber:scope.classNumber}]:[{grade:'3',classNumber:'1'},{grade:'3',classNumber:'2'}],
- rows:mode==='EMPTY'?[]:rows.filter(row=>!scope.grade||row.grade===scope.grade&&row.classNumber===scope.classNumber)});
+ rows:mode==='EMPTY'?[]:rows.filter(row=>!scope.grade||row.grade===scope.grade&&row.classNumber===scope.classNumber)
+ .map(row=>qa.accountRevisions?{...row,...(qa.legacyKeys?.includes(row.studentKey)?{}:{accountRevision:qa.accountRevisions[row.studentKey]??1})}:row)});
  qa.last=raw;listener.onConnection('CONNECTED');listener.onData(parse(raw,scope));
 }};
 qa.connection=state=>listeners.filter(item=>item.active).forEach(item=>item.onConnection(state));
@@ -95,7 +96,7 @@ export async function getWisStockInvestmentHistories(scope){
  {atMs:asOfMs-1200000,holdingValue:800,holdingCostBasis:1000},
  {atMs:asOfMs,holdingValue:row.holdingValue,holdingCostBasis:row.holdingCostBasis}];
  const result={semesterId:scope.year+'-'+scope.semester,studentKey,
- grade:row.grade,classNumber:row.classNumber,asOfMs,sourceRevision:qa.last.revision,priceRevision:qa.last.priceRevision,
+ grade:row.grade,classNumber:row.classNumber,asOfMs,sourceRevision:row.accountRevision??qa.last.revision,priceRevision:qa.last.priceRevision,
  holdings:Array.from({length:row.holdingCount},(_,i)=>({stockId:'stock_'+String(i+1).padStart(24,'0'),name:i?'보유 종목 2':'역사 속 교류와 산업의 발전을 함께 살펴보는 긴 이름의 합성 기업',quantity:(qa.holdingQuantity||3)+i*2})),
  points:qa.historyMode==='null'?points.map(point=>({...point,holdingValue:null,holdingCostBasis:null})):qa.historyMode==='empty'||(qa.historyMode==='partial'&&studentKey===scope.studentKeys[0])?[]:qa.historyMode==='single'?points.slice(-1):points,incompleteBeforeMs:null};
  return result;});
@@ -868,6 +869,45 @@ try {
   checks.push(
     "Load more appends 20/40/50 without rereads or inner-scroll reset; sort/class reset to 20. Selected holdings show each actual quantity, handle long names/empty/loading, discard prior student/revision quantities, and survive quote-only updates without additional calls.",
   );
+
+  const revisions = await open();
+  await revisions.evaluate(() => { window.boardQa.accountRevisions = {}; });
+  await push(revisions);
+  await chartReady(revisions);
+  const rankedKeys = await revisions.evaluate(() => window.boardQa.historyRequests[0].studentKeys);
+  await revisions.evaluate(() => {
+    window.boardQa.accountRevisions['student_000000000000000000000001'] = 2;
+  });
+  await push(revisions, 'READY', 2);
+  await revisions.waitForTimeout(50);
+  assert.equal(await countRequests(revisions), 1, 'another student trade adds zero history reads');
+  await revisions.evaluate(key => { window.boardQa.accountRevisions[key] = 2; }, rankedKeys[0]);
+  await push(revisions, 'READY', 3);
+  await chartReady(revisions);
+  assert.equal(await countRequests(revisions), 2);
+  assert.deepEqual(await revisions.evaluate(() => window.boardQa.historyRequests.at(-1).studentKeys), [rankedKeys[0]], 'one changed ranked account rereads one ledger, not five');
+  await revisions.evaluate(key => { window.boardQa.legacyKeys = [key]; }, rankedKeys[1]);
+  await push(revisions, 'READY', 4);
+  await chartReady(revisions);
+  assert.deepEqual(await revisions.evaluate(() => window.boardQa.historyRequests.at(-1).studentKeys), [rankedKeys[1]], 'mixed legacy row alone uses global revision');
+  await push(revisions, 'READY', 5);
+  await chartReady(revisions);
+  assert.equal(await countRequests(revisions), 4);
+  assert.deepEqual(await revisions.evaluate(() => window.boardQa.historyRequests.at(-1).studentKeys), [rankedKeys[1]]);
+  await revisions.evaluate(() => { window.boardQa.legacyKeys = []; });
+  await push(revisions, 'READY', 6);
+  await chartReady(revisions);
+  const revisionRequests = await countRequests(revisions);
+  await revisions.evaluate(() => { window.boardQa.accountRevisions['student_000000000000000000000001'] = 3; });
+  await push(revisions, 'READY', 7);
+  await revisions.waitForTimeout(50);
+  assert.equal(await countRequests(revisions), revisionRequests);
+  await revisions.getByRole('button', { name: '수익률 기록 새로고침', exact: true }).click();
+  await chartReady(revisions);
+  assert.equal(await countRequests(revisions), revisionRequests + 1);
+  assert.equal(await revisions.evaluate(() => window.boardQa.historyRequests.at(-1).studentKeys.length), 5, 'explicit refresh still rereads all displayed students');
+  await revisions.close();
+  checks.push('Per-account revisions: unrelated trade adds 0 requests (formerly 1 call / 5 ledgers); one ranked trade reads 1 ledger (formerly 5); mixed legacy rows alone follow the global revision; explicit refresh still reads the displayed five.');
 
   for (const width of [320, 390, 768, 1280, 1440]) {
     const page = await open(width, "reduce");

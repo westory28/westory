@@ -41,8 +41,46 @@ const {studentKey,...baseScope}=scope;
 const keys=[studentKey,'student_000000000000000000000002'];
 const batch=extra=>({semesterId:'2026-2',histories:keys.map(studentKey=>result({studentKey})),...extra});
 const batchCount=qa.calls.length;
-const firstBatch=getMany({...baseScope,studentKeys:keys}),sameBatch=getMany({...baseScope,studentKeys:[...keys].reverse()});
-await tick();assert.equal(qa.calls.length,batchCount+1);qa.pending.shift().resolve({data:batch()});assert.deepEqual(await firstBatch,await sameBatch);
+const firstBatch=getMany({...baseScope,studentKeys:keys}),sameBatch=getMany({...baseScope,studentKeys:[...keys].reverse()}),subset=getMany({...baseScope,studentKeys:[keys[0]]});
+await tick();assert.equal(qa.calls.length,batchCount+1);qa.pending.shift().resolve({data:batch()});assert.deepEqual(await firstBatch,await sameBatch);assert.deepEqual(await subset,[result()]);
+// A fast click into an in-flight top-five student reuses that exact student;
+// partial overlaps request only the missing student and combine both results.
+const third='student_000000000000000000000003',overlapCount=qa.calls.length;
+const original=getMany({...baseScope,studentKeys:keys});await tick();
+const overlap=getMany({...baseScope,studentKeys:[keys[1],third]});await tick();
+assert.equal(qa.calls.length,overlapCount+2);
+assert.deepEqual(qa.calls.at(-1).scope.studentKeys,[third]);
+qa.pending.pop().resolve({data:{semesterId:'2026-2',histories:[result({studentKey:third})]}});
+qa.pending.shift().resolve({data:batch()});await original;
+assert.deepEqual((await overlap).map(item=>item.studentKey),[keys[1],third]);
+const overlapFailCount=qa.calls.length;
+const rejected=getMany({...baseScope,studentKeys:keys});await tick();
+const rejectedSubset=getMany({...baseScope,studentKeys:[keys[0]]});await tick();
+const rejectedChecks=[assert.rejects(rejected,/network/),assert.rejects(rejectedSubset,/network/)];
+qa.pending.shift().reject(new Error('network'));await Promise.all(rejectedChecks);
+assert.equal(qa.calls.length,overlapFailCount+1);
+const overlapRetry=getMany({...baseScope,studentKeys:keys});await tick();
+assert.equal(qa.calls.length,overlapFailCount+2);qa.pending.shift().resolve({data:batch()});await overlapRetry;
+const isolatedCount=qa.calls.length;
+const scoped=getMany({...baseScope,studentKeys:[keys[0]]});await tick();
+const otherClass=getMany({...baseScope,classNumber:'2',studentKeys:[keys[0]]});await tick();
+assert.equal(qa.calls.length,isolatedCount+2,'class-scoped flights must not mix');
+qa.pending.shift().resolve({data:{semesterId:'2026-2',histories:[result()]}});
+qa.pending.shift().resolve({data:{semesterId:'2026-2',histories:[result({classNumber:'2'})]}});await Promise.all([scoped,otherClass]);
+const fiveKeys=Array.from({length:5},(_,i)=>'student_'+String(i+1).padStart(24,'0')),fiveCount=qa.calls.length;
+const five=getMany({...baseScope,studentKeys:fiveKeys});await tick();
+const selected=getMany({...baseScope,studentKeys:[fiveKeys[2]]});await tick();
+assert.equal(qa.calls.length,fiveCount+1,'pending top five plus selected student dispatches only one call');
+qa.pending.shift().resolve({data:{semesterId:'2026-2',histories:fiveKeys.map(studentKey=>result({studentKey}))}});
+assert.equal((await five).length,5);assert.equal((await selected)[0].studentKey,fiveKeys[2]);
+const versionCount=qa.calls.length;
+const older=getMany({...baseScope,studentKeys:[keys[0]]},{[keys[0]]:'account:4'});await tick();
+const newer=getMany({...baseScope,studentKeys:[keys[0]]},{[keys[0]]:'account:5'});await tick();
+assert.equal(qa.calls.length,versionCount+2,'new account revision cannot reuse an older pending ledger response');
+assert.deepEqual(qa.calls.at(-1).scope,{...baseScope,studentKeys:[keys[0]]},'local revision never changes the server payload');
+qa.pending.pop().resolve({data:{semesterId:'2026-2',histories:[result({sourceRevision:5,holdings:[{...holding,quantity:7}]})]}});
+assert.equal((await newer)[0].holdings[0].quantity,7);
+qa.pending.shift().resolve({data:{semesterId:'2026-2',histories:[result()]}});assert.equal((await older)[0].sourceRevision,4);
 for(const studentKeys of [[],[...keys,keys[0]],Array.from({length:6},(_,i)=>'student_'+String(i).padStart(24,'0')),['bad']]){
  const count=qa.calls.length;await assert.rejects(getMany({...baseScope,studentKeys}),/대상/);assert.equal(qa.calls.length,count);
 }
@@ -54,6 +92,14 @@ for(const extra of [{semesterId:'2027-1'},{histories:[result()]},{histories:[res
 const batchOwner=getMany({...baseScope,studentKeys:keys});await tick();qa.auth.currentUser=null;qa.pending.shift().resolve({data:batch()});await assert.rejects(batchOwner,/로그인/);qa.auth.currentUser=qa.user;
 const batchFail=getMany({...baseScope,studentKeys:keys});await tick();qa.pending.shift().reject(new Error('network'));await assert.rejects(batchFail,/network/);
 const batchRetry=getMany({...baseScope,studentKeys:keys});await tick();qa.pending.shift().resolve({data:batch()});assert.equal((await batchRetry).length,2);
+for(const load of [()=>get(scope),()=>getMany({...baseScope,studentKeys:keys})]){
+ const old=load();await tick();const oldCheck=assert.rejects(old,/로그인/);
+ const count=qa.calls.length;qa.auth.currentUser={...qa.user};
+ const current=load();await tick();assert.equal(qa.calls.length,count+1,'same UID/epoch but a new SDK owner must dispatch its own request');
+ const data=qa.calls.at(-1).scope.studentKeys?batch():result();
+ qa.pending.pop().resolve({data});await current;
+ qa.pending.shift().resolve({data});await oldCheck;qa.auth.currentUser=qa.user;
+}
 // Exercise the real app factory: mocking only the SDK prevents a valid history
 // client from silently calling the default Seoul region instead of its US export.
 const routeStub = `
@@ -76,4 +122,4 @@ for(const [name,region] of [['getWisStockInvestmentHistory','us-central1'],['get
  const call=await getHttpsCallable(name);const routed=await call({probe:true});
  assert.deepEqual(routed.data,{name,region,input:{probe:true}},name+' callable region');
 }
-console.log(JSON.stringify({passed:22,scopedCalls:qa.calls.length,productionReads:0,productionWrites:0,checks:'in-flight sharing, explicit refresh/retry, stale owner/session rejection, response scope/number/gap validation, actual Firebase factory routes new/existing Wispi to US and preserves Seoul default'}));
+console.log(JSON.stringify({passed:31,scopedCalls:qa.calls.length,productionReads:0,productionWrites:0,checks:'same/subset/partially overlapping in-flight sharing (5+1 => 5 requested students), SDK owner object/class/revision-isolated flights, newer response before older response, failed shared flight cleared for retry, explicit refresh/retry, stale owner/session rejection, response scope/number/gap validation, actual Firebase factory routes new/existing Wispi to US and preserves Seoul default'}));

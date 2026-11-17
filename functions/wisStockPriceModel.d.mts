@@ -11,6 +11,8 @@ export interface WisStockPriceModelInput {
   history?: { atMs: number; price: number }[];
   priceModel?: WisStockPriceModelAnchor;
   settings: {
+    name?: string;
+    sector?: string;
     initialPrice: number;
     minimumPrice: number;
     maximumPrice: number;
@@ -22,9 +24,26 @@ export interface WisStockPriceModelInput {
 }
 /** Return a finite value in [0, 1). The server supplies a private SHA-256 sampler. */
 export type WisStockPriceSampler = (key: string) => number;
+export interface WisStockMarketContext {
+  atMs?: number;
+  priorMarketReturnBps?: number;
+  marketStress?: number;
+  sampler?: WisStockPriceSampler;
+}
+export type WisStockSector = 'CONSTRUCTION_STEEL' | 'TECH_ELECTRONICS' | 'FINANCE' | 'OTHER';
+export function wisStockSector(stock: WisStockPriceModelInput): WisStockSector;
+export function wisStockPreviousMarketReturn(index: { history?: { atMs: number; value: number }[] } | undefined,
+  atMs: number): number;
+export function wisStockMarketStress(index: { history?: { atMs: number; value: number }[] } | undefined,
+  atMs: number): number;
+export function sampleWisStockMarketFactors(stock: WisStockPriceModelInput, semesterId: string, slot: number,
+  priceSeed?: string, context?: WisStockMarketContext): {
+  sector: WisStockSector; market: number; industry: number; volatilityScale: number; priorMarket: number;
+  contribution: number; individualWeight: number;
+};
 export function wisStockPriceModelAnchor(stock: WisStockPriceModelInput): WisStockPriceModelAnchor;
 export function sampleWisStockPriceStep(stock: WisStockPriceModelInput, semesterId: string, slot: number,
-  priceSeed?: string, sampler?: WisStockPriceSampler, dailyPriceLimitBps?: number): {
+  priceSeed?: string, sampler?: WisStockPriceSampler, dailyPriceLimitBps?: number, marketContext?: WisStockMarketContext): {
   movementBps: number;
   regime: 'MANUAL' | 'SIDEWAYS' | 'RISING' | 'FALLING' | 'CORRECTION';
   volatilityScale: number;
@@ -33,4 +52,4 @@ export function sampleWisStockPriceStep(stock: WisStockPriceModelInput, semester
 };
 /** Integer price with instrument bounds; market session/daily/circuit rules remain the caller's responsibility. */
 export function nextWisStockModelPrice(stock: WisStockPriceModelInput, semesterId: string, slot: number,
-  priceSeed?: string, sampler?: WisStockPriceSampler, dailyPriceLimitBps?: number): number;
+  priceSeed?: string, sampler?: WisStockPriceSampler, dailyPriceLimitBps?: number, marketContext?: WisStockMarketContext): number;

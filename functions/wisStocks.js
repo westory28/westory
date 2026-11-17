@@ -1,7 +1,7 @@
 const { createHash, randomBytes } = require('node:crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
-const { nextWisStockModelPrice, wisStockPriceModelAnchor } = require('./wisStockPriceModel');
+const { nextWisStockModelPrice, wisStockPriceModelAnchor, wisStockPreviousMarketReturn, wisStockMarketStress } = require('./wisStockPriceModel');
 const { normalizeWisStockMarketRules, normalizeWisStockTradingSettings,
   isWisStockTradingSession, wisStockKstSession, wisStockDailyBounds } = require('./wisStockMarketRules');
 const { normalizeCatalogPlan, catalogScheduleState, applyDueCatalogListings } = require('./wisStockCatalogSchedule');
@@ -165,17 +165,21 @@ function publishStudentMarket(tx, db, scope, previous, updated) {
     tx.set(db.doc(publicStockPath(scope, 'current')), publicStockStatus(updated));
 }
 const nextTick = (atMs, hours) => (Math.floor(atMs / (hours * HOUR)) + 1) * hours * HOUR;
-function nextPrice(stock, semesterId, slot, priceSeed = '', dailyPriceLimitBps) {
+function nextPrice(stock, semesterId, slot, priceSeed = '', dailyPriceLimitBps, marketContext) {
   // The private seed never enters callable responses. A missing legacy seed is
   // still deterministic; reads and unchanged saves never migrate documents.
   const prefix = `${priceSeed}\n${semesterId}\n${stock.id}\nwispi-price-v2\n`;
+  const factorPrefix = `${priceSeed}\n${semesterId}\nwispi-factors-v1\n`;
   return nextWisStockModelPrice(stock, semesterId, slot, priceSeed,
-    key => Number.parseInt(hash(prefix + key).slice(0, 8), 16) / 4294967296, dailyPriceLimitBps);
+    key => Number.parseInt(hash(prefix + key).slice(0, 8), 16) / 4294967296, dailyPriceLimitBps,
+    { ...marketContext, sampler: key => Number.parseInt(hash(factorPrefix + key).slice(0, 8), 16) / 4294967296 });
 }
 function advanceMarket(market, atMs) {
   const rules = normalizeWisStockMarketRules(market.rules);
   if (!rules.automaticPrices || rules.halted || !isWisStockTradingSession(rules, atMs)) return market;
   const { dayKey } = wisStockKstSession(atMs);
+  const marketContext = { atMs, priorMarketReturnBps: wisStockPreviousMarketReturn(market.marketIndex, atMs),
+    marketStress: wisStockMarketStress(market.marketIndex, atMs) };
   let changed = false;
   const stocks = market.stocks.map(stock => {
     const settings = normalizeSettings(stock.settings);
@@ -184,7 +188,7 @@ function advanceMarket(market, atMs) {
     const dayOpenPrice = stock.dayKey === dayKey ? stock.dayOpenPrice : stock.price;
     const bounds = wisStockDailyBounds(dayOpenPrice, rules.dailyPriceLimitBps);
     const price = Math.max(settings.minimumPrice, bounds.minimum, Math.min(settings.maximumPrice, bounds.maximum,
-      nextPrice(stock, market.semesterId, slot, market.priceSeed, rules.dailyPriceLimitBps)));
+      nextPrice(stock, market.semesterId, slot, market.priceSeed, rules.dailyPriceLimitBps, marketContext)));
     if (price < settings.minimumPrice || price > settings.maximumPrice || price < bounds.minimum || price > bounds.maximum) return stock;
     // The first large move pauses discovery. Once that pause expires, admit one
     // freshly calculated, bounded price; otherwise a sustained correction could

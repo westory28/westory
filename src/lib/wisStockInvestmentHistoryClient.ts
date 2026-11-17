@@ -25,7 +25,9 @@ interface HistoryScope {
   classNumber: string;
   studentKey: string;
 }
-const flights = new Map<string, Promise<WisStockInvestmentHistory>>();
+type HistoryFlights = Map<string, Promise<WisStockInvestmentHistory>>;
+type HistoryOwner = NonNullable<typeof auth.currentUser>;
+const flights = new WeakMap<HistoryOwner, HistoryFlights>();
 const ownerChanged = () =>
   new Error("로그인 상태가 바뀌었습니다. 다시 조회해 주세요.");
 
@@ -36,8 +38,10 @@ export async function getWisStockInvestmentHistory(scope: HistoryScope) {
   const epoch = Number((await owner.getIdTokenResult()).claims.auth_time);
   if (auth.currentUser !== owner || !Number.isSafeInteger(epoch) || epoch <= 0)
     throw ownerChanged();
+  const ownerFlights: HistoryFlights = flights.get(owner) || new Map();
+  flights.set(owner, ownerFlights);
   const key = JSON.stringify([owner.uid, epoch, scope]);
-  const existing = flights.get(key);
+  const existing = ownerFlights.get(key);
   if (existing) return existing;
   const task = (async () => {
     const call = await getHistoryDictionaryCallable<
@@ -57,9 +61,9 @@ export async function getWisStockInvestmentHistory(scope: HistoryScope) {
     validateHistory(data, scope);
     return data;
   })().finally(() => {
-    if (flights.get(key) === task) flights.delete(key);
+    if (ownerFlights.get(key) === task) ownerFlights.delete(key);
   });
-  flights.set(key, task);
+  ownerFlights.set(key, task);
   return task;
 }
 
@@ -118,9 +122,12 @@ function validateHistory(data: WisStockInvestmentHistory, scope: HistoryScope) {
 interface HistoriesScope extends Omit<HistoryScope, "studentKey"> {
   studentKeys: string[];
 }
-const batchFlights = new Map<string, Promise<WisStockInvestmentHistory[]>>();
-/** One bounded call for the displayed five students; no stored cross-session cache. */
-export async function getWisStockInvestmentHistories(scope: HistoriesScope) {
+const studentFlights = new WeakMap<HistoryOwner, HistoryFlights>();
+/** Share overlapping pending students in this exact scope, never completed history. */
+export async function getWisStockInvestmentHistories(
+  scope: HistoriesScope,
+  observedVersions: Readonly<Record<string, string>> = {},
+) {
   if (
     !Array.isArray(scope.studentKeys) ||
     !scope.studentKeys.length ||
@@ -134,10 +141,30 @@ export async function getWisStockInvestmentHistories(scope: HistoriesScope) {
   const epoch = Number((await owner.getIdTokenResult()).claims.auth_time);
   if (auth.currentUser !== owner || !Number.isSafeInteger(epoch) || epoch <= 0)
     throw ownerChanged();
+  const ownerFlights: HistoryFlights = studentFlights.get(owner) || new Map();
+  studentFlights.set(owner, ownerFlights);
   const input = { ...scope, studentKeys: [...scope.studentKeys].sort() };
-  const key = JSON.stringify([owner.uid, epoch, input]);
-  const existing = batchFlights.get(key);
-  if (existing) return existing;
+  const flightKey = (studentKey: string) =>
+    JSON.stringify([
+      owner.uid,
+      epoch,
+      input.year,
+      input.semester,
+      input.grade,
+      input.classNumber,
+      studentKey,
+      observedVersions[studentKey] || "",
+    ]);
+  const missing = input.studentKeys.filter(
+    (studentKey) => !ownerFlights.has(flightKey(studentKey)),
+  );
+  if (!missing.length)
+    return Promise.all(
+      input.studentKeys.map(
+        (studentKey) => ownerFlights.get(flightKey(studentKey))!,
+      ),
+    );
+  const request = { ...input, studentKeys: missing };
   const task = (async () => {
     const call = await getHistoryDictionaryCallable<
       HistoriesScope,
@@ -150,7 +177,7 @@ export async function getWisStockInvestmentHistories(scope: HistoriesScope) {
         if (auth.currentUser !== owner) throw ownerChanged();
       },
     });
-    const { data } = await call(input);
+    const { data } = await call(request);
     if (
       auth.currentUser !== owner ||
       Number((await owner.getIdTokenResult()).claims.auth_time) !== epoch
@@ -160,11 +187,11 @@ export async function getWisStockInvestmentHistories(scope: HistoriesScope) {
       !data ||
       data.semesterId !== `${scope.year}-${scope.semester}` ||
       !Array.isArray(data.histories) ||
-      data.histories.length !== input.studentKeys.length ||
+      data.histories.length !== request.studentKeys.length ||
       new Set(data.histories.map((item) => item?.studentKey)).size !==
-        input.studentKeys.length ||
+        request.studentKeys.length ||
       data.histories.some(
-        (item) => !item || !input.studentKeys.includes(item.studentKey),
+        (item) => !item || !request.studentKeys.includes(item.studentKey),
       )
     )
       throw new Error(
@@ -174,11 +201,24 @@ export async function getWisStockInvestmentHistories(scope: HistoriesScope) {
       validateHistory(item, { ...scope, studentKey: item.studentKey }),
     );
     return data.histories;
-  })().finally(() => {
-    if (batchFlights.get(key) === task) batchFlights.delete(key);
+  })();
+  missing.forEach((studentKey) => {
+    const key = flightKey(studentKey);
+    const flight = task
+      .then(
+        (histories) =>
+          histories.find((history) => history.studentKey === studentKey)!,
+      )
+      .finally(() => {
+        if (ownerFlights.get(key) === flight) ownerFlights.delete(key);
+      });
+    ownerFlights.set(key, flight);
   });
-  batchFlights.set(key, task);
-  return task;
+  return Promise.all(
+    input.studentKeys.map(
+      (studentKey) => ownerFlights.get(flightKey(studentKey))!,
+    ),
+  );
 }
 
 export function wisStockInvestmentHistoryError(error: unknown) {

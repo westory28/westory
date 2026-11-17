@@ -40,6 +40,13 @@ const holdingReturn = (row: WisStockInvestmentBoardState["rows"][number]) =>
   row.holdingCount > 0 && row.holdingCostBasis > 0
     ? (row.unrealizedPnl / row.holdingCostBasis) * 100
     : null;
+const historyVersion = (
+  row: WisStockInvestmentBoardState["rows"][number],
+  sourceRevision: number,
+) =>
+  row.accountRevision === undefined
+    ? `board:${sourceRevision}`
+    : `account:${row.accountRevision}`;
 const percent = (value: number | null) =>
   value === null
     ? "미보유"
@@ -85,10 +92,11 @@ export default function WisStockInvestmentBoard({
   const [historyRetry, setHistoryRetry] = useState(0);
   const [selectedStudentKey, setSelectedStudentKey] = useState("");
   const [periodDays, setPeriodDays] = useState(Infinity);
-  // View-local reuse only. Source/session/connection/scope changes discard it.
+  // View-local reuse only. Session/connection/scope changes discard it.
   const historyCache = useRef({
     scope: "",
     entries: new Map<string, WisStockInvestmentHistory>(),
+    versions: new Map<string, string>(),
   });
   useEffect(() => setSelectedStudentKey(""), [year, semester, classKey]);
   useEffect(() => setVisibleCount(PAGE_SIZE), [year, semester]);
@@ -199,37 +207,52 @@ export default function WisStockInvestmentBoard({
     chartRows.map((row) => row.studentKey).sort(),
   );
   const sourceRevision = live ? data.sourceRevision : 0;
-  const historyScope = JSON.stringify([
-    year,
-    semester,
-    classKey,
-    sourceRevision,
-    historyRetry,
-  ]);
+  const historyVersions = JSON.stringify(
+    chartRows
+      .map(
+        (row) => [row.studentKey, historyVersion(row, sourceRevision)] as const,
+      )
+      .sort(([a], [b]) => a.localeCompare(b)),
+  );
+  const historyScope = JSON.stringify([year, semester, classKey, historyRetry]);
   const selectedHoldings =
     selectedStudent && historyCache.current.scope === historyScope
       ? histories.find(
           (history) =>
             history.studentKey === selectedStudent.studentKey &&
-            history.semesterId === `${year}-${semester}`,
+            history.semesterId === `${year}-${semester}` &&
+            historyCache.current.versions.get(history.studentKey) ===
+              historyVersion(selectedStudent, sourceRevision),
         )?.holdings
       : undefined;
   useEffect(() => {
     let active = true;
     const studentKeys: string[] = JSON.parse(historyKeys);
+    const versions = new Map<string, string>(JSON.parse(historyVersions));
     setHistories([]);
     setHistoryError("");
     setHistoryLoading(false);
     if (!live) {
-      historyCache.current = { scope: "", entries: new Map() };
+      historyCache.current = {
+        scope: "",
+        entries: new Map(),
+        versions: new Map(),
+      };
       return;
     }
     if (historyCache.current.scope !== historyScope)
-      historyCache.current = { scope: historyScope, entries: new Map() };
+      historyCache.current = {
+        scope: historyScope,
+        entries: new Map(),
+        versions: new Map(),
+      };
     if (!studentKeys.length) return;
-    const missing = studentKeys.filter(
-      (key) => !historyCache.current.entries.has(key),
-    );
+    const missing = studentKeys.filter((key) => {
+      const cached = historyCache.current.entries.get(key);
+      return (
+        !cached || historyCache.current.versions.get(key) !== versions.get(key)
+      );
+    });
     const showCached = () =>
       setHistories(
         studentKeys.map((key) => historyCache.current.entries.get(key)!),
@@ -241,18 +264,30 @@ export default function WisStockInvestmentBoard({
     setHistoryLoading(true);
     const [grade = "", classNumber = ""] =
       classKey === "all" ? [] : classKey.split(":");
-    void getWisStockInvestmentHistories({
-      year,
-      semester,
-      grade,
-      classNumber,
-      studentKeys: missing,
-    })
+    void getWisStockInvestmentHistories(
+      {
+        year,
+        semester,
+        grade,
+        classNumber,
+        studentKeys: missing,
+      },
+      Object.fromEntries(versions),
+    )
       .then((next) => {
         if (!active || historyCache.current.scope !== historyScope) return;
-        next.forEach((history) =>
-          historyCache.current.entries.set(history.studentKey, history),
-        );
+        next.forEach((history) => {
+          historyCache.current.entries.set(history.studentKey, history);
+          const requested = versions.get(history.studentKey)!;
+          // Legacy rows retain whole-board invalidation. Account revisions
+          // allow unaffected students to survive another student's trade.
+          historyCache.current.versions.set(
+            history.studentKey,
+            requested.startsWith("account:")
+              ? `account:${history.sourceRevision}`
+              : requested,
+          );
+        });
         showCached();
       })
       .catch((failure) => {
@@ -264,14 +299,28 @@ export default function WisStockInvestmentBoard({
     return () => {
       active = false;
     };
-  }, [year, semester, classKey, live, historyKeys, historyScope]);
+  }, [
+    year,
+    semester,
+    classKey,
+    live,
+    historyKeys,
+    historyVersions,
+    historyScope,
+  ]);
   useEffect(() => {
     if (!live || !data || historyCache.current.scope !== historyScope) return;
     // Keep actual quote observations for visited students without rereading ledgers.
     const cached = historyCache.current.entries;
     cached.forEach((history, key) => {
       const row = data.rows.find((item) => item.studentKey === key);
-      if (!row || data.asOfMs <= history.asOfMs) return;
+      if (
+        !row ||
+        data.asOfMs <= history.asOfMs ||
+        historyCache.current.versions.get(key) !==
+          historyVersion(row, sourceRevision)
+      )
+        return;
       cached.set(key, {
         ...history,
         asOfMs: data.asOfMs,
@@ -294,7 +343,10 @@ export default function WisStockInvestmentBoard({
     const history = histories.find(
       (item) =>
         item.studentKey === row.studentKey &&
-        item.semesterId === `${year}-${semester}`,
+        item.semesterId === `${year}-${semester}` &&
+        historyCache.current.scope === historyScope &&
+        historyCache.current.versions.get(item.studentKey) ===
+          historyVersion(row, sourceRevision),
     );
     return {
       studentKey: row.studentKey,

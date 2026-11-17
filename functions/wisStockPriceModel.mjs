@@ -1,22 +1,12 @@
 // Shared, bounded teaching simulation; not a market forecast or a return promise.
 // No clocks, I/O, random global state, or persisted per-tick state are needed.
 import { DEFAULT_WIS_STOCK_MARKET_RULES, WIS_STOCK_RULE_LIMITS } from './wisStockMarketRules.mjs';
+import { wisStockPreviewSampler, sampleWisStockMarketFactors } from './wisStockMarketFactors.mjs';
+export { wisStockSector, wisStockPreviousMarketReturn, wisStockMarketStress, sampleWisStockMarketFactors } from './wisStockMarketFactors.mjs';
 const HOUR = 3_600_000;
 const DAY = HOUR * 24;
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 const smooth = value => value * value * (3 - 2 * value);
-
-// The browser uses this reproducible synthetic sampler. The server injects a
-// SHA-256 sampler keyed by its private market seed; this hash is not cryptography.
-function previewSampler(seed) {
-  return key => {
-    let value = 2166136261;
-    for (const char of `${seed}\n${key}`) value = Math.imul(value ^ char.charCodeAt(0), 16777619);
-    value ^= value >>> 16; value = Math.imul(value, 0x7feb352d);
-    value ^= value >>> 15; value = Math.imul(value, 0x846ca68b);
-    return ((value ^ (value >>> 16)) >>> 0) / 4294967296;
-  };
-}
 
 export function wisStockPriceModelAnchor(stock) {
   if (stock.priceModel) return { ...stock.priceModel };
@@ -27,7 +17,7 @@ export function wisStockPriceModelAnchor(stock) {
 }
 
 export function sampleWisStockPriceStep(stock, semesterId, slot, priceSeed = '', sampler,
-  dailyPriceLimitBps = DEFAULT_WIS_STOCK_MARKET_RULES.dailyPriceLimitBps) {
+  dailyPriceLimitBps = DEFAULT_WIS_STOCK_MARKET_RULES.dailyPriceLimitBps, marketContext) {
   const settings = stock.settings;
   if (!Number.isSafeInteger(dailyPriceLimitBps) || dailyPriceLimitBps < WIS_STOCK_RULE_LIMITS.dailyPriceLimitBps[0]
     || dailyPriceLimitBps > WIS_STOCK_RULE_LIMITS.dailyPriceLimitBps[1]
@@ -38,7 +28,7 @@ export function sampleWisStockPriceStep(stock, semesterId, slot, priceSeed = '',
     || !['HISTORICAL', 'VALUE'].includes(settings.growthProfile ?? 'HISTORICAL')) {
     throw new RangeError('Invalid stock price model input');
   }
-  const source = sampler || previewSampler(`${priceSeed}\n${semesterId}\n${stock.id}\nwispi-price-v2`);
+  const source = sampler || wisStockPreviewSampler(`${priceSeed}\n${semesterId}\n${stock.id}\nwispi-price-v2`);
   const unit = key => {
     const value = source(key);
     if (!Number.isFinite(value) || value < 0 || value >= 1) throw new RangeError('Invalid price sample');
@@ -48,6 +38,7 @@ export function sampleWisStockPriceStep(stock, semesterId, slot, priceSeed = '',
   // In particular 0 volatility + 0 trend remains completely stationary for VALUE.
   if (settings.volatilityBps === 0) return { movementBps: settings.trendBps,
     regime: 'MANUAL', volatilityScale: 0, shockBps: 0, referencePrice: null };
+  const factors = sampleWisStockMarketFactors(stock, semesterId, slot, priceSeed, marketContext);
   const bell = key => (unit(`${key}:a`) + unit(`${key}:b`) + unit(`${key}:c`)) * 2 / 3 - 1;
   const blend = (channel, span, value) => {
     const index = Math.floor(slot / span), progress = smooth((slot % span) / span);
@@ -102,18 +93,19 @@ export function sampleWisStockPriceStep(stock, semesterId, slot, priceSeed = '',
   const marketScale = dailyPriceLimitBps / 1000;
   const stepLimit = Math.min(6000, 3000 * marketScale);
   const movementBps = Math.round(clamp((drift + pull
-    + vol * volatilityScale * (0.5 * tilt + 0.42 * slowNoise + 0.1 * fastNoise) + shockBps) * marketScale,
+    + vol * (volatilityScale * factors.individualWeight * (0.5 * tilt + 0.42 * slowNoise + 0.1 * fastNoise)
+      + factors.contribution) + shockBps) * marketScale,
   -stepLimit, stepLimit));
   return { movementBps, regime, volatilityScale, shockBps: shockBps * marketScale, referencePrice };
 }
 
 export function nextWisStockModelPrice(stock, semesterId, slot, priceSeed = '', sampler,
-  dailyPriceLimitBps = DEFAULT_WIS_STOCK_MARKET_RULES.dailyPriceLimitBps) {
+  dailyPriceLimitBps = DEFAULT_WIS_STOCK_MARKET_RULES.dailyPriceLimitBps, marketContext) {
   const { minimumPrice, maximumPrice } = stock.settings;
   if (!Number.isSafeInteger(minimumPrice) || !Number.isSafeInteger(maximumPrice)
     || minimumPrice < 1 || maximumPrice < minimumPrice || maximumPrice > 1_000_000) {
     throw new RangeError('Invalid stock price bounds');
   }
-  const { movementBps } = sampleWisStockPriceStep(stock, semesterId, slot, priceSeed, sampler, dailyPriceLimitBps);
+  const { movementBps } = sampleWisStockPriceStep(stock, semesterId, slot, priceSeed, sampler, dailyPriceLimitBps, marketContext);
   return clamp(Math.round(stock.price * (10000 + movementBps) / 10000), minimumPrice, maximumPrice);
 }

@@ -57,6 +57,18 @@ test('class feeds cannot include another class, cross semesters, duplicate stude
     { ...input(), classes: [{ grade: '3', classNumber: '1' }, { grade: '3', classNumber: '1' }] },
   ]) assert.throws(() => build(source), reason('WIS_STOCK_BOARD_INVALID'));
 });
+
+test('account revision is optional for legacy rows and preserved without changing financial totals', () => {
+  const legacy = build(input());
+  assert.equal(Object.hasOwn(legacy.rows[0], 'accountRevision'), false);
+  const current = build({ ...input(), rows: [row(1, { accountRevision: 8 })] });
+  assert.equal(parse(current, all).rows[0].accountRevision, 8);
+  assert.deepEqual(current.totals, legacy.totals);
+  assert.equal(parse(build({ ...input(), rows: [row(1, { accountRevision: 0 })] }), all).rows[0].accountRevision, 0);
+  for (const accountRevision of [-1, 1.5, '8', null, Number.MAX_SAFE_INTEGER + 1])
+    assert.throws(() => build({ ...input(), rows: [row(1, { accountRevision })] }), reason('WIS_STOCK_BOARD_INVALID'));
+  assert.throws(() => build({ ...input(), rows: [row(1, { accountRevision: undefined })] }));
+});
 test('a canonically valued total loss remains visible while a missing valuation cannot masquerade as zero', () => {
   const document = build({ ...input(), rows: [row(1, { holdingValue: 0, holdingCostBasis: 800 })] });
   const state = parse(document, all);

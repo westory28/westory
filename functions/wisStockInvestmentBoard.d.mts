@@ -8,6 +8,8 @@ export interface WisStockInvestmentBoardClass { grade: string; classNumber: stri
 export interface WisStockInvestmentBoardRow {
   /** Opaque server-generated board identity, never an email or authentication UID. */
   studentKey: string; grade: string; classNumber: string; studentNumber: string; displayName: string;
+  /** Canonical account revision. Absent on legacy projections; never infer it from financial totals. */
+  accountRevision?: number;
   /** Stock cash includes reserved cash; never add reservedCash to assets again. */
   stockCash: number; reservedCash: number; holdingCount: number;
   /** Filled holdings only, including shares reserved for sale, at one price revision. */

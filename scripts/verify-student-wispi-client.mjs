@@ -174,4 +174,45 @@ await check('history is bounded, scoped and cursor-based; malformed responses re
   await api.getStudentWisStockHistory(scope,'cursor');assert.deepEqual(qa.calls[0].data,{...scope,cursor:'cursor',limit:20});
   qa.handler=async()=>({entries:[]});await assert.rejects(api.getStudentWisStockHistory(scope));
 });
+await check('history overlaps share one live-account request; completion and failure never become cached pages',async()=>{
+  const {qa,api}=await setup();let finish,fail;
+  qa.handler=async(name)=>name==='getStudentWisStockState'?state():new Promise((resolve,reject)=>{finish=resolve;fail=reject});
+  const states=[],stop=api.watchStudentWisStockState(scope,s=>states.push(s));await until(()=>states.at(-1)?.status==='ready');
+  const historyCalls=()=>qa.calls.filter(call=>call.name==='getStudentWisStockHistory').length;
+  const a=api.getStudentWisStockHistory(scope,'cursor'),b=api.getStudentWisStockHistory(scope,'cursor');
+  await until(()=>finish);assert.equal(historyCalls(),1);
+  finish({semesterId:'2026-2',entries:[],nextCursor:'next',hasMore:true});assert.deepEqual(await a,await b);
+  finish=undefined;const c=api.getStudentWisStockHistory(scope,'cursor'),d=api.getStudentWisStockHistory(scope,'cursor');
+  await until(()=>finish);assert.equal(historyCalls(),2);
+  const rejected=[assert.rejects(c,/synthetic history failure/),assert.rejects(d,/synthetic history failure/)];fail(Error('synthetic history failure'));await Promise.all(rejected);
+  finish=undefined;const retry=api.getStudentWisStockHistory(scope,'cursor');await until(()=>finish);assert.equal(historyCalls(),3);
+  finish({semesterId:'2026-2',entries:[],nextCursor:'',hasMore:false});await retry;stop();
+});
+await check('pending history is isolated by cursor, semester, account revision and active-session pause',async()=>{
+  for(const change of ['cursor','semester','revision','pause']){
+    const {qa,api}=await setup();const pending=[];let revision=1;
+    qa.handler=async(name,fields)=>name==='getStudentWisStockState'?state(revision):new Promise(resolve=>pending.push({fields,resolve}));
+    const states=[],stop=api.watchStudentWisStockState(scope,s=>states.push(s));await until(()=>states.at(-1)?.status==='ready');
+    const first=api.getStudentWisStockHistory(scope,'first');await until(()=>pending.length===1);
+    if(change==='revision'){
+      revision=2;[...qa.observers][0].next({metadata:{fromCache:false,hasPendingWrites:false},exists:()=>true,data:()=>({revision})});
+      await until(()=>states.at(-1)?.data?.account.revision===2);
+    }
+    if(change==='pause'){
+      const session=[...qa.sessions][0];session.paused();session.allowed();await until(()=>states.at(-1)?.status==='ready');
+    }
+    const second=api.getStudentWisStockHistory(change==='semester'?{...scope,semester:'1'}:scope,change==='cursor'?'other':'first');
+    await until(()=>pending.length===2);
+    for(const request of pending)request.resolve({semesterId:request.fields.year+'-'+request.fields.semester,entries:[],nextCursor:'',hasMore:false});
+    await Promise.all([first,second]);stop();
+  }
+});
+await check('replaced SDK user with identical uid/auth_time never shares an older state flight',async()=>{
+  const {qa,api}=await setup();const pending=[];
+  qa.handler=()=>new Promise(resolve=>pending.push(resolve));
+  const oldStates=[],stopOld=api.watchStudentWisStockState(scope,s=>oldStates.push(s));await until(()=>pending.length===1);
+  qa.owner=owner('student-a');const newStates=[],stopNew=api.watchStudentWisStockState(scope,s=>newStates.push(s));await until(()=>pending.length===2);
+  pending[1](state(2));await until(()=>newStates.at(-1)?.status==='ready');pending[0](state(1));await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal(newStates.at(-1).data.account.revision,2);assert.equal(qa.calls.length,2);stopOld();stopNew();
+});
 console.log(JSON.stringify({passed:true,checks,network:0,productionWrites:0},null,2));

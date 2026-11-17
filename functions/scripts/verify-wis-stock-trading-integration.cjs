@@ -271,6 +271,18 @@ async function test(name, fn, count = 2, supply = 1000) {
     assert.equal(current.account.positions[0].costBasis, 1010); assert.equal(current.account.positions[0].quantity, 10);
     assert.deepEqual(await get(mainPath('student0')), initial);
     const board = await get(`${base}/wis_stock_investment_boards/all`); assert.equal(board.totals.holdingValue, 2000);
+    const accountKey = (await get(acctPath('student0'))).studentKey;
+    const studentRow = board.rows.find(row => row.studentKey === accountKey);
+    assert.ok(studentRow); assert.equal(studentRow.accountRevision, current.account.revision);
+    await transfer('student1', 'DEPOSIT', 1000);
+    const unrelated = await get(`${base}/wis_stock_investment_boards/all`);
+    assert.ok(unrelated.sourceRevision > board.sourceRevision);
+    assert.deepEqual(unrelated.rows.find(row => row.studentKey === studentRow.studentKey), studentRow);
+    const pricesOnly = await get(`${base}/wis_stock_markets/current`);
+    pricesOnly.stocks[0].price = 210; pricesOnly.revision++;
+    await api.onWisStockMarketTradingWrite(await marketWrite(pricesOnly));
+    const revalued = (await get(`${base}/wis_stock_investment_boards/all`)).rows.find(row => row.studentKey === studentRow.studentKey);
+    assert.equal(revalued.holdingValue, 2100); assert.equal(revalued.accountRevision, studentRow.accountRevision);
     assert.equal((await place('student0', 'BUY', 10, id, quote)).duplicate, true); assert.equal(commits.at(-1).writes.length, 0);
     await denied(place('student0', 'BUY', 9, id, quote), 'WIS_STOCK_REQUEST_CONFLICT');
   });
@@ -337,8 +349,8 @@ async function test(name, fn, count = 2, supply = 1000) {
     const event = { params: { year: '2026', semester: '2', orderId: order.id }, data: snapshot };
     await api.onWisStockOrderCreated(event); await api.onWisStockOrderCreated(event);
     assert.equal(tasks.length, 2); assert.equal(tasks[0].id, tasks[1].id); assert.equal(tasks[0].scheduleTime.getTime(), order.dueAtMs);
-    assert.deepEqual(await api.recoverWisStockOrders(), { examined: 0, changed: 0 });
-    clock = order.dueAtMs; assert.deepEqual(await api.recoverWisStockOrders(), { examined: 1, changed: 1 });
+    assert.deepEqual(await api.recoverWisStockOrders(), { examined: 0, changed: 0, graduationJobsQueued: 0 });
+    clock = order.dueAtMs; assert.deepEqual(await api.recoverWisStockOrders(), { examined: 1, changed: 1, graduationJobsQueued: 0 });
     assert.equal((await settle(order.id)).duplicate, true); assert.equal(commits.at(-1).writes.length, 0);
   });
   await test('supply exhaustion and parallel sell reservations never exceed issued or held quantities', async () => {
@@ -410,7 +422,7 @@ async function test(name, fn, count = 2, supply = 1000) {
     const first = (await place('student0')).order, second = (await place('student1')).order;
     await db.doc(`${base}/wis_stock_orders/${first.id}`).update({ requestKey: 'synthetic-corrupted-contract' });
     clock += 60000;
-    assert.deepEqual(await api.recoverWisStockOrders(), { examined: 2, changed: 1, failed: 1 });
+    assert.deepEqual(await api.recoverWisStockOrders(), { examined: 2, changed: 1, graduationJobsQueued: 0, failed: 1 });
     assert.equal((await get(`${base}/wis_stock_orders/${first.id}`)).status, 'PENDING');
     assert.equal((await get(`${base}/wis_stock_orders/${second.id}`)).status, 'FILLED');
     assert.equal((await get(acctPath('student0'))).reservedCash, 101);

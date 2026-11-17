@@ -26,12 +26,13 @@ type StateEntry = {
   state: WisStockLoad<StudentWisStockState>;
   commands: number;
   seenRevision: number;
+  historyReads: Map<string, Promise<StudentWisStockHistoryPage>>;
   apply: (state: StudentWisStockState) => void;
   refresh: () => void;
   dispose: () => void;
 };
 const entries = new Map<string, StateEntry>();
-const reads = new Map<string, Promise<StudentWisStockState>>();
+const reads = new WeakMap<User, Map<string, Promise<StudentWisStockState>>>();
 type CommandEntry = {
   flight?: Promise<StudentWisStockMutation>;
   pendingKey?: string;
@@ -107,14 +108,17 @@ function accept(value: StudentWisStockState, b: Boundary) {
   return { ...value, clientReceivedAtMs: Date.now() };
 }
 async function readState(b: Boundary) {
-  const existing = reads.get(b.key);
+  const ownerReads =
+    reads.get(b.owner) || new Map<string, Promise<StudentWisStockState>>();
+  reads.set(b.owner, ownerReads);
+  const existing = ownerReads.get(b.key);
   if (existing) return existing;
   const task = invoke<StudentWisStockState>(b, "getStudentWisStockState")
     .then((value) => accept(value, b))
     .finally(() => {
-      if (reads.get(b.key) === task) reads.delete(b.key);
+      if (ownerReads.get(b.key) === task) ownerReads.delete(b.key);
     });
-  reads.set(b.key, task);
+  ownerReads.set(b.key, task);
   return task;
 }
 export function studentWisStockError(error: unknown) {
@@ -184,6 +188,7 @@ export function watchStudentWisStockState(
         };
         const disconnect = () => {
           generation++;
+          current.historyReads.clear();
           stopSnapshot?.();
           stopSnapshot = undefined;
           path = null;
@@ -238,6 +243,11 @@ export function watchStudentWisStockState(
               }
               current.seenRevision = Math.max(current.seenRevision, revision);
               if (
+                current.state.status !== "ready" ||
+                revision > current.state.data.account.revision
+              )
+                current.historyReads.clear();
+              if (
                 current.commands === 0 &&
                 (current.state.status !== "ready" ||
                   revision > current.state.data.account.revision)
@@ -261,6 +271,11 @@ export function watchStudentWisStockState(
             next.account.revision < current.state.data.account.revision
           )
             return;
+          if (
+            current.state.status !== "ready" ||
+            next.account.revision !== current.state.data.account.revision
+          )
+            current.historyReads.clear();
           send({ status: "ready", data: next, error: "" });
           syncListener(next);
         };
@@ -329,6 +344,7 @@ export function watchStudentWisStockState(
           state: { status: "loading", data: null, error: "" },
           commands: 0,
           seenRevision: 0,
+          historyReads: new Map(),
           apply,
           refresh,
           dispose,
@@ -514,7 +530,10 @@ async function prepareMutation(
       }
     }
     const entry = entries.get(b.key);
-    if (entry) entry.commands++;
+    if (entry) {
+      entry.commands++;
+      entry.historyReads.clear();
+    }
     try {
       const raw = await invoke<StudentWisStockMutation>(b, name, {
         ...(withRequestId ? pending.fields : fields),
@@ -604,17 +623,39 @@ export async function getStudentWisStockHistory(
   cursor = "",
 ) {
   const b = await boundary(scope);
-  const result = await invoke<StudentWisStockHistoryPage>(
+  const entry = entries.get(b.key);
+  // Share only overlapping reads under the same live account/session revision.
+  // Completed pages are never cached; pause, revision changes and commands
+  // invalidate pending sharing so a new view cannot reuse an older request.
+  const pending =
+    entry?.boundary.owner === b.owner &&
+    entry.state.status === "ready" &&
+    entry.commands === 0 &&
+    entry.seenRevision <= entry.state.data.account.revision &&
+    document.visibilityState !== "hidden" &&
+    navigator.onLine !== false
+      ? entry.historyReads
+      : undefined;
+  const existing = pending?.get(cursor);
+  if (existing) return existing;
+  const task = invoke<StudentWisStockHistoryPage>(
     b,
     "getStudentWisStockHistory",
     { cursor, limit: 20 },
-  );
-  if (
-    result?.semesterId !== `${scope.year}-${scope.semester}` ||
-    !Array.isArray(result.entries) ||
-    typeof result.nextCursor !== "string" ||
-    typeof result.hasMore !== "boolean"
   )
-    throw new Error("내역을 확인하지 못했습니다. 다시 시도해 주세요.");
-  return result;
+    .then((result) => {
+      if (
+        result?.semesterId !== `${scope.year}-${scope.semester}` ||
+        !Array.isArray(result.entries) ||
+        typeof result.nextCursor !== "string" ||
+        typeof result.hasMore !== "boolean"
+      )
+        throw new Error("내역을 확인하지 못했습니다. 다시 시도해 주세요.");
+      return result;
+    })
+    .finally(() => {
+      if (pending?.get(cursor) === task) pending.delete(cursor);
+    });
+  pending?.set(cursor, task);
+  return task;
 }
