@@ -15,6 +15,9 @@ export interface WisStockReservedOrder {
   cashDebit: number; cashCredit: number; reservedPrincipal: number; reservedCostBasis: number;
   acceptedAtMs: number; dueAtMs: number; delaySeconds: number; dayKey: string;
   settledAtMs?: number; cancellationReason?: string; realizedPnl?: number; earnedDelta?: number;
+  eventBonusRestrictedDebit?: number;
+  eventBonusLotAllocations?: Array<{ lotId: string; quantity: number; costBasis: number; restrictedCostBasis: number }>;
+  eventBonusRestrictedProceeds?: number; eventBonusRealizedLossDelta?: number;
 }
 export interface WisStockOrderEffects {
   mainCashDelta: 0; stockCashDelta: number; holdingQuantityDelta: number; holdingPrincipalDelta: number; holdingCostBasisDelta: number;

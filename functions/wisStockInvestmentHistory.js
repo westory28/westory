@@ -67,7 +67,7 @@ function createWisStockInvestmentHistory({ db, now = Date.now, assertSession = a
           .select('schemaVersion', 'semesterId', 'accountId', 'studentKey', 'studentUid', 'grade', 'classNumber', 'boardEligible', 'revision', 'positions').limit(2));
         if (accounts.size !== 1) fail('WIS_STOCK_INVESTMENT_HISTORY_INVALID');
         const account = accounts.docs[0].data();
-        if (account.schemaVersion !== 1 || account.semesterId !== scope.semesterId || account.studentKey !== studentKey
+        if (![1, 2].includes(account.schemaVersion) || account.semesterId !== scope.semesterId || account.studentKey !== studentKey
           || account.boardEligible === false || account.grade !== selected.grade || account.classNumber !== selected.classNumber
           || typeof account.studentUid !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(account.studentUid)
           || account.accountId !== accountIdFor(scope.semesterId, account.studentUid) || account.accountId !== accounts.docs[0].id

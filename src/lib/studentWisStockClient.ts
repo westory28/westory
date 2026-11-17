@@ -129,6 +129,10 @@ export function studentWisStockError(error: unknown) {
   };
   if (e.details?.reason === "WIS_STOCK_MARKET_CLOSED")
     return "위스피의 거래가 중지되었습니다.";
+  if (e.details?.reason === "WIS_STOCK_BONUS_RESTRICTION_PENDING")
+    return "이벤트 지원금 내역을 확인하고 있습니다. 잠시 후 잔액을 새로고침해 주세요.";
+  if (e.details?.reason === "WIS_STOCK_WITHDRAWAL_LIMIT")
+    return "출금 가능한 금액을 확인해 주세요. 예약된 위스와 이벤트 지원금 원금은 출금할 수 없습니다.";
   if (
     e.details?.reason?.includes("SESSION") ||
     e.code?.includes("unauthenticated")

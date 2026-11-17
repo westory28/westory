@@ -1,6 +1,8 @@
 // Only trusted market-management transactions can create these durable jobs.
 // Graduation is a zero-fee liquidation at the frozen final quote, never a
 // deletion of positions. Account, supply, order, board and receipt commit once.
+const { isDeepStrictEqual } = require('node:util');
+const { tagWisStockBonusOrder, applyWisStockBonusOrder } = require('./wisStockBonusAccounting');
 function createWisStockGraduation(deps) {
   const { db, now, mutate, scopeOf, rootPath, accountPath, orderPath, hash, fail, sum, multiply,
     validateAccount, readMarket, supplyFor, portfolioFor, reservationsFor, applyOrder,
@@ -41,7 +43,7 @@ function createWisStockGraduation(deps) {
       const changes = [], atMs = now(), context = { scope, actor: { uid: previous.studentUid }, atMs };
       for (let index = 0; index < pending.length; index++) {
         const order = pending[index], raw = snapshots[index].data();
-        if (!raw || raw.studentUid !== previous.studentUid || Object.keys(order).some(key => order[key] !== raw[key]))
+        if (!raw || raw.studentUid !== previous.studentUid || Object.keys(order).some(key => !isDeepStrictEqual(order[key], raw[key])))
           fail('WIS_STOCK_RESERVATION_INVALID');
         const transition = cancelWisStockOrder({ order, accountId, semesterId: scope.semesterId, nowMs: atMs,
           portfolio: portfolioFor(next, market, stockId), reservations: reservationsFor(next, stockId), supply: nextSupply });
@@ -57,14 +59,18 @@ function createWisStockGraduation(deps) {
       next.revision = sum([next.revision, 1]); next.updatedAtMs = atMs;
       nextSupply.availableShares = sum([nextSupply.availableShares, quantity]);
       nextSupply.revision = sum([nextSupply.revision, 1]); delete nextSupply.holders[next.studentKey];
-      delete next.positions[stockId];
       const orderId = `stockord_${hash(`GRADUATION\n${scope.semesterId}\n${stockId}\n${accountId}`)}`;
-      const automatic = { schemaVersion: 1, id: orderId, accountId, studentUid: previous.studentUid,
+      const automatic = tagWisStockBonusOrder(next, { schemaVersion: 1, id: orderId, accountId, studentUid: previous.studentUid,
         semesterId: scope.semesterId, year: scope.year, semester: scope.semester, stockId, side: 'SELL',
         status: 'FILLED', revision: 2, automaticSettlement: 'GRADUATION', quantity, unitPrice: job.unitPrice,
         gross: cashCredit, fee: 0, cashDebit: 0, cashCredit, reservedPrincipal: position.principal,
         reservedCostBasis: position.costBasis, acceptedAtMs: job.atMs, dueAtMs: job.atMs, settledAtMs: atMs,
-        realizedPnl, earnedDelta: 0, requestKey: `GRADUATION:${stockId}:${accountId}` };
+        realizedPnl, earnedDelta: 0, requestKey: `GRADUATION:${stockId}:${accountId}` });
+      // The source lots use their actual purchase cost, independent of the
+      // public position's average cost. Graduation follows ordinary sales.
+      next.positions[stockId] = { ...position, quantity: 0, principal: 0, costBasis: 0 };
+      applyWisStockBonusOrder(previous, next, { order: automatic });
+      delete next.positions[stockId];
       next.recentOrders = [automatic, ...next.recentOrders].slice(0, 10);
       validateAccount(next, scope, previous.studentUid);
       const writeBoards = await prepareBoard(tx, scope, market, previous, next, new Map([[stockId, nextSupply]]));
@@ -78,11 +84,15 @@ function createWisStockGraduation(deps) {
       tx.create(db.doc(orderPath(scope, orderId)), automatic);
       history(tx, context, next, 'ORDER_FILLED', orderId, { orderId, stockId, side: 'SELL', quantity,
         unitPrice: job.unitPrice, fee: 0, stockCashDelta: cashCredit, realizedPnl,
-        principalRemoved: position.principal, costBasisRemoved: position.costBasis, automaticSettlement: 'GRADUATION' });
+        principalRemoved: position.principal, costBasisRemoved: position.costBasis, automaticSettlement: 'GRADUATION',
+        ...(automatic.eventBonusRestrictedProceeds !== undefined ? { eventBonusRestrictedProceeds: automatic.eventBonusRestrictedProceeds,
+          eventBonusRealizedLossDelta: automatic.eventBonusRealizedLossDelta } : {}) });
       tx.create(receiptRef, { schemaVersion: 1, semesterId: scope.semesterId, accountId,
         studentUid: previous.studentUid, stockId, orderId, quantity, unitPrice: job.unitPrice,
         cashCredit, costBasisRemoved: position.costBasis, principalRemoved: position.principal,
-        fee: 0, realizedPnl, appliedAtMs: atMs, status: 'APPLIED' });
+        fee: 0, realizedPnl, appliedAtMs: atMs, status: 'APPLIED',
+        ...(automatic.eventBonusRestrictedProceeds !== undefined ? { eventBonusRestrictedProceeds: automatic.eventBonusRestrictedProceeds,
+          eventBonusRealizedLossDelta: automatic.eventBonusRealizedLossDelta } : {}) });
       writeBoards();
       return { changed: true, cashCredit };
     });

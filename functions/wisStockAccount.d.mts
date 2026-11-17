@@ -1,7 +1,8 @@
 export interface WisStockAccountSnapshot {
   mainCash: number; stockCash: number; reservedCash: number; lastDepositAtMs: number;
-  /** All deposited principal not yet returned, retained even after a loss. */
+  /** Personal deposited principal not yet returned, retained even after a loss. */
   outstandingPrincipal: number;
+  eventBonusRestrictedCash?: number; eventBonusReservedCash?: number; eventBonusMigrationPending?: boolean;
 }
 export interface WisStockFundingLimits {
   maximumDeposit: number; maximumWithdrawal: number; depositLimitBeforeCooldown: number;

@@ -191,10 +191,15 @@ export default function StudentWisStockAccountPanel({
               <dt>주식 지갑</dt>
               <dd>
                 {money(state.account.stockCash)} <small>위스</small>
+                {state.account.reservedCash > 0 && (
+                  <small className="student-wispi-balance-note">
+                    매수 예약 {money(state.account.reservedCash)} 위스
+                  </small>
+                )}
               </dd>
             </div>
             <div>
-              <dt>사용 가능</dt>
+              <dt>매수 가능</dt>
               <dd>
                 {money(
                   Math.max(
@@ -206,9 +211,9 @@ export default function StudentWisStockAccountPanel({
               </dd>
             </div>
             <div>
-              <dt>매수 예약</dt>
+              <dt>출금 가능</dt>
               <dd>
-                {money(state.account.reservedCash)} <small>위스</small>
+                {money(state.funding.maximumWithdrawal)} <small>위스</small>
               </dd>
             </div>
             <div>
@@ -240,9 +245,13 @@ export default function StudentWisStockAccountPanel({
               <InfoHelp label="주식 지갑 입출금 기준">
                 <p>
                   입금은 일반 위스의 절반까지 할 수 있으며, 입금한 뒤 24시간이
-                  지나야 다시 입금할 수 있습니다. 출금하면 전액이 일반 위스로
-                  돌아가고, 원금을 제외한 수익만 누적 위스에 더해집니다. 예약된
-                  위스는 출금할 수 없습니다.
+                  지나야 다시 입금할 수 있습니다. 출금한 금액은 일반 위스로
+                  돌아가고, 본인이 입금한 원금을 제외한 수익만 누적 위스에
+                  더해집니다. 예약된 위스는 출금할 수 없습니다.
+                </p>
+                <p>
+                  이벤트 지원금 원금은 위스피 매수에만 사용할 수 있습니다.
+                  지원금으로 얻은 수익은 손실을 만회한 뒤 출금할 수 있습니다.
                 </p>
               </InfoHelp>
             </div>
@@ -283,6 +292,10 @@ export default function StudentWisStockAccountPanel({
               {direction === "DEPOSIT" &&
               state.funding.nextDepositAtMs > studentWisStockNow(state)
                 ? ` · 다음 입금 ${date.format(state.funding.nextDepositAtMs)}`
+                : ""}
+              {direction === "WITHDRAW" &&
+              (state.account.eventBonusTotal || 0) > 0
+                ? " · 이벤트 지원금 원금 제외"
                 : ""}
             </p>
             {!canTransfer && (

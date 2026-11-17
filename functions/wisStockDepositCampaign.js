@@ -37,7 +37,8 @@ async function prepareDepositBonus({ db, tx, uid, account, incomingDeposit = 0, 
   if (provenDeposits < THRESHOLD) return null;
   return { schemaVersion: 1, campaignId: CAMPAIGN_ID, studentUid: uid, accountId: account.accountId,
     semesterId: account.semesterId, amount: BONUS, threshold: THRESHOLD, status: 'APPLIED', appliedAtMs: atMs,
-    eligibility: 'LIFETIME_CUMULATIVE_DEPOSIT_AT_LEAST_500', outstandingPrincipalDelta: BONUS };
+    eligibility: 'LIFETIME_CUMULATIVE_DEPOSIT_AT_LEAST_500', outstandingPrincipalDelta: 0,
+    eventBonusRestrictionVersion: 1, eventBonusRestrictedCashDelta: BONUS };
 }
 
 module.exports = { CAMPAIGN_ID, THRESHOLD, BONUS, CONFIG_PATH, receiptPath, prepareDepositBonus };

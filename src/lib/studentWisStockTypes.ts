@@ -83,6 +83,11 @@ export interface StudentWisStockState {
     outstandingPrincipal: number;
     lastDepositAtMs: number;
     eventBonusTotal?: number;
+    eventBonusRestrictionVersion?: 1;
+    eventBonusRestrictedCash?: number;
+    eventBonusReservedCash?: number;
+    eventBonusLossCarryforward?: number;
+    eventBonusLegacyWithdrawn?: number;
     positions: StudentWisStockPosition[];
     pendingOrders: StudentWisStockOrder[];
     recentOrders: StudentWisStockOrder[];

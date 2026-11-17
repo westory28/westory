@@ -461,6 +461,11 @@
   font-size: 14px;
   font-weight: 500;
 }
+.student-wispi-balances .student-wispi-balance-note {
+  display: block;
+  margin-top: 4px;
+  color: var(--ws-text-muted, #6b7280);
+}
 .student-wispi-transfer form {
   display: flex;
   align-items: flex-end;

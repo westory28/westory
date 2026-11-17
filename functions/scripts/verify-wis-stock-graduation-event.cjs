@@ -158,15 +158,18 @@ async function graduate() {
     clock += 86400001;
     const second = await transfer('student0', 'DEPOSIT', 251, 'transfer_student0_00000002');
     assert.equal(second.bonusAmount, 500); assert.equal(second.state.account.stockCash, 1000);
-    assert.equal(second.state.account.outstandingPrincipal, 1000);
+    assert.equal(second.state.account.outstandingPrincipal, 500);
+    assert.equal(second.state.account.eventBonusRestrictedCash, 500);
+    assert.equal(second.state.funding.maximumWithdrawal, 500);
     const replay = await transfer('student0', 'DEPOSIT', 251, 'transfer_student0_00000002');
     assert.equal(replay.duplicate, true); assert.equal(commits.at(-1).writes.length, 0);
     const history = (await db.collection(`${base}/wis_stock_history`).where('accountId', '==', second.state.account.accountId).get()).docs.map(d => d.data());
     assert.equal(history.filter(row => row.kind === 'EVENT_BONUS').length, 1);
     assert.equal(new Set(history.map(row => row.sequence)).size, history.length);
-    const withdrawn = await transfer('student0', 'WITHDRAW', 1000, 'withdraw_student0_00000001');
+    await denied(transfer('student0', 'WITHDRAW', 1000, 'withdraw_student0_00000001'), 'WIS_STOCK_WITHDRAWAL_LIMIT');
+    const withdrawn = await transfer('student0', 'WITHDRAW', 500, 'withdraw_student0_00000001');
     assert.equal(withdrawn.receipt.withdrawnProfit, 0);
-    const main = await accounting('student0'); assert.equal(main.balance, 10500); assert.equal(main.earnedTotal, 10000);
+    const main = await accounting('student0'); assert.equal(main.balance, 10000); assert.equal(main.earnedTotal, 10000);
     assert.equal((await get(bonusReceiptPath('student0'))).amount, 500);
     clock += 86400001;
     assert.equal((await transfer('student0', 'DEPOSIT', 500, 'transfer_student0_00000003')).bonusAmount, 0);
@@ -184,7 +187,7 @@ async function graduate() {
     const results = await Promise.all([bonus('student0'), bonus('student0', false, secondInstance())]);
     assert.equal(results.filter(r => r.changed).length, 1);
     assert.equal((await get(acctPath('student0'))).stockCash, 500);
-    assert.equal((await get(acctPath('student0'))).outstandingPrincipal, 500);
+    assert.equal((await get(acctPath('student0'))).outstandingPrincipal, 0);
     assert.equal((await accounting('student0')).balance, 10000);
     assert.equal((await bonus('student0')).changed, false); assert.equal(commits.at(-1).writes.length, 0);
   });
@@ -204,7 +207,7 @@ async function graduate() {
     assert.equal((await bonus('student0', true)).eligible, true); assert.equal(await get(acctPath('student0')), undefined);
     await enable(); assert.equal((await bonus('student0')).changed, true);
     assert.equal((await get(acctPath('student0'))).stockCash, 500);
-    assert.equal((await get(acctPath('student0'))).outstandingPrincipal, 500);
+    assert.equal((await get(acctPath('student0'))).outstandingPrincipal, 0);
     assert.equal((await accounting('student0')).balance, 10000);
   });
   await test('live deposit racing historical backfill credits one bonus only', async () => {
@@ -214,6 +217,70 @@ async function graduate() {
     assert.equal((await get(acctPath('student0'))).eventBonusTotal, 500);
     assert.equal((await accounting('student0')).balance, 9400);
     assert.equal((await db.collection('wis_stock_campaign_receipts').get()).size, 1);
+  });
+  await test('restricted support orders settle from persisted lots and only profit leaves the stock wallet', async () => {
+    await enable(); await transfer('student0', 'DEPOSIT', 1000);
+    const buy = await place('student0', 'BUY', 5); assert.equal(buy.state.account.eventBonusReservedCash, 500);
+    clock += 60001; await settle(buy.order.id);
+    const market = await get(`${base}/wis_stock_markets/current`); market.stocks[0].price = 120; market.revision++;
+    await db.doc(`${base}/wis_stock_markets/current`).set(market);
+    const sell = await place('student0', 'SELL', 5, 'sell_support_profit_0001');
+    clock += 60001; await settle(sell.order.id);
+    const refreshed = await state('student0'); assert.equal(refreshed.account.eventBonusRestrictedCash, 500);
+    assert.equal(refreshed.funding.maximumWithdrawal, 1089);
+    const withdrawn = await transfer('student0', 'WITHDRAW', 1089, 'withdraw_support_profit_01');
+    assert.equal(withdrawn.receipt.principalReturned, 1000); assert.equal(withdrawn.receipt.withdrawnProfit, 89);
+    assert.equal(withdrawn.state.account.stockCash, 500); assert.equal(withdrawn.state.funding.maximumWithdrawal, 0);
+    assert.equal((await transfer('student0', 'WITHDRAW', 1089, 'withdraw_support_profit_01')).duplicate, true);
+    await denied(transfer('student0', 'WITHDRAW', 1, 'withdraw_support_block_01'), 'WIS_STOCK_WITHDRAWAL_LIMIT');
+    const main = await accounting('student0'); assert.equal(main.balance, 10089); assert.equal(main.earnedTotal, 10089);
+  });
+  await test('legacy campaign migration is scoped, fail-closed, digest checked and idempotent without cash movement', async () => {
+    await enable(); await transfer('student0', 'DEPOSIT', 500);
+    const legacy = await get(acctPath('student0')); legacy.schemaVersion = 1; legacy.outstandingPrincipal = 1000;
+    for (const field of ['eventBonusRestrictionVersion', 'eventBonusRestrictedCash', 'eventBonusReservedCash',
+      'eventBonusLossCarryforward', 'eventBonusLegacyWithdrawn']) delete legacy[field];
+    await db.doc(acctPath('student0')).set(legacy);
+    assert.equal((await state('student0')).funding.maximumWithdrawal, 0);
+    await denied(transfer('student0', 'WITHDRAW', 1, 'migration_withdraw_block_01'), 'WIS_STOCK_BONUS_RESTRICTION_PENDING');
+    await denied(place('student0', 'BUY', 1, 'migration_order_block_0001'), 'WIS_STOCK_BONUS_RESTRICTION_PENDING');
+    const inputs = { ...scope, uid: 'student0' }, plan = await api.migrateWisStockBonusRestriction(inputs);
+    assert.equal(plan.eligible, true); assert.equal(plan.restrictedCash, 500); assert.equal(plan.principalCorrection, -500);
+    assert.equal(commits.at(-1).writes.length, 0);
+    await denied(api.migrateWisStockBonusRestriction({ ...inputs, dryRun: false, expectedDigest: '0'.repeat(64) }), 'WIS_STOCK_BONUS_MIGRATION_CHANGED');
+    const beforeMain = await accounting('student0');
+    assert.equal((await api.migrateWisStockBonusRestriction({ ...inputs, dryRun: false, expectedDigest: plan.digest })).changed, true);
+    assert.deepEqual(await accounting('student0'), beforeMain);
+    const migrated = await state('student0'); assert.equal(migrated.account.stockCash, 1000);
+    assert.equal(migrated.account.outstandingPrincipal, 500); assert.equal(migrated.funding.maximumWithdrawal, 500);
+    assert.equal((await api.migrateWisStockBonusRestriction({ ...inputs, dryRun: false, expectedDigest: plan.digest })).duplicate, true);
+    assert.equal(commits.at(-1).writes.length, 0);
+  });
+  await test('restricted mixed lots cancel and fill in reverse without duplicate principal release', async () => {
+    await enable(); await transfer('student0', 'DEPOSIT', 1000);
+    const first = await place('student0', 'BUY', 3, 'support_buy_first_00001');
+    const second = await place('student0', 'BUY', 2, 'support_buy_second_0001');
+    clock += 60001; await settle(second.order.id); await settle(first.order.id);
+    const s1 = await place('student0', 'SELL', 1, 'support_sell_first_0001');
+    const s2 = await place('student0', 'SELL', 1, 'support_sell_second_001');
+    const s3 = await place('student0', 'SELL', 3, 'support_sell_third_0001');
+    await api.cancelStudentWisStockOrder(request('student0', { orderId: s2.order.id }));
+    clock += 60001; await settle(s3.order.id); await settle(s1.order.id);
+    const last = await place('student0', 'SELL', 1, 'support_sell_final_0001'); clock += 60001; await settle(last.order.id);
+    const account = await get(acctPath('student0'));
+    assert.equal(account.positions[stockId], undefined); assert.equal(account.reservedCash, 0);
+    assert.equal(account.eventBonusRestrictedCash + account.eventBonusLossCarryforward, 500);
+    const before = structuredClone(account); await settle(last.order.id); assert.deepEqual(await get(acctPath('student0')), before);
+  });
+  await test('graduation returns support principal with losses retained and personal cash withdrawable', async () => {
+    await enable(); await transfer('student0', 'DEPOSIT', 1000);
+    const buy = await place('student0', 'BUY', 5); clock += 60001; await settle(buy.order.id);
+    const pending = await place('student0', 'SELL', 2, 'support_grad_pending_001'); await graduate(); await gradTask({});
+    const account = await get(acctPath('student0'));
+    assert.equal(account.positions[stockId], undefined); assert.equal(account.eventBonusRestrictedCash, 496);
+    assert.equal(account.eventBonusLossCarryforward, 4); assert.equal((await state('student0')).funding.maximumWithdrawal, 999);
+    assert.equal((await get(`${base}/wis_stock_orders/${pending.order.id}`)).status, 'CANCELLED');
+    const before = structuredClone(account); await gradTask({}); assert.deepEqual(await get(acctPath('student0')), before);
   });
   await test('graduation cancels reservations and liquidates the final price exactly once', async () => {
     await transfer('student0', 'DEPOSIT', 5000);

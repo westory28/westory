@@ -10,12 +10,16 @@ export function getWisStockFundingLimits(snapshot, nowMs) {
   if (!snapshot || !['mainCash', 'stockCash', 'reservedCash', 'lastDepositAtMs', 'outstandingPrincipal'].every(key => valid(snapshot[key]))
     || !valid(nowMs) || snapshot.lastDepositAtMs > nowMs
     || snapshot.reservedCash > snapshot.stockCash) fail('WIS_STOCK_ACCOUNT_INVALID', '일반 위스·주식 계좌·예약 금액을 확인해 주세요.');
+  const restricted = snapshot.eventBonusRestrictedCash ?? 0, reservedRestricted = snapshot.eventBonusReservedCash ?? 0;
+  if (!valid(restricted) || !valid(reservedRestricted) || reservedRestricted > restricted || restricted > snapshot.stockCash
+    || reservedRestricted > snapshot.reservedCash || snapshot.reservedCash - reservedRestricted > snapshot.stockCash - restricted)
+    fail('WIS_STOCK_ACCOUNT_INVALID', '이벤트 지원금 예약 내역을 확인해 주세요.');
   // Only current general Wis is the denominator. Stock cash, reserved cash,
   // purchase cost and mark-to-market gains never increase this deposit limit.
   const nextDepositAtMs = snapshot.lastDepositAtMs === 0 ? 0 : safe(BigInt(snapshot.lastDepositAtMs) + 86400000n);
   const remainingCooldownMs = Math.max(0, nextDepositAtMs - nowMs), depositLimitBeforeCooldown = Math.floor(snapshot.mainCash / 2);
   return { maximumDeposit: remainingCooldownMs ? 0 : depositLimitBeforeCooldown,
-    maximumWithdrawal: snapshot.stockCash - snapshot.reservedCash, depositLimitBeforeCooldown,
+    maximumWithdrawal: snapshot.eventBonusMigrationPending ? 0 : snapshot.stockCash - snapshot.reservedCash - restricted + reservedRestricted, depositLimitBeforeCooldown,
     nextDepositAtMs, remainingCooldownMs, hardCapBps: 5000 };
 }
 // Pure plan, not a transfer endpoint. A future server transaction must bind
@@ -39,9 +43,10 @@ export function planWisStockTransfer(input) {
       effects: { mainCashDelta: 0, stockCashDelta: 0, outstandingPrincipalDelta: 0, earnedDelta: 0, rankEarnedDelta: 0, lastDepositAtMs: null }, executable: false };
   }
   const limits = getWisStockFundingLimits(input.snapshot, input.nowMs);
+  if (input.snapshot.eventBonusMigrationPending) fail('WIS_STOCK_BONUS_RESTRICTION_PENDING', '이벤트 지원금 보호 설정을 적용하고 있습니다. 잠시 후 다시 시도해 주세요.');
   if (input.direction === 'DEPOSIT' && limits.remainingCooldownMs) fail('WIS_STOCK_DEPOSIT_COOLDOWN', '입금 후 24시간이 지나야 다시 입금할 수 있습니다.');
   if (input.direction === 'DEPOSIT' && input.amount > limits.maximumDeposit) fail('WIS_STOCK_DEPOSIT_LIMIT', '현재 일반 위스의 50% 이내에서 입금해 주세요.');
-  if (input.direction === 'WITHDRAW' && input.amount > limits.maximumWithdrawal) fail('WIS_STOCK_WITHDRAWAL_LIMIT', '예약되지 않은 주식 계좌 잔액 안에서 출금해 주세요.');
+  if (input.direction === 'WITHDRAW' && input.amount > limits.maximumWithdrawal) fail('WIS_STOCK_WITHDRAWAL_LIMIT', '이벤트 지원금 원금과 매수 예약금을 제외한 출금 가능 금액을 확인해 주세요.');
   const delta = input.direction === 'DEPOSIT' ? input.amount : -input.amount;
   // General Wis recognizes only withdrawn profit, after all unrecovered
   // deposits (including earlier losses) have been returned. Trading itself

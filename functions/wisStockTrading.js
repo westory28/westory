@@ -1,4 +1,5 @@
 const { createHash } = require('node:crypto');
+const { isDeepStrictEqual } = require('node:util');
 const { Timestamp, FieldPath } = require('firebase-admin/firestore');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { getFunctions } = require('firebase-admin/functions');
@@ -15,6 +16,8 @@ const { buildWisStockInvestmentBoard, parseWisStockInvestmentBoardSnapshot, norm
 
 const { prepareDepositBonus, receiptPath: campaignReceiptPath } = require('./wisStockDepositCampaign');
 const { createWisStockGraduation } = require('./wisStockGraduation');
+const { validateWisStockBonusAccount, assertWisStockBonusReady, wisStockBonusFunding,
+  grantWisStockRestrictedBonus, tagWisStockBonusOrder, applyWisStockBonusOrder } = require('./wisStockBonusAccounting');
 
 const MAX = Number.MAX_SAFE_INTEGER, MAX_PENDING = 20;
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -50,7 +53,7 @@ function blankAccount(scope, uid, wallet, atMs) {
     dailyBuyAmount: 0, dailyOrderCount: 0, lastOrderAtMs: 0, cumulativeRealizedPnl: 0, profitHighWatermark: 0 };
 }
 function validateAccount(account, scope, uid) {
-  if (!record(account) || account.schemaVersion !== 1 || account.semesterId !== scope.semesterId || account.studentUid !== uid
+  if (!record(account) || ![1, 2].includes(account.schemaVersion) || account.semesterId !== scope.semesterId || account.studentUid !== uid
     || account.accountId !== accountIdFor(scope.semesterId, uid) || !safe(account.revision)
     || account.studentKey !== studentKeyFor(uid)
     || (account.boardEligible !== undefined && typeof account.boardEligible !== 'boolean')
@@ -81,6 +84,7 @@ function validateAccount(account, scope, uid) {
       if (position[key] !== (expected[stockId]?.[key] || 0)) fail('WIS_STOCK_ACCOUNT_INVALID');
   }
   if (Object.keys(expected).some(stockId => !account.positions[stockId])) fail('WIS_STOCK_ACCOUNT_INVALID');
+  validateWisStockBonusAccount(account);
   return account;
 }
 function supplyFor(snapshot, stock, scope) {
@@ -132,6 +136,7 @@ function applyOrder(account, supply, transition) {
   if (effects.lastOrderAtMs !== null) next.lastOrderAtMs = effects.lastOrderAtMs;
   if (order.status === 'PENDING') next.pendingOrders[order.id] = order;
   else { delete next.pendingOrders[order.id]; next.recentOrders = [order, ...next.recentOrders.filter(item => item.id !== order.id)].slice(0, 10); }
+  applyWisStockBonusOrder(account, next, transition);
   if (Object.values(p).every(value => value === 0)) delete next.positions[order.stockId];
   next.revision = sum([next.revision, 1]);
   return { next, nextSupply };
@@ -210,11 +215,17 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
       account: { accountId: account.accountId, revision: account.revision, stockCash: account.stockCash, reservedCash: account.reservedCash,
         outstandingPrincipal: account.outstandingPrincipal, lastDepositAtMs: account.lastDepositAtMs,
         eventBonusTotal: account.eventBonusTotal || 0,
+        ...(account.eventBonusRestrictionVersion === 1 ? { eventBonusRestrictionVersion: 1,
+          eventBonusRestrictedCash: account.eventBonusRestrictedCash, eventBonusReservedCash: account.eventBonusReservedCash,
+          eventBonusLossCarryforward: account.eventBonusLossCarryforward, eventBonusLegacyWithdrawn: account.eventBonusLegacyWithdrawn } : {}),
         cumulativeRealizedPnl: account.cumulativeRealizedPnl,
-        positions: Object.entries(account.positions).filter(([, p]) => p.quantity || p.reservedBuyQuantity || p.reservedSellQuantity).map(([stockId, p]) => ({ stockId, ...p })),
+        positions: Object.entries(account.positions).filter(([, p]) => p.quantity || p.reservedBuyQuantity || p.reservedSellQuantity)
+          .map(([stockId, p]) => ({ stockId, quantity: p.quantity, principal: p.principal, costBasis: p.costBasis,
+            reservedBuyQuantity: p.reservedBuyQuantity, reservedSellQuantity: p.reservedSellQuantity,
+            reservedSellPrincipal: p.reservedSellPrincipal, reservedSellCostBasis: p.reservedSellCostBasis })),
         pendingOrders: Object.values(account.pendingOrders).map(safeOrder), recentOrders: account.recentOrders.map(safeOrder) },
       funding: getWisStockFundingLimits({ mainCash, stockCash: account.stockCash, reservedCash: account.reservedCash,
-        outstandingPrincipal: account.outstandingPrincipal, lastDepositAtMs: account.lastDepositAtMs }, context.atMs) };
+        outstandingPrincipal: account.outstandingPrincipal, lastDepositAtMs: account.lastDepositAtMs, ...wisStockBonusFunding(account) }, context.atMs) };
   }
   async function prepareBoard(tx, scope, market, previous, next, supplyChanges = new Map()) {
     const allRef = db.doc(`${rootPath(scope)}/wis_stock_investment_boards/all`), metaRef = db.doc(`${rootPath(scope)}/wis_stock_trade_state/current`);
@@ -319,11 +330,7 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
   });
   function addBonus(next, bonus) {
     if (!bonus) return;
-    next.stockCash = sum([next.stockCash, bonus.amount]);
-    // Reward principal is not trading profit. Returning it to the main wallet
-    // later must not inflate earnedTotal or activity rank a second time.
-    next.outstandingPrincipal = sum([next.outstandingPrincipal, bonus.amount]);
-    next.eventBonusTotal = sum([next.eventBonusTotal || 0, bonus.amount]);
+    grantWisStockRestrictedBonus(next, bonus.amount);
     next.revision = sum([next.revision, 1]);
   }
   function writeBonus(tx, context, next, bonus) {
@@ -331,7 +338,7 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
     tx.create(db.doc(campaignReceiptPath(context.actor.uid)), bonus);
     history(tx, context, next, 'EVENT_BONUS', bonus.campaignId,
       { campaignId: bonus.campaignId, amount: bonus.amount, stockCashDelta: bonus.amount,
-        outstandingPrincipalDelta: bonus.amount });
+        outstandingPrincipalDelta: 0, eventBonusRestrictedCashDelta: bonus.amount, eventBonusRestrictionVersion: 1 });
   }
   // Internal-only operator runner; deliberately not exported as a callable.
   // It uses the same live receipt transaction as an incoming transfer.
@@ -356,6 +363,39 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
       return { eligible: true, changed: true, amount: bonus.amount };
     });
   };
+  // Internal operator hook, deliberately absent from all callable exports.
+  // Read only campaign recipients, their exact account ledger and projection.
+  const migrateWisStockBonusRestriction = async ({ year, semester, uid, dryRun = true, expectedDigest }) => {
+    const scope = scopeOf({ year, semester });
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(uid || '') || typeof dryRun !== 'boolean') fail('WIS_STOCK_INPUT_INVALID');
+    return mutate(scope, async tx => {
+      const accountId = accountIdFor(scope.semesterId, uid), accountRef = db.doc(accountPath(scope, uid));
+      const receiptRef = db.doc(`${rootPath(scope)}/wis_stock_bonus_restriction_receipts/${accountId}`);
+      const [accountSnap, marketSnap, campaignSnap, receiptSnap] = await tx.getAll(accountRef,
+        db.doc(`${rootPath(scope)}/wis_stock_markets/current`), db.doc(campaignReceiptPath(uid)), receiptRef);
+      if (!accountSnap.exists || !campaignSnap.exists) fail('WIS_STOCK_BONUS_MIGRATION_INVALID');
+      const account = validateAccount(accountSnap.data(), scope, uid);
+      const summary = next => ({ restrictedCash: next.eventBonusRestrictedCash || 0,
+        legacyBonusWithdrawn: next.eventBonusLegacyWithdrawn || 0,
+        principalCorrection: next.outstandingPrincipal - account.outstandingPrincipal });
+      if (account.eventBonusRestrictionVersion === 1) {
+        if (receiptSnap.exists && (receiptSnap.data().accountId !== accountId || receiptSnap.data().status !== 'APPLIED'))
+          fail('WIS_STOCK_BONUS_MIGRATION_INVALID');
+        return { eligible: false, changed: false, duplicate: true, skipped: !receiptSnap.exists, ...summary(account) };
+      }
+      if (receiptSnap.exists) fail('WIS_STOCK_BONUS_MIGRATION_INVALID');
+      const ledger = await tx.get(db.collection(`${rootPath(scope)}/wis_stock_history`).where('accountId', '==', accountId)
+        .select('accountId', 'studentUid', 'semesterId', 'sequence', 'atMs', 'kind', 'stockCashDelta', 'amount', 'campaignId', 'principalReturned'));
+      const { planWisStockBonusMigration } = require('./wisStockBonusMigration');
+      const plan = planWisStockBonusMigration({ account, campaignReceipt: campaignSnap.data(), history: ledger.docs.map(doc => doc.data()), atMs: now() });
+      if (dryRun) return { changed: false, eligible: plan.changed, digest: plan.digest, ...summary(plan.next) };
+      if (!/^[a-f0-9]{64}$/.test(expectedDigest || '') || expectedDigest !== plan.digest) fail('WIS_STOCK_BONUS_MIGRATION_CHANGED');
+      validateAccount(plan.next, scope, uid);
+      const market = readMarket(marketSnap, scope), writeBoards = await prepareBoard(tx, scope, market, account, plan.next);
+      tx.set(accountRef, plan.next); tx.create(receiptRef, plan.receipt); writeBoards();
+      return { changed: true, digest: plan.digest, ...summary(plan.next) };
+    });
+  };
   const transferStudentWisStock = checked(async request => {
     const input = request.data;
     validateInput(input, ['requestId', 'direction', 'amount']);
@@ -368,10 +408,11 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
       const transfer = planWisStockTransfer({ transferId: id, accountId: account.accountId, semesterId: scope.semesterId,
         direction: input.direction, amount: input.amount, nowMs: context.atMs,
         snapshot: { mainCash: context.loaded.wallet.balance, stockCash: account.stockCash, reservedCash: account.reservedCash,
-          outstandingPrincipal: account.outstandingPrincipal, lastDepositAtMs: account.lastDepositAtMs },
+          outstandingPrincipal: account.outstandingPrincipal, lastDepositAtMs: account.lastDepositAtMs, ...wisStockBonusFunding(account) },
         existingReceipt: receiptSnap.exists ? receiptSnap.data() : null });
       if (!transfer.changed) return { changed: false, duplicate: true, receipt: transfer.receipt, state: state(context) };
       assertOpen(context);
+      assertWisStockBonusReady(account);
       const next = structuredClone(account), effect = transfer.effects;
       next.stockCash = sum([next.stockCash, effect.stockCashDelta]);
       next.outstandingPrincipal = sum([next.outstandingPrincipal, effect.outstandingPrincipalDelta]);
@@ -415,6 +456,7 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
         return { changed: false, duplicate: true, order: safeOrder(order), state: state(context) };
       }
       assertOpen(context);
+      assertWisStockBonusReady(account);
       if (!context.accountExists) fail('WIS_STOCK_ACCOUNT_REQUIRED', '먼저 주식 계좌에 위스를 입금해 주세요.');
       if (Object.keys(account.pendingOrders).length >= MAX_PENDING) fail('WIS_STOCK_PENDING_LIMIT');
       const stock = context.market.stocks.find(item => item.id === input.stockId);
@@ -430,6 +472,7 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
             haltedUntilMs: stock.haltedUntilMs || 0 },
           quote: { ...input.quote, stockId: stock.id, atMs: Math.min(context.atMs, input.quote.atMs) },
           portfolio: portfolioFor(account, context.market, stock.id) } });
+      transition.order = tagWisStockBonusOrder(account, transition.order);
       const { next, nextSupply } = applyOrder(account, supply, transition); updateRoster(next, context);
       const rawOrder = { ...transition.order, studentUid: actor.uid, year: scope.year, semester: scope.semester,
         authTime: actor.authTime, sessionRevision: actor.revision, tradingEpoch: context.market.tradingEpoch || 0, payloadHash };
@@ -450,7 +493,7 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
     const supplyRef = db.doc(`${rootPath(scope)}/wis_stock_supplies/${stock.id}`), supply = supplyFor(await tx.get(supplyRef), stock, scope);
     if ((supply.holders[account.studentKey] || 0) !== (account.positions[stock.id]?.quantity || 0)) fail('WIS_STOCK_SUPPLY_INVALID');
     const pureOrder = account.pendingOrders[rawOrder.id];
-    if (Object.keys(pureOrder).some(key => pureOrder[key] !== rawOrder[key])) fail('WIS_STOCK_RESERVATION_INVALID');
+    if (Object.keys(pureOrder).some(key => !isDeepStrictEqual(pureOrder[key], rawOrder[key]))) fail('WIS_STOCK_RESERVATION_INVALID');
     const input = { order: pureOrder, accountId: account.accountId, semesterId: scope.semesterId, nowMs: context.atMs,
       portfolio: portfolioFor(account, context.market, stock.id), reservations: reservationsFor(account, stock.id),
       supply: { issuedShares: supply.issuedShares, availableShares: supply.availableShares, reservedBuyQuantity: supply.reservedBuyQuantity } };
@@ -468,6 +511,9 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
     history(tx, context, next, transition.order.status === 'FILLED' ? 'ORDER_FILLED' : 'ORDER_CANCELLED', rawOrder.id,
       { orderId: rawOrder.id, stockId: rawOrder.stockId, side: rawOrder.side, quantity: rawOrder.quantity, unitPrice: rawOrder.unitPrice,
         fee: rawOrder.fee, stockCashDelta: transition.effects.stockCashDelta, realizedPnl: transition.effects.cumulativeRealizedPnlDelta,
+        ...(transition.order.eventBonusRestrictedDebit !== undefined ? { eventBonusRestrictedDebit: transition.order.eventBonusRestrictedDebit } : {}),
+        ...(transition.order.eventBonusRestrictedProceeds !== undefined ? { eventBonusRestrictedProceeds: transition.order.eventBonusRestrictedProceeds,
+          eventBonusRealizedLossDelta: transition.order.eventBonusRealizedLossDelta } : {}),
         ...(transition.order.cancellationReason ? { cancellationReason: transition.order.cancellationReason } : {}) });
     writeBoards();
     return { changed: true, duplicate: false, order: safeOrder(resultOrder), next };
@@ -641,6 +687,6 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
   }
   return { getStudentWisStockState, transferStudentWisStock, placeStudentWisStockOrder, cancelStudentWisStockOrder,
     getStudentWisStockHistory, settleWisStockOrderTask, onWisStockOrderCreated, onWisStockMarketTradingWrite, recoverWisStockOrders,
-    onWisStockEnrollmentSlotWritten, grantWisStockDepositBonus };
+    onWisStockEnrollmentSlotWritten, grantWisStockDepositBonus, migrateWisStockBonusRestriction };
 }
 module.exports = { createWisStockTrading, createWisStockTradingHandlers: createWisStockTrading };
