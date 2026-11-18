@@ -37,9 +37,6 @@
 .wispi-price-chart__candle.is-down {
   color: var(--ws-primary, #2563eb);
 }
-.wispi-price-chart__candle.is-down rect {
-  fill: #fff;
-}
 .wispi-price-chart__candle.is-flat {
   color: var(--ws-text-muted, #6b7280);
 }

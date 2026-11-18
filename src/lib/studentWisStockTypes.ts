@@ -130,7 +130,15 @@ export interface StudentWisStockMutation {
   changed: boolean;
   duplicate: boolean;
   bonusAmount?: number;
+  depositBonus?: StudentWisStockBonus;
   state: StudentWisStockState;
   order?: StudentWisStockOrder;
   receipt?: { withdrawnProfit?: number; principalReturned?: number };
+}
+export interface StudentWisStockBonus {
+  campaignId: string;
+  threshold: number;
+  amount: number;
+  status: "DISABLED" | "INELIGIBLE" | "ELIGIBLE" | "CLAIMED";
+  qualifyingDepositAmount: number;
 }

@@ -215,4 +215,40 @@ await check('replaced SDK user with identical uid/auth_time never shares an olde
   pending[1](state(2));await until(()=>newStates.at(-1)?.status==='ready');pending[0](state(1));await new Promise(resolve=>setTimeout(resolve,10));
   assert.equal(newStates.at(-1).data.account.revision,2);assert.equal(qa.calls.length,2);stopOld();stopNew();
 });
+const bonus = (status='ELIGIBLE') => ({campaignId:'wispi-deposit-500-v1',threshold:500,amount:500,status,qualifyingDepositAmount:500});
+await check('bonus overlapping reads coalesce, settled results and failures are never cached',async()=>{
+  const {qa,api}=await setup();let resolve,reject;
+  qa.handler=()=>new Promise((yes,no)=>{resolve=yes;reject=no});
+  const a=api.getStudentWisStockBonus(scope),b=api.getStudentWisStockBonus(scope);await until(()=>resolve);assert.equal(qa.calls.length,1);
+  resolve(bonus());assert.deepEqual(await a,await b);
+  resolve=undefined;const failed=api.getStudentWisStockBonus(scope);const checked=assert.rejects(failed,/lookup failed/);await until(()=>resolve);reject(Error('lookup failed'));await checked;
+  resolve=undefined;const retry=api.getStudentWisStockBonus(scope);await until(()=>resolve);assert.equal(qa.calls.length,3);resolve(bonus('CLAIMED'));assert.equal((await retry).status,'CLAIMED');
+});
+await check('bonus reads isolate account, auth epoch, semester and changed account revision',async()=>{
+  for(const change of ['owner','epoch','semester','revision','hidden']){
+    const {qa,api}=await setup();const pending=[];let revision=1;
+    qa.handler=async name=>name==='getStudentWisStockState'?state(revision):new Promise(resolve=>pending.push(resolve));
+    const states=[],stop=api.watchStudentWisStockState(scope,value=>states.push(value));await until(()=>states.at(-1)?.status==='ready');
+    const first=api.getStudentWisStockBonus(scope),firstResult=first.catch(error=>error);await until(()=>pending.length===1);
+    if(change==='owner')qa.owner=owner('other-student');
+    if(change==='epoch')qa.owner.epoch++;
+    if(change==='revision'){revision++;[...qa.observers][0].next({metadata:{fromCache:false,hasPendingWrites:false},exists:()=>true,data:()=>({revision})});await until(()=>states.at(-1)?.data?.account.revision===revision)}
+    if(change==='hidden'){document.visibilityState='hidden';document.dispatchEvent(new Event('visibilitychange'));document.visibilityState='visible';document.dispatchEvent(new Event('visibilitychange'));await until(()=>states.at(-1)?.status==='ready')}
+    const next=api.getStudentWisStockBonus(change==='semester'?{...scope,semester:'1'}:scope);await until(()=>pending.length===2);pending.forEach(resolve=>resolve(bonus()));
+    const old=await firstResult;if(change==='owner'||change==='epoch')assert(old instanceof Error);else assert.equal(old.status,'ELIGIBLE');assert.equal((await next).status,'ELIGIBLE');stop();
+  }
+});
+await check('explicit bonus claims share commands and retain the receipt after a lost response without ordinary wallet notifications',async()=>{
+  const {qa,api,storage}=await setup();let resolve,reject;
+  qa.handler=()=>new Promise((yes,no)=>{resolve=yes;reject=no});
+  const a=api.claimStudentWisStockBonus(scope),b=api.claimStudentWisStockBonus(scope);const failures=[assert.rejects(a,/lost bonus/),assert.rejects(b,/lost bonus/)];await until(()=>resolve);assert.equal(qa.calls.length,1);reject(Error('lost bonus'));await Promise.all(failures);assert.equal(storage.size,1);
+  resolve=undefined;const retry=api.claimStudentWisStockBonus(scope);await until(()=>resolve);assert.equal(qa.calls[0].data.requestId,qa.calls[1].data.requestId);resolve({changed:false,duplicate:true,state:state(2),depositBonus:bonus('CLAIMED')});
+  assert.equal((await retry).depositBonus.status,'CLAIMED');assert.equal(storage.size,0);assert.equal(qa.pointsEvents,0);
+});
+await check('bonus deterministic rejection clears receipt and malformed grant responses remain uncertain',async()=>{
+  for(const reason of ['WIS_STOCK_CAMPAIGN_DISABLED','WIS_STOCK_CAMPAIGN_INELIGIBLE']){
+    const {qa,api,storage}=await setup();qa.handler=async()=>{throw Object.assign(Error('rejected'),{details:{reason}})};await assert.rejects(api.claimStudentWisStockBonus(scope));assert.equal(storage.size,0);
+  }
+  const {qa,api,storage}=await setup();qa.handler=async()=>({changed:true,state:state(2),depositBonus:{...bonus(),qualifyingDepositAmount:501}});await assert.rejects(api.claimStudentWisStockBonus(scope),/지원금/);assert.equal(storage.size,1);assert.equal(qa.pointsEvents,0);
+});
 console.log(JSON.stringify({passed:true,checks,network:0,productionWrites:0},null,2));

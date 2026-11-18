@@ -5,7 +5,7 @@ const { getFirestore } = require('firebase-admin/firestore');
 const { createWisStockTradingExports } = require('../wisStockTradingExports');
 const app = initializeApp({ projectId: 'demo-westory-stock-exports' });
 const exported = createWisStockTradingExports({ db: getFirestore(app) });
-const calls = ['getStudentWisStockState', 'getStudentWisStockHistory', 'transferStudentWisStock', 'placeStudentWisStockOrder', 'cancelStudentWisStockOrder', 'getWisStockInvestmentHistory'];
+const calls = ['getStudentWisStockState', 'getStudentWisStockHistory', 'getStudentWisStockBonus', 'claimStudentWisStockBonus', 'transferStudentWisStock', 'placeStudentWisStockOrder', 'cancelStudentWisStockOrder', 'getWisStockInvestmentHistory'];
 const triggers = { onWisStockOrderCreated: 'years/{year}/semesters/{semester}/wis_stock_orders/{orderId}',
   onWisStockMarketTradingWrite: 'years/{year}/semesters/{semester}/wis_stock_markets/current',
   onWisStockEnrollmentSlotWritten: 'semester_enrollment_slots/{slotId}' };

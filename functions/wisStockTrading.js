@@ -14,7 +14,7 @@ const { acceptWisStockOrder, finalizeWisStockOrder, cancelWisStockOrder, createW
 const { wisStockKstSession } = require('./wisStockMarketRules');
 const { buildWisStockInvestmentBoard, parseWisStockInvestmentBoardSnapshot, normalizeWisStockInvestmentBoardScope } = require('./wisStockInvestmentBoard');
 
-const { prepareDepositBonus, receiptPath: campaignReceiptPath } = require('./wisStockDepositCampaign');
+const { getDepositBonusStatus, createDepositBonusReceipt, receiptPath: campaignReceiptPath } = require('./wisStockDepositCampaign');
 const { createWisStockGraduation } = require('./wisStockGraduation');
 const { validateWisStockBonusAccount, assertWisStockBonusReady, wisStockBonusFunding,
   grantWisStockRestrictedBonus, tagWisStockBonusOrder, applyWisStockBonusOrder } = require('./wisStockBonusAccounting');
@@ -328,6 +328,14 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
     const scope = scopeOf(request.data), actor = await actorFor(request);
     return db.runTransaction(async tx => state(await load(tx, scope, actor, now())), { readOnly: true });
   });
+  const getStudentWisStockBonus = checked(async request => {
+    validateInput(request.data, []);
+    const scope = scopeOf(request.data), actor = await actorFor(request);
+    return db.runTransaction(async tx => {
+      await load(tx, scope, actor, now());
+      return getDepositBonusStatus({ db, tx, uid: actor.uid });
+    }, { readOnly: true });
+  });
   function addBonus(next, bonus) {
     if (!bonus) return;
     grantWisStockRestrictedBonus(next, bonus.amount);
@@ -340,28 +348,30 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
       { campaignId: bonus.campaignId, amount: bonus.amount, stockCashDelta: bonus.amount,
         outstandingPrincipalDelta: 0, eventBonusRestrictedCashDelta: bonus.amount, eventBonusRestrictionVersion: 1 });
   }
-  // Internal-only operator runner; deliberately not exported as a callable.
-  // It uses the same live receipt transaction as an incoming transfer.
-  const grantWisStockDepositBonus = async ({ year, semester, uid, dryRun = true }) => {
-    const scope = scopeOf({ year, semester });
-    if (!/^[A-Za-z0-9_-]{1,128}$/.test(uid || '')) fail('WIS_STOCK_INPUT_INVALID');
+  const claimStudentWisStockBonus = checked(async request => {
+    validateInput(request.data, ['requestId']);
+    const scope = scopeOf(request.data), actor = await actorFor(request), requestId = request.data.requestId;
+    if (!requestIdValid(requestId)) fail('WIS_STOCK_INPUT_INVALID', undefined, 'invalid-argument');
     return mutate(scope, async tx => {
-      const loaded = await createStudentWisWallet({ db, validateStudentProfile: value => {
-        if (value.disabled || value.weplayDeletionPending) fail('WIS_STOCK_STUDENT_REQUIRED');
-      } }).read(tx, scope, uid);
-      const [accountSnap, marketSnap] = await tx.getAll(db.doc(accountPath(scope, uid)), db.doc(`${rootPath(scope)}/wis_stock_markets/current`));
-      const atMs = now();
-      const account = accountSnap.exists ? validateAccount(accountSnap.data(), scope, uid)
-        : blankAccount(scope, uid, loaded.wallet, atMs);
-      const bonus = await prepareDepositBonus({ db, tx, uid, account, atMs, allowDisabled: dryRun });
-      if (!bonus || dryRun) return { eligible: !!bonus, changed: false, amount: bonus?.amount || 0 };
-      const market = readMarket(marketSnap, scope), next = structuredClone(account);
-      const context = { scope, actor: { uid }, atMs, loaded };
+      const context = await load(tx, scope, actor, now()), account = context.account;
+      const depositBonus = await getDepositBonusStatus({ db, tx, uid: actor.uid });
+      if (depositBonus.status === 'CLAIMED') return { changed: false, duplicate: true, depositBonus, state: state(context) };
+      if (depositBonus.status === 'DISABLED') fail('WIS_STOCK_CAMPAIGN_DISABLED', '현재 이벤트 지원금을 받을 수 없습니다.');
+      if (depositBonus.status !== 'ELIGIBLE') fail('WIS_STOCK_CAMPAIGN_INELIGIBLE', '주식 지갑에 누적 500위스를 입금한 뒤 받아 주세요.');
+      assertOpen(context);
+      assertWisStockBonusReady(account);
+      const bonus = createDepositBonusReceipt({ uid: actor.uid, account, atMs: context.atMs, requestId });
+      const next = structuredClone(account);
       addBonus(next, bonus); updateRoster(next, context);
-      const writeBoards = await prepareBoard(tx, scope, market, account, next);
-      tx.set(db.doc(accountPath(scope, uid)), next); writeBonus(tx, context, next, bonus); writeBoards();
-      return { eligible: true, changed: true, amount: bonus.amount };
+      const writeBoards = await prepareBoard(tx, scope, context.market, account, next);
+      tx.set(db.doc(accountPath(scope, actor.uid)), next); writeBonus(tx, context, next, bonus); writeBoards();
+      return { changed: true, duplicate: false, depositBonus: { ...depositBonus, status: 'CLAIMED' }, state: state(context, next) };
     });
+  });
+  // Retained only to fail closed for old operator scripts. Grants require the
+  // authenticated student's explicit claim; historical backfills cannot pay.
+  const grantWisStockDepositBonus = async () => {
+    fail('WIS_STOCK_BONUS_CLAIM_REQUIRED', '이벤트 지원금은 학생이 직접 받아야 합니다.');
   };
   // Internal operator hook, deliberately absent from all callable exports.
   // Read only campaign recipients, their exact account ledger and projection.
@@ -418,19 +428,16 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
       next.outstandingPrincipal = sum([next.outstandingPrincipal, effect.outstandingPrincipalDelta]);
       if (effect.lastDepositAtMs !== null) next.lastDepositAtMs = effect.lastDepositAtMs;
       next.revision = sum([next.revision, 1]);
-      const transferSequence = next.revision;
-      const bonus = input.direction === 'DEPOSIT' ? await prepareDepositBonus({ db, tx, uid: actor.uid,
-        account, incomingDeposit: input.amount, atMs: context.atMs }) : null;
-      addBonus(next, bonus); updateRoster(next, context);
+      updateRoster(next, context);
       const writeBoards = await prepareBoard(tx, scope, context.market, account, next);
       const mainCash = postGeneralTransfer(tx, context, transfer);
       tx.set(db.doc(accountPath(scope, actor.uid)), next);
       tx.create(receiptRef, transfer.receipt);
-      history(tx, context, { ...next, revision: transferSequence }, input.direction, id, { amount: input.amount, stockCashDelta: effect.stockCashDelta,
+      history(tx, context, next, input.direction, id, { amount: input.amount, stockCashDelta: effect.stockCashDelta,
         mainCashDelta: effect.mainCashDelta, earnedDelta: effect.earnedDelta,
         principalReturned: transfer.receipt.principalReturned, withdrawnProfit: transfer.receipt.withdrawnProfit });
-      writeBonus(tx, context, next, bonus); writeBoards();
-      return { changed: true, duplicate: false, receipt: transfer.receipt, bonusAmount: bonus?.amount || 0, state: state(context, next, mainCash, true) };
+      writeBoards();
+      return { changed: true, duplicate: false, receipt: transfer.receipt, bonusAmount: 0, state: state(context, next, mainCash, true) };
     });
   });
   const placeStudentWisStockOrder = checked(async request => {
@@ -685,7 +692,7 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
       return { changed: true };
     });
   }
-  return { getStudentWisStockState, transferStudentWisStock, placeStudentWisStockOrder, cancelStudentWisStockOrder,
+  return { getStudentWisStockState, getStudentWisStockBonus, claimStudentWisStockBonus, transferStudentWisStock, placeStudentWisStockOrder, cancelStudentWisStockOrder,
     getStudentWisStockHistory, settleWisStockOrderTask, onWisStockOrderCreated, onWisStockMarketTradingWrite, recoverWisStockOrders,
     onWisStockEnrollmentSlotWritten, grantWisStockDepositBonus, migrateWisStockBonusRestriction };
 }

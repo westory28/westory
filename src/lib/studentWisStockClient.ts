@@ -6,6 +6,7 @@ import { ensureSensitiveOperation } from "./sensitiveOperation";
 import { notifyPointsUpdated, subscribePointsUpdated } from "./appEvents";
 import { watchStudentWisStockSession } from "./studentWisStockSession";
 import type {
+  StudentWisStockBonus,
   StudentWisStockHistoryPage,
   StudentWisStockMutation,
   StudentWisStockState,
@@ -33,6 +34,14 @@ type StateEntry = {
 };
 const entries = new Map<string, StateEntry>();
 const reads = new WeakMap<User, Map<string, Promise<StudentWisStockState>>>();
+const bonusReads = new WeakMap<
+  User,
+  Map<string, Promise<StudentWisStockBonus>>
+>();
+function invalidateDetails(entry: StateEntry) {
+  entry.historyReads.clear();
+  bonusReads.get(entry.boundary.owner)?.delete(entry.boundary.key);
+}
 type CommandEntry = {
   flight?: Promise<StudentWisStockMutation>;
   pendingKey?: string;
@@ -129,6 +138,10 @@ export function studentWisStockError(error: unknown) {
   };
   if (e.details?.reason === "WIS_STOCK_MARKET_CLOSED")
     return "위스피의 거래가 중지되었습니다.";
+  if (e.details?.reason === "WIS_STOCK_CAMPAIGN_INELIGIBLE")
+    return "주식 지갑에 누적 500위스를 입금한 뒤 받아 주세요.";
+  if (e.details?.reason === "WIS_STOCK_CAMPAIGN_DISABLED")
+    return "현재 이벤트 지원금을 받을 수 없습니다.";
   if (e.details?.reason === "WIS_STOCK_BONUS_RESTRICTION_PENDING")
     return "이벤트 지원금 내역을 확인하고 있습니다. 잠시 후 잔액을 새로고침해 주세요.";
   if (e.details?.reason === "WIS_STOCK_WITHDRAWAL_LIMIT")
@@ -192,7 +205,7 @@ export function watchStudentWisStockState(
         };
         const disconnect = () => {
           generation++;
-          current.historyReads.clear();
+          invalidateDetails(current);
           stopSnapshot?.();
           stopSnapshot = undefined;
           path = null;
@@ -250,7 +263,7 @@ export function watchStudentWisStockState(
                 current.state.status !== "ready" ||
                 revision > current.state.data.account.revision
               )
-                current.historyReads.clear();
+                invalidateDetails(current);
               if (
                 current.commands === 0 &&
                 (current.state.status !== "ready" ||
@@ -279,7 +292,7 @@ export function watchStudentWisStockState(
             current.state.status !== "ready" ||
             next.account.revision !== current.state.data.account.revision
           )
-            current.historyReads.clear();
+            invalidateDetails(current);
           send({ status: "ready", data: next, error: "" });
           syncListener(next);
         };
@@ -536,14 +549,20 @@ async function prepareMutation(
     const entry = entries.get(b.key);
     if (entry) {
       entry.commands++;
-      entry.historyReads.clear();
+      invalidateDetails(entry);
     }
     try {
       const raw = await invoke<StudentWisStockMutation>(b, name, {
         ...(withRequestId ? pending.fields : fields),
         ...(withRequestId ? { requestId: pending.requestId } : {}),
       });
-      const result = { ...raw, state: accept(raw.state, b) };
+      const result = {
+        ...raw,
+        state: accept(raw.state, b),
+        ...(name === "claimStudentWisStockBonus"
+          ? { depositBonus: acceptBonus(raw.depositBonus) }
+          : {}),
+      };
       entries.get(b.key)?.apply(result.state);
       command.pendingKey = undefined;
       requestIds.delete(key);
@@ -582,6 +601,8 @@ async function prepareMutation(
           "WIS_STOCK_SELL_ONLY",
           "WIS_STOCK_SLIPPAGE",
           "WIS_STOCK_UNSAFE_TOTAL",
+          "WIS_STOCK_CAMPAIGN_DISABLED",
+          "WIS_STOCK_CAMPAIGN_INELIGIBLE",
         ].includes(reason)
       ) {
         command.pendingKey = undefined;
@@ -609,6 +630,42 @@ export const transferStudentWisStock = (
   direction: "DEPOSIT" | "WITHDRAW",
   amount: number,
 ) => mutate(scope, "transferStudentWisStock", { direction, amount });
+export const claimStudentWisStockBonus = (scope: WisStockScope) =>
+  mutate(scope, "claimStudentWisStockBonus", {});
+
+function acceptBonus(value: StudentWisStockBonus | undefined) {
+  if (
+    !value ||
+    typeof value.campaignId !== "string" ||
+    !value.campaignId ||
+    !["DISABLED", "INELIGIBLE", "ELIGIBLE", "CLAIMED"].includes(value.status) ||
+    !Number.isSafeInteger(value.threshold) ||
+    value.threshold <= 0 ||
+    !Number.isSafeInteger(value.amount) ||
+    value.amount <= 0 ||
+    !Number.isSafeInteger(value.qualifyingDepositAmount) ||
+    value.qualifyingDepositAmount < 0 ||
+    value.qualifyingDepositAmount > value.threshold
+  )
+    throw new Error("지원금을 확인하지 못했습니다. 다시 시도해 주세요.");
+  return value;
+}
+
+/** Only an open wallet requests this. Share overlapping reads, never settled data. */
+export async function getStudentWisStockBonus(scope: WisStockScope) {
+  const b = await boundary(scope);
+  const ownerReads = bonusReads.get(b.owner) || new Map();
+  bonusReads.set(b.owner, ownerReads);
+  const existing = ownerReads.get(b.key);
+  if (existing) return existing;
+  const task = invoke<StudentWisStockBonus>(b, "getStudentWisStockBonus")
+    .then(acceptBonus)
+    .finally(() => {
+      if (ownerReads.get(b.key) === task) ownerReads.delete(b.key);
+    });
+  ownerReads.set(b.key, task);
+  return task;
+}
 export const placeStudentWisStockOrder = (
   scope: WisStockScope,
   input: {

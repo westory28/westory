@@ -474,20 +474,32 @@
   margin-top: 12px;
 }
 .student-wispi-transfer form label {
-  flex: 1 1 220px;
+  flex: 0 1 280px;
 }
 .student-wispi-transfer form label > span {
   flex-shrink: 0;
   white-space: nowrap;
 }
 .student-wispi-transfer form {
-  max-width: 640px;
+  max-width: 100%;
 }
-.student-wispi-transfer > .student-wispi-inline {
+.student-wispi-transfer form > .student-wispi-inline {
   justify-content: flex-start;
 }
 .student-wispi-transfer form button {
   flex: 0 1 auto;
+}
+.student-wispi-bonus {
+  max-width: 640px;
+  margin-top: 24px;
+}
+.student-wispi-bonus-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.student-wispi-bonus > p {
+  margin: 8px 0 0;
 }
 .student-wispi-section {
   margin-top: 24px;

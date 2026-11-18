@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useAuth } from "../../../../contexts/AuthContext";
 import { useStudentWisStockAccount } from "../../../../hooks/useStudentWisStocks";
 import { getYearSemester } from "../../../../lib/semesterScope";
@@ -13,6 +13,7 @@ import type {
   StudentWisStockHistoryPage,
 } from "../../../../lib/studentWisStockTypes";
 import InfoHelp from "../../../../components/common/InfoHelp";
+import StudentWisStockBonusClaim from "./StudentWisStockBonusClaim";
 import "./studentWisStocks.css";
 
 const money = (n: number) => n.toLocaleString("ko-KR");
@@ -39,6 +40,7 @@ export default function StudentWisStockAccountPanel({
   active?: boolean;
 }) {
   const { currentUser, config, authGeneration } = useAuth();
+  const fundingDescriptionId = useId();
   const scope = getYearSemester(config);
   const account = useStudentWisStockAccount(active);
   const identity = `${currentUser?.uid}:${authGeneration}:${scope.year}:${scope.semester}`;
@@ -47,6 +49,9 @@ export default function StudentWisStockAccountPanel({
   const [direction, setDirection] = useState<"DEPOSIT" | "WITHDRAW">("DEPOSIT");
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
+  const [claimBusy, setClaimBusy] = useState(false);
+  const [bonusRefresh, setBonusRefresh] = useState(0);
+  const working = busy || claimBusy;
   const [feedback, setFeedback] = useState<{
     key: string;
     error: boolean;
@@ -75,6 +80,7 @@ export default function StudentWisStockAccountPanel({
     setDirection("DEPOSIT");
     setAmount("");
     setBusy(false);
+    setClaimBusy(false);
     setFeedback(null);
     setHistory(null);
     setHistoryError("");
@@ -137,7 +143,7 @@ export default function StudentWisStockAccountPanel({
     : 0;
   const valid = Number.isSafeInteger(parsed) && parsed > 0 && parsed <= maximum;
   const transfer = async () => {
-    if (!state || busy || !canTransfer || !valid) return;
+    if (!state || working || !canTransfer || !valid) return;
     const key = identity;
     setBusy(true);
     setFeedback(null);
@@ -150,7 +156,7 @@ export default function StudentWisStockAccountPanel({
         error: false,
         text:
           direction === "DEPOSIT"
-            ? `${money(parsed)} 위스를 주식 지갑에 입금했습니다.${result.bonusAmount ? ` 이벤트 보상 ${money(result.bonusAmount)} 위스도 지급되었습니다.` : ""}`
+            ? `${money(parsed)} 위스를 주식 지갑에 입금했습니다.`
             : `${money(parsed)} 위스를 출금했습니다.${result.receipt?.withdrawnProfit ? ` 누적 위스에 수익 ${money(result.receipt.withdrawnProfit)} 위스가 반영되었습니다.` : ""}`,
       });
     } catch (error) {
@@ -179,8 +185,11 @@ export default function StudentWisStockAccountPanel({
           <div className="student-wispi-account-actions">
             <button
               type="button"
-              onClick={account.retry}
-              disabled={busy}
+              onClick={() => {
+                account.retry();
+                setBonusRefresh((value) => value + 1);
+              }}
+              disabled={working}
               aria-label="주식 지갑 잔액 새로고침"
             >
               잔액 새로고침
@@ -210,10 +219,14 @@ export default function StudentWisStockAccountPanel({
                 <small>위스</small>
               </dd>
             </div>
-            <div>
-              <dt>출금 가능</dt>
+            <div
+              id={fundingDescriptionId}
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              <dt>{direction === "DEPOSIT" ? "입금 가능" : "출금 가능"}</dt>
               <dd>
-                {money(state.funding.maximumWithdrawal)} <small>위스</small>
+                {money(maximum)} <small>위스</small>
               </dd>
             </div>
             <div>
@@ -224,43 +237,46 @@ export default function StudentWisStockAccountPanel({
             </div>
           </dl>
           <div className="student-wispi-transfer">
-            <div className="student-wispi-inline">
-              <div className="student-wispi-segments" aria-label="입출금 선택">
-                {(["DEPOSIT", "WITHDRAW"] as const).map((value) => (
-                  <button
-                    type="button"
-                    key={value}
-                    aria-pressed={direction === value}
-                    onClick={() => {
-                      setDirection(value);
-                      setAmount("");
-                      setFeedback(null);
-                    }}
-                    disabled={busy}
-                  >
-                    {value === "DEPOSIT" ? "입금" : "출금"}
-                  </button>
-                ))}
-              </div>
-              <InfoHelp label="주식 지갑 입출금 기준">
-                <p>
-                  입금은 일반 위스의 절반까지 할 수 있으며, 입금한 뒤 24시간이
-                  지나야 다시 입금할 수 있습니다. 출금한 금액은 일반 위스로
-                  돌아가고, 본인이 입금한 원금을 제외한 수익만 누적 위스에
-                  더해집니다. 예약된 위스는 출금할 수 없습니다.
-                </p>
-                <p>
-                  이벤트 지원금 원금은 위스피 매수에만 사용할 수 있습니다.
-                  지원금으로 얻은 수익은 손실을 만회한 뒤 출금할 수 있습니다.
-                </p>
-              </InfoHelp>
-            </div>
             <form
               onSubmit={(event) => {
                 event.preventDefault();
                 void transfer();
               }}
             >
+              <div className="student-wispi-inline">
+                <div
+                  className="student-wispi-segments"
+                  aria-label="입출금 선택"
+                >
+                  {(["DEPOSIT", "WITHDRAW"] as const).map((value) => (
+                    <button
+                      type="button"
+                      key={value}
+                      aria-pressed={direction === value}
+                      onClick={() => {
+                        setDirection(value);
+                        setAmount("");
+                        setFeedback(null);
+                      }}
+                      disabled={working}
+                    >
+                      {value === "DEPOSIT" ? "입금" : "출금"}
+                    </button>
+                  ))}
+                </div>
+                <InfoHelp label="주식 지갑 입출금 기준">
+                  <p>
+                    입금은 일반 위스의 절반까지 할 수 있으며, 입금한 뒤 24시간이
+                    지나야 다시 입금할 수 있습니다. 출금한 금액은 일반 위스로
+                    돌아가고, 본인이 입금한 원금을 제외한 수익만 누적 위스에
+                    더해집니다. 예약된 위스는 출금할 수 없습니다.
+                  </p>
+                  <p>
+                    이벤트 지원금 원금은 위스피 매수에만 사용할 수 있습니다.
+                    지원금으로 얻은 수익은 손실을 만회한 뒤 출금할 수 있습니다.
+                  </p>
+                </InfoHelp>
+              </div>
               <label>
                 <span>위스 금액</span>
                 <input
@@ -270,14 +286,14 @@ export default function StudentWisStockAccountPanel({
                   onChange={(event) =>
                     setAmount(event.target.value.replace(/[^0-9]/g, ""))
                   }
-                  disabled={busy || !canTransfer}
-                  aria-describedby="wispi-transfer-limit"
+                  disabled={working || !canTransfer}
+                  aria-describedby={fundingDescriptionId}
                 />
               </label>
               <button
                 className="student-wispi-primary"
                 type="submit"
-                disabled={busy || !canTransfer || !valid}
+                disabled={working || !canTransfer || !valid}
               >
                 {busy
                   ? "처리 중"
@@ -286,18 +302,16 @@ export default function StudentWisStockAccountPanel({
                     : "일반 위스로 출금"}
               </button>
             </form>
-            <p id="wispi-transfer-limit" className="student-wispi-muted">
-              {direction === "DEPOSIT" ? "입금" : "출금"} 가능 {money(maximum)}{" "}
-              위스
-              {direction === "DEPOSIT" &&
-              state.funding.nextDepositAtMs > studentWisStockNow(state)
-                ? ` · 다음 입금 ${date.format(state.funding.nextDepositAtMs)}`
-                : ""}
-              {direction === "WITHDRAW" &&
-              (state.account.eventBonusTotal || 0) > 0
-                ? " · 이벤트 지원금 원금 제외"
-                : ""}
-            </p>
+            {direction === "DEPOSIT" &&
+              state.funding.nextDepositAtMs > studentWisStockNow(state) && (
+                <p className="student-wispi-muted">
+                  다음 입금 {date.format(state.funding.nextDepositAtMs)}
+                </p>
+              )}
+            {direction === "WITHDRAW" &&
+              (state.account.eventBonusTotal || 0) > 0 && (
+                <p className="student-wispi-muted">이벤트 지원금 원금 제외</p>
+              )}
             {!canTransfer && (
               <p className="student-wispi-muted">
                 지금은 입출금할 수 없습니다.
@@ -312,6 +326,15 @@ export default function StudentWisStockAccountPanel({
               </p>
             )}
           </div>
+          <StudentWisStockBonusClaim
+            scope={scope}
+            identity={identity}
+            revision={state.account.revision}
+            refreshToken={bonusRefresh}
+            tradingEnabled={tradingEnabled}
+            disabled={working}
+            onBusyChange={setClaimBusy}
+          />
           <section className="student-wispi-section" aria-label="내 보유 주식">
             <h2>보유 주식</h2>
             {state.account.positions.filter((position) => position.quantity > 0)

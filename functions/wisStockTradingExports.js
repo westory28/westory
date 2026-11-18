@@ -9,7 +9,7 @@ function createWisStockTradingExports({ db,
   const runtime = { region: 'us-central1', memory: '256MiB', minInstances: 0, maxInstances: 10,
     timeoutSeconds: 60, concurrency: 40 };
   const result = {};
-  for (const name of ['getStudentWisStockState', 'getStudentWisStockHistory', 'transferStudentWisStock',
+  for (const name of ['getStudentWisStockState', 'getStudentWisStockHistory', 'getStudentWisStockBonus', 'claimStudentWisStockBonus', 'transferStudentWisStock',
     'placeStudentWisStockOrder', 'cancelStudentWisStockOrder']) result[name] = onCall(runtime, handlers[name]);
   result.getWisStockInvestmentHistory = onCall(runtime,
     require('./wisStockInvestmentHistory').createWisStockInvestmentHistory({ db }));

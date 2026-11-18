@@ -24,6 +24,8 @@
   inset: 0;
   z-index: 79;
   background: rgb(17 24 39 / 16%);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
   pointer-events: none;
 }
 

@@ -1,5 +1,9 @@
 # 운영 배포 절차
 
+## 위스피 지원금 직접 받기 (2026-11-18)
+
+누적 500위스 입금 조건과 기존 수령 영수증을 유지하고 학생이 지갑의 `500위스 받기`를 눌렀을 때만 지급한다. 입금 자동 지급과 운영자 backfill은 중단한다. [변경과 검증 기록](../reviews/wispi-bonus-claim-20261118.md)을 따른다. `prepare-wispi-bonus-claim-release.mjs`에서 보존한 운영 원본에 최소 delta를 적용해 기존 `transferStudentWisStock`과 신규 `getStudentWisStockBonus`, `claimStudentWisStockBonus`만 배포한다. 실제 준비본 에뮬레이터·Functions 검사와 앱 빌드 후 소스·자원·인증 차단을 재검증하고 같은 main의 Vercel 배포를 운영 도메인으로 승격한다. 지갑 입출금 행과 학생 플로팅 메뉴의 배경 흐림도 함께 확인한다. 캠페인 기준·설정·rules·학생 잔액을 운영 검증으로 변경하지 않는다.
+
 ## 위스피 지원금 계좌 조회 복구 (2026-11-18)
 
 지원금 제한 계좌의 `schemaVersion: 2`도 본인 실시간 조회에 허용한다. 일반 지갑·본인·학기·세션·학적 검사와 목록·쓰기 차단은 유지한다. [원인과 회귀 검사](../reviews/wispi-account-access-20261118.md)를 따른다. 운영 rules 원본을 저장소와 대조하고 `npm run test:wispi-access`, 앱 빌드, 기존 Firestore predeploy 검사를 통과한 뒤 Firestore rules만 배포한다. 배포 후 운영 rules 전체 SHA를 다시 대조한다. Functions·계좌·잔액·거래·공개 상태는 변경하지 않는다.
