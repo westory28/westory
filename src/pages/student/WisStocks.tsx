@@ -666,7 +666,11 @@ export default function StudentWisStocks() {
                             <Change {...quote} />
                           </div>
                           <div className={direction(quote.change)}>
-                            <WisStockPriceChart stock={selected} days={days} />
+                            <WisStockPriceChart
+                              stock={selected}
+                              days={days}
+                              variant="candlestick"
+                            />
                           </div>
                           <div
                             className="student-wispi-periods"
