@@ -108,11 +108,39 @@ try {
   assert.equal(reopened.tradingEpoch, 1);
   checks.push('Closing leaves studentOpen latched and page reads available for the blur overlay; reopening never resets the order generation.');
 
-  const ownAccount = { schemaVersion: 1, accountId, semesterId: '2026-2', studentUid: 'student', enrollmentId: 'enrollment-synthetic',
+  const legacyAccount = { schemaVersion: 1, accountId, semesterId: '2026-2', studentUid: 'student', enrollmentId: 'enrollment-synthetic',
     enrollmentSlotId: slotId, classId: 'class-synthetic', revision: 1, stockCash: 1000, reservedCash: 0 };
+  await db.doc(accountPath).set(legacyAccount);
+  await firstAccount.until(value => value.events.some(event => event.exists()));
+  assert.deepEqual((await assertSucceeds(getDoc(doc(student, accountPath)))).data(), legacyAccount);
+  const ownAccount = { ...legacyAccount, schemaVersion: 2, revision: 2, eventBonusRestrictionVersion: 1,
+    eventBonusTotal: 500, eventBonusRestrictedCash: 500, eventBonusReservedCash: 0,
+    eventBonusLossCarryforward: 0, eventBonusLegacyWithdrawn: 0 };
   await db.doc(accountPath).set(ownAccount);
-  await firstAccount.until(value => value.events.some(event => event.exists())); firstAccount.stop();
-  await assertSucceeds(getDoc(doc(student, accountPath)));
+  await firstAccount.until(value => value.errors.length || value.events.some(event => event.data()?.schemaVersion === 2));
+  assert.deepEqual(firstAccount.errors, [], 'An existing own-account listener must survive the bonus schema migration');
+  assert.deepEqual(firstAccount.events.at(-1).data(), ownAccount); firstAccount.stop();
+  const bonusClient = client('student'), bonusAccount = observe(bonusClient, accountPath);
+  await bonusAccount.until(value => value.errors.length || value.events.length);
+  assert.deepEqual(bonusAccount.errors, [], 'A fresh own-account listener must accept migrated bonus accounts');
+  assert.deepEqual(bonusAccount.events.at(-1).data(), ownAccount); bonusAccount.stop();
+  await db.doc(accountPath).update({ schemaVersion: 3 });
+  await assertFails(getDoc(doc(bonusClient, accountPath)));
+  const unsupportedAccount = observe(bonusClient, accountPath);
+  await unsupportedAccount.until(value => value.errors.length);
+  assert.equal(unsupportedAccount.errors[0].code, 'permission-denied'); unsupportedAccount.stop();
+  await db.doc(accountPath).set(ownAccount);
+  const retriedAccount = observe(bonusClient, accountPath);
+  await retriedAccount.until(value => value.errors.length || value.events.length);
+  assert.deepEqual(retriedAccount.errors, [], 'An explicit resubscription must recover after the account schema is supported');
+  assert.deepEqual(retriedAccount.events.at(-1).data(), ownAccount); retriedAccount.stop();
+  for (const [field, invalid] of [['studentUid', 'other'], ['semesterId', '2025-2'], ['accountId', 'wisacct_' + 'b'.repeat(64)]]) {
+    await db.doc(accountPath).update({ [field]: invalid });
+    await assertFails(getDoc(doc(client('student'), accountPath)));
+    await db.doc(accountPath).set(ownAccount);
+  }
+  assert.deepEqual((await assertSucceeds(getDoc(doc(student, accountPath)))).data(), ownAccount);
+  checks.push('Version 1 own accounts remain readable; live migration to bonus schema 2, fresh schema 2 subscriptions and explicit recovery succeed. Unknown schema 3 and mismatched owner/account/semester remain denied.');
   for (const database of [other, client('teacher'), client('reader'), env.unauthenticatedContext().firestore()])
     await assertFails(getDoc(doc(database, accountPath)));
   await assertFails(getDocs(collection(student, `${prefix}/wis_stock_accounts`)));
@@ -149,6 +177,7 @@ try {
     ['semester_classes/class-synthetic', 'status', 'CLOSED', 'ACTIVE'],
     ['student_identities/student', 'accountStatus', 'CLOSED', 'ACTIVE'],
     [`semester_wis_accounts/${accountId}`, 'status', 'CLOSED', 'ACTIVE'],
+    [`semester_wis_accounts/${accountId}`, 'schemaVersion', 2, 1],
   ]) {
     await db.doc(target).update({ [field]: invalid }); await assertFails(getDoc(doc(student, accountPath)));
     await db.doc(target).update({ [field]: restored }); await assertSucceeds(getDoc(doc(student, accountPath)));
@@ -193,7 +222,10 @@ try {
     await db.doc(ownSessionPath).set({ ...session('student'), ...patch });
     await assertFails(getDoc(doc(client('student'), ownSessionPath))).catch(error => {
       throw new Error('Session mutation was not denied: ' + Object.keys(patch).join(','), { cause: error });
-    }); await db.doc(ownSessionPath).set(restored);
+    });
+    if ('generalExpiresAt' in patch || 'status' in patch)
+      await assertFails(getDoc(doc(client('student'), accountPath)));
+    await db.doc(ownSessionPath).set(restored);
   }
   await db.doc('student_identities/student').update({ accountStatus: 'CLOSED' });
   await assertFails(getDoc(doc(student, ownSessionPath)));
@@ -218,7 +250,7 @@ try {
   checks.push('Authorized students and unchanged teacher roles can observe only their own current active session with the existing field allowlist; other/old/expired/unapproved/disabled/deleted sessions, enumeration and all writes are denied. Closing the observed session immediately rejects its listener.');
   await db.doc('site_settings/semester_active').update({ semesterId: '2027-1' });
   await assertFails(getDoc(doc(student, statusPath))); await assertFails(getDoc(doc(student, accountPath)));
-  checks.push('Own account requires the matching active identity/enrollment/slot/class, exact session and active semester; each invalidation denies reads.');
+  checks.push('Bonus schema 2 accounts retain general-wallet schema 1, active identity/enrollment/slot/class, unexpired active session, maintenance and active-semester boundaries; each invalidation denies reads.');
   assert.deepEqual((await db.doc('semester_wis_accounts/protected-general').get()).data(), { balance: 10000, earnedTotal: 10000, rankEarnedTotal: 300, revision: 1 });
   assert.deepEqual((await db.doc(accountPath).get()).data(), ownAccount);
   assert.equal(readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8'), rules, 'Rules changed during test');

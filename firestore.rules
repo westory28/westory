@@ -1394,7 +1394,8 @@ service cloud.firestore {
             && wallet.accountId == accountId && wallet.studentUid == request.auth.uid && wallet.semesterId == year + '-' + semester
             && wallet.schemaVersion == 1 && wallet.policyVersion == 'w7-v1'
             && wallet.status == 'ACTIVE' && wallet.get('readOnly', false) == false
-            && (resource == null || (resource.data.schemaVersion == 1
+            // Bonus-restricted accounts use v2 with the same ownership fence.
+            && (resource == null || ((resource.data.schemaVersion == 1 || resource.data.schemaVersion == 2)
               && resource.data.studentUid == request.auth.uid && resource.data.semesterId == year + '-' + semester
               && resource.data.accountId == accountId))
             && [enrollment.enrollmentId, enrollment.studentUid, enrollment.semesterId, enrollment.enrollmentStatus,
