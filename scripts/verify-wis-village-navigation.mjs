@@ -57,6 +57,7 @@ const reject=async()=>{throw Error('Unexpected avatar write/read')};
 export const updateAvatarCatalogPricing=reject,getTeacherMyPage=reject,saveTeacherAvatar=reject,updateTeacherProfileIcon=reject,makeAvatarThumbnail=()=>'',getAvatarStudioState=reject,purchaseAvatarItem=reject,saveStudentAvatar=reject;
 `;
 const board = `
+export const watchWisStockExchange=()=>{throw Error("Unexpected exchange subscription")};
 export const getWisStockInvestmentHistories=async()=>{throw Error('Unexpected investment history read')};
 export const wisStockInvestmentHistoryError=error=>error.message;
 export function watchWisStockInvestmentBoard(scope,onData,onConnection){
@@ -102,7 +103,7 @@ const bundle = await build({
           namespace: "fixture",
         }));
         plugin.onResolve(
-          { filter: /lib\/wisStockInvestment(?:Board|History)Client$/ },
+          { filter: /lib\/wisStockExchangeDisplayClient$|lib\/wisStockInvestment(?:Board|History)Client$/ },
           () => ({ path: "board", namespace: "fixture" }),
         );
         plugin.onResolve({ filter: /lib\/wisStocksClient$/ }, () => ({

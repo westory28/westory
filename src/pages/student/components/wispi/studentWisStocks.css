@@ -607,3 +607,88 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+.student-wispi-ranking {
+  max-width: 1152px;
+  min-width: 0;
+}
+.student-wispi-ranking h2 {
+  margin: 0;
+}
+.student-wispi-rank-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+  border-top: 1px solid var(--ws-border, #e5e7eb);
+}
+.student-wispi-rank-list > li {
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+}
+.student-wispi .student-wispi-rank-list > li > button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+.student-wispi .student-wispi-rank-list > li > button:is(:hover, [aria-expanded="true"]) {
+  background: var(--ws-primary-soft, #eff6ff);
+}
+.student-wispi-rank-list button > strong,
+.student-wispi-rank-detail li > span {
+  overflow-wrap: anywhere;
+}
+.student-wispi-rank-list button[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}
+.student-wispi-rank-number {
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+  font-weight: 700;
+}
+.student-wispi-rank-list > li:first-child .student-wispi-rank-number {
+  color: var(--ws-primary, #2563eb);
+}
+.student-wispi-rank-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 24px;
+  padding: 16px 8px 24px;
+}
+.student-wispi-rank-detail h3 {
+  margin: 0 0 12px;
+  color: var(--ws-text-strong, #111827);
+  font-size: 16px;
+  font-weight: 700;
+}
+.student-wispi-rank-chart {
+  position: relative;
+  height: 224px;
+}
+.student-wispi-rank-records summary {
+  min-height: 44px;
+  padding: 12px 0;
+  color: var(--ws-primary, #2563eb);
+  font-size: 14px;
+  cursor: pointer;
+}
+.student-wispi-rank-records .student-wispi-list {
+  max-height: 224px;
+  overflow: auto;
+}
+.student-wispi-rank-records .student-wispi-list > li {
+  padding: 8px 0;
+  font-size: 14px;
+}
+@container (max-width: 760px) {
+  .student-wispi-rank-detail {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+}

@@ -19,6 +19,7 @@ import InfoHelp from "../../components/common/InfoHelp";
 import { useAppToast } from "../../components/common/AppToastProvider";
 import type { StudentWisStockInstrument } from "../../lib/studentWisStockTypes";
 import StudentWisStockAccountPanel from "./components/wispi/StudentWisStockAccountPanel";
+import StudentWisStockRanking from "./components/wispi/StudentWisStockRanking";
 import "./components/wispi/studentWisStocks.css";
 
 const money = (value: number) => value.toLocaleString("ko-KR");
@@ -95,14 +96,14 @@ function amounts(
     : null;
 }
 export default function StudentWisStocks() {
-  const { currentUser, config } = useAuth();
+  const { currentUser, authGeneration, config } = useAuth();
   const { showToast } = useAppToast();
   const scope = getYearSemester(config);
   const status = useStudentWisStockStatus();
-  const [tab, setTab] = useState<"market" | "account">("market");
+  const [tab, setTab] = useState<"market" | "account" | "ranking">("market");
   const opened = status.data?.studentOpen === true;
   const market = useStudentWisStockMarket(opened && tab === "market");
-  const account = useStudentWisStockAccount(opened);
+  const account = useStudentWisStockAccount(opened && tab !== "ranking");
   const [selectedId, setSelectedId] = useState("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "up" | "down">("all");
@@ -479,8 +480,22 @@ export default function StudentWisStocks() {
               >
                 주식 지갑
               </button>
+              <button
+                type="button"
+                aria-pressed={tab === "ranking"}
+                onClick={() => setTab("ranking")}
+              >
+                투자 랭킹
+              </button>
             </nav>
-            {tab === "account" ? (
+            {tab === "ranking" ? (
+              tradingEnabled && (
+                <StudentWisStockRanking
+                  key={`${key}:${authGeneration}:${status.data?.tradingEpoch}`}
+                  {...scope}
+                />
+              )
+            ) : tab === "account" ? (
               <StudentWisStockAccountPanel tradingEnabled={tradingEnabled} />
             ) : (
               <>

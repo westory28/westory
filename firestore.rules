@@ -1362,6 +1362,20 @@ service cloud.firestore {
           && (request.auth.token.email == 'westoria28@gmail.com' || approvedRegistrationProfile(profile))
           && currentYutMaintenance() && stockCurrentScope(checkInterfaceScope);
       }
+      function stockDisplayTeacher() {
+        let profile = userProfile();
+        return stockReadFence(true) && hasWisStockInvestmentReaderRole()
+          && (profile.role == 'teacher' || request.auth.token.email == 'westoria28@gmail.com');
+      }
+      match /wis_stock_display/market {
+        allow get: if stockDisplayTeacher() && (resource == null ||
+          (resource.data.keys().hasOnly(['schemaVersion','semesterId','updatedAtMs','halted','index','stocks'])
+            && resource.data.schemaVersion == 1 && resource.data.semesterId == year + '-' + semester));
+      }
+      match /wis_stock_display_trades/{tradeId} {
+        // The server alone creates this display-only collection from final fills.
+        allow list: if stockDisplayTeacher() && request.query.limit <= 20;
+      }
       match /wis_stock_public/{documentId} {
         function safeStockPublication() {
           return (documentId == 'current' && (resource == null ||

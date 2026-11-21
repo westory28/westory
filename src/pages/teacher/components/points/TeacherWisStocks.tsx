@@ -5,6 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { isAdminUser } from "../../../../lib/permissions";
 import { useAuth } from "../../../../contexts/AuthContext";
 import { useAppToast } from "../../../../components/common/AppToastProvider";
 import InfoHelp from "../../../../components/common/InfoHelp";
@@ -78,7 +79,7 @@ export default function TeacherWisStocks({
   config: WisStockConfig;
   canManage: boolean;
 }) {
-  const { currentUser, authGeneration } = useAuth();
+  const { currentUser, userData, authGeneration } = useAuth();
   const { showToast } = useAppToast();
   const { year, semester } = getYearSemester(config);
   const ownerKey = `${currentUser?.uid || ""}:${authGeneration}:${year}:${semester}:${canManage}`;
@@ -1143,6 +1144,9 @@ export default function TeacherWisStocks({
           key={ownerKey}
           year={year}
           semester={semester}
+          displayMarket={
+            isAdminUser(userData, currentUser?.email) ? market : null
+          }
         />
       )}
     </section>

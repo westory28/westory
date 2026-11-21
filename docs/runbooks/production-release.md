@@ -1,5 +1,11 @@
 # 운영 배포 절차
 
+## 위스피 교사 전광판과 학생 투자 랭킹 (2026-11-21)
+
+교사 전광판에는 표시용 시세와 선택 학급의 최근 자발적 체결 최대 20건을 제공한다. `scripts/prepare-wispi-display-release.mjs prepare`가 기존 운영 소스를 보존한 세 함수의 배포 경로를 만든다. 해당 경로에서 대상 함수만 배포한 뒤 `verify`로 소스와 런타임을 대조한다. 전광판 규칙과 `wis_stock_display_trades`의 학급별 시각 내림차순 색인을 반영한다. 첫 설치 때는 `node scripts/bootstrap-wispi-exchange.cjs`로 대상 건수를 확인하고 `--apply`로 시세와 최근 체결을 채운다. 재실행 시 기존 체결을 건너뛴다.
+
+학생 랭킹은 `publishWisStockDailyRanking`이 매일 한국 시각 00:02에 전날 23:59의 Firestore 자료로 집계한다. 첫 배포나 당일 복구 시 같은 Scheduler 작업을 한 번 실행한다. `getStudentWisStockRanking`은 현재 학기와 학적, 시장 공개 상태를 확인한 뒤 전날 상위 5명의 실명·수익률과 선택한 순위의 그래프·보유 종목을 제공한다. 2026-11-21 운영 담당 교사가 이 학교의 로그인 학생에게 해당 범위를 공개할 수 있음을 확인했다. 외부 전송 서비스나 AI 호출은 추가하지 않았다.
+
 ## 유휴 함수 비용과 조회 범위 (2026-11-21)
 
 운영 미국 리전의 `commandYutRoomFast`, `executeWisCommandFast`, `getWisRankingPreview`는 최소 인스턴스 0개다. 한동안 사용하지 않은 뒤 첫 요청이 느려질 수 있다. 이전 운영 ZIP을 보존해 배포할 때에도 이 세 함수의 최소 인스턴스 수를 확인한다. 변경 당시 `scripts/prepare-standby-cost-release.mjs`의 `prepare`, `preflight`, `verify` 순서로 최신 운영 원본, 대상 함수의 단일 설정 변경, 배포 후 전체 파일과 런타임을 대조했다.

@@ -25,6 +25,8 @@ const imp = (file) =>
 const audited = [
   "src/pages/teacher/components/points/WisStockInvestmentBoard.tsx",
   "src/pages/teacher/components/points/WisStockInvestmentBoard.css",
+  "src/pages/teacher/components/points/WisStockExchangeDisplay.tsx",
+  "src/pages/teacher/components/points/WisStockExchangeDisplay.css",
   "src/pages/teacher/components/points/wisStockInvestmentReturns.ts",
   "functions/wisStockInvestmentBoard.mjs",
   "src/pages/teacher/components/points/WisStockReturnHistoryChart.tsx",
@@ -64,6 +66,13 @@ qa.connection=state=>listeners.filter(item=>item.active).forEach(item=>item.onCo
 qa.fail=()=>listeners.filter(item=>item.active).forEach(item=>{item.stop();item.onError(new Error('투자 현황 조회 권한이나 로그인 상태를 확인해 주세요.'));});
 qa.active=()=>listeners.filter(item=>item.active).length;
 qa.pricePush=raw=>{qa.last=raw;listeners.filter(item=>item.active).forEach(item=>item.onData(parse(raw,item.scope)));};
+export function watchWisStockExchange(year,semester,group,send){
+ qa.displayStarts=(qa.displayStarts||0)+1;qa.displayActive=true;qa.displayGroup=group;
+ const stocks=Array.from({length:23},(_,i)=>({id:'S'+i,name:i===3?'한글 이름이 긴 주식회사': ['조선상회','금강철도','한양은행'][i%3],price:300+i*5,previousClose:300+i*5+[10,-10,0][i%3]}));
+ const result={status:'ready',market:{updatedAtMs:1794787200000,halted:false,index:{value:1052.16,previousClose:1034.5},stocks},trades:Array.from({length:20},(_,i)=>({id:'F'+i,displayName:i===0?'검증학생':'합성학생'+i,atMs:1794787200000-i*10000,stockName:'한양은행',side:i%2?'SELL':'BUY',quantity:i+2,unitPrice:340-i}))};
+ qa.displayPush=()=>send({...result,market:{...result.market,index:{value:987.23,previousClose:1000}}});
+ send(result);return()=>{qa.displayActive=false;qa.displayStops=(qa.displayStops||0)+1};
+}
 export function watchWisStockInvestmentBoard(input,onData,onConnection,onError){
  const scope=normalize(input),listener={scope,onData,onConnection,onError,active:true,stop(){if(listener.active){listener.active=false;qa.stops++;}}};
  listeners.push(listener);qa.subscriptions++;qa.scopes.push(scope);onConnection('CONNECTING');return listener.stop;
@@ -78,7 +87,7 @@ function App(){const[mounted,setMounted]=useState(true),[account,setAccount]=use
  qa.leave=()=>setMounted(false);qa.enter=()=>setMounted(true);qa.switchAccount=()=>setAccount(value=>value+1);
  qa.switchSemester=()=>setScope({year:'2027',semester:'1'});
  return <><aside className="fixture-teacher-rail" aria-hidden="true">교사</aside>
- <main className="ws-page wis-stocks"><h1>학생 투자 현황</h1>{mounted&&<Board key={account} {...scope}/>}</main></>;
+ <main className="ws-page wis-stocks"><h1>학생 투자 현황</h1>{mounted&&<Board key={account} {...scope} displayMarket={{updatedAtMs:0,studentOpen:true,rules:{halted:false},stocks:[]}}/>}</main></>;
 }createRoot(document.getElementById('root')).render(<App/>);`;
 const historyService = `
 export async function getWisStockInvestmentHistories(scope){
@@ -96,7 +105,7 @@ export async function getWisStockInvestmentHistories(scope){
  {atMs:asOfMs-1200000,holdingValue:800,holdingCostBasis:1000},
  {atMs:asOfMs,holdingValue:row.holdingValue,holdingCostBasis:row.holdingCostBasis}];
  const result={semesterId:scope.year+'-'+scope.semester,studentKey,
- grade:row.grade,classNumber:row.classNumber,asOfMs,sourceRevision:row.accountRevision??qa.last.revision,priceRevision:qa.last.priceRevision,
+ grade:row.grade,classNumber:row.classNumber,asOfMs,sourceRevision:qa.detailsRevision??row.accountRevision??qa.last.revision,priceRevision:qa.last.priceRevision,
  holdings:Array.from({length:row.holdingCount},(_,i)=>({stockId:'stock_'+String(i+1).padStart(24,'0'),name:i?'보유 종목 2':'역사 속 교류와 산업의 발전을 함께 살펴보는 긴 이름의 합성 기업',quantity:(qa.holdingQuantity||3)+i*2})),
  points:qa.historyMode==='null'?points.map(point=>({...point,holdingValue:null,holdingCostBasis:null})):qa.historyMode==='empty'||(qa.historyMode==='partial'&&studentKey===scope.studentKeys[0])?[]:qa.historyMode==='single'?points.slice(-1):points,incompleteBeforeMs:null};
  return result;});
@@ -111,7 +120,7 @@ const bundle = await build({
   write: false,
   format: "esm",
   outfile: "board.js",
-  loader: { ".svg": "dataurl" },
+  loader: { ".svg": "dataurl", ".webp":"dataurl" },
   define: { "process.env.NODE_ENV": '"production"' },
   plugins: [
     {
@@ -127,7 +136,7 @@ const bundle = await build({
           resolveDir: root,
         }));
         plugin.onResolve(
-          { filter: /lib\/wisStockInvestmentBoardClient$/ },
+          { filter: /lib\/wisStockInvestmentBoardClient$|lib\/wisStockExchangeDisplayClient$/ },
           () => ({ path: "watcher", namespace: "fixture" }),
         );
         plugin.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({
@@ -620,7 +629,7 @@ try {
     "검증학생25의 보유 수익률",
   );
   await page
-    .getByRole("button", { name: "전체 화면 닫기", exact: true })
+    .getByRole("button", { name: "전광판 닫기", exact: true })
     .click();
   await page.waitForFunction(() => !document.fullscreenElement);
   for (const connection of ["PAUSED", "OFFLINE", "CONNECTING"]) {
@@ -670,7 +679,7 @@ try {
   );
   await page.evaluate(() => window.boardQa.fail());
   await assertBlank(page);
-  await page.getByRole("button", { name: "다시 연결", exact: true }).click();
+  await page.getByRole("button", { name: "다시 조회", exact: true }).click();
   await push(page);
   await chartReady(page);
   await page.evaluate(() => window.boardQa.leave());
@@ -906,6 +915,14 @@ try {
   await chartReady(revisions);
   assert.equal(await countRequests(revisions), revisionRequests + 1);
   assert.equal(await revisions.evaluate(() => window.boardQa.historyRequests.at(-1).studentKeys.length), 5, 'explicit refresh still rereads all displayed students');
+  await revisions.evaluate(() => { window.boardQa.detailsRevision=99; });
+  await revisions.getByRole("button", {name:"수익률 기록 새로고침",exact:true}).click();
+  await revisions.getByRole("button", {name:"투자 현황 다시 조회",exact:true}).click();
+  await revisions.waitForFunction(() => window.boardQa.subscriptions === 2);
+  await assertBlank(revisions);
+  await revisions.evaluate(() => { window.boardQa.detailsRevision=undefined; });
+  await push(revisions, "READY", 8);
+  await chartReady(revisions);
   await revisions.close();
   checks.push('Per-account revisions: unrelated trade adds 0 requests (formerly 1 call / 5 ledgers); one ranked trade reads 1 ledger (formerly 5); mixed legacy rows alone follow the global revision; explicit refresh still reads the displayed five.');
 
@@ -925,14 +942,25 @@ try {
       .getByRole("button", { name: "전광판 보기", exact: true })
       .click();
     await page.locator("dialog[open]").waitFor();
-    assert.equal(await firstName(page), "검증학생01");
-    assert.equal(
-      await page
-        .locator(".wis-return-history__legend strong")
-        .first()
-        .innerText(),
-      "1. 검증학생50",
-    );
+    const display=page.getByRole("dialog",{name:"위스피 전광판"});
+    assert.equal(await display.locator("tbody tr").count(),23);
+    assert.equal(await display.locator(".wis-exchange__trades li").count(),20);
+    assert.match(await display.locator(".wis-exchange__trades li").first().innerText(),/매수[\s\S]*검증학생[\s\S]*한양은행[\s\S]*2주 · 주당 340위스/);
+    assert.equal(await display.locator(".wis-exchange__index-value").innerText(),"1,052.16pt");
+    await page.evaluate(()=>window.boardQa.displayPush());
+    await display.locator(".wis-exchange__index-change .is-down").waitFor();
+    assert.match(await display.locator(".wis-exchange__index-value").innerText(),/987.23/);
+    const geometry=await display.evaluate(el=>{
+      const board=el.querySelector(".wis-exchange");
+      const measure=css=>{const {x,y,right,bottom}=el.querySelector(css).getBoundingClientRect();return{x,y,right,bottom}};
+      return {width:board.scrollWidth,client:board.clientWidth,index:measure(".wis-exchange__index"),quotes:measure(".wis-exchange__quotes"),trades:measure(".wis-exchange__trades"),header:getComputedStyle(el.querySelector(".wis-exchange__bar")).backgroundColor};
+    });
+    assert(geometry.width<=geometry.client+1);
+    assert.equal(geometry.header,"rgba(0, 0, 0, 0)");
+    assert.deepEqual(await display.evaluate(el=>[".is-up",".is-down"].map(css=>getComputedStyle(el.querySelector(css)).color)),["rgb(255, 121, 121)","rgb(118, 181, 255)"]);
+    if(width>=960)assert(geometry.quotes.right<=geometry.index.x && geometry.index.right<=geometry.trades.x);
+    else assert(geometry.index.bottom<=geometry.quotes.y);
+
     assert(
       await page
         .locator("dialog[open]")
@@ -940,7 +968,7 @@ try {
     );
     await page.screenshot({
       path: path.join(output, "board-dialog-" + width + ".png"),
-      fullPage: true,
+      fullPage: false,
     });
     await page.keyboard.press("Escape");
     await page.locator("dialog[open]").waitFor({ state: "hidden" });
@@ -948,10 +976,11 @@ try {
       () => document.activeElement?.textContent?.trim() === "전광판 보기",
     );
     assert.equal(await page.evaluate(() => window.boardQa.subscriptions), 1);
+    assert.deepEqual(await page.evaluate(()=>[window.boardQa.displayStarts,window.boardQa.displayStops,window.boardQa.displayActive]),[1,1,false]);
     await page.close();
   }
   checks.push(
-    "Fullscreen dialog fallback at all five widths: overflow containment, reduced-motion, names and series preserved, Escape focus restoration, no additional subscription.",
+    "Exchange display at five widths: quotes, named trades and index movement, responsive layout, Escape focus restoration, one display subscription disposed on close.",
   );
   assert.deepEqual(errors, []);
   assert.deepEqual(blocked, []);

@@ -8258,6 +8258,13 @@ exports.getWisCommandStatusFast = require('./productionGateway/productionSource'
 exports.getWisRankingPreview = require('./wisRankingPreview').getWisRankingPreview;
 const wisStockHandlers = require('./wisStocks').createWisStockHandlers({ db });
 Object.assign(exports, require('./wisStockTradingExports').createWisStockTradingExports({ db }));
+const stockDailyRanking = require('./wisStockDailyRanking').createWisStockDailyRanking({ db });
+exports.getStudentWisStockRanking = onCall(
+  { region: 'us-central1', memory: '256MiB', minInstances: 0, maxInstances: 10 }, stockDailyRanking.getStudentWisStockRanking);
+exports.publishWisStockDailyRanking = onSchedule({
+  region: 'us-central1', memory: '512MiB', minInstances: 0, maxInstances: 1, timeoutSeconds: 300,
+  schedule: '2 0 * * *', timeZone: 'Asia/Seoul', retryCount: 5, minBackoffSeconds: 30, maxBackoffSeconds: 300,
+}, stockDailyRanking.publishWisStockDailyRanking);
 exports.getWisStockManagement = onCall(
   { region: 'us-central1', memory: '256MiB', maxInstances: 10 },
   wisStockHandlers.getWisStockManagement,

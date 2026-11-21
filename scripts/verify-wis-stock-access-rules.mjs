@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { doc, collection, getDoc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, limit } from 'firebase/firestore';
 const projectId = 'demo-westory-wispi-access';
 assert.equal(process.env.GCLOUD_PROJECT, projectId);
 assert.equal(process.env.FIRESTORE_EMULATOR_HOST, '127.0.0.1:18259');
@@ -79,6 +79,20 @@ try {
   seed.set(db.doc('semester_wis_accounts/protected-general'), { balance: 10000, earnedTotal: 10000, rankEarnedTotal: 300, revision: 1 });
   await seed.commit();
   const student = client('student'), other = client('other');
+  const marketDisplayPath = `${prefix}/wis_stock_display/market`;
+  const trades = uid => collection(client(uid), `${prefix}/wis_stock_display_trades`);
+  await db.doc(`${prefix}/wis_stock_display_trades/example`).set({ atMs: 12, classKey: '3_1' });
+  await assertSucceeds(getDoc(doc(client('teacher'), marketDisplayPath)));
+  assert.equal((await assertSucceeds(getDocs(query(trades('teacher'), where('classKey', '==', '3_1'),
+    orderBy('atMs', 'desc'), limit(20))))).size, 1);
+  await assertFails(getDocs(trades('teacher')));
+  await assertFails(getDocs(query(trades('teacher'), limit(21))));
+  await assertFails(setDoc(doc(trades('teacher'), 'forged'), { atMs: 12 }));
+  for (const uid of ['reader', 'pending', 'student']) {
+    await assertFails(getDoc(doc(client(uid), marketDisplayPath)));
+    await assertFails(getDocs(query(trades(uid), orderBy('atMs', 'desc'), limit(20))));
+  }
+  checks.push('Only a current teacher may open the exchange display and its bounded fills query; student and delegated point reader denied.');
   assert.equal((await assertSucceeds(getDoc(doc(student, statusPath)))).exists(), false);
   await assertFails(getDoc(doc(student, pricesPath)));
   assert.equal((await assertSucceeds(getDoc(doc(student, accountPath)))).exists(), false);

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import WisStockExchangeDisplay from "./WisStockExchangeDisplay";
+import type { WisStockManagement } from "../../../../lib/wisStocksClient";
 import { animate, createScope } from "animejs";
 import InfoHelp from "../../../../components/common/InfoHelp";
 import RefreshButton from "../../../../components/common/RefreshButton";
@@ -54,13 +56,13 @@ const percent = (value: number | null) =>
 export default function WisStockInvestmentBoard({
   year,
   semester,
+  displayMarket,
 }: {
   year: string;
   semester: string;
+  displayMarket: WisStockManagement | null;
 }) {
   const root = useRef<HTMLDivElement>(null);
-  const dialog = useRef<HTMLDialogElement>(null);
-  const restoreFocus = useRef(false);
   const [snapshot, setData] = useState<WisStockInvestmentBoardState | null>(
     null,
   );
@@ -83,11 +85,12 @@ export default function WisStockInvestmentBoard({
       : null;
   const [sort, setSort] = useState("class");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const [fullscreen, setFullscreen] = useState(false);
-  const [pageFullscreen, setPageFullscreen] = useState(false);
-  const [screenError, setScreenError] = useState("");
+  const [displayOpen, setDisplayOpen] = useState(false);
+  const displayActive = useRef(false);
+  displayActive.current = displayOpen && !!displayMarket;
   const [histories, setHistories] = useState<WisStockInvestmentHistory[]>([]);
   const [historyError, setHistoryError] = useState("");
+  const [historyStale, setHistoryStale] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyRetry, setHistoryRetry] = useState(0);
   const [selectedStudentKey, setSelectedStudentKey] = useState("");
@@ -100,7 +103,6 @@ export default function WisStockInvestmentBoard({
   });
   useEffect(() => setSelectedStudentKey(""), [year, semester, classKey]);
   useEffect(() => setVisibleCount(PAGE_SIZE), [year, semester]);
-  const expanded = fullscreen || pageFullscreen;
   useEffect(() => {
     setError("");
     setData(null);
@@ -121,38 +123,12 @@ export default function WisStockInvestmentBoard({
           setError(failure.message);
           setData(null);
         },
+        () => !displayActive.current,
       );
     } catch {
       setError("조회 범위를 확인하지 못했습니다. 다시 시도해 주세요.");
     }
   }, [year, semester, classKey, retry]);
-  useEffect(() => {
-    const changed = () =>
-      setFullscreen(document.fullscreenElement === root.current);
-    document.addEventListener("fullscreenchange", changed);
-    return () => document.removeEventListener("fullscreenchange", changed);
-  }, []);
-  useEffect(() => {
-    if (!pageFullscreen) {
-      if (restoreFocus.current) {
-        root.current
-          ?.querySelector<HTMLButtonElement>(".wis-investment-board__screen")
-          ?.focus();
-        restoreFocus.current = false;
-      }
-      return;
-    }
-    const modal = dialog.current;
-    if (!modal) return;
-    const overflow = document.body.style.overflow;
-    modal.showModal();
-    document.body.style.overflow = "hidden";
-    restoreFocus.current = true;
-    return () => {
-      modal.close();
-      document.body.style.overflow = overflow;
-    };
-  }, [pageFullscreen]);
   const revision = data?.revision;
   useEffect(() => {
     if (data?.status !== "READY") return;
@@ -214,7 +190,13 @@ export default function WisStockInvestmentBoard({
       )
       .sort(([a], [b]) => a.localeCompare(b)),
   );
-  const historyScope = JSON.stringify([year, semester, classKey, historyRetry]);
+  const historyScope = JSON.stringify([
+    year,
+    semester,
+    classKey,
+    retry,
+    historyRetry,
+  ]);
   const selectedHoldings =
     selectedStudent && historyCache.current.scope === historyScope
       ? histories.find(
@@ -231,6 +213,7 @@ export default function WisStockInvestmentBoard({
     const versions = new Map<string, string>(JSON.parse(historyVersions));
     setHistories([]);
     setHistoryError("");
+    setHistoryStale(false);
     setHistoryLoading(false);
     if (!live) {
       historyCache.current = {
@@ -276,6 +259,19 @@ export default function WisStockInvestmentBoard({
     )
       .then((next) => {
         if (!active || historyCache.current.scope !== historyScope) return;
+        // A new operation may land after the one-time summary and before detail opens.
+        if (
+          next.some((history) => {
+            const requested = versions.get(history.studentKey);
+            return (
+              requested?.startsWith("account:") &&
+              requested !== "account:" + history.sourceRevision
+            );
+          })
+        ) {
+          setHistoryStale(true);
+          return;
+        }
         next.forEach((history) => {
           historyCache.current.entries.set(history.studentKey, history);
           const requested = versions.get(history.studentKey)!;
@@ -387,38 +383,14 @@ export default function WisStockInvestmentBoard({
   const status = error
     ? "연결 오류"
     : connection === "PAUSED"
-      ? "구독 일시 중지"
+      ? "조회 일시 중지"
       : connection === "OFFLINE"
         ? "오프라인"
         : connection === "CONNECTING"
           ? "연결 중"
           : ready
-            ? "실시간 연결"
+            ? "조회 완료"
             : "투자 현황 대기";
-  const screen = async () => {
-    setScreenError("");
-    if (pageFullscreen) {
-      setPageFullscreen(false);
-      return;
-    }
-    if (document.fullscreenElement === root.current) {
-      try {
-        await document.exitFullscreen();
-      } catch {
-        setScreenError("전체 화면을 닫지 못했습니다. Esc 키로 닫아 주세요.");
-      }
-      return;
-    }
-    try {
-      if (root.current?.requestFullscreen)
-        await root.current.requestFullscreen();
-      else setPageFullscreen(true);
-    } catch {
-      // Preserve presentation, focus trap and Escape when native fullscreen is
-      // denied, without changing permissions or adding a data subscription.
-      setPageFullscreen(true);
-    }
-  };
   const stats = [
     { label: "투자 학생", value: totals?.studentCount, unit: "명" },
     { label: "계좌 현금", value: totals?.stockCash, unit: "위스" },
@@ -435,11 +407,11 @@ export default function WisStockInvestmentBoard({
   const content = (
     <div
       ref={root}
-      className={`wis-investment-board${expanded ? " is-fullscreen" : ""}`}
-      aria-label="학생 투자 현황 전광판"
+      className="wis-investment-board"
+      aria-label="학생 투자 현황"
     >
       <div className="wis-investment-board__toolbar">
-        <h2 className={expanded ? "" : "sr-only"}>학생 투자 현황</h2>
+        <h2 className="sr-only">학생 투자 현황</h2>
         <label>
           학급
           <select
@@ -469,13 +441,20 @@ export default function WisStockInvestmentBoard({
             포함하지 않습니다.
           </p>
         </InfoHelp>
-        <button
-          type="button"
-          className="wis-investment-board__screen"
-          onClick={() => void screen()}
-        >
-          {expanded ? "전체 화면 닫기" : "전광판 보기"}
-        </button>
+        <RefreshButton
+          label="투자 현황 새로고침"
+          loading={connection === "CONNECTING" && !error}
+          onClick={() => setRetry((value) => value + 1)}
+        />
+        {displayMarket && (
+          <button
+            type="button"
+            className="wis-investment-board__screen"
+            onClick={() => setDisplayOpen(true)}
+          >
+            전광판 보기
+          </button>
+        )}
       </div>
       <div className="wis-investment-board__status" role="status">
         <span className={live ? "is-live" : ""}>{status}</span>
@@ -485,15 +464,15 @@ export default function WisStockInvestmentBoard({
           </time>
         )}
       </div>
-      {(error || screenError) && (
+      {error && (
         <div role="alert" className="wis-stocks__error">
-          <p>{error || screenError}</p>
+          <p>{error}</p>
           {error && (
             <button
               type="button"
               onClick={() => setRetry((value) => value + 1)}
             >
-              다시 연결
+              다시 조회
             </button>
           )}
         </div>
@@ -587,7 +566,7 @@ export default function WisStockInvestmentBoard({
                     : connection === "CONNECTING"
                       ? "투자 현황을 확인하고 있습니다."
                       : connection === "PAUSED" || connection === "OFFLINE"
-                        ? "실시간 연결이 중지되었습니다."
+                        ? "투자 현황 조회가 중지되었습니다."
                         : ready
                           ? "투자 내역이 없습니다."
                           : "아직 집계된 투자 현황이 없습니다."}
@@ -668,12 +647,22 @@ export default function WisStockInvestmentBoard({
           </div>
           {!live ? (
             <p className="wis-investment-board__returns-empty">
-              투자 현황이 연결되면 수익률 기록을 확인할 수 있습니다.
+              투자 현황을 불러오면 수익률 기록을 확인할 수 있습니다.
             </p>
           ) : !chartRows.length ? (
             <p className="wis-investment-board__returns-empty">
               보유 주식이 있는 학생이 없습니다.
             </p>
+          ) : historyStale ? (
+            <div className="wis-stocks__error" role="status">
+              <p>조회한 뒤 학생 계좌가 갱신되었습니다.</p>
+              <button
+                type="button"
+                onClick={() => setRetry((value) => value + 1)}
+              >
+                투자 현황 다시 조회
+              </button>
+            </div>
           ) : historyError ? (
             <div className="wis-stocks__error" role="alert">
               <p>{historyError}</p>
@@ -753,9 +742,11 @@ export default function WisStockInvestmentBoard({
                 <h4>보유 주식</h4>
                 {selectedHoldings === undefined ? (
                   <p role="status">
-                    {historyError
-                      ? "보유 종목을 확인하지 못했습니다."
-                      : "보유 종목을 확인하고 있습니다."}
+                    {historyStale
+                      ? "투자 현황을 다시 조회해 주세요."
+                      : historyError
+                        ? "보유 종목을 확인하지 못했습니다."
+                        : "보유 종목을 확인하고 있습니다."}
                   </p>
                 ) : selectedHoldings.length === 0 ? (
                   <p>보유한 주식이 없습니다.</p>
@@ -784,19 +775,22 @@ export default function WisStockInvestmentBoard({
       </div>
     </div>
   );
-  return pageFullscreen ? (
-    <dialog
-      ref={dialog}
-      className="wis-investment-board-dialog"
-      aria-label="학생 투자 현황 전광판"
-      onCancel={(event) => {
-        event.preventDefault();
-        setPageFullscreen(false);
-      }}
-    >
+  return (
+    <>
       {content}
-    </dialog>
-  ) : (
-    content
+      {displayOpen && displayMarket && (
+        <WisStockExchangeDisplay
+          year={year}
+          semester={semester}
+          classKey={classKey}
+          initialMarket={displayMarket}
+          onClose={() => {
+            setDisplayOpen(false);
+            if (connection === "PAUSED" && !document.hidden)
+              setRetry((value) => value + 1);
+          }}
+        />
+      )}
+    </>
   );
 }

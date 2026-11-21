@@ -8,6 +8,7 @@ const { resolveSessionAuthorityConfig } = require('./sessionAuthority');
 const { createStudentWisWallet, accountIdFor } = require('./studentWisWallet');
 const { evaluateStudentMaintenanceAccess, DEFAULT_DISABLED_CONFIG } = require('./studentMaintenance');
 const { readMarket, publicStockSettings } = require('./wisStocks');
+const { marketDisplay, tradeDisplay } = require('./wisStockDisplay');
 const { assertStudentWispiMenuVisible } = require('./studentMenuVisibility');
 const { planWisStockTransfer, getWisStockFundingLimits } = require('./wisStockAccount');
 const { acceptWisStockOrder, finalizeWisStockOrder, cancelWisStockOrder, createWisStockOrderDelaySeconds } = require('./wisStockOrderLifecycle');
@@ -515,6 +516,10 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
     const resultOrder = { ...rawOrder, ...transition.order };
     tx.set(db.doc(accountPath(scope, context.actor.uid)), next); tx.set(supplyRef, nextSupply);
     tx.set(db.doc(orderPath(scope, rawOrder.id)), resultOrder);
+    if (resultOrder.status === 'FILLED') {
+      tx.create(db.doc(`${rootPath(scope)}/wis_stock_display_trades/${resultOrder.id}`),
+        tradeDisplay(scope.semesterId, next, stock.settings.name, resultOrder, context.atMs));
+    }
     history(tx, context, next, transition.order.status === 'FILLED' ? 'ORDER_FILLED' : 'ORDER_CANCELLED', rawOrder.id,
       { orderId: rawOrder.id, stockId: rawOrder.stockId, side: rawOrder.side, quantity: rawOrder.quantity, unitPrice: rawOrder.unitPrice,
         fee: rawOrder.fee, stockCashDelta: transition.effects.stockCashDelta, realizedPnl: transition.effects.cumulativeRealizedPnlDelta,
@@ -639,7 +644,16 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
     }
     return mutate(scope, async tx => {
       const market = readMarket(await tx.get(db.doc(`${rootPath(scope)}/wis_stock_markets/current`)), scope);
+      // Events can arrive out of order. Project the canonical transaction read.
+      const displayRef = db.doc(`${rootPath(scope)}/wis_stock_display/market`);
+      let display = null;
+      if (!isDeepStrictEqual(before.stocks, after.stocks) || before.studentOpen !== after.studentOpen
+        || before.rules?.halted !== after.rules?.halted || !isDeepStrictEqual(before.marketIndex, after.marketIndex)) {
+        const nextDisplay = marketDisplay(market);
+        if (!isDeepStrictEqual((await tx.get(displayRef)).data(), nextDisplay)) display = nextDisplay;
+      }
       const writeBoards = await prepareBoard(tx, scope, market, null, null);
+      if (display) tx.set(displayRef, display);
       if (writeBoards) writeBoards();
       return { changed: !!writeBoards };
     });

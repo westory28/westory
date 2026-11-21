@@ -12,7 +12,8 @@ process.env.WESTORY_SESSION_IDLE_MODE = 'ENFORCE';
 process.env.WESTORY_APP_CHECK_MODE = 'DISABLED';
 const { initializeApp, deleteApp } = require('firebase-admin/app');
 const { getFirestore, Timestamp } = require('firebase-admin/firestore');
-const { createWisStockTrading } = require('../wisStockTrading');
+const { createWisStockTrading } = require(process.env.WIS_STOCK_DISPLAY_SOURCE_DIR
+  ? path.join(process.env.WIS_STOCK_DISPLAY_SOURCE_DIR, 'wisStockTrading') : '../wisStockTrading');
 const { createWisStockInvestmentHistory } = require(process.env.WIS_STOCK_HISTORY_SOURCE_DIR
   ? path.join(process.env.WIS_STOCK_HISTORY_SOURCE_DIR, 'wisStockInvestmentHistory.js') : '../wisStockInvestmentHistory');
 const { accountIdFor } = require('../studentWisWallet');
@@ -325,6 +326,7 @@ async function test(name, fn, count = 2, supply = 1000) {
     await db.doc(sessionPath('student0')).update({ status: 'closed' });
     await assert.rejects(state('student0'), error => error.code === 'unauthenticated');
     assert.equal((await settle(order.id)).order.status, 'CANCELLED');
+    assert.equal((await db.collection(`${base}/wis_stock_display_trades`).get()).empty, true);
     await db.doc(sessionPath('student0')).update({ status: 'active' });
     await db.doc('site_settings/config').update({ studentMenuVisibility: { wispi: false } });
     assert.equal((await state('student0')).account.stockCash, 5000);
@@ -352,6 +354,18 @@ async function test(name, fn, count = 2, supply = 1000) {
     assert.deepEqual(await api.recoverWisStockOrders(), { examined: 0, changed: 0, graduationJobsQueued: 0 });
     clock = order.dueAtMs; assert.deepEqual(await api.recoverWisStockOrders(), { examined: 1, changed: 1, graduationJobsQueued: 0 });
     assert.equal((await settle(order.id)).duplicate, true); assert.equal(commits.at(-1).writes.length, 0);
+    const fills = await db.collection(`${base}/wis_stock_display_trades`).get();
+    assert.equal(fills.size, 1);
+    assert.deepEqual(fills.docs[0].data(), { semesterId: '2026-2', classKey: '3_1', atMs: clock,
+      displayName: '합성 1', stockName: '합성검증종목', side: 'BUY', quantity: 1, unitPrice: 100 });
+    const halt = await marketWrite({ rules: { ...(await get(`${base}/wis_stock_markets/current`)).rules, halted: true } });
+    await api.onWisStockMarketTradingWrite(halt);
+    const display = await get(`${base}/wis_stock_display/market`);
+    assert.equal(display.halted, true);
+    assert.deepEqual(display.index, { value: 1000, previousClose: 1000 });
+    assert.deepEqual(display.stocks, [{ id: stockId, name: '합성검증종목', price: 100, previousClose: 100 }]);
+    await api.onWisStockMarketTradingWrite(halt);
+    assert.equal(commits.at(-1).writes.length, 0);
   });
   await test('supply exhaustion and parallel sell reservations never exceed issued or held quantities', async () => {
     for (let i = 0; i < 3; i++) await transfer(`student${i}`, 'DEPOSIT', 5000);

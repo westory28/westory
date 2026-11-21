@@ -60,6 +60,19 @@ if(name==='placeStudentWisStockOrder'&&qa.holdOrder){qa.holdOrder=false;await ne
 if(name==='placeStudentWisStockOrder'&&qa.failOrder){qa.failOrder=false;throw Object.assign(Error('시세가 바뀌었습니다. 다시 주문해 주세요.'),{code:'functions/failed-precondition',details:{reason:'WIS_STOCK_QUOTE_CHANGED'}})}
 if(name==='getStudentWisStockHistory'&&qa.holdHistory){qa.holdHistory=false;await new Promise(resolve=>qa.releaseHistory=resolve)}
 if(name==='getStudentWisStockState'){result=qa.state();if(qa.holdRead){qa.holdRead=false;await new Promise(resolve=>qa.releaseRead=resolve)}}
+else if(name==='getStudentWisStockRanking'){
+ const asOfMs=Math.floor((Date.now()+9*3600000)/86400000)*86400000-9*3600000-60000;
+ const dayKey=new Date(asOfMs+9*3600000).toISOString().slice(0,10);
+ const day={semesterId:fields.year+'-'+fields.semester,dayKey,asOfMs};
+ const rows=[1,2,3,4,5].map(rank=>({rank,displayName:'연습학생'+rank,returnPercent:20-rank*5}));
+ if(qa.rankingError){qa.rankingError=false;throw Error('synthetic failure');}
+ if(fields.rank){
+   if(qa.holdRanking){qa.holdRanking=false;await new Promise(resolve=>qa.releaseRanking=resolve);}
+   result={...day,rank:fields.rank,displayName:rows[fields.rank-1].displayName,holdings:[{name:'조선 후기 상업 발전을 연구하는 종목 이름',quantity:13}],
+     points:[{atMs:asOfMs-5*86400000,returnPercent:-2.5},{atMs:asOfMs-4*86400000,returnPercent:1.5},{atMs:asOfMs-3*86400000,returnPercent:null},{atMs:asOfMs-2*86400000,returnPercent:3},{atMs:asOfMs-86400000,returnPercent:9},{atMs:asOfMs,returnPercent:rows[fields.rank-1].returnPercent}]};
+   if(qa.futurePoint) result.points.push({atMs:asOfMs+86400000,returnPercent:1000});
+ }else result={...day,status:qa.rankingMode==='pending'?'NOT_READY':'READY',rows:qa.rankingMode?[]:rows};
+}
 else if(name==='getStudentWisStockBonus'){result={campaignId:'wispi-deposit-500-v1',threshold:500,amount:500,status:qa.bonusClaimed?'CLAIMED':qa.bonusEnabled?(qa.depositTotal>=500?'ELIGIBLE':'INELIGIBLE'):'DISABLED',qualifyingDepositAmount:Math.min(500,qa.depositTotal||0)};}
 else if(name==='getStudentWisStockHistory'){if(qa.failHistory===fields.cursor){qa.failHistory=null;throw Error('내역 조회 실패')}const start=Number(fields.cursor||0),entries=qa.records.slice(start,start+20);result={semesterId:fields.year+'-'+fields.semester,entries,nextCursor:start+20<qa.records.length?String(start+20):'',hasMore:start+20<qa.records.length};}
 else if(qa.receipts.has(fields.requestId)){result={...qa.receipts.get(fields.requestId),duplicate:true,changed:false,state:qa.state()}}
@@ -88,6 +101,64 @@ async function deposit(page){await account(page);await page.getByLabel('위스 �
 const layout=async(page,width)=>{const result=await page.evaluate(()=>{const header=document.querySelector('.ws-page-header')||document.querySelector('main'),style=getComputedStyle(header);return{width:innerWidth,scroll:document.documentElement.scrollWidth,header:style.backgroundColor,shadow:style.boxShadow,minHeight:style.minHeight,tabs:[...document.querySelectorAll('.ws-page-tabs')].map(el=>getComputedStyle(el).backgroundColor)}});assert(result.scroll<=width,JSON.stringify(result));assert.equal(result.header,'rgba(0, 0, 0, 0)');assert.equal(result.shadow,'none');assert(result.tabs.every(color=>color==='rgba(0, 0, 0, 0)'),JSON.stringify(result));};
 const orderRow=async(page)=>{const boxes=await page.locator('.student-wispi-order-action').evaluate(row=>{const input=row.querySelector('input').getBoundingClientRect(),button=row.querySelector('button').getBoundingClientRect();return{input:{x:input.x,y:input.y,width:input.width,height:input.height},button:{x:button.x,y:button.y,width:button.width,height:button.height},overflow:row.scrollWidth>row.clientWidth}});assert(Math.abs(boxes.input.y-boxes.button.y)<2,JSON.stringify(boxes));assert(boxes.input.x+boxes.input.width<boxes.button.x,JSON.stringify(boxes));assert(boxes.input.height>=44&&boxes.button.height>=44&&!boxes.overflow,JSON.stringify(boxes));};
 try{
+ if(!process.argv.includes('--graduation-only')){
+   const name='getStudentWisStockRanking';
+   for(const width of [320,390,768,1280,1440]){
+     const page=await open(width,'',true);
+     assert.equal(await calls(page,name),0);
+     await page.getByRole('button',{name:'투자 랭킹',exact:true}).click();
+     const rows=page.locator('.student-wispi-rank-list > li > button');
+     await rows.first().waitFor();
+     assert.equal(await rows.count(),5);
+     assert.equal(await calls(page,name),1);
+     assert.equal(await page.locator('.student-wispi-rank-chart').count(),0);
+     assert.deepEqual((await page.evaluate(()=>window.qa.activePaths())).sort(),[
+       'application_sessions/student-a/sessions/1001','years/2026/semesters/2/wis_stock_public/current'
+     ]);
+     await rows.first().focus();
+     await page.keyboard.press('Enter');
+     await page.locator('.student-wispi-rank-chart canvas').waitFor();
+     await page.getByText('13주',{exact:true}).waitFor();
+     assert.equal(await rows.first().getAttribute('aria-expanded'),'true');
+     assert.equal(await page.locator('.student-wispi-ranking > div > time').getAttribute('datetime'),'2026-11-15T14:59:00.000Z');
+     assert.deepEqual(await page.evaluate(name=>window.qa.calls.filter(call=>call.name===name).map(call=>call.fields),name),[
+       {year:'2026',semester:'2'},{year:'2026',semester:'2',dayKey:'2026-11-15',rank:1}
+     ]);
+     await layout(page,width);
+     await page.screenshot({path:path.join(evidence,'ranking-'+width+'.png')});
+     await rows.first().click();await rows.first().click();
+     assert.equal(await calls(page,name),2);
+     await page.close();
+   }
+   const page=await open(390,'',true);
+   const goRanking=()=>page.getByRole('button',{name:'투자 랭킹',exact:true}).click();
+   await page.evaluate(()=>{window.qa.rankingError=true});await goRanking();
+   await page.getByRole('alert').getByText('랭킹을 불러오지 못했습니다.').waitFor();
+   await page.evaluate(()=>{window.qa.rankingMode='pending'});
+   await page.getByRole('button',{name:'다시 불러오기',exact:true}).click();
+   await page.getByText('아직 전날 랭킹이 준비되지 않았습니다.').waitFor();
+   await page.evaluate(()=>{window.qa.rankingMode='empty'});
+   await page.getByRole('button',{name:'다시 불러오기',exact:true}).click();
+   await page.getByText('전날 보유 수익률이 집계된 학생이 없습니다.').waitFor();
+   await page.getByRole('button',{name:'주식 시장',exact:true}).click();
+   await page.evaluate(()=>{window.qa.rankingMode='';window.qa.futurePoint=true});await goRanking();
+   const first=page.locator('.student-wispi-rank-list > li > button').first();
+   await first.click();await page.getByRole('alert').getByText('투자 기록을 불러오지 못했습니다.').waitFor();
+   assert.equal(await page.locator('.student-wispi-rank-chart').count(),0);
+   await page.evaluate(()=>{window.qa.futurePoint=false;window.qa.holdRanking=true});
+   await page.getByRole('button',{name:'다시 불러오기',exact:true}).click();
+   await page.waitForFunction(()=>typeof window.qa.releaseRanking==='function');
+   await page.clock.fastForward(14*3600000+1000);
+   await page.waitForFunction(()=>document.querySelector('.student-wispi-ranking > div > time')?.getAttribute('datetime')==='2026-11-16T14:59:00.000Z');
+   await page.evaluate(()=>window.qa.releaseRanking());
+   assert.equal(await first.getAttribute('aria-expanded'),'false');
+   assert.equal(await page.locator('.student-wispi-rank-chart').count(),0);
+   await page.evaluate(()=>window.qa.setHalted(true));
+   await page.getByRole('alert').getByText('위스피의 거래가 중지되었습니다.').waitFor();
+   assert.equal(await page.locator('.student-wispi-ranking').count(),0);
+   await page.close();
+   checks.push('Ranking: five widths, five rows, one prior-day list read, one selected detail read, no market/account listener; keyboard, collapse cache, failure/retry, empty, pending, future point rejection, KST midnight, late response discard and market halt.');
+ }
  for(const width of [320,390,768,1280]) {
    const graduated=await open(width);await graduated.evaluate(()=>{const q=window.qa;q.account.stockCash=1000;q.account.positions=[{stockId:q.market.stocks[0].id,quantity:3,reservedSellQuantity:0,principal:300,costBasis:303}];q.account.revision++;q.notifyAccount();q.market.stocks[0].settings.tradingStatus='GRADUATED';q.market.revision++;q.emit('/market')});
    await graduated.locator('#student-wispi-order-problem').filter({hasText:'졸업한 종목'}).waitFor();

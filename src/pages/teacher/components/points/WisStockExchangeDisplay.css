@@ -1,0 +1,127 @@
+.wis-exchange-dialog {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: #10151d;
+}
+.wis-exchange {
+  --exchange-text: #f1f5f9;
+  --exchange-muted: #abbaca;
+  --exchange-line: rgb(175 197 224 / 18%);
+  --exchange-up: #ff7979;
+  --exchange-down: #76b5ff;
+  color-scheme: dark;
+  position: relative;
+  isolation: isolate;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  padding: max(16px, env(safe-area-inset-top)) max(clamp(16px, 2.4vw, 48px), env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(clamp(16px, 2.4vw, 48px), env(safe-area-inset-left));
+  background: radial-gradient(ellipse at 45% 24%, #23313d 0, transparent 57%), linear-gradient(115deg, #10151d, #19232d 56%, #10151d);
+  color: var(--exchange-text);
+  font-family: "Noto Sans KR", sans-serif;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+.wis-exchange::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  --exchange-mark: url("../../../../assets/brand/westory-mark.webp");
+  background-image: var(--exchange-mark), var(--exchange-mark), var(--exchange-mark);
+  background-repeat: no-repeat;
+  background-position: left -40px bottom 7%, center 14%, right -56px bottom 22%;
+  background-size: clamp(160px, 16vw, 300px) auto, clamp(100px, 9vw, 200px) auto, clamp(160px, 16vw, 300px) auto;
+  filter: grayscale(1) brightness(2);
+  opacity: .026;
+}
+.wis-exchange * { box-sizing: border-box; }
+.wis-exchange :is(h2, h3, dl, dd, ol) { margin: 0; }
+.wis-exchange :is(button, [tabindex]):focus-visible { outline: 2px solid #a9d4ff; outline-offset: -2px; }
+.wis-exchange button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 8px 14px; border: 1px solid #627484;
+  border-radius: 8px; background: #202b36; color: var(--exchange-text); font: inherit;
+  cursor: pointer;
+}
+.wis-exchange button:hover { background: #30404f; }
+.wis-exchange__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding-bottom: 16px; border-bottom: 1px solid var(--exchange-line); }
+.wis-exchange__bar h2 { font-size: clamp(20px, 2vw, 30px); font-weight: 800; letter-spacing: -.04em; }
+.wis-exchange__connection { display: inline-flex; gap: 8px; align-items: center; color: var(--exchange-muted); font-size: 14px; }
+.wis-exchange__connection::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.wis-exchange__connection.is-ready::before { background: #74d8ac; }
+.wis-exchange__close { margin-left: auto; }
+.wis-exchange__close > span { font-size: 24px; line-height: 1; }
+.wis-exchange__columns { display: grid; flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr) minmax(0, .96fr) minmax(0, 1fr); grid-template-areas: "quotes index trades"; padding-top: clamp(16px, 3vh, 36px); }
+.wis-exchange__quotes { grid-area: quotes; }
+.wis-exchange__trades { grid-area: trades; }
+.wis-exchange__quotes, .wis-exchange__trades { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.wis-exchange__heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; align-items: baseline; margin-bottom: 12px; }
+.wis-exchange__heading h3 { font-size: clamp(18px, 1.5vw, 24px); font-weight: 700; }
+.wis-exchange__heading > span, .wis-exchange__muted, .wis-exchange__empty { color: var(--exchange-muted); }
+.wis-exchange__heading > span { font-size: 13px; }
+.wis-exchange__scroll { overflow: auto; scrollbar-width: thin; scrollbar-color: #536478 transparent; }
+.wis-exchange table { width: 100%; table-layout: fixed; border-collapse: collapse; border: 0; background: transparent; }
+.wis-exchange table :is(th,td) { border: 0; border-bottom: 1px solid var(--exchange-line); padding: 10px 4px; text-align: right; vertical-align: middle; overflow-wrap: anywhere; background: transparent; color: inherit; }
+.wis-exchange thead th { position: sticky; top: 0; z-index: 1; background: #19232d; font-size: 13px; font-weight: 500; color: var(--exchange-muted); }
+.wis-exchange table th:first-child { width: 39%; padding-left: 0; text-align: left; }
+.wis-exchange table th:last-child { width: 32%; }
+.wis-exchange tbody th { font-size: 15px; font-weight: 600; }
+.wis-exchange tbody td { font-size: clamp(16px, 1.3vw, 24px); font-weight: 700; }
+.wis-exchange .is-up { color: var(--exchange-up); }
+.wis-exchange .is-down { color: var(--exchange-down); }
+.wis-exchange .is-flat { color: var(--exchange-muted); }
+.wis-exchange__movement { display: inline-flex; flex-direction: column; align-items: flex-end; font-weight: 700; font-size: 15px; }
+.wis-exchange__movement small { font-size: .86em; font-weight: 500; }
+.wis-exchange__index { grid-area: index; min-width: 0; align-self: stretch; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(32px, 7vh, 80px); margin-inline: clamp(12px, 2vw, 40px); padding: 16px 8px; border-inline: 1px solid var(--exchange-line); text-align: center; }
+.wis-exchange__index-main { min-width: 0; width: 100%; }
+.wis-exchange__index h3 { display: grid; gap: 0; }
+.wis-exchange__index h3 > span { font-size: clamp(30px, 4vw, 76px); line-height: 1.1; letter-spacing: -.055em; font-weight: 800; }
+.wis-exchange__index h3 small { margin-top: 8px; color: var(--exchange-muted); font-size: 15px; font-weight: 500; }
+.wis-exchange__index-value { display: block; margin: 20px 0 8px; font-size: clamp(34px, 4.3vw, 100px); font-weight: 800; line-height: 1.15; letter-spacing: -.065em; overflow-wrap: anywhere; }
+.wis-exchange__index-value > small { margin-left: 4px; font-size: .28em; font-weight: 500; letter-spacing: 0; color: var(--exchange-muted); }
+.wis-exchange__index-change { display: flex; align-items: baseline; justify-content: center; gap: 4px 8px; flex-wrap: wrap; }
+.wis-exchange__index-change > span:first-child { font-size: 13px; color: var(--exchange-muted); }
+.wis-exchange__index-change .wis-exchange__movement { flex-flow: row wrap; justify-content: center; align-items: baseline; gap: 4px; font-size: clamp(17px, 1.45vw, 28px); }
+.wis-exchange__index-time { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 12px; margin-top: 20px; color: var(--exchange-muted); font-size: 13px; }
+.wis-exchange__breadth { width: min(85%, 330px); }
+.wis-exchange__breadth-bar { display: flex; gap: 2px; height: 5px; overflow: hidden; border-radius: 2px; }
+.wis-exchange__breadth-bar i { background: currentColor; }
+.wis-exchange__breadth dl { display: flex; justify-content: space-between; padding-top: 8px; }
+.wis-exchange__breadth dt { color: var(--exchange-muted); font-size: 13px; }
+.wis-exchange__breadth dd { font-size: 18px; font-weight: 700; }
+.wis-exchange__trades ol { padding: 0; list-style: none; }
+.wis-exchange__trades li { padding: 12px 0; border-bottom: 1px solid var(--exchange-line); }
+.wis-exchange__trade-head, .wis-exchange__trade-stock { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; overflow-wrap: anywhere; }
+.wis-exchange__trade-head b { font-size: 13px; }
+.wis-exchange__trade-head strong { font-size: 16px; }
+.wis-exchange__trade-head time { margin-left: auto; color: var(--exchange-muted); font-size: 13px; }
+.wis-exchange__trade-stock { margin-top: 4px; font-size: 15px; }
+.wis-exchange__trade-stock span:last-child { margin-left: auto; font-size: 14px; color: var(--exchange-muted); }
+.wis-exchange__empty { margin: 16px 0; font-size: 14px; }
+.wis-exchange__error { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 12px; color: var(--exchange-up); }
+@media (max-width: 959px) {
+  .wis-exchange__columns { flex: none; grid-template-areas: "index index" "quotes trades"; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+  .wis-exchange__index { margin: 0; padding: 8px 0 20px; border: 0; border-bottom: 1px solid var(--exchange-line); gap: 16px; }
+  .wis-exchange__index-value { margin-top: 12px; font-size: clamp(42px, 8vw, 64px); }
+  .wis-exchange__index h3 > span { font-size: 32px; }
+  .wis-exchange__index-time { margin-top: 12px; }
+  .wis-exchange__scroll { max-height: 64dvh; }
+}
+@media (max-width: 639px) {
+  .wis-exchange__columns { grid-template-areas: "index" "quotes" "trades"; grid-template-columns: minmax(0, 1fr); }
+  .wis-exchange__bar { gap: 6px 10px; }
+  .wis-exchange__close { padding-inline: 10px; }
+  .wis-exchange__scroll { max-height: min(460px, 55dvh); }
+  .wis-exchange__heading { margin-bottom: 4px; }
+}
