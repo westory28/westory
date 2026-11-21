@@ -76,7 +76,7 @@ export const loadHallOfFameRecognition = async (
     if (!wallet) return null;
     const profileEmoji = resolveStudentProfileEmoji(
       policy.rankPolicy,
-      wallet.rankEarnedTotal ?? 0,
+      wallet.earnedTotal ?? 0,
       userData,
     );
 

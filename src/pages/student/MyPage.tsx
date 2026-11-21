@@ -626,7 +626,7 @@ const MyPage: React.FC = () => {
     () =>
       resolveStudentProfileEmoji(
         pointPolicy.rankPolicy,
-        pointRankReady ? Number(safePointWallet.rankEarnedTotal || 0) : 0,
+        pointRankReady ? safePointWallet.earnedTotal : 0,
         pointRankReady
           ? {
               profileEmojiId:
@@ -638,7 +638,7 @@ const MyPage: React.FC = () => {
     [
       pointPolicy.rankPolicy,
       pointRankReady,
-      safePointWallet.rankEarnedTotal,
+      safePointWallet.earnedTotal,
       profile?.profileEmojiId,
       userData?.profileEmojiId,
       profileIcon,

@@ -247,6 +247,15 @@ await test("Own student reads deduplicate pending work and use canonical scope",
     "Settled results are not cached across sessions",
   );
 });
+await test("Cumulative earnings remain strict numbers through the actual wallet adapter", async () => {
+  for (const earnedTotal of [0, 9999, 10000, 10010, "10000", NaN, -1, null, undefined, 10000.5, Infinity]) {
+    const h = harness(async () => state({ account: { ...account, earnedTotal, rankEarnedTotal: 20000 } }));
+    const wallet = await h.student.getStudentPointWallet(config, "student-a");
+    assert.equal(wallet.earnedTotal, Number.isSafeInteger(earnedTotal) && earnedTotal >= 0 ? earnedTotal : 0);
+    assert.equal(wallet.rankEarnedTotal, 20000, "The retained ledger counter is unchanged and is not a cumulative fallback");
+    assert.equal(h.calls.length, 1);
+  }
+});
 for (const change of ["account", "same-uid-object", "epoch"])
   await test(`Stale query rejects ${change}`, async () => {
     const gate = deferred(),

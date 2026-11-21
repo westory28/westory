@@ -219,9 +219,9 @@ async function profileEmoji(db, tx, context) {
   const account = accountDoc.data();
   const valid = account?.accountId === id && account.studentUid === context.uid && account.semesterId === context.scope
     && account.schemaVersion === 1 && account.policyVersion === 'w7-v1' && account.status === 'ACTIVE' && account.readOnly !== true
-    && Number.isSafeInteger(account.rankEarnedTotal) && account.rankEarnedTotal >= 0;
+    && Number.isSafeInteger(account.earnedTotal) && account.earnedTotal >= 0;
   return resolveStudentProfileEmoji({ profileEmojiId: context.profile.profileEmojiId, profileIcon: context.profile.profileIcon,
-    rankEarnedTotal: valid ? account.rankEarnedTotal : 0, rankPolicy: policyDoc.data()?.rankPolicy }).profileEmojiId;
+    earnedTotal: valid ? account.earnedTotal : 0, rankPolicy: policyDoc.data()?.rankPolicy }).profileEmojiId;
 }
 async function notificationPlan(db, tx, context, type, questionId, revision, now) {
   const teachers = type === 'question_created', settings = context.settings;

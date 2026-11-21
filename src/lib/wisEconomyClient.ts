@@ -202,7 +202,10 @@ export const wisWallet = (account: WisRow): PointWallet => ({
   class: account.classNumber || "",
   number: account.studentNumber || "",
   balance: Number(account.balance || 0),
-  earnedTotal: Number(account.earnedTotal || 0),
+  earnedTotal:
+    Number.isSafeInteger(account.earnedTotal) && account.earnedTotal >= 0
+      ? account.earnedTotal
+      : 0,
   rankEarnedTotal: Number(account.rankEarnedTotal || 0),
   spentTotal: Number(account.spentTotal || 0),
   adjustedTotal: Number(account.adjustedTotal || 0),

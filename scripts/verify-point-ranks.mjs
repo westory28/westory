@@ -175,7 +175,7 @@ test("empty policy fallback and disabled policies preserve their behavior", () =
   assert.equal(display({ ...joseonPolicy, enabled: false }, 0), null);
 });
 
-test("legacy wallet and transaction metrics remain intact and inputs are not mutated", () => {
+test("canonical cumulative earnings never add legacy transactions and inputs are not mutated", () => {
   for (const value of [0, 199, 200, 3000]) {
     const rank = display(joseonPolicy, value, { rankEarnedTotal: undefined });
     assert.equal(rank.label, value < 3000 ? "노비" : "상민");
@@ -190,8 +190,8 @@ test("legacy wallet and transaction metrics remain intact and inputs are not mut
     wallet,
     earnedPointsFromTransactions: 1,
   });
-  assert.equal(rank.metricValue, 3000);
-  assert.equal(rank.label, "상민");
+  assert.equal(rank.metricValue, 2999);
+  assert.equal(rank.label, "노비");
   assert.equal(JSON.stringify(wallet), originalWallet);
   assert.equal(JSON.stringify(joseonPolicy), originalPolicy);
   assert.equal(
@@ -200,7 +200,7 @@ test("legacy wallet and transaction metrics remain intact and inputs are not mut
   );
 });
 
-test("cumulative earnings include initial grants while rank and spending stay independent", () => {
+test("rank and cumulative earnings include initial grants and remain unchanged by spending", () => {
   const wallet = { earnedTotal: 8100, rankEarnedTotal: 7600, balance: 7910 };
   assert.equal(ranks.getPointWalletCumulativeEarned(wallet), 8100);
   assert.equal(
@@ -213,14 +213,14 @@ test("cumulative earnings include initial grants while rank and spending stay in
   );
   assert.equal(
     ranks.getPointRankDisplay({ wallet, rankPolicy: joseonPolicy }).metricValue,
-    7600,
+    8100,
   );
   const boundary = { earnedTotal: 3100, rankEarnedTotal: 2600 };
   assert.equal(ranks.getPointWalletCumulativeEarned(boundary), 3100);
   assert.equal(
     ranks.getPointRankDisplay({ wallet: boundary, rankPolicy: joseonPolicy })
       .label,
-    "노비",
+    "상민",
   );
   assert.equal(
     ranks.getPointWalletCumulativeEarned({
@@ -230,6 +230,33 @@ test("cumulative earnings include initial grants while rank and spending stay in
     0,
   );
   assert.equal(ranks.getPointWalletCumulativeEarned(null), 0);
+});
+
+test("royal promotion uses 10000 cumulative Wis, including the initial 500, under both saved policies", () => {
+  for (const basedOn of ["earnedTotal", "earnedTotal_plus_positive_manual_adjust"]) {
+    const rankPolicy = { ...joseonPolicy, basedOn };
+    for (const [earnedTotal, label] of [[9999, "양반"], [10000, "왕족"], [10010, "왕족"]]) {
+      const wallet = { earnedTotal, rankEarnedTotal: earnedTotal - 500, balance: 0, spentTotal: earnedTotal };
+      const before = JSON.stringify(wallet);
+      const rank = ranks.getPointRankDisplay({ rankPolicy, wallet, earnedPointsFromTransactions: 500 });
+      assert.equal(rank.label, label);
+      assert.equal(rank.metricValue, earnedTotal);
+      assert.equal(rank.remainingToNext, earnedTotal < 10000 ? 1 : 0);
+      assert.equal(JSON.stringify(wallet), before, "Rank evaluation never rewrites either ledger counter");
+    }
+  }
+});
+
+test("missing or invalid cumulative totals never unlock from the activity counter or legacy transactions", () => {
+  for (const earnedTotal of [undefined, null, NaN, Infinity, -1, 10000.5, "10000"]) {
+    const rank = ranks.getPointRankDisplay({
+      rankPolicy: joseonPolicy,
+      wallet: { earnedTotal, rankEarnedTotal: 20000 },
+      earnedPointsFromTransactions: 20000,
+    });
+    assert.equal(rank.metricValue, 0);
+    assert.equal(rank.label, "노비");
+  }
 });
 
 test("the teacher selector uses a neutral history label while preserving custom theme display", () => {

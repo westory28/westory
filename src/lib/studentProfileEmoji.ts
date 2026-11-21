@@ -9,15 +9,14 @@ import {
 // A saved profile preference never grants an unlock in a different semester.
 export const resolveStudentProfileEmoji = (
   rankPolicy: PointRankPolicy,
-  rankEarnedTotal: number,
+  earnedTotal: number,
   profile: { profileEmojiId?: string; profileIcon?: string } | null,
 ) => {
   const rank = getPointRankDisplay({
     rankPolicy,
     wallet: {
-      earnedTotal: 0,
-      rankEarnedTotal: Number.isSafeInteger(rankEarnedTotal)
-        ? Math.max(0, rankEarnedTotal)
+      earnedTotal: Number.isSafeInteger(earnedTotal)
+        ? Math.max(0, earnedTotal)
         : 0,
     },
   });
@@ -61,7 +60,7 @@ export const resolveStudentHallProfileEmojis = (
           profileIcon:
             resolveStudentProfileEmoji(
               rankPolicy,
-              entry.cumulativeEarned,
+              entry.earnedTotal ?? 0,
               entry,
             ).entry?.emoji || "😀",
         })),

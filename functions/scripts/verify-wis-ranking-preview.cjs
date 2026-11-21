@@ -101,7 +101,7 @@ const addStudent = (store, index, { scope = '2026-2', grade = '3', score = 1000 
   const fields = { accountId, studentUid: uid, semesterId: scope, enrollmentId, classId,
     grade, classNumber: '1', displayName: name, rankEarnedTotal: score, status };
   store.set(accountPath(scope, uid), { ...fields, studentNumber: String(index + 1),
-    balance: score, recentLedgerEntries: Array.from({ length: 100 }, (_, n) => ({ reason: `large transaction ${n}` })) });
+    balance: score, earnedTotal: score, recentLedgerEntries: Array.from({ length: 100 }, (_, n) => ({ reason: `large transaction ${n}` })) });
   const { status: _status, ...ranking } = fields;
   store.set(rankingPath(scope, uid), ranking);
   // Simulate canonical writer output independently: never import the index
@@ -240,6 +240,34 @@ const run = async () => {
     assert.ok(rows.some(row => row.uid === publicId('2026-2', 'student-5')));
     assert.deepEqual(rows.map(row => row.cumulativeEarned), [999, 998, 997, 996, 995]);
     assertIndexOnly(ctx.store);
+  });
+  await check('indexed and archived grade eligibility uses canonical total earned without changing ranking score or reads', async () => {
+    for (const source of ['CURRENT', 'EXPLICIT']) {
+      const ctx = setup();
+      ctx.store.set(policyPath('2026-2'), { rankPolicy: {
+        tiers: [{ code: 'tier_1', minPoints: 0, allowedEmojiIds: ['smile'] },
+          { code: 'tier_5', minPoints: 10000, allowedEmojiIds: ['fox'] }],
+      } });
+      ctx.store.patch('users/student-0', { profileEmojiId: 'fox', profileIcon: '🦊' });
+      const path = accountPath('2026-2', 'student-0');
+      ctx.store.patch(path, { earnedTotal: 10010, rankEarnedTotal: 9510, balance: 1 });
+      ctx.store.patch(previewPath('2026-2', 'student-0'), { rankEarnedTotal: 9510 });
+      if (source === 'EXPLICIT') ctx.store.patch('semester_manifests/2026-2', { status: 'ARCHIVED' });
+      const request = () => ctx.request({ uid: 'teacher', audience: 'teacher', source });
+      const earned = entries(await request()).find(row => row.uid === publicId('2026-2', 'student-0'));
+      assert.equal(earned.earnedTotal, 10010);
+      assert.equal(earned.cumulativeEarned, 9510, 'The existing index sort metric stays unchanged');
+      assert.equal(earned.profileIcon, '🦊');
+      for (const total of [9999, undefined, -1, 10000.5, Number.NaN]) {
+        ctx.store.patch(path, { earnedTotal: total, rankEarnedTotal: 9510, balance: 99999 });
+        const denied = entries(await request()).find(row => row.uid === publicId('2026-2', 'student-0'));
+        assert.equal(denied.profileIcon, '😀', 'Balance, legacy rank or malformed total cannot unlock a grade');
+        assert.equal(denied.earnedTotal, total === 9999 ? 9999 : 0);
+      }
+      ctx.store.patch(path, { earnedTotal: 10000 });
+      assert.equal(entries(await request()).find(row => row.uid === publicId('2026-2', 'student-0')).profileIcon, '🦊');
+      assert.equal(ctx.store.writes, 0);
+    }
   });
   await check('fresh score decreases across an entire first page trigger bounded next-page replacement', async () => {
     const ctx = setup(80);

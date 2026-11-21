@@ -7,7 +7,7 @@ const ACTIVE_POINTER_PATH = 'site_settings/semester_active';
 const PROFILE_FIELDS = ['profileEmojiId', 'profileIcon'];
 const USER_EVENT_FIELDS = [...PROFILE_FIELDS, 'role', 'deletedAt', 'isDeleted'];
 const ACCOUNT_EVENT_FIELDS = [
-  'accountId', 'studentUid', 'semesterId', 'rankEarnedTotal', 'status',
+  'accountId', 'studentUid', 'semesterId', 'earnedTotal', 'status',
   'readOnly', 'schemaVersion', 'policyVersion',
 ];
 const safeInteger = (value, minimum = 0) => Number.isSafeInteger(value) && value >= minimum;
@@ -72,11 +72,11 @@ const createStudentProfileEmojiReconciliationService = ({
         && account?.accountId === accountId && account.studentUid === uid && account.semesterId === semesterId
         && account.schemaVersion === 1 && account.policyVersion === 'w7-v1'
         && account.status === 'ACTIVE' && account.readOnly !== true && safeInteger(account.revision, 1)
-        && safeInteger(account.rankEarnedTotal);
+        && safeInteger(account.earnedTotal) && safeInteger(account.rankEarnedTotal);
       // Rank access never falls back to legacy wallets, balances or projections.
-      const rankEarnedTotal = hasValidAccount ? account.rankEarnedTotal : 0;
+      const earnedTotal = hasValidAccount ? account.earnedTotal : 0;
       const resolved = resolveStudentProfileEmoji({
-        ...before, rankEarnedTotal, rankPolicy: policySnapshot.data()?.rankPolicy,
+        ...before, earnedTotal, rankPolicy: policySnapshot.data()?.rankPolicy,
       });
       if (resolved.isValid) {
         return { status: 'valid', uid, semesterId, reason: resolved.reason, applied: false };
@@ -88,7 +88,7 @@ const createStudentProfileEmojiReconciliationService = ({
       if (apply) transaction.set(db.doc(`users/${uid}`), { ...after, updatedAt: serverTimestamp() }, { merge: true });
       return {
         status: 'updated', uid, semesterId, before, after, reason: resolved.reason,
-        applied: apply, rankEarnedTotal, accountValid: hasValidAccount,
+        applied: apply, earnedTotal, accountValid: hasValidAccount,
       };
     });
   };
@@ -131,7 +131,8 @@ const createStudentProfileEmojiReconciliationService = ({
     // Keep invalid/repaired revision transitions authoritative, but avoid five
     // fresh document reads for an otherwise unchanged, valid account revision.
     if (!fieldsChanged(before, after, ACCOUNT_EVENT_FIELDS)
-      && safeInteger(before?.revision, 1) === safeInteger(after?.revision, 1)) return null;
+      && safeInteger(before?.revision, 1) === safeInteger(after?.revision, 1)
+      && safeInteger(before?.rankEarnedTotal) === safeInteger(after?.rankEarnedTotal)) return null;
     // Re-check both owners after reassignment/deletion using their current account.
     const uids = [...new Set([before?.studentUid, after?.studentUid].filter(validUid))];
     return Promise.all(uids.map((uid) => reconcileStudent(uid)));

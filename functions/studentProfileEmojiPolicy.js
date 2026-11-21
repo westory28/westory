@@ -286,9 +286,11 @@ const getAllowedEmojiIdsForTier = (rankPolicy, currentTierCode) => {
     : [resolvedRankPolicy.emojiPolicy.defaultEmojiId];
 };
 
-const getCurrentTierCodeForRankTotal = (rankEarnedTotal, rankPolicy) => {
+// Use the same canonical cumulative earnings shown in the wallet. Initial
+// grants count; spending and returned principal do not create extra earnings.
+const getCurrentTierCodeForEarnedTotal = (earnedTotal, rankPolicy) => {
   const resolvedRankPolicy = resolveRankPolicy(rankPolicy);
-  const metricValue = Number.isSafeInteger(rankEarnedTotal) && rankEarnedTotal >= 0 ? rankEarnedTotal : 0;
+  const metricValue = Number.isSafeInteger(earnedTotal) && earnedTotal >= 0 ? earnedTotal : 0;
   let activeTier = resolvedRankPolicy.tiers[0] || { code: 'tier_1' };
   resolvedRankPolicy.tiers.forEach((tier) => {
     if (metricValue >= Number(tier.minPoints || 0)) activeTier = tier;
@@ -298,9 +300,9 @@ const getCurrentTierCodeForRankTotal = (rankEarnedTotal, rankPolicy) => {
 
 // A stored ID is authoritative. Raw icons can only identify legacy profiles
 // with no ID, and never grant a tier unlock or override the registry glyph.
-const resolveStudentProfileEmoji = ({ profileEmojiId, profileIcon, rankEarnedTotal, rankPolicy }) => {
+const resolveStudentProfileEmoji = ({ profileEmojiId, profileIcon, earnedTotal, rankPolicy }) => {
   const policy = resolveRankPolicy(rankPolicy);
-  const tierCode = getCurrentTierCodeForRankTotal(rankEarnedTotal, policy);
+  const tierCode = getCurrentTierCodeForEarnedTotal(earnedTotal, policy);
   const allowedIds = new Set(getAllowedEmojiIdsForTier(policy, tierCode));
   const defaultEntry = getProfileEmojiEntryById(policy.emojiPolicy.defaultEmojiId, policy.emojiRegistry);
   const fallbackEntry = defaultEntry && defaultEntry.enabled !== false
@@ -329,5 +331,5 @@ const resolveStudentProfileEmoji = ({ profileEmojiId, profileIcon, rankEarnedTot
 module.exports = {
   DEFAULT_POINT_RANK_TIERS, DEFAULT_PROFILE_EMOJI_ID, PROFILE_EMOJI_REGISTRY,
   resolveRankPolicy, getProfileEmojiEntryById, getAllowedEmojiIdsForTier,
-  getCurrentTierCodeForRankTotal, resolveStudentProfileEmoji,
+  getCurrentTierCodeForEarnedTotal, resolveStudentProfileEmoji,
 };

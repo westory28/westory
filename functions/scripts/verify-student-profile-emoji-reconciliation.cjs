@@ -17,10 +17,10 @@ const policy = () => ({ rankPolicy: {
   ],
   emojiPolicy: { enabled: true, defaultEmojiId: 'smile' },
 } });
-const account = (uid, semesterId = '2026-2', rankEarnedTotal = 100) => ({
+const account = (uid, semesterId = '2026-2', earnedTotal = 100) => ({
   accountId: accountIdFor(semesterId, uid), studentUid: uid, semesterId,
   schemaVersion: 1, policyVersion: 'w7-v1', status: 'ACTIVE', readOnly: false,
-  revision: 1, rankEarnedTotal, balance: 444, earnedTotal: 888,
+  revision: 1, rankEarnedTotal: 0, balance: 444, earnedTotal,
 });
 const selected = { role: 'student', profileEmojiId: 'rocket', profileIcon: '🚀', displayName: '학생' };
 
@@ -110,6 +110,35 @@ const accountPath = `semester_wis_accounts/${accountIdFor('2026-2', 'student')}`
   assert.deepEqual(spend.writes, [], 'A valid revision-only purchase performs zero writes');
   assert.equal(spend.attempts, 0, 'Irrelevant account changes do not open a transaction');
 
+  const obsoleteRank = { ...spent, rankEarnedTotal: 9000 };
+  spend.put(accountPath, obsoleteRank);
+  assert.equal(await spend.service.handleAccountWritten(event(spent, obsoleteRank)), null);
+  assert.equal(spend.documentReads.length, 0, 'Historical rank-field changes alone do not change access');
+
+  const initialGrant = fixture();
+  const initialPolicy = policy();
+  initialPolicy.rankPolicy.tiers[1].minPoints = 10000;
+  initialGrant.put('years/2026/semesters/2/point_policies/current', initialPolicy);
+  const initialAccount = { ...account('student', '2026-2', 10010), rankEarnedTotal: 9510, balance: 0 };
+  initialGrant.put(accountPath, initialAccount);
+  assert.equal((await initialGrant.service.reconcileStudent('student')).status, 'valid');
+  assert.equal(initialGrant.writes.length, 0, 'Initial grant plus earned rewards preserve an unlocked selection after spending');
+  const reducedAccount = { ...initialAccount, earnedTotal: 9999, revision: 2 };
+  initialGrant.put(accountPath, reducedAccount);
+  initialGrant.documentReads.length = 0;
+  await initialGrant.service.handleAccountWritten(event(initialAccount, reducedAccount));
+  assert.equal(initialGrant.documentReads.length, 5, 'An earnings-only change revalidates exactly five authority documents');
+  assert.equal(initialGrant.values.get('users/student').profileIcon, '😀');
+  assert.equal(initialGrant.writes.length, 1);
+  assert.deepEqual(initialGrant.values.get(accountPath), reducedAccount, 'Reconciliation preserves the original wallet and ledger fields');
+
+  const invalidHistoricalMetric = fixture(), historicalBefore = account('student');
+  const historicalAfter = { ...historicalBefore, rankEarnedTotal: 'invalid' };
+  invalidHistoricalMetric.put(accountPath, historicalAfter);
+  await invalidHistoricalMetric.service.handleAccountWritten(event(historicalBefore, historicalAfter));
+  assert.equal(invalidHistoricalMetric.documentReads.length, 5, 'Existing wallet integrity checks remain effective');
+  assert.equal(invalidHistoricalMetric.values.get('users/student').profileIcon, '😀');
+
   for (const invalidRevision of [0, -1, '2', null, undefined, Number.MAX_SAFE_INTEGER + 1]) {
     for (const [beforeRevision, afterRevision] of [[1, invalidRevision], [invalidRevision, 2]]) {
       const f = fixture(), before = { ...account('student'), revision: beforeRevision };
@@ -144,7 +173,7 @@ const accountPath = `semester_wis_accounts/${accountIdFor('2026-2', 'student')}`
 
   const scoreDown = fixture();
   const originalAccount = clone(scoreDown.values.get(accountPath));
-  scoreDown.put(accountPath, { ...originalAccount, rankEarnedTotal: 0 });
+  scoreDown.put(accountPath, { ...originalAccount, earnedTotal: 0 });
   const dry = await scoreDown.service.inspectStudent('student');
   assert.equal(dry.status, 'updated'); assert.equal(dry.applied, false);
   assert.deepEqual(dry.before, { profileEmojiId: 'rocket', profileIcon: '🚀' });
@@ -153,7 +182,7 @@ const accountPath = `semester_wis_accounts/${accountIdFor('2026-2', 'student')}`
   await scoreDown.service.handleAccountWritten(event(originalAccount, scoreDown.values.get(accountPath), { accountId: originalAccount.accountId }));
   assert.equal(scoreDown.values.get('users/student').profileIcon, '😀');
   assert.deepEqual(scoreDown.writes, [{ path: 'users/student', data: { profileEmojiId: 'smile', profileIcon: '😀', updatedAt: 'server-timestamp' } }]);
-  assert.deepEqual(scoreDown.values.get(accountPath), { ...originalAccount, rankEarnedTotal: 0 }, 'No wallet, score or ranking writes');
+  assert.deepEqual(scoreDown.values.get(accountPath), { ...originalAccount, earnedTotal: 0 }, 'No wallet, score or ranking writes');
   await scoreDown.service.handleAccountWritten(event(originalAccount, scoreDown.values.get(accountPath), { accountId: originalAccount.accountId }));
   await scoreDown.service.handleUserWritten(event(selected, scoreDown.values.get('users/student'), { uid: 'student' }));
   assert.equal(scoreDown.writes.length, 1, 'Duplicate and self-induced events settle without writes');
@@ -171,9 +200,9 @@ const accountPath = `semester_wis_accounts/${accountIdFor('2026-2', 'student')}`
   const mismatch = fixture({ 'users/student': { ...selected, profileEmojiId: 'smile' } });
   assert.equal((await mismatch.service.reconcileStudent('student')).reason, 'id_icon_mismatch');
   assert.equal(mismatch.values.get('users/student').profileIcon, '😀');
-  for (const rankEarnedTotal of [-1, '100', Infinity, Number.MAX_SAFE_INTEGER + 1]) {
-    const f = fixture({ [accountPath]: { ...account('student'), rankEarnedTotal } });
-    assert.equal((await f.service.reconcileStudent('student')).rankEarnedTotal, 0);
+  for (const earnedTotal of [undefined, null, -1, '100', 100.5, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+    const f = fixture({ [accountPath]: { ...account('student'), earnedTotal } });
+    assert.equal((await f.service.reconcileStudent('student')).earnedTotal, 0);
   }
   for (const change of [{ status: 'CLOSED' }, { readOnly: true }, { studentUid: 'someone-else' }, { semesterId: '2026-1' }, { accountId: 'forged' }, { schemaVersion: 0 }, { policyVersion: 'legacy' }, { revision: 0 }]) {
     const f = fixture({ [accountPath]: { ...account('student'), ...change } });
@@ -181,7 +210,7 @@ const accountPath = `semester_wis_accounts/${accountIdFor('2026-2', 'student')}`
     assert.equal(f.values.get('users/student').profileIcon, '😀');
   }
   const missing = fixture({ [accountPath]: undefined, 'years/2026/semesters/2/point_wallets/student': { rankEarnedTotal: 999999 } });
-  assert.equal((await missing.service.reconcileStudent('student')).rankEarnedTotal, 0, 'A legacy wallet never restores access');
+  assert.equal((await missing.service.reconcileStudent('student')).earnedTotal, 0, 'A legacy wallet never restores access');
 
   const policyChange = fixture();
   const changedPolicy = policy(); changedPolicy.rankPolicy.tiers[1].minPoints = 200;
@@ -202,7 +231,7 @@ const accountPath = `semester_wis_accounts/${accountIdFor('2026-2', 'student')}`
   semesterChange.put('years/2027/semesters/1/point_policies/current', policy());
   await semesterChange.service.handleSemesterWritten(event({ semesterId: '2026-2', revision: 4 }, { semesterId: '2027-1', revision: 1 }));
   assert.equal(semesterChange.values.get('users/student').profileIcon, '😀', 'The new semester cannot inherit prior rank access');
-  assert.equal(semesterChange.values.get(accountPath).rankEarnedTotal, 100);
+  assert.equal(semesterChange.values.get(accountPath).earnedTotal, 100);
 
   for (const extra of [
     { 'site_settings/semester_active': undefined },

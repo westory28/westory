@@ -901,37 +901,13 @@ export const needsPointRankLegacyFallback = (
   wallet?: Pick<PointWallet, "rankEarnedTotal"> | null,
 ) => !hasPointRankEarnedTotalSnapshot(wallet);
 
-const getStoredRankEarnedTotal = (
-  wallet?: Pick<PointWallet, "rankEarnedTotal"> | null,
-) =>
-  hasPointRankEarnedTotalSnapshot(wallet)
-    ? Math.max(0, Number(wallet?.rankEarnedTotal || 0))
-    : null;
-
 export const getPointWalletCumulativeEarned = (
   wallet?: Pick<PointWallet, "earnedTotal" | "rankEarnedTotal"> | null,
 ) => {
-  return Math.max(0, Number(wallet?.earnedTotal || 0));
-};
-
-const getPointRankMetricValue = ({
-  wallet,
-  rankPolicy,
-  earnedPointsFromTransactions = 0,
-}: PointRankInput) => {
-  const resolvedPolicy = resolvePointRankPolicy(rankPolicy);
-  const storedRankEarnedTotal = getStoredRankEarnedTotal(wallet);
-  if (storedRankEarnedTotal !== null) {
-    return storedRankEarnedTotal;
-  }
-  if (resolvedPolicy.basedOn === "earnedTotal") {
-    return Math.max(0, Number(wallet?.earnedTotal || 0));
-  }
-  return Math.max(
-    0,
-    Number(wallet?.earnedTotal || 0) +
-      Number(earnedPointsFromTransactions || 0),
-  );
+  const earnedTotal = wallet?.earnedTotal;
+  return Number.isSafeInteger(earnedTotal) && Number(earnedTotal) >= 0
+    ? Number(earnedTotal)
+    : 0;
 };
 
 export const getPointRankAllowedEmojiIds = (
@@ -1005,16 +981,13 @@ export const isPointRankEmojiUnlocked = ({
 export const getPointRankDisplay = ({
   rankPolicy,
   wallet,
-  earnedPointsFromTransactions = 0,
 }: PointRankInput): PointRankDisplay | null => {
   const resolvedPolicy = resolvePointRankPolicy(rankPolicy);
   if (!resolvedPolicy.enabled) return null;
 
-  const metricValue = getPointRankMetricValue({
-    wallet,
-    rankPolicy: resolvedPolicy,
-    earnedPointsFromTransactions,
-  });
+  // The canonical total already includes starting Wis and positive grants.
+  // The retained activity-only counter and legacy transactions grant no tiers.
+  const metricValue = getPointWalletCumulativeEarned(wallet);
   let activeTier = resolvedPolicy.tiers[0];
   let nextTier: PointRankPolicyTier | null = resolvedPolicy.tiers[1] || null;
 

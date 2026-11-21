@@ -1,5 +1,9 @@
 # 운영 배포 절차
 
+## 누적 위스 등급 연동 (2026-11-21)
+
+등급·이모지·아바타 해금은 화면의 현재 학기 canonical `earnedTotal`을 사용한다. 초기 지급을 포함하고 지출·주식 반환 원금은 누적을 늘리지 않으며, 누적에 이미 확정된 출금 수익은 같은 기준에 반영한다. 과거 `rankEarnedTotal` 원장 의미는 보존하고 재집계·계좌 보정은 하지 않는다. [원인과 검증 기록](../reviews/wis-rank-cumulative-20261121.md)을 따른다. `prepare-wis-rank-cumulative-release.mjs`의 운영 원본 준비본과 `verify-wis-rank-cumulative-release.mjs`를 검증하고 대상 12함수만 선택 배포한다. 전체 소스·자원·권한·이벤트 보존 확인 후 같은 main의 Vercel 배포를 승격하고 운영 왕실 배지를 확인한다. 새 공개 `earnedTotal`을 제공하는 서버를 프런트엔드보다 먼저 반영한다.
+
 ## 위스피 지원금 직접 받기 (2026-11-18)
 
 누적 500위스 입금 조건과 기존 수령 영수증을 유지하고 학생이 지갑의 `500위스 받기`를 눌렀을 때만 지급한다. 입금 자동 지급과 운영자 backfill은 중단한다. [변경과 검증 기록](../reviews/wispi-bonus-claim-20261118.md)을 따른다. `prepare-wispi-bonus-claim-release.mjs`에서 보존한 운영 원본에 최소 delta를 적용해 기존 `transferStudentWisStock`과 신규 `getStudentWisStockBonus`, `claimStudentWisStockBonus`만 배포한다. 실제 준비본 에뮬레이터·Functions 검사와 앱 빌드 후 소스·자원·인증 차단을 재검증하고 같은 main의 Vercel 배포를 운영 도메인으로 승격한다. 지갑 입출금 행과 학생 플로팅 메뉴의 배경 흐림도 함께 확인한다. 캠페인 기준·설정·rules·학생 잔액을 운영 검증으로 변경하지 않는다.

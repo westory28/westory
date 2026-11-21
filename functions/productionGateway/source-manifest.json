@@ -13,6 +13,7 @@
     "executeThinkCloudResponseFast"
   ],
   "notes": [
+    "2026-11-21: Align displayed grades and profile/ avatar eligibility with canonical cumulative earnedTotal, including initial grants. Add explicit public earnedTotal without changing historical hall ordering, wallet totals or ledgers. Deploy the captured ranking/query closures before the frontend; preserve all unrelated source and runtime configuration.",
     "2026-11-15: Stock transfers have dedicated ledger types; cumulative Wis recognizes withdrawn profit only, never returned principal or internal trades. Update the read-only audit and explicit ledger rebuild through the captured executeCommand source; preserve all other live files and runtime resources. Fast transaction endpoint cannot execute rebuild and is not redeployed.",
     "2026-11-14: Total-earned Wis includes initial grants in dashboard, opt-in hall and teacher overview; grade eligibility remains rankEarnedTotal. Deploy only the four live ranking/query endpoints from captured archives with wisOverviewQuery.js. No ledger, balance, policy, trigger or account migration.",
     "2026-11-14: Wis wallet integrity, canonical cumulative/current ranking, scoped teacher queries and ACTIVE enrollment metadata synchronization. Transplant reviewed files into each captured live archive, include ../wisLedgerIntegrity.js for executeCommand and ../wisOverviewQuery.js for query endpoints, and preserve deployed runtime resources. No account or ledger repair; isolated stock endpoints remain teacher-only.",
@@ -516,7 +517,7 @@
       "sourceFile": "wisEconomy.js",
       "file": "wisEconomyQuery.js",
       "originalSha256": "560fd24282179aa9e4bd4ac9b7b99556cb533f7c4f67baac9339b22cb13b6f46",
-      "sha256": "15e2259284dfb52c968c034de84e5ac954eaa335e7f9c90559acb0c02ac8daae",
+      "sha256": "6c6c6e3520141e70dc0ee35622f5434822f5512f344b75bb0b16d220450131cc",
       "changes": [
         "Restore the live EXPLICIT teacher archive query independently of the command closure.",
         "Expose only requested full name, student number and selected-entry profile emoji; preserve pseudonymous public IDs, zero balances, tie caps and grade/class limits.",
@@ -536,7 +537,8 @@
         "2026-10-20: Page selected hall groups in ordered batches of twenty with fresh cutoff/zero-tail bounds; share student grade/class candidate authority and current moves. Cache only two-field teacher selector directories for thirty seconds with four-scope pending deduplication and failure eviction; preserve missing-group fallback via real bounded queries.",
         "2026-10-20: Start selected paged-hall account and safe index roster-hint reads together; keep canonical slot/enrollment/class authority, stale-hint fallback, account field masks and unselected-candidate bounds unchanged.",
         "2026-10-27: Page the complete immutable ledger with scope/owner-checked cursors, preserve game/learning activities, and allow direct lightweight account reads.",
-        "2026-10-27: Project server-validated avatar summaries from existing permitted users profile batches into public ranking preview/full hall; preserve public IDs, profile read bounds, wallet arithmetic and all authorization."
+        "2026-10-27: Project server-validated avatar summaries from existing permitted users profile batches into public ranking preview/full hall; preserve public IDs, profile read bounds, wallet arithmetic and all authorization.",
+        "2026-11-21: Project strict canonical earnedTotal for cumulative grade eligibility and profile icons while retaining legacy hall ranking and cursor semantics."
       ]
     },
     {

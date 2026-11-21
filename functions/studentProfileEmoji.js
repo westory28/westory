@@ -4,7 +4,7 @@ const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 const { readStudentMenuAccess } = require('./studentMenuVisibility');
 const { createStudentWisWallet } = require('./studentWisWallet');
 const {
-  resolveRankPolicy, getProfileEmojiEntryById, getCurrentTierCodeForRankTotal,
+  resolveRankPolicy, getProfileEmojiEntryById, getCurrentTierCodeForEarnedTotal,
   getAllowedEmojiIdsForTier,
 } = require('./studentProfileEmojiPolicy');
 
@@ -43,7 +43,7 @@ const createStudentProfileEmojiHandler = ({
       if (!emojiEntry || emojiEntry.enabled === false) {
         throw new HttpsError('invalid-argument', '선택할 수 없는 이모지입니다.');
       }
-      const tierCode = getCurrentTierCodeForRankTotal(wallet.rankEarnedTotal, rankPolicy);
+      const tierCode = getCurrentTierCodeForEarnedTotal(wallet.earnedTotal, rankPolicy);
       if (!getAllowedEmojiIdsForTier(rankPolicy, tierCode).includes(emojiId)) {
         throw new HttpsError('failed-precondition', '현재 학기 점수로 아직 선택할 수 없는 이모지입니다.');
       }

@@ -16,6 +16,7 @@ const evidence = process.env.WIS_RANKING_QA_EVIDENCE_DIR || path.join(os.tmpdir(
 await fs.mkdir(evidence, { recursive: true });
 const imp = file => JSON.stringify(path.join(root, file).replaceAll('\\', '/'));
 const service = `
+import {getPointRankDisplay as actualRank,resolvePointRankPolicy as actualPolicy} from ${imp('src/lib/pointRanks.ts')};
 export const qa=window.wisRankingQa={calls:[],pending:[],hold:false,fail:false,empty:false,config:{year:'2026',semester:'2'},
  user:{uid:'teacher',getIdTokenResult:async()=>({claims:{auth_time:1}})},generation:1,audience:'teacher'};
 export const useAuth=()=>({currentUser:qa.user,authGeneration:qa.generation,configReady:true});
@@ -25,10 +26,10 @@ export const archiveScope=null;
 export const assertWisOwner=uid=>{if(!uid||uid!==qa.user?.uid)throw Error('owner changed')};
 export const wisSemesterId=config=>config.year+'-'+config.semester;
 export const wisHallOfFame=state=>state.hallOfFame;
-export const resolvePointRankPolicy=policy=>policy;
+export const resolvePointRankPolicy=actualPolicy;
 export const getWisHallOfFameGradeLeaderboard=snapshot=>snapshot?.gradeLeaderboardByGrade?.[snapshot.primaryGradeKey]||[];
 export const getPointRankDefaultEmojiValue=()=> '😀';
-export const getPointRankDisplay=({wallet})=>{qa.rankWallet=wallet;return null};
+export const getPointRankDisplay=input=>{qa.rankWallet=input.wallet;return actualRank(input)};
 export const callWisService=async(_name,payload)=>{
  const [year,semester]=payload.semesterId.split('-'),config={year,semester},audience=payload.audience;
  const selection={metric:payload.rankingMetric,classKey:payload.rankingClassKey};
@@ -36,9 +37,9 @@ export const callWisService=async(_name,payload)=>{
  const current=selection.metric==='current',classroom=selection.classKey==='3-2';
  const entries=Array.from({length:qa.rowCount??5},(_,i)=>({uid:'student-'+(current?5-i:i),rank:i<2?1:i+1,
    grade:'3',class:classroom?'2':'1',number:String(i+1),studentName:(current?'현재':'누적')+(classroom?'2반':'전체')+'학생'+(i+1),
-   displayName:(current?'현재':'누적')+(classroom?'2반':'전체')+'학생'+(i+1),currentBalance:500-i*10,cumulativeEarned:1000-i*10,rankEarnedTotal:500-i*10}));
+   displayName:(current?'현재':'누적')+(classroom?'2반':'전체')+'학생'+(i+1),currentBalance:500-i*10,cumulativeEarned:10010-i*10,earnedTotal:10010-i*10,rankEarnedTotal:9510-i*10}));
  const result={semesterId:payload.semesterId,hallOfFame:{primaryGradeKey:'3',rankingMetric:current?'currentBalance':'cumulativeEarned',
-   gradeLeaderboardByGrade:{'3':qa.empty?[]:entries}},rankPolicy:{enabled:false},
+   gradeLeaderboardByGrade:{'3':qa.empty?[]:entries}},rankPolicy:{enabled:true,tiers:[{code:'tier_1',minPoints:0},{code:'tier_5',minPoints:10000}],themes:{korean_golpum:{themeName:'검증 신분제',tiers:{tier_1:{label:'양반',shortLabel:'양반'},tier_5:{label:'왕실',shortLabel:'왕실'}}}}},
    rankingClasses:[{key:'3-1',grade:'3',classNumber:'1'},{key:'3-2',grade:'3',classNumber:'2'}]};
  if(qa.hold)await new Promise((resolve,reject)=>qa.pending.push({call,resolve,reject}));
  if(qa.fail)throw Error('synthetic ranking failure');return result;
@@ -87,7 +88,8 @@ try {
     await page.goto(origin);await waitName(page,'누적전체');
     assert.equal(await page.evaluate(()=>wisRankingQa.calls.length),1);
     assert.deepEqual(await page.locator('.wis-ranking-rank-medal').allTextContents(),['1','1','3','4','5']);
-    assert.equal(await page.evaluate(()=>wisRankingQa.rankWallet.rankEarnedTotal),460,'Badge uses award earnings, not the total including starting Wis');
+    assert.equal(await page.evaluate(()=>wisRankingQa.rankWallet.earnedTotal),9970,'Badge receives canonical cumulative earnings including starting Wis');
+    assert.deepEqual(await page.locator('.wis-ranking-rank-badge').allTextContents(),['왕실','왕실','양반','양반','양반']);
     await page.evaluate(()=>{scrollTo(0,180);wisRankingQa.hold=true});
     const before=await geometry(page);
     const cumulative=page.getByRole('radio',{name:'누적',exact:true});

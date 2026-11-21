@@ -192,11 +192,11 @@ let rules;
     assert.equal((await get(fixture.accountPath)).balance, 1000);
     assert.equal((await db.collection('semester_wis_ledger').get()).size, 0);
   });
-  await check('purchase rank settings use CAS, preserve legacy edits, and enforce canonical custom thresholds without denied writes', async () => {
+  await check('purchase ranks include the initial 500 at the 10000 earnings boundary with CAS, denied-write safety and duplicate recovery', async () => {
     await seed(); await seedTeacher();
     const item = fixture.paid[0], policyPath = 'years/2026/semesters/2/point_policies/current';
-    await db.doc(policyPath).set({ rankPolicy: { tiers: [0, 100, 400, 900, 2400].map((minPoints, index) => ({ code: `tier_${index + 1}`, minPoints })) } });
-    await db.doc(fixture.accountPath).update({ rankEarnedTotal: 2399 });
+    await db.doc(policyPath).set({ rankPolicy: { tiers: [0, 3000, 5000, 7000, 10000].map((minPoints, index) => ({ code: `tier_${index + 1}`, minPoints })) } });
+    await db.doc(fixture.accountPath).update({ earnedTotal: 9999, rankEarnedTotal: 9499 });
     const update = teacherRequest({ expectedRevision: 0, purchaseTiers: { [item.id]: 'tier_5' } });
     await assert.rejects(pricingApi.updateAvatarCatalogPricing(authenticated(fixture.req(update.data))),
       error => error.details?.reason === 'AVATAR_TEACHER_REQUIRED');
@@ -217,12 +217,14 @@ let rules;
     assert.equal((await db.doc(fixture.avatarPath).get()).exists, false);
     assert.equal((await db.collection(`${fixture.avatarPath}/requests`).get()).size, 0);
     assert.equal((await db.collection('semester_wis_ledger').get()).size, 0);
-    await db.doc(fixture.accountPath).update({ rankEarnedTotal: 2400 });
+    await db.doc(fixture.accountPath).update({ earnedTotal: 10000, rankEarnedTotal: 9500 });
     const values = await Promise.all(Array.from({ length: 3 }, () => api.purchaseStudentAvatarItem(request)));
     assert.equal(values.filter(value => !value.duplicate).length, 1);
     assert.equal(values[0].purchaseTierCode, 'tier_5');
     assert.equal((await get(fixture.accountPath)).balance, 909);
-    assert.equal((await get(fixture.accountPath)).rankEarnedTotal, 2400);
+    assert.equal((await get(fixture.accountPath)).earnedTotal, 10000);
+    assert.equal((await get(fixture.accountPath)).rankEarnedTotal, 9500, 'Purchase never migrates the historical ledger total');
+    assert.equal((await api.getAvatarStudioState(authenticated(fixture.req({ year: '2026', semester: '2' })))).purchaseTierCode, 'tier_5', 'Spending keeps the earned rank');
     assert.equal((await db.collection('semester_wis_ledger').get()).size, 1);
     assert.equal((await db.collection(`${fixture.avatarPath}/requests`).get()).size, 1);
   });
@@ -231,7 +233,7 @@ let rules;
     const item = fixture.paid.find(entry => entry.gender !== 'boy' && entry.characters.includes('girl'));
     const bought = await api.purchaseStudentAvatarItem(authenticated(fixture.purchase(item)));
     await pricingApi.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 0, purchaseTiers: { [item.id]: 'tier_5' } }));
-    await db.doc(fixture.accountPath).update({ rankEarnedTotal: 0 });
+    await db.doc(fixture.accountPath).update({ earnedTotal: 0 });
     const replay = await api.purchaseStudentAvatarItem(authenticated(fixture.purchase(item)));
     assert.equal(replay.duplicate, true);
     const noCharge = await api.purchaseStudentAvatarItem(authenticated(fixture.req({ ...fixture.purchase(item, 'rank-owned-new-request').data,
@@ -250,7 +252,7 @@ let rules;
     const [first, second] = fixture.paid, policyPath = 'years/2026/semesters/2/point_policies/current';
     await db.doc(policyPath).set({ rankPolicy: { tiers: [[1, 0], [2, 50], [3, 150], [5, 300], [4, 500], [6, 750]]
       .map(([index, minPoints]) => ({ code: `tier_${index}`, minPoints })) } });
-    await db.doc(fixture.accountPath).update({ rankEarnedTotal: 300 });
+    await db.doc(fixture.accountPath).update({ earnedTotal: 300 });
     await pricingApi.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 0,
       purchaseTiers: { [first.id]: 'tier_4', [second.id]: 'tier_5' } }));
     const quote = (item, id) => authenticated(fixture.req({ ...fixture.purchase(item, id).data, expectedPricingRevision: 1 }));
@@ -258,7 +260,7 @@ let rules;
       && error.details.purchaseTierCode === 'tier_5' && !error.details.allowedPurchaseTiers.includes('tier_4'));
     const allowed = await api.purchaseStudentAvatarItem(quote(second, 'reordered-allowed-item'));
     assert.deepEqual(allowed.allowedPurchaseTiers, ['tier_1', 'tier_2', 'tier_3', 'tier_5']);
-    await db.doc(fixture.accountPath).update({ rankEarnedTotal: 750 });
+    await db.doc(fixture.accountPath).update({ earnedTotal: 750 });
     const extended = await api.purchaseStudentAvatarItem(quote(first, 'reordered-locked-item'));
     assert.equal(extended.purchaseTierCode, 'tier_6');
     assert.deepEqual(extended.allowedPurchaseTiers, ['tier_1', 'tier_2', 'tier_3', 'tier_4', 'tier_5']);
@@ -286,7 +288,7 @@ let rules;
     assert.equal((await db.doc(PRICING_PATH).get()).updateTime.toMillis(), before.updateTime.toMillis());
     const pricing = await pricingApi.updateAvatarCatalogPricing(teacherRequest({ expectedRevision: 1, prices: { [item.id]: 0 } }));
     assert.equal(pricing.purchaseTiers[item.id], 'tier_1'); assert.equal(pricing.prices[item.id], 0);
-    await db.doc(fixture.accountPath).update({ rankEarnedTotal: 0 });
+    await db.doc(fixture.accountPath).update({ earnedTotal: 0 });
     const freePurchase = await api.purchaseStudentAvatarItem(authenticated(fixture.req({ ...fixture.purchase(item, 'free-after-conversion').data,
       expectedPrice: 0, expectedPricingRevision: 2 })));
     assert.equal(freePurchase.charged, 0); assert.equal(freePurchase.pricing.purchaseTiers[item.id], 'tier_1');

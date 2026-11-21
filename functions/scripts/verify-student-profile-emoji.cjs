@@ -3,7 +3,7 @@ const { createHash } = require('node:crypto');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { createStudentProfileEmojiHandler } = require('../studentProfileEmoji');
 const { accountIdFor } = require('../studentWisWallet');
-const { resolveStudentProfileEmoji, resolveRankPolicy, getCurrentTierCodeForRankTotal } = require('../studentProfileEmojiPolicy');
+const { resolveStudentProfileEmoji, resolveRankPolicy, getCurrentTierCodeForEarnedTotal } = require('../studentProfileEmojiPolicy');
 
 // Isolated in-memory transactions only; no credentials or production data.
 const uid = 'emoji-student', semesterId = '2026-2';
@@ -23,7 +23,7 @@ const request = (overrides = {}) => ({
   data: { year: '2026', semester: '2', emojiId: 'smile', _session: { revision: 'current' }, ...overrides },
 });
 
-function fixture({ rank = 0, balance = 0, assertSession } = {}) {
+function fixture({ rank = 0, earned = rank, balance = 0, assertSession } = {}) {
   const documents = new Map(Object.entries({
     'site_settings/semester_active': { semesterId, revision: 1 },
     [`semester_manifests/${semesterId}`]: { semesterId, status: 'ACTIVE', revision: 1 },
@@ -35,7 +35,7 @@ function fixture({ rank = 0, balance = 0, assertSession } = {}) {
     'semester_classes/class-one': { classId: 'class-one', semesterId, status: 'ACTIVE' },
     [accountPath]: { schemaVersion: 1, policyVersion: 'w7-v1', accountId, studentUid: uid, semesterId,
       enrollmentId: 'enrollment-one', classId: 'class-one', status: 'ACTIVE', revision: 1, balance,
-      earnedTotal: rank, rankEarnedTotal: rank, spentTotal: 0, adjustedTotal: 0, recentLedgerEntries: [] },
+      earnedTotal: earned, rankEarnedTotal: rank, spentTotal: 0, adjustedTotal: 0, recentLedgerEntries: [] },
     [policyPath]: { rankPolicy: { emojiRegistry: registry } },
     [`years/2026/semesters/1/point_wallets/${uid}`]: { balance: 10000, earnedTotal: 10000, rankEarnedTotal: 10000 },
     [`years/2026/semesters/2/point_wallets/${uid}`]: { balance: 10000, earnedTotal: 10000, rankEarnedTotal: 10000 },
@@ -124,6 +124,32 @@ const rejected = async (state, input, code = 'failed-precondition') => {
     const state = fixture({ rank: 50 });
     assert.equal((await state.handler(request({ emojiId: 'cool' }))).tierCode, 'tier_2');
   });
+  await test('initial grants count at 10000 cumulative earnings without changing wallet or ledger totals', async () => {
+    const rankPolicy = { emojiRegistry: registry, tiers: [
+      { code: 'tier_1', minPoints: 0 }, { code: 'tier_4', minPoints: 7000 },
+      { code: 'tier_5', minPoints: 10000 },
+    ] };
+    for (const earned of [9999, 10000, 10010]) {
+      const state = fixture({ rank: earned - 500, earned, balance: 0 });
+      state.documents.set(policyPath, { rankPolicy });
+      const accountBefore = structuredClone(state.documents.get(accountPath));
+      if (earned < 10000) await rejected(state, request({ emojiId: 'fox' }));
+      else assert.equal((await state.handler(request({ emojiId: 'fox' }))).tierCode, 'tier_5');
+      assert.equal(state.reads.length, 12, 'One menu, ten authority and one policy read; no ledger query');
+      assert.deepEqual(state.documents.get(accountPath), accountBefore);
+      assert.equal(state.writes.length, earned < 10000 ? 0 : 1, 'Only the explicitly selected profile is written');
+    }
+  });
+  await test('invalid cumulative earnings cannot borrow a high historical rank or legacy wallet', async () => {
+    for (const earned of [undefined, null, '10000', -1, 10000.5, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+      const state = fixture({ rank: 10000 });
+      state.documents.get(accountPath).earnedTotal = earned;
+      await rejected(state, request({ emojiId: 'fox' }));
+    }
+    const resolved = resolveStudentProfileEmoji({ profileEmojiId: 'fox', profileIcon: '🦊',
+      rankEarnedTotal: 10000, rankPolicy: { emojiRegistry: registry } });
+    assert.equal(resolved.reason, 'tier_locked', 'Missing cumulative metric has no rank-field fallback');
+  });
   await test('missing canonical account never falls back to legacy wallet', async () => {
     const state = fixture(); state.documents.delete(accountPath);
     await rejected(state, request());
@@ -180,41 +206,41 @@ const rejected = async (state, input, code = 'failed-precondition') => {
       ['unknown', '😀', 'unknown_id'], ['smile', '🦊', 'id_icon_mismatch'],
       ['cool', '🦊', 'id_icon_mismatch'], ['smile', { icon: '😀' }, 'id_icon_mismatch'],
     ]) {
-      const resolved = resolveStudentProfileEmoji({ profileEmojiId, profileIcon, rankEarnedTotal: 0, rankPolicy });
+      const resolved = resolveStudentProfileEmoji({ profileEmojiId, profileIcon, earnedTotal: 0, rankPolicy });
       assert.equal(resolved.profileEmojiId, 'cool');
       assert.equal(resolved.profileIcon, '😎');
       assert.equal(resolved.isValid, false);
       assert.equal(resolved.reason, reason);
     }
-    const allowed = resolveStudentProfileEmoji({ profileEmojiId: 'smile', profileIcon: '😀', rankEarnedTotal: 0, rankPolicy });
+    const allowed = resolveStudentProfileEmoji({ profileEmojiId: 'smile', profileIcon: '😀', earnedTotal: 0, rankPolicy });
     assert.equal(allowed.profileIcon, '😀');
     assert.equal(allowed.isValid, true);
-    assert.equal(resolveStudentProfileEmoji({ profileEmojiId: 'smile', rankEarnedTotal: 0, rankPolicy }).profileIcon, '😀');
+    assert.equal(resolveStudentProfileEmoji({ profileEmojiId: 'smile', earnedTotal: 0, rankPolicy }).profileIcon, '😀');
   });
   await test('legacy raw icons require current unlock and normalize to registry glyph', async () => {
     const rankPolicy = { emojiRegistry: registry.map(entry => entry.id === 'smile'
       ? { ...entry, legacyValues: ['☺️'] } : entry) };
-    assert.equal(resolveStudentProfileEmoji({ profileIcon: '🦊', rankEarnedTotal: 0, rankPolicy }).profileIcon, '😀');
-    assert.equal(resolveStudentProfileEmoji({ profileIcon: '🦊', rankEarnedTotal: 500, rankPolicy }).profileIcon, '🦊');
-    assert.equal(resolveStudentProfileEmoji({ profileIcon: '☺️', rankEarnedTotal: 0, rankPolicy }).profileIcon, '😀');
+    assert.equal(resolveStudentProfileEmoji({ profileIcon: '🦊', earnedTotal: 0, rankPolicy }).profileIcon, '😀');
+    assert.equal(resolveStudentProfileEmoji({ profileIcon: '🦊', earnedTotal: 500, rankPolicy }).profileIcon, '🦊');
+    assert.equal(resolveStudentProfileEmoji({ profileIcon: '☺️', earnedTotal: 0, rankPolicy }).profileIcon, '😀');
   });
   await test('invalid canonical rank values fail closed instead of unlocking higher emojis', async () => {
     const rankPolicy = { emojiRegistry: registry };
-    for (const rankEarnedTotal of [Infinity, -Infinity, NaN, Number.MAX_SAFE_INTEGER + 1, '500', -1, 500.5, null, undefined]) {
-      assert.equal(getCurrentTierCodeForRankTotal(rankEarnedTotal, rankPolicy), 'tier_1');
-      const resolved = resolveStudentProfileEmoji({ profileEmojiId: 'fox', profileIcon: '🦊', rankEarnedTotal, rankPolicy });
+    for (const earnedTotal of [Infinity, -Infinity, NaN, Number.MAX_SAFE_INTEGER + 1, '500', -1, 500.5, null, undefined]) {
+      assert.equal(getCurrentTierCodeForEarnedTotal(earnedTotal, rankPolicy), 'tier_1');
+      const resolved = resolveStudentProfileEmoji({ profileEmojiId: 'fox', profileIcon: '🦊', earnedTotal, rankPolicy });
       assert.equal(resolved.profileEmojiId, 'smile');
       assert.equal(resolved.profileIcon, '😀');
       assert.equal(resolved.reason, 'tier_locked');
     }
-    assert.equal(getCurrentTierCodeForRankTotal(500, rankPolicy), 'tier_5');
+    assert.equal(getCurrentTierCodeForEarnedTotal(500, rankPolicy), 'tier_5');
   });
   await test('disabled default falls back safely and display flags never disable tier authorization', async () => {
     const rankPolicy = { emojiRegistry: registry, emojiPolicy: { defaultEmojiId: 'disabled' } };
     assert.equal(resolveRankPolicy(rankPolicy).emojiPolicy.defaultEmojiId, 'smile');
-    assert.equal(resolveStudentProfileEmoji({ profileEmojiId: 'unknown', rankEarnedTotal: 0, rankPolicy }).profileIcon, '😀');
+    assert.equal(resolveStudentProfileEmoji({ profileEmojiId: 'unknown', earnedTotal: 0, rankPolicy }).profileIcon, '😀');
     for (const flags of [{ enabled: false }, { emojiPolicy: { enabled: false } }]) {
-      const resolved = resolveStudentProfileEmoji({ profileEmojiId: 'fox', profileIcon: '🦊', rankEarnedTotal: 0,
+      const resolved = resolveStudentProfileEmoji({ profileEmojiId: 'fox', profileIcon: '🦊', earnedTotal: 0,
         rankPolicy: { emojiRegistry: registry, ...flags } });
       assert.equal(resolved.profileIcon, '😀');
       assert.equal(resolved.reason, 'tier_locked');

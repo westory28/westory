@@ -220,18 +220,45 @@ const check = async (name, test) => { await test(); checks.push(name); };
     assert.equal(pages[1].startAfterPath, pages[0].returnedPaths.at(-1));
     assert.equal(rows(result).length, 5);
   });
-  await check('total earned includes initial grants while spending and grade eligibility stay independent', async () => {
+  await check('total earned includes initial grants while spending does not lower cumulative ranking', async () => {
     const ctx = prepare();
     update(ctx, 'student-0', { earnedTotal: 8100, rankEarnedTotal: 7600, balance: 7910 });
     update(ctx, 'student-1', { earnedTotal: 8000, rankEarnedTotal: 8000, balance: 7800 });
     const result = rows(await request(ctx));
     assert.equal(result[0].uid, publicId(scope, 'student-0'));
     assert.equal(result[0].cumulativeEarned, 8100);
+    assert.equal(result[0].earnedTotal, 8100);
     assert.equal(result[0].rankEarnedTotal, 7600);
     assert.equal(result[0].currentBalance, 7910);
     const page = ctx.store.queries.find(item => item.collection === 'semester_wis_accounts');
     assert.equal(page.orderBy[0].field, 'earnedTotal');
     assert.equal(ctx.store.writes, 0);
+  });
+  await check('current and cumulative public views unlock the same earned-total grade at 10000 with zero extra reads or writes', async () => {
+    const ctx = prepare();
+    ctx.store.set('years/2026/semesters/2/point_policies/current', { rankPolicy: {
+      tiers: [{ code: 'tier_1', minPoints: 0, allowedEmojiIds: ['smile'] },
+        { code: 'tier_5', minPoints: 10000, allowedEmojiIds: ['fox'] }],
+    } });
+    ctx.store.patch('users/student-0', { profileEmojiId: 'fox', profileIcon: '🦊' });
+    update(ctx, 'student-0', { earnedTotal: 10010, rankEarnedTotal: 9510, balance: 8640 });
+    for (const metric of ['current', 'cumulative']) {
+      ctx.store.resetStats();
+      const unlocked = rows(await request(ctx, metric))[0];
+      const reads = ctx.store.reads.length, queries = ctx.store.queries.length;
+      assert.equal(unlocked.earnedTotal, 10010);
+      assert.equal(unlocked.profileIcon, '🦊');
+      assert.equal(unlocked.rankEarnedTotal, 9510, 'Read-only grade change cannot rewrite ledger totals');
+      update(ctx, 'student-0', { earnedTotal: 9999 });
+      ctx.store.resetStats();
+      assert.equal(rows(await request(ctx, metric))[0].profileIcon, '😀');
+      assert.equal(ctx.store.reads.length, reads);
+      assert.equal(ctx.store.queries.length, queries);
+      update(ctx, 'student-0', { earnedTotal: 10000 });
+      assert.equal(rows(await request(ctx, metric))[0].profileIcon, '🦊');
+      update(ctx, 'student-0', { earnedTotal: 10010 });
+      assert.equal(ctx.store.writes, 0);
+    }
   });
   await check('opt-in hall views use the same total-earned order and retain public rank limits', async () => {
     const ctx = prepare(80);
@@ -244,6 +271,7 @@ const check = async (name, test) => { await test(); checks.push(name); };
       const groups = view === 'grade' ? state.hallOfFame.gradeLeaderboardByGrade : state.hallOfFame.classLeaderboardByClassKey;
       const entries = Object.values(groups).flat();
       assert.equal(entries[0].cumulativeEarned, 8100);
+      assert.equal(entries[0].earnedTotal, 8100);
       assert.equal(entries[0].rankEarnedTotal, 7600);
       assert.equal(entries[0].podiumSlot, 1);
       assert.equal(entries.length, 10);
@@ -272,7 +300,8 @@ const check = async (name, test) => { await test(); checks.push(name); };
     for (const path of [...ctx.store.docs.keys()]) if (/^semester_(classes|enrollment_slots|wis_rankings|wis_preview_entries)\//.test(path)) ctx.store.docs.delete(path);
     update(ctx, 'student-0', { earnedTotal: 8100, rankEarnedTotal: 7600, balance: 7910 });
     const historical = await request(ctx, 'cumulative', '', { source: 'EXPLICIT', projection: 'hall-view', hallView: 'grade', hallGradeKey: '3' });
-    assert.equal(rows(historical)[0].cumulativeEarned, 8100); assert.equal(historical.readOnly, true);
+    assert.equal(rows(historical)[0].cumulativeEarned, 8100);
+    assert.equal(rows(historical)[0].earnedTotal, 8100); assert.equal(historical.readOnly, true);
   });
   console.log(JSON.stringify({ passed: true, cases: checks.length, checks, writes: 0, network: 0 }));
 })().catch(error => { console.error(error); process.exitCode = 1; });

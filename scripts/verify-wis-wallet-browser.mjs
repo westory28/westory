@@ -252,7 +252,7 @@ try {
         "earnedTotal",
       );
     } else {
-      await total.getByText("등급 기준 7,600 ₩s", { exact: true }).waitFor();
+      await total.getByText("등급 기준 8,100 ₩s", { exact: true }).waitFor();
       assert.equal(
         await total.getByText("누적 기준 7,600 ₩s", { exact: true }).count(),
         0,
@@ -282,7 +282,7 @@ try {
     await total.close();
   }
   checks.push(
-    "Student and teacher cumulative earnings show 8,100 with current 7,910 and activity rank metric 7,600; overview orders by earnedTotal and keyboard help explains initial-grant inclusion.",
+    "Student and teacher cumulative earnings and rank metric show 8,100 with current 7,910 and the retained activity counter 7,600; overview orders by earnedTotal and keyboard help explains initial-grant inclusion.",
   );
   const student = await open();
   await student.getByText("충무공 도전 비용", { exact: true }).waitFor();

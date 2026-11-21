@@ -831,7 +831,7 @@ const loadWisSummary = async (
       wallet,
       currentRank,
       balance: Number(wallet?.balance || 0),
-      earnedTotal: Number(wallet?.earnedTotal || wallet?.rankEarnedTotal || 0),
+      earnedTotal: Number(wallet?.earnedTotal || 0),
       spentTotal: Number(wallet?.spentTotal || 0),
       nextRankGap: Number(currentRank?.remainingToNext || 0),
     };

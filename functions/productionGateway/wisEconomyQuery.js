@@ -2857,7 +2857,7 @@ const projectWisAccount = (account) =>
         grade: String(account.grade || ""),
         classNumber: String(account.classNumber || ""),
         studentNumber: String(account.studentNumber || ""),
-        earnedTotal: Number(account.earnedTotal || 0),
+        earnedTotal: Number.isSafeInteger(account.earnedTotal) && account.earnedTotal >= 0 ? account.earnedTotal : 0,
         rankEarnedTotal: Number(account.rankEarnedTotal || 0),
         spentTotal: Number(account.spentTotal || 0),
         adjustedTotal: Number(account.adjustedTotal || 0),
@@ -3039,6 +3039,7 @@ const buildWisHallOfFameProjection = ({
         displayName: publicName,
         currentBalance: 0,
         cumulativeEarned: Math.max(0, Number(account.rankEarnedTotal || 0)),
+        earnedTotal: Number.isSafeInteger(account.earnedTotal) && account.earnedTotal >= 0 ? account.earnedTotal : 0,
         profileIcon: "😀",
       };
     })
@@ -3141,7 +3142,7 @@ const addHallProfileIcons = async (transaction, hall, accounts, scope) => {
     const resolved = resolveStudentProfileEmoji({
       profileEmojiId: profile?.profileEmojiId,
       profileIcon: profile?.profileIcon,
-      rankEarnedTotal: account.rankEarnedTotal,
+      earnedTotal: account.earnedTotal,
       rankPolicy: policySnapshot.data?.rankPolicy,
     });
     return [hallPublicId(scope, account.studentUid), resolved.profileIcon];
@@ -3281,7 +3282,7 @@ const buildRankingPreview = async ({ transaction, cached, scope, config, student
     if (avatar) avatars.set(hallPublicId(scope, account.studentUid), avatar);
     return [hallPublicId(scope, account.studentUid), resolveStudentProfileEmoji({
       profileEmojiId: profile?.profileEmojiId, profileIcon: profile?.profileIcon,
-      rankEarnedTotal: account.rankEarnedTotal, rankPolicy,
+      earnedTotal: account.earnedTotal, rankPolicy,
     }).profileIcon];
   }));
   entries.forEach((entry) => {
@@ -3466,9 +3467,10 @@ const querySelectableRankingPreview = async ({ transaction, scope, config, stude
           classKey: `${account.grade}-${account.classNumber}`, number: String(account.studentNumber || ""),
           studentName: String(account.displayName || "학생"), displayName: String(account.displayName || "학생"),
           currentBalance: Number(account.balance || 0), cumulativeEarned: account.earnedTotal,
+          earnedTotal: account.earnedTotal,
           rankEarnedTotal: account.rankEarnedTotal,
           profileIcon: resolveStudentProfileEmoji({ profileEmojiId: profile.profileEmojiId,
-            profileIcon: profile.profileIcon, rankEarnedTotal: account.rankEarnedTotal, rankPolicy }).profileIcon,
+            profileIcon: profile.profileIcon, earnedTotal: account.earnedTotal, rankPolicy }).profileIcon,
           ...(avatar ? { avatar } : {}) };
       });
       const hall = buildWisHallOfFameProjection({ accounts: [], config, scope });

@@ -7,7 +7,7 @@ const { readStudentMenuAccess, assertStudentMenuVisible } = require('./studentMe
 const { createStudentWisWallet } = require('./studentWisWallet');
 const { catalog, items, PURCHASE_TIER_CODES, defaultLook, validateLook, validateWearableLook, restoreStoredLook, lookHash } = require('./studentAvatarCatalog');
 const { readAvatarPricing, assertAvatarIdentity, readAvatarTeacher, ownedLookIds, canUsePricedLook } = require('./avatarCatalogPricing');
-const { resolveRankPolicy, getCurrentTierCodeForRankTotal, getProfileEmojiEntryById, DEFAULT_PROFILE_EMOJI_ID } = require('./studentProfileEmojiPolicy');
+const { resolveRankPolicy, getCurrentTierCodeForEarnedTotal, getProfileEmojiEntryById, DEFAULT_PROFILE_EMOJI_ID } = require('./studentProfileEmojiPolicy');
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const safe = (value, min = 0) => Number.isSafeInteger(value) && value >= min;
@@ -111,7 +111,7 @@ const createStudentAvatarHandlers = ({ db, bucket, assertSession = assertScoreWo
     const policy = loadPolicy ? await loadPolicy(tx, scope.year, scope.semester)
       : (await tx.getAll(db.doc(`years/${scope.year}/semesters/${scope.semester}/point_policies/current`), { fieldMask: ['rankPolicy.tiers'] }))[0].data();
     const rankPolicy = resolveRankPolicy(policy?.rankPolicy);
-    const purchaseTierCode = getCurrentTierCodeForRankTotal(wallet.rankEarnedTotal, rankPolicy);
+    const purchaseTierCode = getCurrentTierCodeForEarnedTotal(wallet.earnedTotal, rankPolicy);
     const currentIndex = rankPolicy.tiers.findIndex(tier => tier.code === purchaseTierCode);
     const reachedCodes = new Set(rankPolicy.tiers.slice(0, currentIndex + 1).map(tier => tier.code));
     // Codes are stable identities, not numeric ranks: the policy permits extra

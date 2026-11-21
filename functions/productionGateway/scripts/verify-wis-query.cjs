@@ -1039,10 +1039,10 @@ const run = async () => {
   assert.doesNotMatch(publicHallJson, /\*|never-expose|never-use-profile-name/u);
   const ownHallEntry = studentHallState.hallOfFame.gradeLeaderboardByGrade["2"].find(entry => entry.studentName === "합성 학생");
   assert.equal(ownHallEntry.number, "7");
-  assert.equal(ownHallEntry.profileIcon, "😀", "A saved legacy fox does not grant its tier unlock");
+  assert.equal(ownHallEntry.profileIcon, "🦊", "The canonical cumulative total allows the saved emoji");
   assert.equal(ownHallEntry.currentBalance, 0);
   assert.deepEqual(Object.keys(ownHallEntry).sort(), ["uid", "rank", "grade", "class", "classKey", "number",
-    "studentName", "displayName", "currentBalance", "cumulativeEarned", "profileIcon", "podiumSlot"].sort());
+    "studentName", "displayName", "currentBalance", "cumulativeEarned", "earnedTotal", "profileIcon", "podiumSlot"].sort());
   assert.doesNotMatch(
     publicHallJson,
     /student-1|wisacct_|"balance"|"studentUid"|"accountId"/u,
@@ -1183,7 +1183,7 @@ const run = async () => {
     ]) {
       const seed = structuredClone(hallRosterSeed);
       const path = `semester_wis_accounts/${accountId}`;
-      seed[path] = { ...seed[path], rankEarnedTotal: rank, earnedTotal: 99999, balance: 99999,
+      seed[path] = { ...seed[path], rankEarnedTotal: 99999, earnedTotal: rank, balance: 99999,
         grade: "2", classNumber: "3", studentNumber: "7", displayName: "합성 학생",
         profileEmojiId: "fox", profileIcon: "🦊" };
       seed["users/student-1"] = { ...profileBefore, profileEmojiId: undefined, profileIcon: undefined, ...profile };
@@ -1213,7 +1213,8 @@ const run = async () => {
         const rows = Object.values(state.hallOfFame[groupName]).flat();
         const entry = rows.find((item) => item.uid === ownHallEntry.uid);
         assert.ok(entry, `${audience}/${source}/${groupName} retains the permitted student's entry`);
-        assert.equal(entry.profileIcon, expectedIcon, `${audience}/${source}/${groupName} validates the current rank and stored ID`);
+        assert.equal(entry.profileIcon, expectedIcon, `${audience}/${source}/${groupName} validates the cumulative total and stored ID`);
+        assert.equal(entry.earnedTotal, rank, 'Every public group exposes the same canonical grade basis');
       }
       assert.equal(state.writeCount, 0);
       assert.deepEqual(probe.documents, before, "Emoji projection is read-only");
@@ -1225,6 +1226,19 @@ const run = async () => {
   // teacher's all-grade projection when their initial balance earns no rank.
   const ownAccountPath = `semester_wis_accounts/${wis.accountIdFor("2026-2", "student-1")}`;
   const ownAccountBefore = structuredClone(tx.documents.get(ownAccountPath));
+  for (const earnedTotal of [10000, "10000", true, null, undefined, -1, 10000.5, NaN, Infinity]) {
+    tx.set(ownAccountPath, { ...ownAccountBefore, earnedTotal, rankEarnedTotal: 99999, balance: 99999 });
+    const before = structuredClone(tx.documents);
+    const state = await queryCore.getWisEconomyState({
+      auth: { uid: "student-1", token: { email: "student@yongshin-ms.ms.kr" } },
+      data: { audience: "student", semesterId: "2026-2", source: "CURRENT", projection: "student-core", includeLedger: false },
+    });
+    assert.equal(state.account.earnedTotal, earnedTotal === 10000 ? 10000 : 0,
+      "Account projections cannot coerce malformed cumulative earnings into an unlocked grade");
+    assert.equal(state.account.rankEarnedTotal, 99999);
+    assert.equal(state.writeCount, 0);
+    assert.deepEqual(tx.documents, before, "Malformed projection validation must not repair the account during a read");
+  }
   tx.set(ownAccountPath, { ...ownAccountBefore, rankEarnedTotal: 0 });
   const otherClassBefore = structuredClone(tx.documents.get("semester_classes/class-2"));
   tx.set("semester_classes/class-2", { ...otherClassBefore, grade: "3" });

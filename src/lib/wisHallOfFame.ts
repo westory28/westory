@@ -253,6 +253,9 @@ const normalizeEntry = (value: unknown): WisHallOfFameEntry | null => {
     displayName,
     currentBalance: toNonNegativeNumber(raw.currentBalance),
     cumulativeEarned: toNonNegativeNumber(raw.cumulativeEarned),
+    ...(Number.isSafeInteger(raw.earnedTotal) && Number(raw.earnedTotal) >= 0
+      ? { earnedTotal: Number(raw.earnedTotal) }
+      : {}),
     ...(Number.isFinite(Number(raw.rankEarnedTotal))
       ? { rankEarnedTotal: toNonNegativeNumber(raw.rankEarnedTotal) }
       : {}),
