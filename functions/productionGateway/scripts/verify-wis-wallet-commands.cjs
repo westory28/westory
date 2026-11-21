@@ -178,7 +178,7 @@ test("the fast route keeps its command allowlist, session checks and teacher per
   await unchanged(f.store, () => f.endpoints.executeWisCommandFast.run({ ...request(), auth: { uid: "student" } }), "WIS_MANAGE_REQUIRED");
   await assert.rejects(() => f.endpoints.executeWisCommandFast.run({ ...request(), sessionRejected: true }),
     (error) => error.code === "unauthenticated");
-  assert.equal(f.endpoints.executeWisCommandFast.__endpoint.minInstances, 1);
+  assert.equal(f.endpoints.executeWisCommandFast.__endpoint.minInstances, 0);
   assert.equal(f.endpoints.executeWisCommandFast.__endpoint.maxInstances, 20);
   assert.equal(f.endpoints.executeWisCommandFast.__endpoint.concurrency, 80);
 });

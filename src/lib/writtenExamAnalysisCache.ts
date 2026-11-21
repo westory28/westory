@@ -101,14 +101,20 @@ export function writeWrittenExamAnalysisCache<T>(
   key: string,
   value: T,
   expectedRevision: number,
+  reuseScoreSnapshot = false,
 ) {
   if (expectedRevision !== revision) return;
   readWrittenExamAnalysisCache(scope, key);
-  const entry = { scope, examId, key, expires: Date.now() + TTL, value };
+  const currentEntries = entries();
+  const existing = currentEntries.get(key);
+  if (reuseScoreSnapshot && !existing) return;
+  const expires =
+    reuseScoreSnapshot && existing ? existing.expires : Date.now() + TTL;
+  const entry = { scope, examId, key, expires, value };
   const serialized = JSON.stringify(entry);
   // Oversized results remain usable without consuming unbounded local storage.
   if (serialized.length > 3 * 1024 * 1024) return;
-  const previous = [...entries().values()]
+  const previous = [...currentEntries.values()]
     .filter((item) => item.key !== key)
     .sort((a, b) => a.expires - b.expires);
   while (previous.length >= MAX_ENTRIES) remove(previous.shift()!.key);

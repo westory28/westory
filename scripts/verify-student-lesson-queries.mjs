@@ -41,6 +41,7 @@ const lessons = [
   { unitId: "unit-b", title: "단원 B", updatedAt: 20, contentHtml: "본문 B" },
 ];
 let readGate;
+let supportsCorePointIds = true;
 const compile = (file, modules) => {
   const exports = {};
   vm.runInNewContext(
@@ -87,7 +88,9 @@ const api = compile("src/lib/studentLessonReadCache.ts", {
                   title,
                   updatedAt,
                 }))
-              : rows,
+              : request.corePointIdsOnly && supportsCorePointIds
+                ? rows.map(({ unitId }) => ({ unitId, corePointIds: [unitId] }))
+                : rows,
           legacyLessons: [],
         },
       };
@@ -132,6 +135,11 @@ const full = await api.readStudentLessonProgressCatalog(scope);
 assert.equal(calls.at(-1).view, "progress");
 await api.readStudentLessonProgressCatalog(scope);
 assert.equal(calls.filter((call) => call.view === "progress").length, 1);
+assert.equal(
+  await api.readStudentLessonProgressCatalog(scope, "core-point-ids"),
+  full,
+  "An already authorized progress catalogue supplies highlights with no extra call",
+);
 assert.equal(
   full.length,
   2,
@@ -235,6 +243,25 @@ assert.equal(
 auth.currentUser.tokenFailure = null;
 await api.readStudentLesson(scope, "unit-a");
 assert.equal(calls.length, before + 1);
+now += 60001;
+before = calls.length;
+const [ids, sameIds] = await Promise.all([
+  api.readStudentLessonProgressCatalog(scope, "core-point-ids"),
+  api.readStudentLessonProgressCatalog(scope, "core-point-ids"),
+]);
+assert.equal(calls.length, before + 1);
+assert.equal(calls.at(-1).view, "progress");
+assert.equal(calls.at(-1).corePointIdsOnly, true);
+assert.equal(ids, sameIds);
+assert.equal(ids[0].corePointIds[0], ids[0].unitId);
+assert.equal(ids[0].contentHtml, undefined);
+const progressAfterIds = await api.readStudentLessonProgressCatalog(scope);
+assert.ok(progressAfterIds[0].contentHtml, "An ID response cannot stand in for full progress");
+supportsCorePointIds = false;
+now += 60001;
+const olderServer = await api.readStudentLessonProgressCatalog(scope, "core-point-ids");
+assert.ok(olderServer.find(item => item.unitId === "unit-a").worksheetBlanks,
+  "An older callable returns the usable progress representation");
 before = calls.length;
 auth.currentUser = null;
 await assert.rejects(api.readStudentLesson(scope, "unit-a"), /로그인 상태/);

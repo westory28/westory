@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { initializeTestEnvironment } from "@firebase/rules-unit-testing";
 import {
   collection,
+  collectionGroup,
   deleteDoc,
   doc,
   getDocFromServer,
@@ -145,8 +146,33 @@ try {
     };
     await setDoc(doc(db, scorePath), { ...score, rosterId: scoreId });
     await setDoc(doc(db, siblingPath), { ...score, rosterId: siblingId });
+    await setDoc(doc(db, `users/student-b/performance_scores/${scoreId}`), {
+      ...score,
+      uid: "student-b",
+      rosterId: scoreId,
+    });
   });
   await maintenance(false, 20);
+  const classScoreQuery = (actor) =>
+    getDocsFromServer(
+      query(
+        collectionGroup(clients[actor], "performance_scores"),
+        where("rosterId", "==", scoreId),
+        where("uid", "in", [student, "synthetic-student-without-score"]),
+      ),
+    );
+  for (const actor of ["admin", "teacher"]) {
+    const selected = await classScoreQuery(actor);
+    assert.deepEqual(
+      selected.docs.map((entry) => entry.ref.path),
+      [scorePath],
+    );
+  }
+  for (const actor of [student, "staff", "expired", "pending", "anon"])
+    await denied(classScoreQuery(actor));
+  console.log(
+    "PASS teacher class-sheet query excludes other pupils and assessments and checks live access",
+  );
   await setDoc(
     doc(
       clients[student],

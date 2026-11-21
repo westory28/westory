@@ -1,6 +1,10 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { WEPLAY_GAMES, getWeplayLobby } from "../../../lib/weplay";
+import {
+  WEPLAY_GAMES,
+  getWeplayLobby,
+  type WeplayLobby,
+} from "../../../lib/weplay";
 import { withWeplayRequestTimeout } from "./requestTimeout";
 import { useAuth } from "../../../contexts/AuthContext";
 import { getStudentRouteAccess } from "../../../lib/studentMenuAccess";
@@ -16,10 +20,12 @@ export default function WeplayGameCatalog({
   gameTitle,
   portal,
   groupTitle,
+  readNavalLobby,
 }: {
   gameTitle: string;
   groupTitle?: string;
   portal: "student" | "teacher";
+  readNavalLobby?: () => Promise<WeplayLobby | undefined>;
 }) {
   const publication = useYutPublication(portal);
   const rhythmPublication = useRhythmPublication(portal, portal === "student");
@@ -40,12 +46,19 @@ export default function WeplayGameCatalog({
     if (portal === "teacher" || !navalAllowed) return;
     let active = true;
     setNaval({ scope, status: "checking" });
-    void withWeplayRequestTimeout(getWeplayLobby(config))
+    const request = readNavalLobby
+      ? readNavalLobby()
+      : withWeplayRequestTimeout(getWeplayLobby(config, false));
+    void request
       .then((lobby) => {
         if (active)
           setNaval({
             scope,
-            status: lobby.gameEnabled === true ? "open" : "closed",
+            status: !lobby
+              ? "error"
+              : lobby.gameEnabled === true
+                ? "open"
+                : "closed",
           });
       })
       .catch(() => {
@@ -54,7 +67,7 @@ export default function WeplayGameCatalog({
     return () => {
       active = false;
     };
-  }, [portal, scope, revision]);
+  }, [portal, scope, revision, readNavalLobby]);
   const navalStatus = naval.scope === scope ? naval.status : "checking";
   const games = WEPLAY_GAMES.filter(
     (game) =>

@@ -200,6 +200,35 @@ test('student cannot retrieve an older matching-class or legacy revision when th
   assert.deepEqual(f.reads.filter(row => row.kind === 'query').map(row => row.path), [scoped]);
 });
 
+test('progress ID projection preserves legacy IDs, duplicates and visibility without returning bodies or blank answers', async () => {
+  const f = studentFixture();
+  const valid = { widthRatio: '0.1', heightRatio: 1 };
+  Object.assign(f.collections[scoped][0], {
+    contentHtml: 'X'.repeat(64000), worksheetBlanks: [{ id: 'blank', answer: 'private' }],
+    worksheetExamHighlights: [null, { ...valid }, { ...valid, id: ' repeat ' }, { ...valid, id: 'repeat' },
+      { ...valid, id: null }, { ...valid, id: 0 }, { ...valid, widthRatio: -1 }, { ...valid, heightRatio: 'bad' }],
+  });
+  f.collections[scoped][1].worksheetExamHighlights = [{ ...valid, id: 'foreign' }];
+  f.collections.lessons[1].worksheetExamHighlights = [{ ...valid, id: 'legacy' }];
+  const full = await f.read({ view: 'progress' });
+  assert.equal(full.scopedLessons[0].contentHtml.length, 64000);
+  const fullDocuments = f.reads.filter(read => read.kind === 'query').reduce((sum, read) => sum + read.documents, 0);
+  f.reads.length = 0;
+  const compact = await f.read({ view: 'progress', corePointIdsOnly: true });
+  assert.deepEqual(compact, {
+    scopedLessons: [{ unitId: 'allowed', corePointIds: ['exam-highlight-2', 'repeat', 'repeat', 'null', '0'] }],
+    legacyLessons: [{ unitId: 'legacy-only', corePointIds: ['legacy'] }],
+  });
+  const reads = f.reads.filter(read => read.kind === 'query');
+  assert.equal(reads.length, 2);
+  assert.equal(reads.reduce((sum, read) => sum + read.documents, 0), fullDocuments);
+  assert.equal(f.reads.length - reads.length, 7);
+  assert.ok(reads.every(read => !read.fields.includes('contentHtml') && !read.fields.includes('worksheetBlanks')));
+  const bytes = value => Buffer.byteLength(JSON.stringify(value));
+  assert.ok(bytes(compact) < bytes(full) / 100);
+  console.log(JSON.stringify({ suite: 'lesson-core-point-ids', fullBytes: bytes(full), idBytes: bytes(compact), documents: fullDocuments }));
+});
+
 test('semester, slot, enrollment, and classroom failures stop before any lesson source read', async () => {
   const cases = [
     ['site_settings/config', { year: '2025' }],

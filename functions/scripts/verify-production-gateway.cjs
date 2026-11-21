@@ -43,6 +43,9 @@ process.env.FIREBASE_CONFIG = JSON.stringify({ projectId: process.env.GCLOUD_PRO
 process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:18192';
 process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:19192';
 const deployedFunctions = require('../index');
+for (const name of ['commandYutRoomFast', 'executeWisCommandFast', 'getWisRankingPreview']) {
+  assert.equal(deployedFunctions[name].__endpoint.minInstances, 0, `${name} should scale to zero`);
+}
 const canonicalFunctions = require('../productionGateway/productionSource');
 assert.equal(deployedFunctions.getThinkCloudState, require('../thinkCloudQuery').getThinkCloudState);
 assert.equal(deployedFunctions.getThinkCloudStateFast, require('../thinkCloudQuery').getThinkCloudStateFast);

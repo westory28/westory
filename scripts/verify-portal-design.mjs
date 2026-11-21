@@ -63,7 +63,11 @@ export const readStudentLesson=async(_,id)=>{
   window.portalDesignQa.lessonReads.push(id);
   return window.corePointQa?.lesson ?? {unitId:id,title:'검증 소단원',contentHtml:'<p>선택한 수업 본문</p>',isVisibleToStudents:true};
 };
-export const readStudentLessonProgressCatalog=async()=>window.corePointQa ? [window.corePointQa.lesson] : [];
+export const readStudentLessonProgressCatalog=async(_,view)=>{
+  const lesson=window.corePointQa?.lesson;
+  if(!lesson)return [];
+  return view==="core-point-ids" ? [{unitId:lesson.unitId,corePointIds:lesson.worksheetExamHighlights.map(point=>point.id)}] : [lesson];
+};
 export const subscribeThinkCloudState=(_config,_audience,_id,success,failure)=>{
   if(mode==='retry' && window.portalDesignQa.attempts++===0) failure(Error('synthetic outage'));
   else success({thinkCloudSessions:[], thinkCloudResponses:[], thinkCloudManagedClasses:[]});

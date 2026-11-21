@@ -1553,7 +1553,7 @@ const createCallableExports = ({ core } = {}) => ({
   // The same authorization, transaction and receipt namespace serve old and
   // fast clients. Keep this route limited to routine wallet transactions.
   executeWisCommandFast: onCall({ region: "us-central1", memory: "256MiB",
-    minInstances: 1, maxInstances: 20, concurrency: 80 }, (request) => {
+    minInstances: 0, maxInstances: 20, concurrency: 80 }, (request) => {
     assertWisTransactionCommand(request);
     return (core || getDefaultCore()).execute(request);
   }),

@@ -1884,8 +1884,8 @@ try {
   await cacheReady();
   assert.deepEqual(
     (await cacheCalls()).slice(failedMockCalls.length),
-    ["load", "mock"],
-    "Failed mock lookups are retried instead of cached",
+    ["mock"],
+    "Failed mock lookups retry without rereading the successful exam scores",
   );
   assert.equal(await cachePage.getByRole("alert").count(), 0);
   const draftRefreshStart = (await cacheCalls()).length;

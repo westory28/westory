@@ -6063,6 +6063,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const [scoreWarningLoading, setScoreWarningLoading] = useState(true);
   const [scoreWarningSaving, setScoreWarningSaving] = useState(false);
   const [scoreWarningModalOpen, setScoreWarningModalOpen] = useState(false);
+  const [scoreWarningRequestedFor, setScoreWarningRequestedFor] = useState("");
   const [previewGradeFilter, setPreviewGradeFilter] = useState("all");
   const [previewClassFilter, setPreviewClassFilter] = useState("all");
   const [previewNumberFilter, setPreviewNumberFilter] = useState("all");
@@ -6306,6 +6307,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     setStudentsLoading(false);
     setStudentsLoaded(false);
     setStudents([]);
+    setScoreWarningModalOpen(false);
+    setScoreWarningLoading(true);
+    setScoreWarningRequestedFor("");
     scoreDocumentSyncCheckedKeysRef.current.clear();
     scoreDocumentSyncRunRef.current += 1;
     void loadRosters();
@@ -6319,8 +6323,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   }, [scoreReadIdentity]);
 
   useEffect(() => {
-    void loadScoreWarningSettings();
-  }, [scoreReadIdentity]);
+    if (scoreWarningRequestedFor === scoreReadIdentity)
+      void loadScoreWarningSettings();
+  }, [scoreReadIdentity, scoreWarningRequestedFor]);
 
   useEffect(() => {
     if (!refreshVisibleScores.current) return;
@@ -6453,13 +6458,16 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     normalizePerformanceScoreAnswerSheetRequest,
     sortPerformanceScoreAnswerSheetRequests,
   );
+  const resetRosterDetailReads = (rosterId: string) => {
+    scoreDocumentRecordsByRosterCacheRef.current.delete(rosterId);
+    scoreDocumentRecordPromisesByRosterRef.current.delete(rosterId);
+    confirmationsByRosterCacheRef.current.delete(rosterId);
+    confirmationPromisesByRosterRef.current.delete(rosterId);
+  };
   const invalidateRosterReadCaches = (...rosterIds: string[]) => {
     rosterIds.filter(Boolean).forEach((rosterId) => {
+      resetRosterDetailReads(rosterId);
       invalidateWrittenExamAnalysisCache(rosterId);
-      scoreDocumentRecordsByRosterCacheRef.current.delete(rosterId);
-      scoreDocumentRecordPromisesByRosterRef.current.delete(rosterId);
-      confirmationsByRosterCacheRef.current.delete(rosterId);
-      confirmationPromisesByRosterRef.current.delete(rosterId);
     });
   };
   const clearPerformanceScoreReadCaches = () => {
@@ -8642,7 +8650,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
   const loadScoreRecordsForRoster = async (
     roster: PerformanceScoreRoster,
-    options: { includeStudentDocuments?: boolean; fromServer?: boolean } = {},
+    options: {
+      includeStudentDocuments?: boolean;
+      includeConfirmations?: boolean;
+      fromServer?: boolean;
+    } = {},
   ) => {
     const owner = scoreReadIdentity;
     const studentSnapshot = isSemesterArchive
@@ -8657,7 +8669,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       return buildScoreListRecordsFromRosterRows(activeRoster);
     }
 
-    invalidateRosterReadCaches(roster.id);
+    resetRosterDetailReads(roster.id);
 
     const linkedRows = rosterRows.filter((row) => row.uid);
     let documentRecords: ScoreListRecord[] = [];
@@ -8697,9 +8709,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       .forEach((row) => {
         loaded.push(buildScoreListRecordFromRosterRow(roster, row));
       });
+    if (options.includeConfirmations === false)
+      return sortStudentIdentityRows(loaded);
     const confirmationsByUid = await loadPerformanceScoreConfirmationsForRoster(
       roster.id,
-      loaded.map((record) => record.uid),
+      loaded.filter(hasEnteredPerformanceScore).map((record) => record.uid),
     );
     return sortStudentIdentityRows(
       loaded.map((record) => ({
@@ -8882,7 +8896,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         const loadedRecords = (
           await Promise.all(
             writtenExamScoreStatsRosters.map((roster) =>
-              loadScoreRecordsForRoster(roster),
+              loadScoreRecordsForRoster(roster, {
+                includeConfirmations: false,
+              }),
             ),
           )
         ).flat();
@@ -9812,7 +9828,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   ) => {
     if (!roster) return [];
     // Student signatures can arrive after the previous preview was opened.
-    invalidateRosterReadCaches(roster.id);
+    resetRosterDetailReads(roster.id);
     const studentSnapshot = isSemesterArchive
       ? []
       : await loadStudents({ force: true, throwOnError: true });
@@ -9824,15 +9840,66 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           normalizeSchoolValue(row.grade) === normalizeSchoolValue(gradeValue)),
     );
     const linkedRows = classRows.filter((row) => row.uid);
-    let documentRecords: ScoreListRecord[] = [];
-    try {
-      documentRecords = await loadScoreDocumentRecordsForRoster(roster);
-    } catch (error) {
-      console.warn("Falling back to direct class score document reads:", error);
-      documentRecords = await loadScoreDocumentRecordsForLinkedRows(
-        roster,
-        linkedRows,
-      );
+    const documentRecords: ScoreListRecord[] = [];
+    // A move can leave the old class on the score document. Query the UIDs
+    // selected by the current enrollment and keep alternate legacy document IDs.
+    for (let offset = 0; offset < linkedRows.length; offset += 30) {
+      const chunk = linkedRows.slice(offset, offset + 30);
+      try {
+        const snap = await getDocsFromServer(
+          query(
+            collectionGroup(db, PERFORMANCE_SCORE_USER_COLLECTION),
+            where("rosterId", "==", roster.id),
+            where(
+              "uid",
+              "in",
+              chunk.map((row) => row.uid),
+            ),
+          ),
+        );
+        documentRecords.push(
+          ...snap.docs
+            .map((item) =>
+              buildScoreListRecordFromDocument(
+                item.id,
+                item.data() as PerformanceScoreRecord,
+              ),
+            )
+            .filter((record) =>
+              shouldUseScoreDocumentForRoster(record, roster),
+            ),
+        );
+      } catch (error) {
+        // Preserve the original lookup for alternate legacy document IDs on
+        // installations that have only the rosterId collection-group index.
+        const code = (error as { code?: string })?.code;
+        if (code !== "permission-denied" && code !== "failed-precondition")
+          throw error;
+        documentRecords.length = 0;
+        if (code === "failed-precondition") {
+          try {
+            documentRecords.push(
+              ...(await loadScoreDocumentRecordsForRoster(roster, true)),
+            );
+            break;
+          } catch (fallbackError) {
+            const fallbackCode = (fallbackError as { code?: string })?.code;
+            if (
+              fallbackCode !== "permission-denied" &&
+              fallbackCode !== "failed-precondition"
+            )
+              throw fallbackError;
+          }
+        }
+        documentRecords.push(
+          ...(await loadScoreDocumentRecordsForLinkedRows(
+            roster,
+            linkedRows,
+            true,
+          )),
+        );
+        break;
+      }
     }
 
     const documentRecordsByUid = new Map(
@@ -9855,7 +9922,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
     const confirmationsByUid = await loadPerformanceScoreConfirmationsForRoster(
       roster.id,
-      loaded.map((record) => record.uid),
+      loaded.filter(hasEnteredPerformanceScore).map((record) => record.uid),
     );
 
     const withConfirmations = loaded.map((record) =>
@@ -11326,15 +11393,22 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       />
       <button
         type="button"
-        onClick={() => setScoreWarningModalOpen(true)}
-        disabled={scoreWarningLoading || scoreWarningSaving}
+        onClick={() => {
+          setScoreWarningRequestedFor(scoreReadIdentity);
+          setScoreWarningModalOpen(true);
+        }}
+        disabled={scoreWarningSaving}
         className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         aria-label="학생 점수 확인 경고 문구 설정"
         title="학생 점수 확인 경고 문구 설정"
       >
         <i
           className={`fas fa-cog text-xs ${
-            scoreWarningLoading || scoreWarningSaving ? "animate-spin" : ""
+            (scoreWarningRequestedFor === scoreReadIdentity &&
+              scoreWarningLoading) ||
+            scoreWarningSaving
+              ? "animate-spin"
+              : ""
           }`}
           aria-hidden="true"
         />

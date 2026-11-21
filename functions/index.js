@@ -5520,10 +5520,10 @@ const yutHandlers = require('./yut').createYutHandlers({ db });
 exports.getYutPublication = onCall({ region: REGION, maxInstances: 10 }, yutHandlers.getYutPublication);
 exports.getYutLobby = onCall({ region: REGION, maxInstances: 10 }, yutHandlers.getYutLobby);
 exports.commandYutRoom = onCall({ region: REGION, maxInstances: 20 }, yutHandlers.commandYutRoom);
-// Keep gameplay transactions beside Firestore nam5 and avoid idle cold starts.
+// Keep gameplay transactions beside Firestore nam5.
 // The Seoul endpoint remains available to already-open clients.
 exports.commandYutRoomFast = onCall({
-  region: 'us-central1', minInstances: 1, maxInstances: 20,
+  region: 'us-central1', minInstances: 0, maxInstances: 20,
   memory: '256MiB', concurrency: 80, timeoutSeconds: 30,
 }, yutHandlers.commandYutRoom);
 exports.getYutManagement = onCall({ region: REGION, maxInstances: 10 }, yutHandlers.getYutManagement);

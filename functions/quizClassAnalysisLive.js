@@ -247,7 +247,9 @@ function createLiveReader({ db, json, resultFields, scoreFields, questionFields,
       // Advancing to through is safe: their new sequence remains pending.
       if (consumed) checkpoint.target[checkpoint.key] = checkpoint.through;
     }
-    if ((await state(query.semesterId, classes)).contextVersion !== query.contextVersion) fail('QUIZ_ANALYSIS_LIVE_SCOPE_CHANGED');
+    // Only the semester roster generation participates in this final check.
+    // Class cursors stay at the captured boundary so later events are replayed.
+    if ((await state(query.semesterId, [])).contextVersion !== query.contextVersion) fail('QUIZ_ANALYSIS_LIVE_SCOPE_CHANGED');
     const students = [...owners.values()].filter(Boolean);
     if (query.liveMode === 'achievement' && query.analysisProjection !== 'compact-v1') prepareAchievementRows(rawRows);
     const scoreRows = query.liveMode === 'achievement' ? await buildMockExamScoreRows(allRows, students, query, { documents: 0, bytes: 0 }) : [];

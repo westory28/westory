@@ -27,6 +27,7 @@ import {
   type LessonData,
   type LessonFootnote,
 } from "../../../../lib/lessonData";
+import { normalizeWorksheetExamHighlights } from "../../../../lib/lessonWorksheet";
 import {
   buildLessonAnswerSnapshot,
   getLessonAnswerStatus as getInputStatus,
@@ -455,7 +456,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
 
     const [visibleLessons, progressRootSnap, progressUnitsSnap] =
       await Promise.all([
-        readStudentLessonProgressCatalog(config),
+        readStudentLessonProgressCatalog(config, "core-point-ids"),
         getDoc(getProgressRootRef()!),
         getDocs(
           collection(
@@ -477,12 +478,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
     let foundCount = 0;
 
     visibleLessons.forEach((item) => {
-      const normalized = normalizeLessonData(item);
-      const lessonUnitId = String(normalized.unitId || "").trim();
+      const lessonUnitId = String(item.unitId || "").trim();
       if (!lessonUnitId) return;
-      const corePointIds = getLessonContentSections(
-        normalized,
-      ).worksheet.examHighlights.map((highlight) => highlight.id);
+      const corePointIds =
+        item.corePointIds ??
+        normalizeWorksheetExamHighlights(item.worksheetExamHighlights).map(
+          (highlight) => highlight.id,
+        );
       if (!corePointIds.length) return;
 
       totalCount += corePointIds.length;

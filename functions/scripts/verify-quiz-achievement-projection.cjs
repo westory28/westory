@@ -254,6 +254,8 @@ test('compact live changes read current scope plus sidecar and preserve cursors 
   assert.equal(result.rawRows[0].raw.analysisSourceVersion, entry.sourceVersion);
   assert.equal(result.rawRows[0].raw.percent, 0);
   assert.equal(result.live.classes[0].cursor, 1); assert.equal(result.hasMore, false);
+  assert.equal(f.reads.filter(read => read.path === state).length, 2);
+  assert.equal(f.reads.filter(read => read.path === classState).length, 1);
   const originals = f.reads.filter(read => read.path === PATH);
   assert.equal(originals.length, 1); assert.deepEqual(originals[0].fields, SCOPE_FIELDS);
   assert.equal(f.reads.filter(read => read.path === projectionRef(f.db, PATH).path).length, 1);

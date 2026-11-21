@@ -107,6 +107,31 @@ assert.equal(
   null,
   "Ten-minute expiry forces a new server read",
 );
+write("teacher-a", "exam-a", "partial", { mock: null });
+now += 9 * 60 * 1000;
+const saveRecoveredMock = () =>
+  cache.writeWrittenExamAnalysisCache(
+    "teacher-a",
+    "exam-a",
+    "partial",
+    { mock: "recovered" },
+    cache.writtenExamAnalysisCacheRevision(),
+    true,
+  );
+saveRecoveredMock();
+assert.equal(read("teacher-a", "partial").mock, "recovered");
+now += 60 * 1000;
+assert.equal(
+  read("teacher-a", "partial"),
+  null,
+  "A recovered comparison cannot extend the score TTL",
+);
+saveRecoveredMock();
+assert.equal(
+  read("teacher-a", "partial"),
+  null,
+  "An expired score snapshot cannot be recreated by a late comparison",
+);
 for (let i = 0; i < 20; i++) write("teacher-a", "exam-a", "room-" + i);
 assert.ok(values.size <= 6, "Storage growth is bounded");
 assert.equal(read("teacher-a", "room-0"), null);

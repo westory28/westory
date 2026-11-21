@@ -745,6 +745,9 @@ test('achievement route reads only selected pupils and never reads retired evide
   const handler = createQuizClassAnalysisHandler({ db: f.db, assertSession: async () => ({ uid: 'teacher', email: 't@school.test' }) });
   const result = await handler({ auth: { uid: 'teacher' }, data: query });
   assert.equal(Object.hasOwn(result, 'canReview'), false); assert.equal(result.students.length, 1);
+  assert.equal(f.queries.filter(read => read.path === 'semester_classes').length, 0);
+  assert.equal(f.reads.filter(path => path === 'semester_classes/class_a').length, 1);
+  assert.equal(f.reads.includes('semester_classes/class_b'), false);
   assert.equal(result.rawRows.length, 1); assert.equal(result.mockExamScoreRows.length, 1);
   assert.equal(f.reads.includes('semester_assessment_attempts/exam'), false);
   assert.equal(Object.hasOwn(result, 'achievementEvidence'), false);
@@ -752,6 +755,12 @@ test('achievement route reads only selected pupils and never reads retired evide
   assert.equal(JSON.stringify(result).includes('FOREIGN_STUDENT_ANSWER'), false);
   assert.equal(f.queries.some(query => /\/(lessons|lesson_progress)(\/|$)/.test(query.path)), false);
   assert.deepEqual(f.writes, []);
+  const legacy = await handler({ auth: { uid: 'teacher' }, data: { ...query, classIds: ['3-1'] } });
+  assert.deepEqual(legacy.configuredClasses, result.configuredClasses);
+  for (const id of ['old_class', 'missing_class']) {
+    await assert.rejects(handler({ auth: { uid: 'teacher' }, data: { ...query, classIds: [id] } }),
+      error => error.details?.reason === 'QUIZ_ANALYSIS_CLASS_INVALID');
+  }
   f.data.set('users/teacher', { role: 'staff', teacherPortalEnabled: true, staffPermissions: ['quiz_read'] });
   assert.equal((await handler({ auth: { uid: 'teacher' }, data: query })).mockExamScoreRows.length, 1);
 });
@@ -1413,6 +1422,29 @@ test('read authority and active semester are checked before catalog/cache and no
   const f = memory(); f.data.set('site_settings/semester_active', { semesterId: '2027-1', revision: 1 });
   const handler = createQuizClassAnalysisHandler({ db: f.db, assertSession: async () => ({ uid: 'teacher' }), service: { query: async () => assert.fail('no query') } });
   await assert.rejects(handler({ data: q, auth: { uid: 'teacher', token: {} } }), e => e.code === 'failed-precondition');
+});
+
+test('explicit catalog refresh skips the old cache body and preserves the prior response if rebuilding fails', async () => {
+  const f = memory(), service = createQuizClassAnalysisService({ db: f.db });
+  const input = normalizeQuery({ semesterId: SCOPE, mode: 'catalog' });
+  const initial = await service.query(input);
+  const cachePath = f.writes[0], saved = structuredClone(f.data.get(cachePath));
+  assert.ok(cachePath.startsWith('quiz_class_analysis_cache/'));
+  f.reads.length = 0; f.writes.length = 0;
+  const collection = f.db.collection;
+  f.db.collection = () => { throw new Error('temporary failure'); };
+  await assert.rejects(service.query({ ...input, forceRefresh: true }), /temporary failure/);
+  assert.equal(f.reads.includes(cachePath), false);
+  assert.deepEqual(f.writes, []);
+  assert.deepEqual(f.data.get(cachePath), saved);
+  f.db.collection = collection;
+  f.data.set('semester_classes/class_c', { semesterId: SCOPE, status: 'ACTIVE', grade: '3', classNumber: '3' });
+  const refreshed = await service.query({ ...input, forceRefresh: true });
+  assert.equal(refreshed.classes.length, initial.classes.length + 1);
+  assert.equal(f.reads.includes(cachePath), false);
+  assert.deepEqual(f.writes, [cachePath]);
+  assert.deepEqual(await service.query(input), refreshed);
+  assert.equal(f.reads.filter(path => path === cachePath).length, 1);
 });
 
 test('profile presentation changes invalidate roster but unrelated last-login writes do not', async () => {

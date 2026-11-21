@@ -109,8 +109,9 @@
       "sourceFile": "commandGateway.js",
       "file": "commandGateway.js",
       "originalSha256": "a2d260be728a5aed1861118fbd75f90babee6eea569c7bf8119b20296f45edce",
-      "sha256": "6bbad2dcca8f0292f7bc6432b9bd9b7e970857b181034be3ccf1d04d37078581",
+      "sha256": "3ccc49432f61038b45dfa8c2a5504e8b666c65ea070dfd8cb8b02e43600dc4dd",
       "changes": [
+        "2026-11-21: Allow executeWisCommandFast to scale to zero between requests.",
         "2026-11-07: Omit only hint/hintEnabled from historical mock QUIZ start receipt presentations on execute replay and status reads; preserve stored receipts, answers, choices and all other command results.",
         "2026-10-20: Add an opt-in read-only transaction store for the isolated ranking preview; command stores keep their existing default.",
         "2026-10-20: Support optional field masks for getAll and collection queries so the opt-in full hall can omit ledger payloads; existing reads keep their unprojected default.",

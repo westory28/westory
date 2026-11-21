@@ -6,7 +6,7 @@ import {
   query,
   where,
 } from "firebase/firestore";
-import { db } from "./firebase";
+import { auth, db } from "./firebase";
 import {
   getPointPolicy,
   getPointRankManualAdjustEarnedPointsByUid,
@@ -408,12 +408,37 @@ const readLessonTreeMeta = async (config: ConfigLike) => {
   return semesterMeta.size ? semesterMeta : readTreeDoc("curriculum/tree");
 };
 
+// A different account, semester or expired progress catalog produces a new
+// array. Reuse its ordering only while the source can still return that array.
+const treeOrderByCatalog = new WeakMap<
+  Awaited<ReturnType<typeof readStudentLessonProgressCatalog>>,
+  ReturnType<typeof readLessonTreeMeta>
+>();
+
 const readLessons = async (config: ConfigLike) => {
-  const treeMeta = await readLessonTreeMeta(config).catch((error) => {
+  const owner = auth.currentUser;
+  if (!owner) throw new Error("로그인 상태를 확인해 주세요.");
+  const authTime = Number((await owner.getIdTokenResult()).claims.auth_time);
+  if (owner !== auth.currentUser || !Number.isFinite(authTime))
+    throw new Error("로그인 계정이 바뀌었습니다.");
+
+  const lessons = await readStudentLessonProgressCatalog(config);
+  let treeRequest = treeOrderByCatalog.get(lessons);
+  if (!treeRequest) {
+    treeRequest = readLessonTreeMeta(config);
+    treeOrderByCatalog.set(lessons, treeRequest);
+  }
+  const treeMeta = await treeRequest.catch((error) => {
+    if (treeOrderByCatalog.get(lessons) === treeRequest)
+      treeOrderByCatalog.delete(lessons);
     console.warn("Failed to load lesson tree order:", error);
     return new Map<string, LessonTreeMeta>();
   });
-  const lessons = await readStudentLessonProgressCatalog(config);
+  const settledAuthTime = Number(
+    (await owner.getIdTokenResult()).claims.auth_time,
+  );
+  if (owner !== auth.currentUser || settledAuthTime !== authTime)
+    throw new Error("로그인 계정이 바뀌었습니다.");
   return lessons
     .map((item) => {
       const unitId = String(item.unitId || "").trim();
@@ -439,26 +464,6 @@ const readLessons = async (config: ConfigLike) => {
         left.unitId.localeCompare(right.unitId, "ko")
       );
     });
-};
-
-type LessonCatalog = Awaited<ReturnType<typeof readLessons>>;
-
-const lessonCatalogCache = new Map<string, Promise<LessonCatalog>>();
-
-const getLessonCatalogCacheKey = (config: ConfigLike) =>
-  `${String(config?.year || "default")}:${String(config?.semester || "default")}`;
-
-const readLessonsCached = (config: ConfigLike) => {
-  const key = getLessonCatalogCacheKey(config);
-  const cached = lessonCatalogCache.get(key);
-  if (cached) return cached;
-
-  const promise = readLessons(config).catch((error) => {
-    lessonCatalogCache.delete(key);
-    throw error;
-  });
-  lessonCatalogCache.set(key, promise);
-  return promise;
 };
 
 const loadLessonSummary = async (
@@ -548,7 +553,7 @@ export const loadStudentLessonProgressSummary = async (
     );
   }
 
-  const lessonCatalog = await readLessonsCached(config).catch((error) => {
+  const lessonCatalog = await readLessons(config).catch((error) => {
     console.warn("Failed to load lesson catalog for student summary:", error);
     return null;
   });
@@ -730,7 +735,7 @@ export const loadStudentQuizProgressSummary = async (
     );
   }
 
-  const lessonCatalog = await readLessonsCached(config).catch((error) => {
+  const lessonCatalog = await readLessons(config).catch((error) => {
     console.warn(
       "Failed to load lesson catalog for student quiz summary:",
       error,
@@ -879,7 +884,7 @@ export const loadStudentProgressSummary = async (
     };
   }
 
-  const lessonCatalog = await readLessonsCached(config).catch((error) => {
+  const lessonCatalog = await readLessons(config).catch((error) => {
     console.warn("Failed to load lesson catalog for student summary:", error);
     return null;
   });

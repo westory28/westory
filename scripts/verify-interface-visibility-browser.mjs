@@ -239,9 +239,10 @@ export const archiveScope=null,isSemesterArchive=false;
 export const markLoginPerf=()=>{},measureLoginPerf=()=>{};
 const toast={showToast(value){window.visibilityQa.toasts.push(value);}};export const useAppToast=()=>toast;
 export const WEPLAY_GAMES=[{id:'history-rain',name:'충무공'},{id:'joseon-yut',name:'마우저구 윷놀이'},{id:'gungdeok-rock',name:'덩기덕 쿵더Rock'}];
-export const getWeplayLobby=async()=>{window.visibilityQa.navalReads++;return window.visibilityQa.navalReply??(window.visibilityQa.deferNaval?new Promise(resolve=>navalPending.push(resolve)):{gameEnabled:true});};
+export const getWeplayLobby=async(_config,includeRankings)=>{const qa=window.visibilityQa;qa.navalReads++;if(includeRankings!==false)throw Error('Unexpected ranking read for publication');if(qa.failNextNaval){qa.failNextNaval=false;throw Error('Synthetic lobby failure');}return qa.navalReply??(qa.deferNaval?new Promise(resolve=>navalPending.push(resolve)):{gameEnabled:true});};
 export const prepareWeplayIntroAudio=()=>{},preloadWeplayAssets=()=>{};
 export const startWeplayGame=()=>{throw Error('Fixture forbids paid game starts')};
+export const getHistoryDictionaryCallable=async()=>{throw Error('Unexpected server request in visibility fixture');};
 export const weplayErrorMessage=(_error,fallback)=>fallback;
 export const WEPLAY_DIFFICULTY_LABELS={mild:'쉬움',normal:'보통',hard:'어려움'};
 `;
@@ -263,7 +264,8 @@ const output = await build({
   write: false,
   format: "esm",
   platform: "browser",
-  loader: { ".svg": "dataurl", ".webp": "dataurl" },
+  loader: { ".svg": "dataurl", ".webp": "dataurl", ".woff2": "dataurl" },
+  external: ["/assets/*"],
   target: "es2022",
   outfile: path.join(evidence, "fixture.js"),
   define: {
@@ -283,6 +285,10 @@ const output = await build({
         );
         plugin.onResolve({ filter: /(?:^|\/)Header$/ }, () => ({
           path: "header",
+          namespace: "fixture",
+        }));
+        plugin.onResolve({ filter: /historyDictionarySession$/ }, () => ({
+          path: "services",
           namespace: "fixture",
         }));
         plugin.onResolve(
@@ -702,6 +708,10 @@ try {
     );
     const navalCard = page.locator('.weplay-game-card[href*="history-rain"]');
     await navalCard.waitFor();
+    check(
+      (await page.evaluate(() => window.visibilityQa.navalReads)) === 1,
+      "catalogue publication and active session lookup share one lobby read",
+    );
     await page.evaluate(
       (value) => window.visibilityQa.resolveNaval(value),
       paid,
@@ -718,6 +728,32 @@ try {
       "back to catalogue preserves or restores same paid session",
     );
     checks.push(`${width}: back navigation cannot lose an active paid session`);
+
+    await open(page, "/student/weplay", "weplay");
+    await page.evaluate(() => {
+      window.visibilityQa.failNextNaval = true;
+    });
+    await settle(page);
+    const retryNaval = page.getByRole("button", {
+      name: "다시 확인",
+      exact: true,
+    });
+    await retryNaval.waitFor();
+    check(
+      (await page.evaluate(() => window.visibilityQa.navalReads)) === 1,
+      "failed catalogue checks share the same request",
+    );
+    await retryNaval.click();
+    await page.waitForFunction(() => window.visibilityQa.navalReads === 2);
+    await page.evaluate(
+      (value) => window.visibilityQa.resolveNaval(value),
+      lobby,
+    );
+    await navalCard.waitFor();
+    check(
+      (await page.evaluate(() => window.visibilityQa.navalReads)) === 2,
+      "catalogue retry makes one fresh read",
+    );
 
     await open(page, "/student/weplay", "weplay");
     await page.evaluate(

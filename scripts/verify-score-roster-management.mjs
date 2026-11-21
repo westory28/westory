@@ -905,6 +905,7 @@ await (async () => {
 // unchanged student's score document must keep that student's valid confirmation.
 Object.assign(context, {
   loadStudents: async () => active,
+  resetRosterDetailReads: () => {},
   isWrittenExamObjectiveRoster: () => false,
   loadScoreDocumentRecordsForRoster: async () => [
     {
@@ -968,13 +969,59 @@ assert.equal(
 console.log(
   "PASS live-read confirmation check: score document version survives unrelated roster updates.",
 );
+const loadConfirmations = context.loadPerformanceScoreConfirmationsForRoster;
+context.loadPerformanceScoreConfirmationsForRoster = () => {
+  throw new Error("Score statistics should not fetch signatures");
+};
+const stats = await context.loadScoreRecordsActual(roster, {
+  includeStudentDocuments: true,
+  includeConfirmations: false,
+});
+assert.deepEqual(
+  Array.from(stats, ({ uid, totalScore }) => [uid, totalScore]),
+  Array.from(loadedWithSignature, ({ uid, totalScore }) => [uid, totalScore]),
+);
+context.loadPerformanceScoreConfirmationsForRoster = loadConfirmations;
 
 const storedMovedRecord = subject
   .buildScoreListRecordsFromRosterRows(roster)
   .find((record) => record.uid === "moved-3");
-context.loadScoreDocumentRecordsForRoster = async () => [
+const scopedScoreQueries = [];
+const storedClassScores = [
   { ...storedMovedRecord, updatedAt: { seconds: 100, nanoseconds: 0 } },
 ];
+Object.assign(context, {
+  collectionGroup: (_db, path) => path,
+  where: (field, op, value) => ({ field, op, value }),
+  query: (group, ...filters) => ({ group, filters }),
+  PERFORMANCE_SCORE_USER_COLLECTION: "performance_scores",
+  buildScoreListRecordFromDocument: (id, data) => ({
+    id,
+    ...data,
+    scoreDocumentExists: true,
+  }),
+  shouldUseScoreDocumentForRoster: (record, value) =>
+    record.rosterId === value.id,
+  getDocsFromServer: async ({ group, filters }) => {
+    assert.equal(group, "performance_scores");
+    assert.equal(filters[0].field, "rosterId");
+    assert.equal(filters[0].op, "==");
+    assert.equal(filters[0].value, roster.id);
+    assert.equal(filters[1].field, "uid");
+    assert.equal(filters[1].op, "in");
+    const uids = Array.from(filters[1].value);
+    assert.ok(uids.length >= 1 && uids.length <= 30);
+    scopedScoreQueries.push(uids);
+    return {
+      docs: storedClassScores
+        .filter((item) => uids.includes(item.uid))
+        .map((value) => ({ id: value.id, data: () => value })),
+    };
+  },
+  loadScoreDocumentRecordsForRoster: () => {
+    throw new Error("class preview read the entire roster");
+  },
+});
 context.loadPerformanceScoreConfirmationsForRoster = async () =>
   new Map([
     [
@@ -1002,6 +1049,7 @@ vm.runInContext(
 );
 const oldClass = await context.loadClassRecordsActual(roster, "1", "3");
 const movedClass = await context.loadClassRecordsActual(roster, "2", "3");
+assert.deepEqual(scopedScoreQueries, [["active-1", "new-2"], ["moved-3"]]);
 assert.equal(
   oldClass.some((record) => record.uid === "moved-3"),
   false,
@@ -1030,6 +1078,56 @@ await assert.rejects(
   /confirmation read denied/,
 );
 assert.equal(redundantConfirmationReads, 0);
+const originalClassQuery = context.getDocsFromServer;
+context.getDocsFromServer = async () => {
+  throw Object.assign(new Error("index unavailable"), {
+    code: "failed-precondition",
+  });
+};
+let legacyReads = 0;
+context.loadScoreDocumentRecordsForRoster = async (_roster, fresh) => {
+  assert.equal(fresh, true);
+  legacyReads++;
+  return storedClassScores.map((record) => ({
+    ...record,
+    id: "historic-document-id",
+  }));
+};
+context.loadScoreDocumentRecordsForLinkedRows = async (
+  _roster,
+  rows,
+  fresh,
+) => {
+  assert.equal(fresh, true);
+  assert.deepEqual(
+    Array.from(rows, (row) => row.uid),
+    ["moved-3"],
+  );
+  return storedClassScores;
+};
+context.loadPerformanceScoreConfirmationsForRoster = async () => new Map();
+assert.equal(
+  (await context.loadClassRecordsActual(roster, "2", "3"))[0].totalScore,
+  15,
+);
+assert.equal(legacyReads, 1);
+context.loadScoreDocumentRecordsForRoster = async () => {
+  throw Object.assign(new Error("group query denied"), {
+    code: "permission-denied",
+  });
+};
+assert.equal(
+  (await context.loadClassRecordsActual(roster, "2", "3"))[0].totalScore,
+  15,
+);
+context.getDocsFromServer = async () => {
+  throw Object.assign(new Error("offline"), { code: "unavailable" });
+};
+await assert.rejects(
+  () => context.loadClassRecordsActual(roster, "2", "3"),
+  /offline/,
+);
+context.getDocsFromServer = originalClassQuery;
 console.log(
   "PASS confirmation read failure: class export requires successful signature reads and never treats read errors as unsigned.",
 );

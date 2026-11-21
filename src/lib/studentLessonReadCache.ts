@@ -28,6 +28,7 @@ import {
 } from "./lessonTreeSelection";
 
 type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
+type CatalogLesson = Partial<LessonData> & { corePointIds?: string[] };
 
 export interface StudentCurriculumTreeItem {
   id: string;
@@ -56,9 +57,9 @@ const visibleCurriculumTreeCache = new Map<
 const effectiveLessonsCache = new Map<
   string,
   CacheEntry<{
-    scopedLatestLessons: Partial<LessonData>[];
-    legacyLatestLessons: Partial<LessonData>[];
-    visibleLessons: Partial<LessonData>[];
+    scopedLatestLessons: CatalogLesson[];
+    legacyLatestLessons: CatalogLesson[];
+    visibleLessons: CatalogLesson[];
     visibleUnitIds: Set<string>;
   }>
 >();
@@ -77,14 +78,14 @@ const getScopeKey = (config: ConfigLike) => {
 const getTreeCacheKey = (tree: StudentCurriculumTreeItem[]) =>
   JSON.stringify(tree);
 
-const sortLessonsByRecency = (lessons: Partial<LessonData>[]) =>
+const sortLessonsByRecency = (lessons: CatalogLesson[]) =>
   [...lessons].sort(
     (left, right) =>
       getLessonTreeMetaTimestampMs(right) - getLessonTreeMetaTimestampMs(left),
   );
 
-const getLatestLessonsByUnitId = (lessons: Partial<LessonData>[]) => {
-  const latestByUnitId = new Map<string, Partial<LessonData>>();
+const getLatestLessonsByUnitId = (lessons: CatalogLesson[]) => {
+  const latestByUnitId = new Map<string, CatalogLesson>();
   for (const lesson of sortLessonsByRecency(lessons)) {
     const unitId = String(lesson.unitId || "").trim();
     if (!unitId || latestByUnitId.has(unitId)) continue;
@@ -129,6 +130,7 @@ const readCached = async <T>(
   cache: Map<string, CacheEntry<T>>,
   key: string,
   loader: () => Promise<T>,
+  compatibleKey?: string,
 ) => {
   const owner = auth.currentUser;
   if (!owner) throw new Error("로그인 상태를 확인해 주세요.");
@@ -136,10 +138,11 @@ const readCached = async <T>(
   if (auth.currentUser !== owner || !Number.isFinite(authTime))
     throw new Error("로그인 계정이 바뀌었습니다.");
 
-  const cached = cache.get(key);
   // A UID can sign in again while the module stays mounted. A cached read is
   // reusable only within the same Firebase user object and authentication epoch.
-  if (cached?.owner === owner && cached.authTime === authTime) {
+  for (const lookup of compatibleKey ? [key, compatibleKey] : [key]) {
+    const cached = cache.get(lookup);
+    if (cached?.owner !== owner || cached.authTime !== authTime) continue;
     if (cached.value !== undefined && (cached.expiresAt || 0) > Date.now()) {
       return cached.value;
     }
@@ -188,7 +191,7 @@ export const readStudentCurriculumTree = (config: ConfigLike) =>
 
 const readEffectiveStudentLessons = (
   config: ConfigLike,
-  view: "full" | "catalog" | "progress" = "full",
+  view: "full" | "catalog" | "progress" | "core-point-ids" = "full",
 ) =>
   readCached(
     effectiveLessonsCache,
@@ -212,13 +215,20 @@ const readEffectiveStudentLessons = (
             year: string;
             semester: string;
             view: "full" | "catalog" | "progress";
+            corePointIdsOnly?: true;
           },
           {
-            scopedLessons: Partial<LessonData>[];
-            legacyLessons: Partial<LessonData>[];
+            scopedLessons: CatalogLesson[];
+            legacyLessons: CatalogLesson[];
           }
         >("getStudentVisibleLessons");
-        return (await read({ ...getYearSemester(config), view })).data;
+        return (
+          await read({
+            ...getYearSemester(config),
+            view: view === "core-point-ids" ? "progress" : view,
+            ...(view === "core-point-ids" ? { corePointIdsOnly: true } : {}),
+          })
+        ).data;
       })();
       const scopedLatestLessons = getLatestLessonsByUnitId(data.scopedLessons);
       const scopedUnitIds = getLessonUnitIds(scopedLatestLessons);
@@ -237,6 +247,7 @@ const readEffectiveStudentLessons = (
         visibleUnitIds: getLessonUnitIds(visibleLessons),
       };
     },
+    view === "core-point-ids" ? `${getScopeKey(config)}:progress` : undefined,
   );
 
 export const readStudentVisibleLessons = (config: ConfigLike) =>
@@ -244,8 +255,11 @@ export const readStudentVisibleLessons = (config: ConfigLike) =>
     ({ visibleLessons }) => visibleLessons,
   );
 
-export const readStudentLessonProgressCatalog = (config: ConfigLike) =>
-  readEffectiveStudentLessons(config, "progress").then(
+export const readStudentLessonProgressCatalog = (
+  config: ConfigLike,
+  view: "progress" | "core-point-ids" = "progress",
+) =>
+  readEffectiveStudentLessons(config, view).then(
     ({ visibleLessons }) => visibleLessons,
   );
 

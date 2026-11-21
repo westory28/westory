@@ -176,23 +176,31 @@ export default function WrittenExamAnalysis({
         const cached = source
           ? readWrittenExamAnalysisCache<LoadedExam>(current, cacheKey)
           : null;
-        if (
+        const previous =
           cached?.identity === current &&
           cached.metadata?.id === target &&
           cached.classId === room &&
           cached.loadKind === kind &&
           Array.isArray(cached.students) &&
           Array.isArray(cached.scoreRows)
+            ? cached
+            : null;
+        if (
+          previous &&
+          (kind === "essay" || previous.mock || !previous.students.length)
         ) {
-          setLoaded(cached);
+          setLoaded(previous);
           return;
         }
-        const result = await loadWrittenExamScoreAnalysis(config, target, {
-          ...(room ? { classId: room } : {}),
-          analysisKind: kind,
-        });
+        const result =
+          previous ??
+          (await loadWrittenExamScoreAnalysis(config, target, {
+            ...(room ? { classId: room } : {}),
+            analysisKind: kind,
+          }));
         if (run !== request.current || identityRef.current !== current) return;
         let mock: QuizClassAchievement | null = null;
+        let reuseScoresOnRetry = Boolean(result.metadata.examDate);
         if (kind === "objective" && result.students.length > 0) {
           try {
             if (!result.metadata.examDate) throw new Error("시험일 미등록");
@@ -210,8 +218,21 @@ export default function WrittenExamAnalysis({
             );
             if (mock.semesterId !== semesterId || mock.complete === false)
               throw new Error("모의고사 분석 범위를 확인하지 못했습니다.");
-          } catch {
+          } catch (failure) {
             mock = null;
+            const code = String((failure as { code?: string })?.code || "");
+            if (
+              code.endsWith("permission-denied") ||
+              code.endsWith("unauthenticated")
+            ) {
+              reuseScoresOnRetry = false;
+              if (
+                previous &&
+                run === request.current &&
+                identityRef.current === current
+              )
+                invalidateWrittenExamAnalysisCache(target);
+            }
             if (run === request.current && identityRef.current === current)
               setMockError(
                 result.metadata.examDate
@@ -229,8 +250,16 @@ export default function WrittenExamAnalysis({
           identity: current,
         };
         setLoaded(snapshot);
-        // A failed mock lookup is retryable, not a successful cached estimate.
-        if (source && (kind === "essay" || mock || !result.students.length))
+        // Reuse successfully loaded exam scores even when the separate mock
+        // service fails. A subsequent analysis retries that service.
+        if (
+          source &&
+          (!previous || mock) &&
+          (kind === "essay" ||
+            mock ||
+            !result.students.length ||
+            reuseScoresOnRetry)
+        )
           writeWrittenExamAnalysisCache(
             current,
             target,
@@ -239,6 +268,7 @@ export default function WrittenExamAnalysis({
               ? { ...snapshot, scoreRows: [], scoreItems: [] }
               : snapshot,
             cacheRevision,
+            Boolean(previous),
           );
       } catch (failure) {
         if (run === request.current && identityRef.current === current)

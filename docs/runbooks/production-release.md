@@ -1,5 +1,11 @@
 # 운영 배포 절차
 
+## 유휴 함수 비용과 조회 범위 (2026-11-21)
+
+운영 미국 리전의 `commandYutRoomFast`, `executeWisCommandFast`, `getWisRankingPreview`는 최소 인스턴스 0개다. 한동안 사용하지 않은 뒤 첫 요청이 느려질 수 있다. 이전 운영 ZIP을 보존해 배포할 때에도 이 세 함수의 최소 인스턴스 수를 확인한다. 변경 당시 `scripts/prepare-standby-cost-release.mjs`의 `prepare`, `preflight`, `verify` 순서로 최신 운영 원본, 대상 함수의 단일 설정 변경, 배포 후 전체 파일과 런타임을 대조했다.
+
+서울 `getQuizClassAnalysis`는 선택 학급과 계산에 필요한 버전만 확인한다. `getStudentVisibleLessons`의 핵심포인트 목록은 공개 범위를 검증한 뒤 단원과 표시 ID만 돌려준다. 기존 진도 요청과 구형 응답을 계속 처리한다. 새 프론트엔드는 동일 학기의 선택 반 점수, 점수 관리자의 접근 권한, 모의고사 재조회 실패·복구, 게임 목록 재진입과 유료 게임 복원을 검증하고 운영에 반영한다.
+
 ## 누적 위스 등급 연동 (2026-11-21)
 
 등급·이모지·아바타 해금은 화면의 현재 학기 canonical `earnedTotal`을 사용한다. 초기 지급을 포함하고 지출·주식 반환 원금은 누적을 늘리지 않으며, 누적에 이미 확정된 출금 수익은 같은 기준에 반영한다. 과거 `rankEarnedTotal` 원장 의미는 보존하고 재집계·계좌 보정은 하지 않는다. [원인과 검증 기록](../reviews/wis-rank-cumulative-20261121.md)을 따른다. `prepare-wis-rank-cumulative-release.mjs`의 운영 원본 준비본과 `verify-wis-rank-cumulative-release.mjs`를 검증하고 대상 12함수만 선택 배포한다. 전체 소스·자원·권한·이벤트 보존 확인 후 같은 main의 Vercel 배포를 승격하고 운영 왕실 배지를 확인한다. 새 공개 `earnedTotal`을 제공하는 서버를 프런트엔드보다 먼저 반영한다.
@@ -220,7 +226,7 @@ HTML 표시 경계·호환 의존성·브라우저 헤더를 보완하고 SVG가
 
 ## 위스 지갑과 전체 거래 내역 (2026-10-27)
 
-위스 지급·차감·조정·역분개·구매·취소·주문 검토는 `executeWisCommandFast`, 상태 확인은 `getWisCommandStatusFast`, 일반 지갑 조회는 `getWisEconomyStateFast`를 us-central1에서 호출한다. 기존 서울 함수와 같은 영수증·권한을 사용하며 클라이언트가 실패 시 새 요청 ID나 다른 리전으로 자동 재지급하지 않는다. 지급 함수만 256MiB 최소 인스턴스 1개(유휴 비용 발생), 최대 20개, concurrency 80이다.
+위스 지급·차감·조정·역분개·구매·취소·주문 검토는 `executeWisCommandFast`, 상태 확인은 `getWisCommandStatusFast`, 일반 지갑 조회는 `getWisEconomyStateFast`를 us-central1에서 호출한다. 기존 서울 함수와 같은 영수증·권한을 사용하며 클라이언트가 실패 시 새 요청 ID나 다른 리전으로 자동 재지급하지 않는다. 지급 함수는 256MiB, 최소 인스턴스 0개, 최대 20개, 동시 요청 80개로 운영한다(2026-11-21 변경).
 
 `semester_wis_ledger`의 accountId ASC / createdAt DESC / __name__ DESC COLLECTION 인덱스가 READY인지 먼저 확인한다. 학생·교사 전체 내역은 원장을 페이지 조회하며 최근 100건 캐시를 전체 원장으로 취급하지 않는다. 거래 조회는 읽기 전용 transaction이다. 지급은 실제 학기·경제 상태·계좌·주문·재고 revision을 확인하고, 다른 학생이 바꾼 학교 aggregate revision만으로 거부하지 않는다.
 
@@ -232,7 +238,7 @@ HTML 표시 경계·호환 의존성·브라우저 헤더를 보완하고 SVG가
 
 ## 윷놀이 온라인 명령 (2026-10-27)
 
-새 클라이언트는 `commandYutRoomFast`를 `us-central1`에서 호출한다. Firestore `nam5`와 가까운 곳에서 동일한 세션·학기·학적·공개 설정·방 권한·요청 영수증 검사를 수행한다. 최초 기동 지연을 줄이기 위해 이 함수만 256MiB 최소 인스턴스 1개(유휴 비용 발생), 최대 20개, 동시 요청 80개를 사용한다. 기존 서울 `commandYutRoom`은 열린 구 클라이언트의 호환 경로로 유지한다. 로그인 함수나 다른 게임의 리전은 변경하지 않는다.
+새 클라이언트는 `commandYutRoomFast`를 `us-central1`에서 호출한다. Firestore `nam5`와 가까운 곳에서 동일한 세션·학기·학적·공개 설정·방 권한·요청 영수증 검사를 수행한다. 이 함수는 256MiB, 최소 인스턴스 0개, 최대 20개, 동시 요청 80개를 사용한다(2026-11-21 변경). 기존 서울 `commandYutRoom`은 열린 구 클라이언트의 호환 경로로 유지한다. 로그인 함수나 다른 게임의 리전은 변경하지 않는다.
 
 대기방은 마지막 방장 활동(`hostActivityAtMs`, 구 문서는 `createdAtMs`)으로부터 10분 동안 활동이 없으면 만료된다. 방장의 서버 승인 명령과 감정표현은 방·참가 코드의 만료를 함께 갱신한다. 다른 참가자 활동, 단순 조회, 같은 요청 영수증의 재실행은 시간을 연장하지 않는다. 강퇴는 대기 중인 방장이 준비하지 않은 다른 참가자에게만 실행할 수 있으며 실제 쓰기와 실시간 읽기 권한을 함께 제거한다.
 
@@ -407,8 +413,8 @@ firebase functions:list --project history-quiz-yongsin
 
 대시보드는 미국 `getWisRankingPreview`를 한 번 호출해 순위와 등급 정책을 함께 받는다.
 Firestore `nam5`와 가까운 `us-central1`에서 읽기 전용 트랜잭션을 사용한다.
-순위 조회 함수만 256MiB 대기 인스턴스 1개, 최대 3개, 동시 요청 80개로 제한한다.
-서버 최초 기동 지연을 줄이기 위한 설정으로 대기 인스턴스 비용이 발생한다.
+순위 조회 함수는 256MiB, 최소 인스턴스 0개, 최대 3개, 동시 요청 80개로 운영한다(2026-11-21 변경).
+오래 사용하지 않은 뒤 첫 요청은 인스턴스 기동을 기다릴 수 있다.
 주기적인 호출이나 캐시 갱신 요청으로 서버를 깨우지 않는다.
 기존 서울/미국 `getWisEconomyState`와 전체 명예의 전당 조회는 그대로 유지한다.
 

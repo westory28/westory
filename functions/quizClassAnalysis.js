@@ -342,9 +342,11 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
     for (let attempt = 0; attempt < 2; attempt++) {
       const before = await revision(scope, classId, kind);
       const ref = db.doc(`quiz_class_analysis_cache/${hash(key)}`);
-      const saved = dataOf(await ref.get());
-      if (!forceRefresh && saved.schemaVersion === SCHEMA && saved.version === before.version
-        && Number(saved.expiresAtMs) > now() && saved.payload) return saved.payload;
+      if (!forceRefresh) {
+        const saved = dataOf(await ref.get());
+        if (saved.schemaVersion === SCHEMA && saved.version === before.version
+          && Number(saved.expiresAtMs) > now() && saved.payload) return saved.payload;
+      }
       const payload = json(await build(before.version));
       if (Buffer.byteLength(JSON.stringify(payload)) > 850000) fail('resource-exhausted', '학급 분석 요약이 너무 큽니다. 평가 범위를 확인해 주세요.', 'QUIZ_ANALYSIS_CACHE_TOO_LARGE');
       const written = await db.runTransaction(async tx => {
@@ -795,8 +797,8 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
   const liveReader = createLiveReader({ db, json, resultFields: RESULT_FIELDS, scoreFields: SCORE_FIELDS,
     questionFields: QUESTION_FIELDS, adaptRecords, buildMockExamScoreRows,
     effectiveQuizResult: raw => withQuizPaperMaterialHashes(effectiveQuizResult(raw), materialSnapshots), prepareAchievementRows });
-  const verifyLiveState = async (initial, scope, classes) => {
-    const current = await liveReader.state(scope, classes);
+  const verifyLiveState = async (initial, scope) => {
+    const current = await liveReader.state(scope, []);
     if (initial.contextVersion !== current.contextVersion || initial.contentGeneration !== current.contentGeneration)
       fail('aborted', '조회 중 문항이나 명단이 변경되었습니다. 다시 조회해 주세요.', 'QUIZ_ANALYSIS_CHANGED');
   };
@@ -877,9 +879,16 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
     if (input.mode === 'achievement') {
       // Explicitly requested evidence is read afresh. This route never creates
       // a catalog/cache record and never changes grading or worksheet progress.
-      const classDocs = await readBounded(db.collection('semester_classes').where('semesterId', '==', input.semesterId)
-        .select('status', 'grade', 'classNumber'), 300, '학급', budget);
-      const selectedClasses = selectClasses(classDocs.filter(doc => doc.data().status === 'ACTIVE').map(doc => ({
+      // Legacy grade-class aliases resolve against the sorted semester roster.
+      // An explicit document ID identifies a single class without that scan.
+      const fields = ['semesterId', 'status', 'grade', 'classNumber'];
+      const classId = input.classIds?.[0];
+      const classDocs = !input.grade && classId && !/^\d*-\d*$/.test(classId)
+        ? await db.getAll(db.doc(`semester_classes/${classId}`), { fieldMask: fields })
+        : await readBounded(db.collection('semester_classes').where('semesterId', '==', input.semesterId)
+          .select(...fields), 300, '학급', budget);
+      const selectedClasses = selectClasses(classDocs.filter(doc => doc.exists && doc.data().semesterId === input.semesterId
+        && doc.data().status === 'ACTIVE').map(doc => ({
         id: doc.id, grade: text(doc.data().grade), classNumber: text(doc.data().classNumber),
         label: `${doc.data().grade}학년 ${doc.data().classNumber}반`,
       })).sort((a, b) => a.label.localeCompare(b.label, 'ko', { numeric: true })), input);
@@ -938,7 +947,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
         payload: gzipSync(serialized).toString('base64') } : result;
       if (compressed && Buffer.byteLength(JSON.stringify(response)) > MAX_BYTES)
         fail('resource-exhausted', '성취 분석 자료가 조회 한도를 초과했습니다. 일부 자료만으로 분석하지 않습니다.', 'QUIZ_ACHIEVEMENT_RESPONSE_LIMIT');
-      if (live) await verifyLiveState(live, input.semesterId, selectedClasses);
+      if (live) await verifyLiveState(live, input.semesterId);
       else if (await scopeRevision(input.semesterId, selectedClasses) !== version
         || (gradeRevision && (await revision(input.semesterId, '')).version !== gradeRevision.version))
         fail('aborted', '조회 중 평가 자료가 갱신되었습니다. 다시 조회해 주세요.', 'QUIZ_ANALYSIS_CHANGED');
@@ -1025,7 +1034,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
         ...(searchResult ? { keyword: input.keyword, search: searchResult.search, basis: KEYWORD_BASIS } : {}) };
       if (Buffer.byteLength(JSON.stringify(result)) > MAX_BYTES) fail('resource-exhausted', '학급 상세 자료가 너무 큽니다. 요약을 확인하거나 평가 기록 범위를 점검해 주세요.', 'QUIZ_ANALYSIS_DETAIL_TOO_LARGE');
       await verifySearch();
-      if (live) await verifyLiveState(live, input.semesterId, selectedClasses);
+      if (live) await verifyLiveState(live, input.semesterId);
       else if (await scopeRevision(input.semesterId, selectedClasses) !== version)
         fail('aborted', '조회 중 평가 자료가 갱신되었습니다. 다시 조회해 주세요.', 'QUIZ_ANALYSIS_CHANGED');
       return result;
@@ -1079,7 +1088,7 @@ function createQuizClassAnalysisService({ db, now = () => Date.now() }) {
     }));
     if (buildError) throw buildError;
     await verifySearch();
-    if (live) await verifyLiveState(live, input.semesterId, allClasses);
+    if (live) await verifyLiveState(live, input.semesterId);
     else if (aggregateGrade) {
       const states = await db.getAll(stateRef(db, input.semesterId), ...allClasses.map(c => classStateRef(db, input.semesterId, c.id)));
       if (allClasses.some((c, index) => summaries.get(c.id).version !== versionOf([states[0], states[index + 1]]))) {

@@ -600,7 +600,7 @@ test('Firestore field masks reach actual getAll/select options while default rea
   assert.equal(calls.filter(call => call.kind === 'select').length, 2);
 });
 
-test('transport allows only hall-of-fame or default preview and preserves the existing warm instance options', async () => {
+test('transport allows only hall-of-fame or default preview and scales to zero with bounded concurrency', async () => {
   let received, options;
   const exports = {};
   vm.runInNewContext(fs.readFileSync(require.resolve('../wisRankingPreview'), 'utf8'), { exports, require: name => {
@@ -615,7 +615,7 @@ test('transport allows only hall-of-fame or default preview and preserves the ex
     await exports.getWisRankingPreview(request); assert.equal(received.data.projection, expected);
     assert.equal(received.auth, request.auth); assert.equal(received.data._session, request.data._session); assert.equal(request.data.projection, input);
   }
-  assert.equal(options.minInstances, 1); assert.equal(options.maxInstances, 3); assert.equal(options.concurrency, 80);
+  assert.equal(options.minInstances, 0); assert.equal(options.maxInstances, 3); assert.equal(options.concurrency, 80);
   assert.equal(options.memory, '256MiB'); assert.equal(options.region, 'us-central1');
 });
 
@@ -629,5 +629,5 @@ test('transport allows only hall-of-fame or default preview and preserves the ex
       'student grade/class pages share fresh verified candidates and no directory query',
       'published grade/class union only, with fresh canonical replacement',
       'all grade/class limits, ties, zero fill, current profiles and policy preserved', 'student own grade/class and no account/ledger payload',
-      'stored EXPLICIT archive and old full endpoint unchanged', 'existing standby reused without polling or automatic query retries'] }));
+      'stored EXPLICIT archive and old full endpoint unchanged', 'scales to zero without polling or automatic query retries'] }));
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -23,10 +23,13 @@ const CORE_POINT_FIELDS = [
   'unitId', 'isVisibleToStudents', 'deletedAt', 'updatedAt', 'createdAt',
   'assignedClassIds', 'worksheetExamHighlights',
 ];
-const countCorePoints = (highlights) => Array.isArray(highlights)
-  ? highlights.filter((point) => point && typeof point === 'object'
-    && Number(point.widthRatio) > 0 && Number(point.heightRatio) > 0).length
-  : 0;
+const isCorePoint = (point) => point && typeof point === 'object'
+  && Number(point.widthRatio) > 0 && Number(point.heightRatio) > 0;
+const countCorePoints = (highlights) => Array.isArray(highlights) ? highlights.filter(isCorePoint).length : 0;
+const corePointIds = (highlights) => Array.isArray(highlights)
+  ? highlights.flatMap((point, index) => isCorePoint(point)
+    ? [String('id' in point ? point.id : '').trim() || `exam-highlight-${index + 1}`] : [])
+  : [];
 const timestampMs = (value) => {
   if (typeof value?.toMillis === 'function') return value.toMillis();
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
@@ -63,7 +66,8 @@ const createStudentLessonAccessHandler = ({ db, assertSession = assertScoreWorkf
     throw new HttpsError('invalid-argument', '학기 정보를 확인해 주세요.');
   }
   const corePointsOnly = request.data?.view === 'core-points';
-  const fields = corePointsOnly ? CORE_POINT_FIELDS : request.data?.view === 'catalog' ? CATALOG_FIELDS
+  const idsOnly = request.data?.view === 'progress' && request.data?.corePointIdsOnly === true;
+  const fields = corePointsOnly || idsOnly ? CORE_POINT_FIELDS : request.data?.view === 'catalog' ? CATALOG_FIELDS
     : request.data?.view === 'progress' ? PROGRESS_FIELDS : LESSON_FIELDS;
   const unitId = String(request.data?.unitId || '').trim();
   if (unitId.length > 200 || unitId.includes('/')) {
@@ -115,6 +119,10 @@ const createStudentLessonAccessHandler = ({ db, assertSession = assertScoreWorkf
     [scoped, legacy] = await Promise.all([readLessons(scopedPath), readLessons('lessons')]);
   }
   const result = selectVisibleLessons(scoped.docs.map((doc) => doc.data()), legacy.docs.map((doc) => doc.data()), classId);
+  if (idsOnly) {
+    return Object.fromEntries(Object.entries(result).map(([key, lessons]) => [key,
+      lessons.map((lesson) => ({ unitId: lesson.unitId, corePointIds: corePointIds(lesson.worksheetExamHighlights) }))]));
+  }
   if (corePointsOnly) {
     return Object.fromEntries(Object.entries(result).map(([key, lessons]) => [key,
       lessons.map((lesson) => ({ unitId: lesson.unitId, corePointCount: countCorePoints(lesson.worksheetExamHighlights) }))]));

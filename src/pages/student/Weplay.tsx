@@ -84,7 +84,8 @@ export default function Weplay() {
 }
 
 function NavalWeplay({ groupTitle }: { groupTitle: string }) {
-  const { config, currentUser, userData, menuConfig } = useAuth();
+  const { config, currentUser, userData, menuConfig, authGeneration } =
+    useAuth();
   const [params, setParams] = useSearchParams();
   const [introComplete, setIntroComplete] = useState(false);
   useEffect(() => {
@@ -116,10 +117,14 @@ function NavalWeplay({ groupTitle }: { groupTitle: string }) {
   } | null>(null);
   const uncertainStart = useRef(false);
   const generation = useRef(0);
-  const loadRequest = useRef<{ scope: string; token: number } | null>(null);
+  const loadRequest = useRef<{
+    scope: string;
+    token: number;
+    promise: Promise<WeplayLobby | undefined>;
+  } | null>(null);
   const startGeneration = useRef(0);
   const startingRef = useRef(false);
-  const scope = `${currentUser?.uid || ""}/${config?.year || ""}/${config?.semester || ""}`;
+  const scope = `${currentUser?.uid || ""}/${authGeneration}/${config?.year || ""}/${config?.semester || ""}`;
   const [loadedScope, setLoadedScope] = useState("");
   const guide = useWeplayGuide(
     currentUser?.uid,
@@ -136,45 +141,51 @@ function NavalWeplay({ groupTitle }: { groupTitle: string }) {
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
   const load = useCallback(
-    async (restore = true) => {
-      if (loadRequest.current?.scope === scope) return;
+    (restore = true) => {
+      // Catalogue publication and paid-session restoration need the same lobby.
+      if (loadRequest.current?.scope === scope)
+        return loadRequest.current.promise;
       const request = ++generation.current;
-      loadRequest.current = { scope, token: request };
       setLoading(true);
       setError("");
-      try {
-        const next = await withWeplayRequestTimeout(
-          getWeplayLobby(config, false),
-        );
-        if (request !== generation.current || scopeRef.current !== scope)
-          return;
-        setLobby(next);
-        setLoadedScope(scope);
-        if (restore && next.activeSession) {
-          setIntroComplete(true);
-          uncertainStart.current = false;
-          startPayload.current = null;
-          requestKey.current = "";
-          setSession(next.activeSession);
-          setMode(next.activeSession.mode);
-          setDifficulty(next.activeSession.difficulty);
-          setRankingDifficulty(next.activeSession.difficulty);
-        }
-      } catch (caught) {
-        if (request === generation.current && scopeRef.current === scope)
-          setError(
-            weplayErrorMessage(
-              caught,
-              "위플레이를 불러오지 못했습니다. 다시 시도해 주세요.",
-            ),
-          );
-      } finally {
-        if (loadRequest.current?.token === request) loadRequest.current = null;
-        if (request === generation.current && scopeRef.current === scope)
-          setLoading(false);
-      }
+      const promise = withWeplayRequestTimeout(getWeplayLobby(config, false))
+        .then((next) => {
+          if (request !== generation.current || scopeRef.current !== scope)
+            return;
+          setLobby(next);
+          setLoadedScope(scope);
+          if (restore && next.activeSession) {
+            setIntroComplete(true);
+            uncertainStart.current = false;
+            startPayload.current = null;
+            requestKey.current = "";
+            setSession(next.activeSession);
+            setMode(next.activeSession.mode);
+            setDifficulty(next.activeSession.difficulty);
+            setRankingDifficulty(next.activeSession.difficulty);
+          }
+          return next;
+        })
+        .catch((caught) => {
+          if (request === generation.current && scopeRef.current === scope)
+            setError(
+              weplayErrorMessage(
+                caught,
+                "위플레이를 불러오지 못했습니다. 다시 시도해 주세요.",
+              ),
+            );
+          return undefined;
+        })
+        .finally(() => {
+          if (loadRequest.current?.token === request)
+            loadRequest.current = null;
+          if (request === generation.current && scopeRef.current === scope)
+            setLoading(false);
+        });
+      loadRequest.current = { scope, token: request, promise };
+      return promise;
     },
-    [config?.year, config?.semester, currentUser?.uid],
+    [scope],
   );
   useEffect(() => {
     preloadWeplayAssets();
@@ -357,6 +368,7 @@ function NavalWeplay({ groupTitle }: { groupTitle: string }) {
           gameTitle={gameTitle}
           groupTitle={groupTitle}
           portal="student"
+          readNavalLobby={load}
         />
       </main>
     );
