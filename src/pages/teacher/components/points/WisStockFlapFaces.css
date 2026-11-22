@@ -1,0 +1,45 @@
+.wis-flap {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  perspective: 650px;
+  overflow: clip;
+}
+.wis-flap > div {
+  position: absolute;
+  inset-inline: 0;
+  height: 50%;
+  overflow: hidden;
+  backface-visibility: hidden;
+  background: var(--wis-flap-surface, #1b2732);
+}
+.wis-flap__sheet {
+  position: absolute;
+  inset-inline: 0;
+  height: 200%;
+}
+.wis-flap__fold, .wis-flap__fold > .wis-flap__sheet { top: 0; }
+.wis-flap__lower, .wis-flap__unfold,
+.wis-flap__lower > .wis-flap__sheet, .wis-flap__unfold > .wis-flap__sheet { bottom: 0; }
+.wis-flap__fold {
+  transform-origin: bottom;
+  animation: wis-board-fold 210ms ease-in var(--wis-flap-delay) both;
+}
+.wis-flap__unfold {
+  transform-origin: top;
+  animation: wis-board-unfold 210ms ease-out calc(var(--wis-flap-delay) + 210ms) both;
+}
+@keyframes wis-board-fold {
+  from { transform: rotateX(0); }
+  to { transform: rotateX(-90deg); filter: brightness(.58); }
+}
+@keyframes wis-board-unfold {
+  from { transform: rotateX(90deg); filter: brightness(.58); }
+  to { transform: rotateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wis-flap { visibility: hidden; }
+  .wis-flap__fold { animation: none; }
+  .wis-flap__unfold { animation-duration: 0s; animation-delay: 0s; }
+}

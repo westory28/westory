@@ -3,53 +3,27 @@ import { createPortal } from "react-dom";
 import type { ExchangeMarket } from "../../../../lib/wisStockExchangeDisplayClient";
 import type { WisStockManagement } from "../../../../lib/wisStocksClient";
 import { quoteNumber, signedQuote, wisStockQuote } from "./wisStockQuote";
-import WisStockQuotePrice from "./WisStockQuotePrice";
+import { Movement, direction } from "./WisStockMovement";
+import WisStockQuotePages from "./WisStockQuotePages";
+import WisStockTradeFeed, { exchangeDateTime } from "./WisStockTradeFeed";
+import WisStockFlapFaces from "./WisStockFlapFaces";
+import { useWisStockDisplayRows } from "./useWisStockDisplayRows";
 import { useWisStockExchangeDisplay } from "./useWisStockExchangeDisplay";
 import "./WisStockExchangeDisplay.css";
 
-const clock = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "Asia/Seoul",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hourCycle: "h23",
-});
-const dated = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "Asia/Seoul",
-  month: "short",
-  day: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-  hourCycle: "h23",
-});
-const direction = (change: number) =>
-  change > 0 ? "up" : change < 0 ? "down" : "flat";
-const kstDay = (atMs: number) =>
-  Math.floor((atMs + 9 * 3_600_000) / 86_400_000);
-
-function Movement({
-  price,
-  previous,
-  digits = 0,
-}: {
-  price: number;
-  previous: number | null;
-  digits?: number;
-}) {
-  if (previous === null) return <span className="wis-exchange__muted">—</span>;
-  const change = price - previous;
-  const icon = change > 0 ? "▲" : change < 0 ? "▼" : "―";
+function surgeList(stocks: { id: string; name: string; percent: number }[]) {
   return (
-    <span className={"wis-exchange__movement is-" + direction(change)}>
-      <span>
-        <span aria-hidden="true">{icon} </span>
-        <span className="sr-only">
-          {change > 0 ? "상승 " : change < 0 ? "하락 " : "보합 "}
-        </span>
-        {quoteNumber(Math.abs(change), digits)}
-      </span>
-      <small>({signedQuote((change / previous) * 100, 2)}%)</small>
-    </span>
+    <ul aria-label="실시간 급등 종목">
+      {stocks.map((stock) => (
+        <li key={stock.id}>
+          <b>{stock.name}</b>
+          <strong>
+            <span aria-hidden="true">▲ </span>
+            {signedQuote(stock.percent, 2)}%
+          </strong>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -88,7 +62,18 @@ export default function WisStockExchangeDisplay({
   const close = useRef(onClose);
   close.current = onClose;
   const [retry, setRetry] = useState(0);
-  const { state, flips, surges } = useWisStockExchangeDisplay(
+  const [mobilePanel, setMobilePanel] = useState<"quotes" | "trades">("quotes");
+  const [narrow, setNarrow] = useState(
+    () => window.matchMedia("(max-width: 639px)").matches,
+  );
+  useLayoutEffect(() => {
+    const query = window.matchMedia("(max-width: 639px)");
+    const update = () => setNarrow(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  const { state, flips, bulletin, tradeSession } = useWisStockExchangeDisplay(
     year,
     semester,
     classKey,
@@ -118,6 +103,7 @@ export default function WisStockExchangeDisplay({
       if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
     };
   }, []);
+  const rows = useWisStockDisplayRows(panel);
   const initial = useMemo(() => initialQuotes(initialMarket), [initialMarket]);
   const market = state.status === "ready" ? (state.market ?? initial) : null;
   const index = market?.index;
@@ -137,8 +123,6 @@ export default function WisStockExchangeDisplay({
           : state.status === "paused"
             ? "연결 일시 중지"
             : "연결 중";
-  const [grade, classNumber] = classKey.split(":");
-  const today = kstDay(Date.now());
   return createPortal(
     <dialog
       ref={dialog}
@@ -168,7 +152,8 @@ export default function WisStockExchangeDisplay({
             autoFocus
             aria-label="전광판 닫기"
           >
-            <span aria-hidden="true">×</span> 닫기
+            <span aria-hidden="true">×</span>{" "}
+            <span className="wis-exchange__close-text">닫기</span>
           </button>
         </div>
         {state.status === "error" && (
@@ -182,54 +167,37 @@ export default function WisStockExchangeDisplay({
             </button>
           </div>
         )}
-        <div className="wis-exchange__columns">
-          <section
-            className="wis-exchange__quotes"
-            aria-labelledby="wis-exchange-quotes"
+        <div className="wis-exchange__columns" data-panel={mobilePanel}>
+          <div
+            className="wis-exchange__mobile-switch"
+            role="group"
+            aria-label="표시할 목록"
           >
-            <div className="wis-exchange__heading">
-              <h3 id="wis-exchange-quotes">종목 시세</h3>
-              <span>
-                현재가 · 전일 대비 <b>단위 위스</b>
-              </span>
-            </div>
-            <div
-              className="wis-exchange__scroll"
-              tabIndex={0}
-              role="region"
-              aria-label="종목 시세 목록"
+            <button
+              type="button"
+              aria-pressed={mobilePanel === "quotes"}
+              onClick={() => setMobilePanel("quotes")}
             >
-              <ul className="wis-exchange__quote-grid">
-                {market?.stocks.map((stock) => (
-                  <li key={stock.id}>
-                    <strong className="wis-exchange__quote-name">
-                      {stock.name}
-                    </strong>
-                    <div className="wis-exchange__quote-values">
-                      <span className="wis-exchange__quote-price">
-                        <WisStockQuotePrice
-                          price={stock.price}
-                          transition={flips.get(stock.id)}
-                        />
-                      </span>
-                      <span className="sr-only">전일 대비 </span>
-                      <Movement
-                        price={stock.price}
-                        previous={stock.previousClose}
-                      />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              {market && !market.stocks.length && (
-                <p className="wis-exchange__empty">상장된 종목이 없습니다.</p>
-              )}
-            </div>
-          </section>
-          <section
-            className={
-              "wis-exchange__index" + (surges.length ? " has-surge" : "")
+              시세
+            </button>
+            <button
+              type="button"
+              aria-pressed={mobilePanel === "trades"}
+              onClick={() => setMobilePanel("trades")}
+            >
+              체결
+            </button>
+          </div>
+          <WisStockQuotePages
+            stocks={market?.stocks}
+            flips={flips}
+            rows={rows.quotes}
+            active={
+              state.status === "ready" && (!narrow || mobilePanel === "quotes")
             }
+          />
+          <section
+            className={"wis-exchange__index" + (bulletin ? " has-surge" : "")}
             aria-label="위스피 종합지수"
           >
             <div className="wis-exchange__index-main">
@@ -256,7 +224,7 @@ export default function WisStockExchangeDisplay({
                   <span>{market.halted ? "거래 정지" : "거래 중"}</span>
                   {market.updatedAtMs > 0 && (
                     <time dateTime={new Date(market.updatedAtMs).toISOString()}>
-                      {dated.format(market.updatedAtMs)}{" "}
+                      {exchangeDateTime.format(market.updatedAtMs)}{" "}
                       {state.status === "ready" && !state.market
                         ? "조회 시세"
                         : "시세"}
@@ -275,23 +243,22 @@ export default function WisStockExchangeDisplay({
               role="status"
               aria-live="polite"
             >
-              {surges.length > 0 && (
+              {bulletin && (
                 <div className="wis-exchange__surge">
                   <div className="wis-exchange__surge-heading">
                     <strong>급등 속보</strong>
                     <span>직전 시세 대비</span>
                   </div>
-                  <ul aria-label="실시간 급등 종목" tabIndex={0}>
-                    {surges.map((stock) => (
-                      <li key={stock.id}>
-                        <b>{stock.name}</b>
-                        <strong>
-                          <span aria-hidden="true">▲ </span>
-                          {signedQuote(stock.percent, 2)}%
-                        </strong>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="wis-exchange__surge-page">
+                    {surgeList(bulletin.stocks)}
+                    {bulletin.before.length > 0 && (
+                      <WisStockFlapFaces
+                        key={bulletin.id}
+                        before={surgeList(bulletin.before)}
+                        after={surgeList(bulletin.stocks)}
+                      />
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -323,62 +290,12 @@ export default function WisStockExchangeDisplay({
               </div>
             )}
           </section>
-          <section
-            className="wis-exchange__trades"
-            aria-labelledby="wis-exchange-trades"
-          >
-            <div className="wis-exchange__heading">
-              <h3 id="wis-exchange-trades">실시간 체결</h3>
-              <span>
-                {classKey === "all"
-                  ? "전체 학급"
-                  : grade + "학년 " + classNumber + "반"}{" "}
-                · 최근 20건
-              </span>
-            </div>
-            <div
-              className="wis-exchange__scroll"
-              tabIndex={0}
-              role="region"
-              aria-label="최근 학생 체결 목록"
-            >
-              {trades && !trades.length && (
-                <p className="wis-exchange__empty">표시할 체결이 없습니다.</p>
-              )}
-              <ol>
-                {trades?.map((trade) => (
-                  <li key={trade.id}>
-                    <div className="wis-exchange__trade-head">
-                      <b className={trade.side === "BUY" ? "is-up" : "is-down"}>
-                        {trade.side === "BUY" ? "매수" : "매도"}
-                      </b>
-                      <strong>{trade.displayName}</strong>
-                      <time
-                        dateTime={new Date(trade.atMs).toISOString()}
-                        title={dated.format(trade.atMs)}
-                      >
-                        {kstDay(trade.atMs) === today
-                          ? clock.format(trade.atMs)
-                          : dated.format(trade.atMs)}
-                      </time>
-                    </div>
-                    <div className="wis-exchange__trade-stock">
-                      <span>{trade.stockName}</span>
-                      <span className="wis-exchange__trade-amount">
-                        <span>
-                          <strong>{quoteNumber(trade.quantity)}</strong>주
-                        </span>{" "}
-                        <span>
-                          주당 <strong>{quoteNumber(trade.unitPrice)}</strong>
-                          위스
-                        </span>
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          </section>
+          <WisStockTradeFeed
+            trades={trades}
+            rows={rows.trades}
+            classKey={classKey}
+            session={tradeSession}
+          />
         </div>
       </div>
     </dialog>,
