@@ -1,0 +1,91 @@
+.wis-quote-price {
+  --quote-upper: #1d2933;
+  --quote-lower: #16212b;
+  --quote-half-time: 240ms;
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: .12em;
+  background: linear-gradient(to bottom, var(--quote-upper) 50%, var(--quote-lower) 50%);
+  color: #b5f6d7;
+  vertical-align: middle;
+}
+
+.wis-quote-price::after {
+  content: "";
+  position: absolute;
+  inset: 50% 0 auto;
+  border-top: 1px solid rgb(5 12 19 / 60%);
+  pointer-events: none;
+}
+
+.wis-quote-price__face,
+.wis-quote-price__transition {
+  position: absolute;
+  inset: 0;
+}
+
+.wis-quote-price svg {
+  position: absolute;
+  left: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.wis-quote-price__transition {
+  perspective: 8em;
+}
+
+.wis-quote-price__transition > span {
+  position: absolute;
+  inset-inline: 0;
+  height: 50%;
+  overflow: hidden;
+  backface-visibility: hidden;
+}
+
+.wis-quote-price__transition svg {
+  height: 200%;
+}
+
+.wis-quote-price__old-lower,
+.wis-quote-price__unfold {
+  bottom: 0;
+  background: var(--quote-lower);
+}
+
+.wis-quote-price__old-lower svg,
+.wis-quote-price__unfold svg {
+  bottom: 0;
+}
+
+.wis-quote-price__fold {
+  top: 0;
+  background: var(--quote-upper);
+  transform-origin: center bottom;
+  animation: wis-quote-fold var(--quote-half-time) ease-in var(--quote-delay) both;
+}
+
+.wis-quote-price__unfold {
+  transform-origin: center top;
+  animation: wis-quote-unfold var(--quote-half-time) ease-out calc(var(--quote-delay) + var(--quote-half-time)) both;
+}
+
+@keyframes wis-quote-fold {
+  from { transform: rotateX(0); }
+  to { transform: rotateX(-90deg); filter: brightness(.7); }
+}
+
+@keyframes wis-quote-unfold {
+  from { transform: rotateX(90deg); filter: brightness(.7); }
+  to { transform: rotateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wis-quote-price__transition { visibility: hidden; }
+  .wis-quote-price__fold { animation: none; }
+  /* Settle the hidden flap immediately, including when the preference changes mid-flip. */
+  .wis-quote-price__unfold { animation-duration: 0s; animation-delay: 0s; }
+}

@@ -1,12 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  watchWisStockExchange,
-  type ExchangeMarket,
-  type ExchangeState,
-} from "../../../../lib/wisStockExchangeDisplayClient";
+import type { ExchangeMarket } from "../../../../lib/wisStockExchangeDisplayClient";
 import type { WisStockManagement } from "../../../../lib/wisStocksClient";
 import { quoteNumber, signedQuote, wisStockQuote } from "./wisStockQuote";
+import WisStockQuotePrice from "./WisStockQuotePrice";
+import { useWisStockExchangeDisplay } from "./useWisStockExchangeDisplay";
 import "./WisStockExchangeDisplay.css";
 
 const clock = new Intl.DateTimeFormat("ko-KR", {
@@ -90,7 +88,12 @@ export default function WisStockExchangeDisplay({
   const close = useRef(onClose);
   close.current = onClose;
   const [retry, setRetry] = useState(0);
-  const [state, setState] = useState<ExchangeState>({ status: "loading" });
+  const { state, flips, surges } = useWisStockExchangeDisplay(
+    year,
+    semester,
+    classKey,
+    retry,
+  );
   useLayoutEffect(() => {
     const modal = dialog.current!;
     const frame = panel.current!;
@@ -115,10 +118,6 @@ export default function WisStockExchangeDisplay({
       if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
     };
   }, []);
-  useEffect(
-    () => watchWisStockExchange(year, semester, classKey, setState),
-    [year, semester, classKey, retry],
-  );
   const initial = useMemo(() => initialQuotes(initialMarket), [initialMarket]);
   const market = state.status === "ready" ? (state.market ?? initial) : null;
   const index = market?.index;
@@ -190,7 +189,9 @@ export default function WisStockExchangeDisplay({
           >
             <div className="wis-exchange__heading">
               <h3 id="wis-exchange-quotes">종목 시세</h3>
-              <span>단위 위스</span>
+              <span>
+                현재가 · 전일 대비 <b>단위 위스</b>
+              </span>
             </div>
             <div
               className="wis-exchange__scroll"
@@ -198,35 +199,39 @@ export default function WisStockExchangeDisplay({
               role="region"
               aria-label="종목 시세 목록"
             >
-              <table>
-                <thead>
-                  <tr>
-                    <th scope="col">종목명</th>
-                    <th scope="col">현재가</th>
-                    <th scope="col">전일 대비</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {market?.stocks.map((stock) => (
-                    <tr key={stock.id}>
-                      <th scope="row">{stock.name}</th>
-                      <td>{quoteNumber(stock.price)}</td>
-                      <td>
-                        <Movement
+              <ul className="wis-exchange__quote-grid">
+                {market?.stocks.map((stock) => (
+                  <li key={stock.id}>
+                    <strong className="wis-exchange__quote-name">
+                      {stock.name}
+                    </strong>
+                    <div className="wis-exchange__quote-values">
+                      <span className="wis-exchange__quote-price">
+                        <WisStockQuotePrice
                           price={stock.price}
-                          previous={stock.previousClose}
+                          transition={flips.get(stock.id)}
                         />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </span>
+                      <span className="sr-only">전일 대비 </span>
+                      <Movement
+                        price={stock.price}
+                        previous={stock.previousClose}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
               {market && !market.stocks.length && (
                 <p className="wis-exchange__empty">상장된 종목이 없습니다.</p>
               )}
             </div>
           </section>
-          <section className="wis-exchange__index" aria-label="위스피 종합지수">
+          <section
+            className={
+              "wis-exchange__index" + (surges.length ? " has-surge" : "")
+            }
+            aria-label="위스피 종합지수"
+          >
             <div className="wis-exchange__index-main">
               <h3>
                 <span lang="en">WsPI</span>
@@ -263,6 +268,31 @@ export default function WisStockExchangeDisplay({
                 <p className="wis-exchange__empty">
                   아직 지수 기록이 없습니다.
                 </p>
+              )}
+            </div>
+            <div
+              className="wis-exchange__bulletin"
+              role="status"
+              aria-live="polite"
+            >
+              {surges.length > 0 && (
+                <div className="wis-exchange__surge">
+                  <div className="wis-exchange__surge-heading">
+                    <strong>급등 속보</strong>
+                    <span>직전 시세 대비</span>
+                  </div>
+                  <ul aria-label="실시간 급등 종목" tabIndex={0}>
+                    {surges.map((stock) => (
+                      <li key={stock.id}>
+                        <b>{stock.name}</b>
+                        <strong>
+                          <span aria-hidden="true">▲ </span>
+                          {signedQuote(stock.percent, 2)}%
+                        </strong>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
             {market && (
@@ -334,9 +364,14 @@ export default function WisStockExchangeDisplay({
                     </div>
                     <div className="wis-exchange__trade-stock">
                       <span>{trade.stockName}</span>
-                      <span>
-                        {quoteNumber(trade.quantity)}주 · 주당{" "}
-                        {quoteNumber(trade.unitPrice)}위스
+                      <span className="wis-exchange__trade-amount">
+                        <span>
+                          <strong>{quoteNumber(trade.quantity)}</strong>주
+                        </span>{" "}
+                        <span>
+                          주당 <strong>{quoteNumber(trade.unitPrice)}</strong>
+                          위스
+                        </span>
                       </span>
                     </div>
                   </li>

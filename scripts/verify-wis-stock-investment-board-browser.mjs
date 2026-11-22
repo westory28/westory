@@ -27,6 +27,9 @@ const audited = [
   "src/pages/teacher/components/points/WisStockInvestmentBoard.css",
   "src/pages/teacher/components/points/WisStockExchangeDisplay.tsx",
   "src/pages/teacher/components/points/WisStockExchangeDisplay.css",
+  "src/pages/teacher/components/points/useWisStockExchangeDisplay.ts",
+  "src/pages/teacher/components/points/WisStockQuotePrice.tsx",
+  "src/pages/teacher/components/points/WisStockQuotePrice.css",
   "src/pages/teacher/components/points/wisStockInvestmentReturns.ts",
   "functions/wisStockInvestmentBoard.mjs",
   "src/pages/teacher/components/points/WisStockReturnHistoryChart.tsx",
@@ -68,10 +71,17 @@ qa.active=()=>listeners.filter(item=>item.active).length;
 qa.pricePush=raw=>{qa.last=raw;listeners.filter(item=>item.active).forEach(item=>item.onData(parse(raw,item.scope)));};
 export function watchWisStockExchange(year,semester,group,send){
  qa.displayStarts=(qa.displayStarts||0)+1;qa.displayActive=true;qa.displayGroup=group;
- const stocks=Array.from({length:23},(_,i)=>({id:'S'+i,name:i===3?'한글 이름이 긴 주식회사': ['조선상회','금강철도','한양은행'][i%3],price:300+i*5,previousClose:300+i*5+[10,-10,0][i%3]}));
- const result={status:'ready',market:{updatedAtMs:1794787200000,halted:false,index:{value:1052.16,previousClose:1034.5},stocks},trades:Array.from({length:20},(_,i)=>({id:'F'+i,displayName:i===0?'검증학생':'합성학생'+i,atMs:1794787200000-i*10000,stockName:'한양은행',side:i%2?'SELL':'BUY',quantity:i+2,unitPrice:340-i}))};
- qa.displayPush=()=>send({...result,market:{...result.market,index:{value:987.23,previousClose:1000}}});
- send(result);return()=>{qa.displayActive=false;qa.displayStops=(qa.displayStops||0)+1};
+ const names=['조선상회','금강철도','한양은행','한글 이름이 긴 주식회사'];
+ const stocks=Array.from({length:23},(_,i)=>({id:'S'+i,name:names[i]||'합성종목'+i,price:i===22?9876543:300+i*5,previousClose:i===0?200:i===22?1234567:300+i*5+[10,-10,0][i%3]}));
+ let market={updatedAtMs:Date.now(),halted:false,index:{value:1052.16,previousClose:1034.5},stocks};
+ let trades=Array.from({length:20},(_,i)=>({id:'F'+i,displayName:i===0?'검증학생':'합성학생'+i,atMs:1794787200000-i*10000,stockName:'한양은행',side:i%2?'SELL':'BUY',quantity:i+2,unitPrice:340-i}));
+ const emit=()=>{if(qa.displayActive)send({status:'ready',market,trades});};
+ qa.displayTick=({prices={},index=market.index,added=[],halted=market.halted}={})=>{
+   market={...market,updatedAtMs:market.updatedAtMs+1000,index,halted,stocks:[...market.stocks.map(stock=>({...stock,price:prices[stock.id]??stock.price})),...added]};emit();
+ };
+ qa.displayTrade=()=>{trades=[{...trades[0],id:'new'+trades[0].id,displayName:'새체결학생'},...trades.slice(0,19)];emit();};
+ qa.displayStatus=status=>{if(qa.displayActive)send({status});};
+ emit();return()=>{qa.displayActive=false;qa.displayStops=(qa.displayStops||0)+1};
 }
 export function watchWisStockInvestmentBoard(input,onData,onConnection,onError){
  const scope=normalize(input),listener={scope,onData,onConnection,onError,active:true,stop(){if(listener.active){listener.active=false;qa.stops++;}}};
@@ -242,6 +252,89 @@ const period = (page, name) =>
   page
     .locator(".wis-investment-board__chart-controls")
     .getByRole("button", { name, exact: true });
+
+async function checkLiveExchange(page, display, surge) {
+  const quotes = display.locator(".wis-exchange__quote-grid > li");
+  const firstTrade = display.locator(".wis-exchange__trades li").first();
+  await page.evaluate(() => window.boardQa.displayTrade());
+  await firstTrade.getByText("새체결학생").waitFor();
+  assert.equal(await surge.isVisible(), false);
+  assert.equal(await quotes.locator(".wis-quote-price__fold").count(), 0, "trade does not turn quote flaps");
+
+  // Check the full eight-second lifetime without waiting on real time for the timeout.
+  await page.clock.install();
+  const samples = await page.evaluate(async () => {
+    window.boardQa.displayTick({ prices: { S0: 315, S1: 320, S2: 341, S3: 290, S4: 321 } });
+    await new Promise(requestAnimationFrame);
+    return Array.from(document.querySelectorAll(".wis-exchange__quote-grid > li")).slice(0, 6).map(cell => {
+      const top = cell.querySelector(".wis-quote-price__fold");
+      const bottom = cell.querySelector(".wis-quote-price__unfold");
+      if (!top || !bottom) return null;
+      const times = node => {
+        const css = getComputedStyle(node);
+        return {
+          delay: parseFloat(css.animationDelay), duration: parseFloat(css.animationDuration),
+          hasRotation: node.getAnimations().some(animation =>
+            animation.effect.getKeyframes().some(frame => String(frame.transform).includes("rotateX")),
+          ),
+        };
+      };
+      const glyphs = node => Array.from(node.querySelectorAll("path"), path => path.getAttribute("d")).join("|");
+      const oldTop = glyphs(top), newBottom = glyphs(bottom);
+      if (oldTop === newBottom || oldTop !== glyphs(cell.querySelector(".wis-quote-price__old-lower")) ||
+          newBottom !== glyphs(cell.querySelector(".wis-quote-price__face"))) {
+        throw new Error("The old and new segment faces must match their two respective halves");
+      }
+      return { top: times(top), bottom: times(bottom) };
+    });
+  });
+  assert(samples.slice(0, 5).every(sample => sample && sample.top.duration > 0 &&
+    sample.top.hasRotation && sample.bottom.hasRotation && sample.bottom.delay > sample.top.delay), JSON.stringify(samples));
+  assert.equal(samples[5], null, "an unchanged quote has no flip");
+  const delays = samples.slice(0, 5).map(sample => sample.top.delay);
+  assert.equal(delays[0], delays[1]);
+  assert.equal(delays[2], delays[3]);
+  assert(delays[0] < delays[2] && delays[2] < delays[4], "top-to-bottom row delays " + delays);
+  await surge.waitFor();
+  const headline = await surge.innerText();
+  const surgePercentSize = await surge.locator("li > strong").first().evaluate(node => parseFloat(getComputedStyle(node).fontSize));
+  assert(surgePercentSize >= 38, "TV surge percentage font size " + surgePercentSize);
+  for (const term of ["조선상회", "한양은행", "+5.00%", "+10.00%"]) assert(headline.includes(term), headline);
+  for (const below of ["금강철도", "한글 이름이 긴 주식회사", "합성종목4"]) assert(!headline.includes(below), headline);
+  await page.screenshot({ path: path.join(output, "board-dialog-surge-1920.png") });
+  await page.clock.fastForward(5_000);
+  await page.evaluate(() => window.boardQa.displayTrade());
+  await page.clock.fastForward(2_000);
+  assert(await surge.isVisible(), "alert still visible before eight seconds");
+  await page.clock.fastForward(1_100);
+  await surge.waitFor({ state: "hidden", timeout: 1_000 });
+  const first = quotes.first().locator(".wis-quote-price");
+  assert.match(await first.textContent(), /315/);
+
+  await page.evaluate(() => window.boardQa.displayTick({
+    added: [{ id: "new", name: "신규상장", price: 700, previousClose: 100 }],
+  }));
+  await quotes.getByText("신규상장").waitFor();
+  assert.equal(await surge.isVisible(), false, "new listings start a fresh baseline");
+  await page.evaluate(() => window.boardQa.displayStatus("paused"));
+  await quotes.first().waitFor({ state: "hidden" });
+  await page.evaluate(() => window.boardQa.displayTick({ prices: { S0: 500 } }));
+  await first.waitFor();
+  assert.match(await first.textContent(), /500/);
+  assert.equal(await surge.isVisible(), false, "price jump across a subscription pause is not a live surge");
+  assert.equal(await quotes.locator(".wis-quote-price__fold").count(), 0);
+  await page.evaluate(() => {
+    window.boardQa.displayTick({ prices: { S0: 501 } });
+    window.boardQa.displayTick({ prices: { S0: 502 } });
+  });
+  await first.getByText("현재가 502위스").waitFor({ state: "attached" });
+  await first.locator(".wis-quote-price__transition").waitFor({ state: "detached" });
+  assert.equal(await surge.isVisible(), false, "quick successive updates settle on the final price");
+  await page.evaluate(() => window.boardQa.displayTick({ halted: true, prices: { S0: 700 } }));
+  await display.getByText("거래 정지", { exact: true }).waitFor();
+  assert.equal(await surge.isVisible(), false);
+}
+
 try {
   for (const width of [320, 390, 768, 1280, 1440]) {
     const page = await open(width);
@@ -926,8 +1019,10 @@ try {
   await revisions.close();
   checks.push('Per-account revisions: unrelated trade adds 0 requests (formerly 1 call / 5 ledgers); one ranked trade reads 1 ledger (formerly 5); mixed legacy rows alone follow the global revision; explicit refresh still reads the displayed five.');
 
-  for (const width of [320, 390, 768, 1280, 1440]) {
-    const page = await open(width, "reduce");
+  for (const width of [320, 390, 768, 1280, 1440, 1920]) {
+    const tv = width === 1920;
+    const page = await open(width, tv ? "no-preference" : "reduce");
+    if (tv) await page.setViewportSize({ width, height: 1080 });
     await push(page);
     await chartReady(page);
     await page.evaluate(() =>
@@ -942,21 +1037,68 @@ try {
       .getByRole("button", { name: "전광판 보기", exact: true })
       .click();
     await page.locator("dialog[open]").waitFor();
-    const display=page.getByRole("dialog",{name:"위스피 전광판"});
-    assert.equal(await display.locator("tbody tr").count(),23);
-    assert.equal(await display.locator(".wis-exchange__trades li").count(),20);
-    assert.match(await display.locator(".wis-exchange__trades li").first().innerText(),/매수[\s\S]*검증학생[\s\S]*한양은행[\s\S]*2주 · 주당 340위스/);
-    assert.equal(await display.locator(".wis-exchange__index-value").innerText(),"1,052.16pt");
-    await page.evaluate(()=>window.boardQa.displayPush());
+    const display = page.getByRole("dialog", { name: "위스피 전광판" });
+    const quotes = display.locator(".wis-exchange__quote-grid > li");
+    const trades = display.locator(".wis-exchange__trades li");
+    const surge = display.locator(".wis-exchange__index .wis-exchange__surge");
+    assert.equal(await quotes.count(), 23);
+    assert.equal(await trades.count(), 20);
+    const trade = (await trades.first().innerText()).replace(/\s+/g, "");
+    for (const field of ["매수", "검증학생", "한양은행", "2주", "주당340위스"]) {
+      assert(trade.includes(field), field + " visible in first trade");
+    }
+    assert.equal(await display.locator(".wis-exchange__index-value").innerText(), "1,052.16pt");
+    assert.equal(await surge.isVisible(), false, "previous-close gain on entry is not a live surge");
+    await page.evaluate(() => window.boardQa.displayTick({ index: { value: 987.23, previousClose: 1000 } }));
     await display.locator(".wis-exchange__index-change .is-down").waitFor();
-    assert.match(await display.locator(".wis-exchange__index-value").innerText(),/987.23/);
-    const geometry=await display.evaluate(el=>{
-      const board=el.querySelector(".wis-exchange");
-      const measure=css=>{const {x,y,right,bottom}=el.querySelector(css).getBoundingClientRect();return{x,y,right,bottom}};
-      return {width:board.scrollWidth,client:board.clientWidth,index:measure(".wis-exchange__index"),quotes:measure(".wis-exchange__quotes"),trades:measure(".wis-exchange__trades"),header:getComputedStyle(el.querySelector(".wis-exchange__bar")).backgroundColor};
+    assert.match(await display.locator(".wis-exchange__index-value").innerText(), /987.23/);
+    assert.equal(await display.locator(".wis-quote-price__fold").count(), 0, "unchanged quotes stay still");
+    const geometry = await display.evaluate(el => {
+      const board = el.querySelector(".wis-exchange");
+      const measure = node => {
+        const { x, y, right, bottom } = node.getBoundingClientRect();
+        return { x, y, right, bottom };
+      };
+      const cells = Array.from(el.querySelectorAll(".wis-exchange__quote-grid > li"));
+      const containers = [...cells, ...el.querySelectorAll(".wis-exchange__scroll, .wis-exchange__trades li, .wis-exchange__movement, .wis-exchange__quote-values")];
+      const font = selector => parseFloat(getComputedStyle(el.querySelector(selector)).fontSize);
+      return {
+        width: board.scrollWidth, client: board.clientWidth,
+        index: measure(el.querySelector(".wis-exchange__index")),
+        quotes: measure(el.querySelector(".wis-exchange__quotes")),
+        trades: measure(el.querySelector(".wis-exchange__trades")),
+        header: getComputedStyle(el.querySelector(".wis-exchange__bar")).backgroundColor,
+        cells: cells.map(measure),
+        overflow: containers.filter(node => node.scrollWidth > node.clientWidth + 1).map(node => node.className),
+        fonts: {
+          quote: font(".wis-exchange__quote-name"), price: font(".wis-exchange__quote-price"),
+          name: font(".wis-exchange__trade-head strong"), stock: font(".wis-exchange__trade-stock"),
+          amount: font(".wis-exchange__trade-amount strong"),
+          change: font(".wis-exchange__quote-values .wis-exchange__movement"),
+          changePercent: font(".wis-exchange__quote-values .wis-exchange__movement small"),
+          indexChange: font(".wis-exchange__index-change .wis-exchange__movement"),
+          indexPercent: font(".wis-exchange__index-change .wis-exchange__movement small"),
+        },
+      };
     });
-    assert(geometry.width<=geometry.client+1);
-    assert.equal(geometry.header,"rgba(0, 0, 0, 0)");
+    assert(geometry.width <= geometry.client + 1);
+    assert.deepEqual(geometry.overflow, [], width + "px quote and trade clipping");
+    for (let i = 1; i < geometry.cells.length; i++) {
+      const previous = geometry.cells[i - 1], cell = geometry.cells[i];
+      if (i % 2) {
+        assert(Math.abs(previous.y - cell.y) < 1 && previous.right <= cell.x + 1, "two quotes per row at " + width);
+      } else {
+        assert(previous.bottom <= cell.y + 1 && Math.abs(cell.x - geometry.cells[0].x) < 1, "new quote row at " + width);
+      }
+    }
+    if (tv) {
+      const { quote, price, name, stock, amount } = geometry.fonts;
+      assert(quote >= 24 && price >= 30 && name >= 24 && stock >= 20 && amount >= 22, JSON.stringify(geometry.fonts));
+      const { change, changePercent, indexChange, indexPercent } = geometry.fonts;
+      assert(Math.round(change) >= 35 && changePercent >= 32 && indexChange >= 43 && indexPercent >= 39, JSON.stringify(geometry.fonts));
+    }
+    layouts.push({ screen: "exchange", width, quoteColumns: 2, fonts: geometry.fonts });
+    assert.equal(geometry.header, "rgba(0, 0, 0, 0)");
     assert.deepEqual(await display.evaluate(el=>[".is-up",".is-down"].map(css=>getComputedStyle(el.querySelector(css)).color)),["rgb(255, 121, 121)","rgb(118, 181, 255)"]);
     if(width>=960)assert(geometry.quotes.right<=geometry.index.x && geometry.index.right<=geometry.trades.x);
     else assert(geometry.index.bottom<=geometry.quotes.y);
@@ -970,6 +1112,15 @@ try {
       path: path.join(output, "board-dialog-" + width + ".png"),
       fullPage: false,
     });
+    if (tv) {
+      await checkLiveExchange(page, display, surge);
+    } else if (width === 390) {
+      await page.evaluate(() => window.boardQa.displayTick({ prices: { S0: 315 } }));
+      await surge.waitFor();
+      const price = quotes.first().locator(".wis-quote-price");
+      assert.match(await price.textContent(), /315/);
+      assert.equal(await price.locator(".wis-quote-price__transition").isVisible(), false, "reduced motion shows the new price immediately");
+    }
     await page.keyboard.press("Escape");
     await page.locator("dialog[open]").waitFor({ state: "hidden" });
     await page.waitForFunction(
@@ -980,7 +1131,8 @@ try {
     await page.close();
   }
   checks.push(
-    "Exchange display at five widths: quotes, named trades and index movement, responsive layout, Escape focus restoration, one display subscription disposed on close.",
+    "Exchange display at six widths from 320 to 1920px: two quotes per row, seven-digit prices, named trades, index movement, TV font sizes, reduced motion, Escape focus restoration and watcher disposal.",
+    "Live quote sequence: row-ordered split flaps, initial/unchanged/reconnected prices, immediate prior-tick 5% threshold, simultaneous surges, timed dismissal, new listings and halted market.",
   );
   assert.deepEqual(errors, []);
   assert.deepEqual(blocked, []);
