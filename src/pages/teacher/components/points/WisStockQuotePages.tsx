@@ -73,9 +73,7 @@ export default function WisStockQuotePages({
           : Math.max(0, start - size);
     setTurn({
       first: destination,
-      previous: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? undefined
-        : current,
+      previous: current,
     });
   };
   const next = useRef(nextPage);

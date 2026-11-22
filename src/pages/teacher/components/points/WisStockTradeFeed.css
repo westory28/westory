@@ -17,7 +17,3 @@
 .wis-exchange__trade-blanks { position: absolute; inset-inline: 0; pointer-events: none; }
 .wis-exchange__trade-blank { position: relative; border-bottom: 1px solid transparent; }
 .wis-exchange__trade-blank > .wis-exchange__trade-content { visibility: hidden; }
-
-@media (prefers-reduced-motion: reduce) {
-  .wis-exchange__trades .wis-exchange__trade-row { transform: none !important; }
-}

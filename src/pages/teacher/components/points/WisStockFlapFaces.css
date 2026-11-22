@@ -38,8 +38,3 @@
   from { transform: rotateX(90deg); filter: brightness(.58); }
   to { transform: rotateX(0); }
 }
-@media (prefers-reduced-motion: reduce) {
-  .wis-flap { visibility: hidden; }
-  .wis-flap__fold { animation: none; }
-  .wis-flap__unfold { animation-duration: 0s; animation-delay: 0s; }
-}

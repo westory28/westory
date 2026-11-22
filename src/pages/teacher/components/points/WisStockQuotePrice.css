@@ -82,10 +82,3 @@
   from { transform: rotateX(90deg); filter: brightness(.7); }
   to { transform: rotateX(0); }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .wis-quote-price__transition { visibility: hidden; }
-  .wis-quote-price__fold { animation: none; }
-  /* Settle the hidden flap immediately, including when the preference changes mid-flip. */
-  .wis-quote-price__unfold { animation-duration: 0s; animation-delay: 0s; }
-}

@@ -345,26 +345,32 @@ async function visitTradePages(page, display) {
   while (await previous.isEnabled()) { await previous.press("Enter"); await afterLayout(page); }
   assert.equal(await names.first().innerText(), "검증학생");
 }
-async function checkAutomaticQuotePages(page, display, reduced) {
+async function waitForVisibleRotation(page, selector) {
+  await page.waitForFunction(selector => [...document.querySelectorAll(selector)].some(face => {
+    const style = getComputedStyle(face);
+    if (!face.getClientRects().length || style.visibility !== "visible" || style.transform === "none") return false;
+    // An intermediate X rotation proves that an actual rendered face is moving.
+    const tilt = Math.abs(new DOMMatrixReadOnly(style.transform).m23);
+    return tilt > 0.01 && tilt < 0.99;
+  }), selector, { timeout: 2000 });
+}
+async function checkAutomaticQuotePages(page, display) {
   const quotes = display.locator(stockRows);
   const first = await quotes.first().getAttribute("data-quote-id");
   const oldName = await quotes.first().locator(".wis-exchange__quote-name").first().textContent();
   await page.clock.fastForward(8_050);
   await page.waitForFunction(({selector, first}) => document.querySelector(selector)?.dataset.quoteId !== first, {selector:stockRows, first});
   const incoming = quotes.first().locator(".wis-ticker-tile__current .wis-exchange__quote-name");
-  if (reduced) {
-    assert.equal(await quotes.first().locator(".wis-flap__fold").isVisible(), false);
-  } else {
-    const expectedName = await incoming.textContent();
-    assert.notEqual(expectedName, oldName);
-    const frames = await quotes.evaluateAll(cells => cells.slice(0, 3).map(cell => {
-      const fold=cell.querySelector(".wis-flap__fold"), unfold=cell.querySelector(".wis-flap__unfold");
-      const turning = face => !!face && face.getAnimations().some(a => a.effect.getKeyframes().some(k => String(k.transform).includes("rotateX")));
-      return {old:fold?.textContent, next:unfold?.textContent, delay:fold && parseFloat(getComputedStyle(fold).animationDelay), turning:turning(fold)&&turning(unfold)};
-    }));
-    assert(frames[0].old?.includes(oldName) && frames[0].next?.includes(expectedName) && frames[0].turning, JSON.stringify(frames));
-    if (frames.length >= 3) assert(frames[0].delay === frames[1].delay && frames[0].delay < frames[2].delay);
-  }
+  const expectedName = await incoming.textContent();
+  assert.notEqual(expectedName, oldName);
+  const frames = await quotes.evaluateAll(cells => cells.slice(0, 3).map(cell => {
+    const fold=cell.querySelector(".wis-flap__fold"), unfold=cell.querySelector(".wis-flap__unfold");
+    const turning = face => !!face && face.getAnimations().some(a => a.effect.getKeyframes().some(k => String(k.transform).includes("rotateX")));
+    return {old:fold?.textContent, next:unfold?.textContent, delay:fold && parseFloat(getComputedStyle(fold).animationDelay), turning:turning(fold)&&turning(unfold)};
+  }));
+  assert(frames[0].old?.includes(oldName) && frames[0].next?.includes(expectedName) && frames[0].turning, JSON.stringify(frames));
+  if (frames.length >= 3) assert(frames[0].delay === frames[1].delay && frames[0].delay < frames[2].delay);
+  await waitForVisibleRotation(page, ".wis-ticker-tile__turn .wis-flap__fold");
   await display.getByRole("button",{name:"종목 자동 넘김 일시정지",exact:true}).click();
   const paused = await quotes.first().getAttribute("data-quote-id");
   await page.clock.fastForward(16_100);
@@ -395,6 +401,11 @@ async function checkLiveExchange(page, display, surge) {
   assert.deepEqual(movement.names,["새체결학생", ...start.slice(0,-1)]);
   assert(movement.fold?.some(frame=>frame.includes("rotateX")) && movement.unfold?.some(frame=>frame.includes("rotateX")), JSON.stringify(movement));
   assert(movement.shift?.some(frame=>frame.includes("translate")), "previous first trade moves down into row two");
+  await page.waitForFunction(selector => {
+    const row = document.querySelectorAll(selector)[1];
+    const transform = getComputedStyle(row).transform;
+    return transform !== "none" && new DOMMatrixReadOnly(transform).m42 < -1;
+  }, fillRows, {timeout: 2000});
   await trades.first().locator(".wis-flap__fold").waitFor({state:"detached"});
   await page.evaluate(() => window.boardQa.replayTrades());
   await afterLayout(page);
@@ -487,6 +498,7 @@ async function checkLiveExchange(page, display, surge) {
   for (const expected of [["조선상회","금강철도"],["한양은행","한글 이름이 긴 주식회사"],["합성종목4","합성종목5"]]) {
     await headlines.filter({hasText:expected[0]}).waitFor();
     assert.deepEqual(await headlines.allTextContents(),expected);
+    if (expected[0] !== "조선상회") await waitForVisibleRotation(page, ".wis-exchange__surge-page .wis-flap__fold, .wis-exchange__surge-page .wis-flap__unfold");
     await checkBoardFit(display,"quotes");
     await page.clock.fastForward(4_010);
   }
@@ -1187,10 +1199,11 @@ try {
   await revisions.close();
   checks.push('Per-account revisions: unrelated trade adds 0 requests (formerly 1 call / 5 ledgers); one ranked trade reads 1 ledger (formerly 5); mixed legacy rows alone follow the global revision; explicit refresh still reads the displayed five.');
 
-  for (const [width,height] of [[320,568],[390,844],[768,1024],[1280,720],[1440,900],[1920,1080]]) {
+  for (const [width,height,motion="reduce"] of [[320,568],[390,844],[768,1024],[1280,720],[1440,900],[1920,1080],[1920,1080,"no-preference"]]) {
     const tv = width === 1920;
     const mobile = width < 640;
-    const page = await open(width, tv ? "no-preference" : "reduce");
+    const page = await open(width, motion);
+    assert.equal(await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches), motion === "reduce");
     await page.setViewportSize({width,height});
     await push(page);
     await chartReady(page);
@@ -1222,7 +1235,7 @@ try {
     await setPanel("시세");
     assert((await quotes.count()) > 0 && (await quotes.count()) < 23);
     await page.screenshot({path:path.join(output, "board-dialog-" + width + ".png")});
-    if (tv || width===390) await checkAutomaticQuotePages(page,display,!tv);
+    if (tv || width===390) await checkAutomaticQuotePages(page,display);
     else await display.getByRole("button", {name:"종목 자동 넘김 일시정지",exact:true}).click();
     await visitQuotePages(page,display);
     await setPanel("체결");
@@ -1319,14 +1332,14 @@ try {
       await page.evaluate(() => window.boardQa.displayTick({ prices: { S0: 315 } }));
       await surge.waitFor();
       await checkBoardFit(display,"quotes");
-      const price = quotes.first().locator(".wis-quote-price");
+      const price = quotes.first().locator(".wis-ticker-tile__current .wis-quote-price");
       assert.match(await price.textContent(), /315/);
-      assert.equal(await price.locator(".wis-quote-price__transition").isVisible(), false, "reduced motion shows the new price immediately");
+      await waitForVisibleRotation(page, ".wis-quote-price__fold, .wis-quote-price__unfold");
       await setPanel("체결");
       await page.evaluate(() => window.boardQa.displayTrade());
       await afterLayout(page);
       assert.deepEqual((await display.locator(fillNames).allTextContents()).slice(0,2),["새체결학생","검증학생"]);
-      assert.equal(await trades.locator(".wis-flap__fold").isVisible(),false,"reduced motion keeps live trades current without turning");
+      await waitForVisibleRotation(page, ".wis-exchange__trades .wis-flap__fold, .wis-exchange__trades .wis-flap__unfold");
     }
     await page.keyboard.press("Escape");
     await page.locator("dialog[open]").waitFor({ state: "hidden" });
@@ -1339,7 +1352,7 @@ try {
   }
   checks.push(
     "Fullscreen exchange at six viewport sizes including 320×568 and 1280×720: no scrolling/clipping, two quotes per row, all 23 stocks and all 20 fills reachable, mobile panel switching, TV font sizes, Escape focus restoration and watcher disposal.",
-    "Eight-second quote page cycle uses old/new half faces and row delays, with pause/manual paging and immediate reduced-motion rendering. A new confirmed trade flips into row 1 as the previous first trade moves down; batched and replayed snapshots preserve order without replay.",
+    "In both motion settings the eight-second quote cycle visibly folds old/new faces row by row, with pause and manual paging. Prices and trades flip with reduced motion enabled. A new fill moves the previous first row down; replays and reconnects do not replay fills.",
     "Live quote sequence: row-ordered split flaps, initial/unchanged/reconnected prices, immediate prior-tick 5% threshold, simultaneous surges, timed dismissal, new listings and halted market.",
   );
   assert.deepEqual(errors, []);

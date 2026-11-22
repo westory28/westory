@@ -60,10 +60,7 @@ type Turn = {
   rows: number;
 };
 function canTurn(list: HTMLOListElement | null) {
-  return (
-    Boolean(list?.getClientRects().length) &&
-    !window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
+  return Boolean(list?.getClientRects().length);
 }
 type Feed = {
   source: ExchangeTrade[] | null;
