@@ -70,7 +70,7 @@ test('the first opening adds only due stocks with one actual observation and no 
     assert.equal(stock.settings.tradingStatus, 'ACTIVE');
     assert.deepEqual(stock.history, [{ atMs: start, price: stock.settings.initialPrice }]);
     assert.deepEqual(stock.priceModel, { version: 1, anchorAtMs: start, anchorPrice: stock.settings.initialPrice });
-    assert.equal(stock.nextTickAtMs, start + HOUR);
+    assert.equal(stock.nextTickAtMs, start + HOUR / 2);
     assert.equal(stock.updatedAtMs, start);
     assert.equal(stock.dayKey, '2026-11-16');
     assert.equal(stock.haltedUntilMs, 0);
@@ -78,6 +78,7 @@ test('the first opening adds only due stocks with one actual observation and no 
   const state = catalogScheduleState(result.market, start);
   assert.deepEqual(state, { plan: plan(), totalCount: 80, listedCount: 11,
     pendingCount: 69, dueCount: 0, nextListingAtMs: start + HOUR });
+  assert.equal(applyDueCatalogListings(result.market, start + HOUR / 2).market, result.market);
   const next = applyDueCatalogListings(result.market, start + HOUR);
   assert.deepEqual(next.addedIds, catalog.filter(entry => entry.listingSession === 2).map(entry => entry.id));
 });
@@ -122,7 +123,7 @@ test('closed, unpublished and halted markets defer listings and catch up at the 
   for (const stock of result.market.stocks) {
     assert.deepEqual(stock.history, [{ atMs: reopen, price: stock.settings.initialPrice }]);
     assert.equal(stock.priceModel.anchorAtMs, reopen);
-    assert.equal(stock.nextTickAtMs, start + 7 * DAY + 2 * HOUR);
+    assert.equal(stock.nextTickAtMs, start + 7 * DAY + HOUR + HOUR / 2);
   }
 });
 

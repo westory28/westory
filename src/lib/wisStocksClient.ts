@@ -19,6 +19,7 @@ export interface WisStockSettings {
   maximumPrice: number;
   volatilityBps: number;
   trendBps: number;
+  /** Retained in saved settings for compatibility. The live market uses 30-minute slots. */
   intervalHours: number;
   automatic: boolean;
   issuedShares: number;

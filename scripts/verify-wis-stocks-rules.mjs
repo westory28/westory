@@ -27,7 +27,7 @@ const { DEFAULT_WIS_STOCK_MARKET_RULES, normalizeWisStockMarketRules, quoteWisSt
 const env = await initializeTestEnvironment({ projectId, firestore: { host: '127.0.0.1', port: 18256, rules: readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8') } });
 const app = initializeApp({ projectId }), db = getFirestore(app);
 const root = 'years/2026/semesters/2';
-// Monday 10:00 KST, then later hourly slots remain inside the default session.
+// Monday 10:00 KST, within the default trading session.
 let clock = Date.parse('2026-11-16T01:00:00Z');
 const commits = [], rejected = [], reads = [];
 const observedDb = {
@@ -324,14 +324,15 @@ try {
   assert.equal((await db.collection(`${root}/wis_stock_receipts`).get()).size, 1);
   assert.equal(totalWrites(), 2, 'Eight identical commands commit one market and one receipt write');
   checks.push('8 concurrent duplicate registrations produce one stock, one receipt, two committed writes');
-  clock += 3600000;
+  clock += 1800000;
   await Promise.all(Array.from({ length: 8 }, () => api.advanceWisStockPrices()));
   const market = await api.getWisStockManagement(request({}));
   assert.equal(market.stocks[0].price, 103); assert.equal(market.stocks[0].history.length, 2); assert.equal(market.revision, 2);
   assert.equal(totalWrites(), 3, 'Eight concurrent ticks commit one market write');
   await api.advanceWisStockPrices();
   assert.equal(totalWrites(), 3, 'Same slot scheduler retry makes zero writes');
-  checks.push('8 concurrent ticks advance exactly once; same-slot retry writes zero');
+  assert.equal(commits.at(-1).reads, 2);
+  checks.push('8 concurrent half-hour ticks advance exactly once; same-slot retry reads two documents and writes zero');
   const edits = await Promise.allSettled(['첫 수정', '둘째 수정'].map((name, index) => api.saveWisStock(request({ expectedRevision: 2,
     stockId: market.stocks[0].id, settings: { ...settings, name }, requestId: `conflicting-stock-request-${index}` }))));
   assert.equal(edits.filter(item => item.status === 'fulfilled').length, 1);
@@ -532,7 +533,7 @@ try {
   const beforeListingCommits = commits.length, beforeListingWrites = totalWrites();
   const listings = await Promise.all(Array.from({ length: 8 }, () => api.advanceWisStockPrices()));
   assert.equal(listings.filter(result => result.changed).length, 1);
-  assert(commits.slice(beforeListingCommits).every(commit => commit.reads === commit.attempts * 4));
+  assert(commits.slice(beforeListingCommits).every(commit => commit.reads <= commit.attempts * 4));
   assert.equal(totalWrites() - beforeListingWrites, 3, 'Concurrent due listing writes market, public prices and scheduler receipt once');
   const listedMarket = (await db.doc(`${root}/wis_stock_markets/current`).get()).data();
   assert.equal(listedMarket.revision, scheduledMarket.revision + 1);
@@ -541,9 +542,11 @@ try {
   assert.deepEqual(newListing.history, [{ atMs: clock, price: newListing.settings.initialPrice }]);
   assert.deepEqual((await db.doc(`${root}/wis_stock_public/current`).get()).data(), menuSignal);
   const afterListingWrites = totalWrites();
+  const afterListingCommits = commits.length;
   await Promise.all(Array.from({ length: 8 }, () => api.advanceWisStockPrices()));
+  assert(commits.slice(afterListingCommits).every(commit => commit.reads === commit.attempts * 2));
   assert.equal(totalWrites(), afterListingWrites);
-  checks.push('8 concurrent due workers: one listing with actual-time observation, one revision and three committed writes; four reads per attempt; repeated workers zero writes and menu status unchanged');
+  checks.push('8 concurrent due workers commit one listing, one revision and three writes. Each attempt reads at most four documents, repeated workers read two and write zero, and the menu signal stays unchanged.');
 
   const crowded = { ...scheduleMarket, stocks: Array.from({ length: 21 }, (_, index) => ({
     ...manual, id: `stock_${index.toString(16).padStart(24, '0')}`,

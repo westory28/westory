@@ -99,7 +99,8 @@ async function seed(count = 2, issuedShares = 1000) {
     docs[`semester_enrollments/enrollment-${uid}`] = { semesterId: scope.semesterId, studentUid: uid, enrollmentId: `enrollment-${uid}`,
       enrollmentStatus: 'ACTIVE', classId: 'class-one' };
     docs[sessionPath(uid)] = { uid, authTime, schemaVersion: 2, status: 'active', authorityGeneration: proof.authorityGeneration,
-      protocolVersion: 2, sessionRevision: proof.revision, authorityModeAtOpen: 'ENFORCE', generalExpiresAt: Timestamp.fromMillis(clock + 7 * 86400000) };
+      protocolVersion: 2, sessionRevision: proof.revision, authorityModeAtOpen: 'ENFORCE',
+      generalExpiresAt: Timestamp.fromMillis(Math.max(clock, Date.now()) + 7 * 86400000) };
     const wallet = { schemaVersion: 1, policyVersion: 'w7-v1', semesterId: scope.semesterId, accountId, studentUid: uid,
       enrollmentId: `enrollment-${uid}`, classId: 'class-one', grade: '3', classNumber: '1', studentNumber: String(index + 1), displayName: `합성 ${index + 1}`,
       status: 'ACTIVE', revision: 3, balance: 10000, earnedTotal: 10000, rankEarnedTotal: 9500, spentTotal: 0, adjustedTotal: 9500, recentLedgerEntries: ledger };
@@ -211,7 +212,7 @@ async function test(name, fn, count = 2, supply = 1000) {
     assert.equal(value.rules.dailyPriceLimitBps, 6000);
     assert.equal(commits.at(-1).writes.length, 0);
     const management = createWisStockHandlers({ db: observedDb, now: () => clock });
-    clock += 3600000;
+    clock += 1800000;
     assert.equal((await management.advanceWisStockPrices()).changed, true);
     assert.equal(commits.at(-1).finalReads, 4);
     assert.equal(commits.at(-1).writes.length, 2);
@@ -224,7 +225,7 @@ async function test(name, fn, count = 2, supply = 1000) {
     assert(Math.abs(changed.marketIndex.value - market.marketIndex.value * 1.03) < 1e-8);
     assert.equal(Object.hasOwn(await get(`${base}/wis_stock_public/market`), 'marketIndex'), false);
     assert.equal((await management.advanceWisStockPrices()).changed, false);
-    assert.equal(commits.at(-1).finalReads, 4);
+    assert.equal(commits.at(-1).finalReads, 2);
     assert.equal(commits.at(-1).writes.length, 0);
     assert.deepEqual(await Promise.all(protectedPaths.map(get)), protectedBefore);
     assert.deepEqual((await db.collection('semester_wis_ledger').where('studentUid', '==', 'student0').get()).docs.map(doc => doc.data()), ledgerBefore);
@@ -254,6 +255,32 @@ async function test(name, fn, count = 2, supply = 1000) {
     clock = firstTime + 86400000 - 1; await denied(transfer('student0', 'DEPOSIT', 1, 'deposit_cooldown_end'), 'WIS_STOCK_DEPOSIT_COOLDOWN');
     clock++; await transfer('student0', 'DEPOSIT', 4999, 'deposit_cooldown_end');
     assert.equal((await accounting('student0')).balance, 5000);
+  });
+  await test('half-hour market revaluation reads only existing supplies across all changed ID batches', async () => {
+    const market = await get(`${base}/wis_stock_markets/current`), held = market.stocks[0];
+    const untraded = Array.from({ length: 60 }, (_, i) => ({
+      ...held, id: 'stock_' + i.toString(16).padStart(24, '0'),
+    }));
+    await marketWrite({ stocks: [...untraded, held] });
+    await transfer('student0', 'DEPOSIT', 5000);
+    const order = (await place('student0', 'BUY', 2)).order;
+    clock = order.dueAtMs;
+    await settle(order.id);
+    clock += 1800000;
+    const event = await marketWrite({ revision: 2, updatedAtMs: clock,
+      stocks: [...untraded, held].map(stock => ({ ...stock, updatedAtMs: clock, price: 115 })) });
+    await api.onWisStockMarketTradingWrite(event);
+    // Canonical market, display, overall board and trade state, plus two
+    // empty-query minimums and the held supply in the final batch.
+    assert.equal(commits.at(-1).finalReads, 7);
+    assert.equal(commits.at(-1).writes.length, 4);
+    for (const key of ['all', 'class_3_1']) {
+      const board = await get(`${base}/wis_stock_investment_boards/${key}`);
+      assert.equal(board.totals.holdingValue, 230);
+    }
+    await api.onWisStockMarketTradingWrite(event);
+    assert.equal(commits.at(-1).finalReads, 4);
+    assert.equal(commits.at(-1).writes.length, 0);
   });
   await test('fixed-price reservations settle once after sixty seconds even after quote expiry and price revision', async () => {
     await transfer('student0', 'DEPOSIT', 5000);

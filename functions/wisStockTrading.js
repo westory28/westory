@@ -245,8 +245,23 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
     const changed = market.stocks.filter(stock => meta.prices[stock.id] !== undefined && meta.prices[stock.id] !== stock.price);
     if (!next && !changed.length) return null;
     const rows = new Map((old?.rows || []).map(row => [row.studentKey, { ...row }])), touchedClasses = new Set();
+    // A market tick can reprice the entire catalog. Only previously traded
+    // instruments have supply documents. Query their IDs in Firestore's IN
+    // batches so untraded listings do not each incur a missing-document read.
+    let marketSupplies;
+    if (!next) {
+      marketSupplies = new Map();
+      const collection = db.collection(`${rootPath(scope)}/wis_stock_supplies`);
+      for (let start = 0; start < changed.length; start += 30) {
+        const ids = changed.slice(start, start + 30).map(stock => stock.id);
+        const result = await tx.get(collection.where(FieldPath.documentId(), 'in', ids));
+        for (const doc of result.docs) marketSupplies.set(doc.id, doc);
+      }
+    }
     for (const stock of changed) {
-      const supply = supplyChanges.get(stock.id) || supplyFor(await tx.get(db.doc(`${rootPath(scope)}/wis_stock_supplies/${stock.id}`)), stock, scope);
+      if (marketSupplies && !marketSupplies.has(stock.id)) continue;
+      const supply = supplyChanges.get(stock.id) || supplyFor(marketSupplies?.get(stock.id)
+        ?? await tx.get(db.doc(`${rootPath(scope)}/wis_stock_supplies/${stock.id}`)), stock, scope);
       for (const [key, quantity] of Object.entries(supply.holders)) {
         // The changed account is replaced from its complete current positions below.
         if (key === next?.studentKey || excluded.has(key)) continue;

@@ -241,6 +241,21 @@ test('finance reacts more to the common market and to strictly prior committed i
   assert.equal(move(ordinary, 500), move(ordinary, -500));
 });
 
+test('half-hour ticks use elapsed calendar time for VALUE and the latest prior index print', () => {
+  const halfHour = HOUR / 2, day = 24 * HOUR;
+  const atMs = FIRST + 42 * day + halfHour;
+  const s = stock({ growthProfile: 'VALUE', intervalHours: 24 });
+  const reference = sampleWisStockPriceStep(s, '2026-2', Math.floor(atMs / halfHour), 'reference',
+    undefined, 1000, { atMs }).referencePrice;
+  const expected = s.price * Math.exp(((atMs - FIRST) / day) * 24 / 10000);
+  assert(Math.abs(reference - expected) < 0.000001);
+
+  const index = { history: [{ atMs: FIRST - halfHour, value: 1000 }, { atMs: FIRST + 2000, value: 950 },
+    { atMs: FIRST + halfHour, value: 1 }] };
+  assert(Math.abs(wisStockPreviousMarketReturn(index, FIRST + halfHour + 2000) + 500) < 0.000001);
+  assert(wisStockMarketStress(index, FIRST + halfHour + 2000) > 0);
+});
+
 test('common volatility clusters and bounded selloff uncertainty decays without guaranteeing a rebound', () => {
   const index = { history: [{ atMs: FIRST, value: 1000 }, { atMs: FIRST + HOUR, value: 850 }] };
   const immediate = wisStockMarketStress(index, FIRST + 2 * HOUR), later = wisStockMarketStress(index, FIRST + 14 * HOUR);

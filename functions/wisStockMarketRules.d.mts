@@ -26,6 +26,9 @@ export interface WisStockOrderQuote {
   dayKey: string; nextDailyBuyAmount: number; nextDailyOrderCount: number; nextAvailableShares: number; executable: false; studentOpen: false;
 }
 export class WisStockRuleError extends Error { reason: string; }
+export const WIS_STOCK_PRICE_INTERVAL_MS: number;
+export function wisStockPriceSlot(atMs: number): number;
+export function nextWisStockPriceTick(atMs: number): number;
 export const DEFAULT_WIS_STOCK_MARKET_RULES: Readonly<WisStockMarketRules>;
 export const DEFAULT_WIS_STOCK_TRADING_SETTINGS: Readonly<WisStockTradingSettings>;
 export const WIS_STOCK_RULE_LIMITS: Readonly<Record<string, readonly [number, number]>>;

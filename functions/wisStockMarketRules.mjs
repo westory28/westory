@@ -3,6 +3,9 @@
 const MAX_SAFE = Number.MAX_SAFE_INTEGER;
 const BPS = 10000n;
 const KST_OFFSET = 9 * 3600000;
+export const WIS_STOCK_PRICE_INTERVAL_MS = 30 * 60_000;
+export const wisStockPriceSlot = atMs => Math.floor(atMs / WIS_STOCK_PRICE_INTERVAL_MS);
+export const nextWisStockPriceTick = atMs => (wisStockPriceSlot(atMs) + 1) * WIS_STOCK_PRICE_INTERVAL_MS;
 const record = value => value && typeof value === 'object' && !Array.isArray(value);
 const int = (value, min = 0, max = MAX_SAFE) => Number.isSafeInteger(value) && value >= min && value <= max;
 export class WisStockRuleError extends Error {

@@ -356,7 +356,7 @@ export default function WisStockMarketRules({
                   set("automaticPrices", event.target.checked)
                 }
               />
-              시장 자동 가격 변동
+              거래 시간 중 30분마다 시장 가격 자동 변동
             </label>
             {input(
               "dailyPriceLimitBps",

@@ -89,14 +89,43 @@ try {
     assert(layout.rows.every(height=>height>=44),JSON.stringify(layout));
     if(width>=1280){assert(layout.detail.left>=layout.list.right,JSON.stringify(layout));assert.equal(layout.detail.position,'sticky');assert(layout.list.scrollHeight>layout.list.height);const before=await detail.boundingBox();await list.evaluate(el=>el.scrollTop=el.scrollHeight-el.clientHeight);assert(await list.evaluate(el=>el.scrollTop>0));assert.deepEqual(await detail.boundingBox(),before);await list.evaluate(el=>el.scrollTop=0);}else{assert(Math.abs(layout.detail.left-layout.list.left)<2,JSON.stringify(layout));assert.notEqual(layout.detail.position,'sticky');}
     await overview.screenshot({path:path.join(evidence,'master-detail-'+width+'.png'),fullPage:true});
-    await choose(overview);await overview.getByLabel('종목명',{exact:true}).fill('실시간 갱신 중 유지할 초안');
+    await choose(overview);
+    assert.equal(await overview.getByLabel('변동 간격', { exact: true }).count(), 0);
+    await overview.getByLabel('거래 시간 중 30분마다 자동 가격 변동', { exact: true }).waitFor();
+    await overview.getByLabel('종목명',{exact:true}).fill('실시간 갱신 중 유지할 초안');
     await second.click();assert.equal(await overview.getByLabel('종목명',{exact:true}).inputValue(),'실시간 갱신 중 유지할 초안');
     await overview.locator('.wis-stocks__market-row').click();
     await overview.evaluate(()=>{const q=window.stockQa;q.market.revision++;q.market.marketIndex.value=1040.125;q.market.marketIndex.history.push({atMs:1794794400000,value:1040.125});q.listingNext(q.market.stocks.map(s=>s.id).sort(),q.market.revision)});
     await overview.waitForFunction(()=>window.stockQa.completedReads===2);assert.equal(await overview.getByLabel('종목명',{exact:true}).inputValue(),'실시간 갱신 중 유지할 초안');assert((await overview.locator('.wis-stocks__index-quote').innerText()).includes('1,040.13'));
-    await overview.evaluate(()=>{const q=window.stockQa;q.listingNext(q.market.stocks.map(s=>s.id).sort(),q.market.revision)});assert.equal(await overview.evaluate(()=>window.stockQa.reads),2);await overview.close();
+    await overview.evaluate(()=>{const q=window.stockQa;q.listingNext(q.market.stocks.map(s=>s.id).sort(),q.market.revision)});
+    assert.deepEqual(await overview.evaluate(() => [window.stockQa.reads, window.stockQa.watches]), [2, 1]);
+    await overview.close();
   }
   checks.push('Five widths: index starts selected; compact name/current-price/daily-change list switches one right-side chart/description immediately, first-session and previous-session change bases are correct, red/blue signed values and 44px rows; desktop sticky detail remains fixed during independent list scroll and mobile stacks; browsing performs zero writes/extra reads and preserves editor draft through selection and market updates.');
+  const burst = await open(390);
+  await enter(burst);
+  await burst.waitForFunction(() => Boolean(window.stockQa.listingNext));
+  await burst.evaluate(() => {
+    const qa = window.stockQa;
+    const ids = qa.market.stocks.map(stock => stock.id).sort();
+    qa.holdRead = true;
+    for (let revision = 0; revision < 3; revision++) qa.listingNext(ids, ++qa.market.revision);
+    qa.listingNext(ids, qa.market.revision);
+  });
+  assert.deepEqual(await burst.evaluate(() => [window.stockQa.reads, window.stockQa.watches]), [2, 1]);
+  await burst.evaluate(() => window.stockQa.release());
+  await burst.waitForFunction(() => window.stockQa.completedReads === 3);
+  assert.deepEqual(await burst.evaluate(() => [window.stockQa.reads, window.stockQa.watches]), [3, 1]);
+  await burst.evaluate(() => {
+    const qa = window.stockQa;
+    const ids = qa.market.stocks.map(stock => stock.id).sort();
+    qa.listingNext(ids, qa.market.revision + 1);
+    qa.market.revision++;
+  });
+  await burst.waitForFunction(() => window.stockQa.completedReads === 5);
+  assert.deepEqual(await burst.evaluate(() => [window.stockQa.reads, window.stockQa.watches]), [5, 1]);
+  await burst.close();
+  checks.push('Concurrent market revisions share one visible subscription and coalesce into one catch-up read. A response preceding its notice retries once.');
   const dayBoundary=await open(390);
   await dayBoundary.evaluate(()=>{const q=window.stockQa,at=Date.parse('2026-11-16T00:00:00+09:00'),stock=q.market.stocks[0];q.market.updatedAtMs=at+3600000;stock.updatedAtMs=at+3600000;stock.price=110;stock.history=[{atMs:at-1,price:200},{atMs:at,price:100},{atMs:at+3600000,price:110}];const empty=structuredClone(stock);empty.id='stock_000000000000000000000002';empty.settings.name='기록 없는 종목';empty.history=[];q.market.stocks.push(empty)});
   await enter(dayBoundary);const boundaryRow=dayBoundary.locator('.wis-stocks__row').first();await boundaryRow.click();
@@ -156,7 +185,7 @@ try {
   }
   checks.push('320/390/768/1280/1440: three tabs, keyboard edit/save, preserved stock/rule drafts, long Korean, transparent title/tabs, no overflow, one shared read.');
   const hidden=await open(1280,'?hidden');await enter(hidden);assert.equal(await hidden.evaluate(()=>window.stockQa.reads),0);await hidden.evaluate(()=>{window.stockQa.hidden=false;document.dispatchEvent(new Event('visibilitychange'))});await hidden.getByRole('button',{name:/합성 역사 종목/}).waitFor();await tab(hidden,'주식 차트 관리');await hidden.waitForTimeout(350);assert.equal(await hidden.evaluate(()=>window.stockQa.reads),1);await hidden.close();checks.push('Hidden document and unopened feature perform zero reads; tab changes and time do not poll.');
-  const empty=await open(390,'?empty');await enter(empty);await empty.getByText('등록된 종목이 없습니다.').waitFor();await tab(empty,'주식 차트 관리');await empty.getByText('6주 기획안 · 가상 시세',{exact:true}).waitFor();assert.equal(await empty.locator('.wis-stock-preview__stock').count(),10);assert.deepEqual(await empty.evaluate(()=>[window.stockQa.saves,window.stockQa.ruleSaves]),[0,0]);await tab(empty,'종목 관리');await empty.getByRole('button',{name:'새 종목 추가',exact:true}).click();await empty.getByLabel('종목명',{exact:true}).fill('새 합성 종목');assert.equal(await empty.getByLabel('자동 가격 변동',{exact:true}).isChecked(),false);await empty.getByRole('button',{name:'종목 등록',exact:true}).click();await empty.getByRole('heading',{name:'새 합성 종목',exact:true}).first().waitFor();await tab(empty,'주식 차트 관리');assert.equal(await empty.getByText('6주 기획안 · 가상 시세',{exact:true}).count(),0);await empty.close();checks.push('Empty-market examples never write; registration only inside new form, new real stock replaces example data.');
+  const empty=await open(390,'?empty');await enter(empty);await empty.getByText('등록된 종목이 없습니다.').waitFor();await tab(empty,'주식 차트 관리');await empty.getByText('6주 기획안 · 가상 시세',{exact:true}).waitFor();assert.equal(await empty.locator('.wis-stock-preview__stock').count(),10);assert.deepEqual(await empty.evaluate(()=>[window.stockQa.saves,window.stockQa.ruleSaves]),[0,0]);await tab(empty,'종목 관리');await empty.getByRole('button',{name:'새 종목 추가',exact:true}).click();await empty.getByLabel('종목명',{exact:true}).fill('새 합성 종목');assert.equal(await empty.getByLabel('거래 시간 중 30분마다 자동 가격 변동',{exact:true}).isChecked(),false);await empty.getByRole('button',{name:'종목 등록',exact:true}).click();await empty.getByRole('heading',{name:'새 합성 종목',exact:true}).first().waitFor();await tab(empty,'주식 차트 관리');assert.equal(await empty.getByText('6주 기획안 · 가상 시세',{exact:true}).count(),0);await empty.close();checks.push('Empty-market examples never write; registration only inside new form, new real stock replaces example data.');
   const failure=await open();await failure.evaluate(()=>window.stockQa.failRead=true);await enter(failure);await failure.getByRole('alert').waitFor();await failure.evaluate(()=>window.stockQa.failRead=false);await failure.getByRole('button',{name:'다시 불러오기',exact:true}).click();await choose(failure);await failure.getByLabel('종목명',{exact:true}).fill('보존할 수정');await failure.evaluate(()=>window.stockQa.conflict=true);await failure.getByRole('button',{name:'변경 저장',exact:true}).click();await failure.getByRole('button',{name:'최신 자료 확인',exact:true}).click();assert.equal(await failure.getByLabel('종목명',{exact:true}).inputValue(),'보존할 수정');await failure.getByRole('button',{name:'변경 저장',exact:true}).click();await failure.getByRole('heading',{name:'보존할 수정'}).first().waitFor();
   await tab(failure,'시장 규칙');await failure.getByLabel('매수 수수료 (%)',{exact:true}).fill('3');await failure.evaluate(()=>window.stockQa.ruleConflict=true);await failure.getByRole('button',{name:'규칙 저장',exact:true}).click();await failure.getByRole('button',{name:'최신 자료 확인',exact:true}).click();assert.equal(await failure.getByLabel('매수 수수료 (%)',{exact:true}).inputValue(),'3');await failure.getByRole('button',{name:'규칙 저장',exact:true}).click();await failure.waitForFunction(()=>window.stockQa.market.rules.buyFeeBps===300);await failure.close();checks.push('Read failure retries explicitly; stock/rules CAS conflict refresh preserves draft and requires explicit resave.');
   for (const times of [[0,3600000,86400000],[0,0],[0]]) {
@@ -223,7 +252,7 @@ try {
     await tab(page,'종목 관리');await page.getByRole('button',{name:'새 종목 추가',exact:true}).click();
     const options=await page.getByRole('combobox',{name:/종목 초안/}).locator('option').evaluateAll(options=>options.map(o=>({value:o.value,label:o.textContent})));assert.equal(options.length,81);
     await page.getByRole('combobox',{name:/종목 초안/}).selectOption(options.find(o=>o.label==='경강로지스').value);
-    assert.equal(await page.getByLabel('종목명',{exact:true}).inputValue(),'경강로지스');assert.equal(await page.getByLabel('자동 가격 변동',{exact:true}).isChecked(),false);assert.equal(await page.evaluate(()=>window.stockQa.saves),0);
+    assert.equal(await page.getByLabel('종목명',{exact:true}).inputValue(),'경강로지스');assert.equal(await page.getByLabel('거래 시간 중 30분마다 자동 가격 변동',{exact:true}).isChecked(),false);assert.equal(await page.evaluate(()=>window.stockQa.saves),0);
     await page.getByRole('button',{name:'종목 등록',exact:true}).click();await page.getByRole('heading',{name:'경강로지스',exact:true}).first().waitFor();assert.equal(await page.evaluate(()=>window.stockQa.saves),1);assert.equal(await page.locator('.wis-stocks__row-name > strong').filter({hasText:'경강로지스'}).count(),1);
     await page.close();
   }

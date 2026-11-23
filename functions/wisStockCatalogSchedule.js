@@ -1,5 +1,5 @@
 const catalog = require('./wisStockCatalog.json');
-const { normalizeWisStockMarketRules, isWisStockTradingSession, wisStockKstSession } = require('./wisStockMarketRules');
+const { normalizeWisStockMarketRules, isWisStockTradingSession, wisStockKstSession, nextWisStockPriceTick } = require('./wisStockMarketRules');
 
 // The same reviewed catalog feeds the teacher plan and the server. Only listing
 // times are operational here: synthetic future prices, exits and mergers are not.
@@ -91,7 +91,7 @@ function applyDueCatalogListings(market, atMs) {
     return { id: entry.id, settings, price: settings.initialPrice,
       priceModel: { version: 1, anchorAtMs: atMs, anchorPrice: settings.initialPrice },
       dayKey, dayOpenPrice: settings.initialPrice, haltedUntilMs: 0,
-      updatedAtMs: atMs, nextTickAtMs: (Math.floor(atMs / HOUR) + 1) * HOUR,
+      updatedAtMs: atMs, nextTickAtMs: nextWisStockPriceTick(atMs),
       history: [{ atMs, price: settings.initialPrice }] };
   });
   // The caller owns capacity checks, revision, audit receipt and atomic public

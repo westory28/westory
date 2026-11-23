@@ -1,4 +1,5 @@
 import catalog from './wisStockCatalog.json' with { type: 'json' };
+import { WIS_STOCK_PRICE_INTERVAL_MS, wisStockPriceSlot } from './wisStockMarketRules.mjs';
 
 const HOUR = 3_600_000;
 const catalogSectors = new Map(catalog.map(entry => [entry.id, entry.sector]));
@@ -32,11 +33,11 @@ export function wisStockPreviewSampler(seed) {
   };
 }
 
-// Use only committed observations before the current hourly tick. In particular,
+// Use only committed observations before the current half-hour tick. In particular,
 // the current map's prices/index cannot influence later stocks in the same map.
 // Legacy markets without an index start neutral; this function never reads I/O.
 function priorObservations(index, atMs) {
-  const beforeMs = Math.floor(atMs / HOUR) * HOUR;
+  const beforeMs = wisStockPriceSlot(atMs) * WIS_STOCK_PRICE_INTERVAL_MS;
   return (Array.isArray(index?.history) ? index.history : [])
     .filter(point => Number.isSafeInteger(point?.atMs) && point.atMs >= 0 && point.atMs < beforeMs
       && Number.isFinite(point.value) && point.value > 0)
@@ -50,7 +51,7 @@ export function wisStockPreviousMarketReturn(index, atMs) {
 }
 
 export function wisStockMarketStress(index, atMs) {
-  const history = priorObservations(index, atMs), hour = Math.floor(atMs / HOUR);
+  const history = priorObservations(index, atMs), hour = wisStockPriceSlot(atMs) * WIS_STOCK_PRICE_INTERVAL_MS / HOUR;
   let stress = 0;
   for (let i = 1; i < history.length; i++) {
     const ageHours = hour - history[i].atMs / HOUR;
@@ -71,7 +72,7 @@ export function sampleWisStockMarketFactors(stock, semesterId, slot, priceSeed =
     || !Number.isFinite(marketStress) || marketStress < 0 || marketStress > 0.35) {
     throw new RangeError('Invalid stock market factor input');
   }
-  const hour = Math.floor(atMs / HOUR);
+  const hour = wisStockPriceSlot(atMs) * WIS_STOCK_PRICE_INTERVAL_MS / HOUR;
   const source = context.sampler || wisStockPreviewSampler(`${priceSeed}\n${semesterId}\nwispi-factors-v1`);
   const unit = key => {
     const value = source(key);

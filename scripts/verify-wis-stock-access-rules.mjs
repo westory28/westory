@@ -25,12 +25,12 @@ const session = uid => ({ uid, authTime, status: 'active', schemaVersion: 2, pro
 const client = (uid, token = {}) => env.authenticatedContext(uid, { email: `${uid}@yongshin-ms.ms.kr`, auth_time: authTime, ...token }).firestore();
 const request = data => ({ auth: { uid: 'teacher', token: { email: 'teacher@yongshin-ms.ms.kr' } }, data: { year: '2026', semester: '2', ...data } });
 let clock = Date.parse('2026-11-16T00:00:00Z');
-const commits = [];
+const commits = [], reads = [];
 const observedDb = { doc: path => db.doc(path), runTransaction: async (callback, options) => {
   const attempts = [];
   const result = await db.runTransaction(async tx => {
     const writes = []; attempts.push(writes);
-    const proxy = { get: ref => tx.get(ref) };
+    const proxy = { get: ref => { reads.push(ref.path); return tx.get(ref); } };
     for (const name of ['set', 'update', 'create']) proxy[name] = (ref, ...args) => { writes.push(ref.path); tx[name](ref, ...args); };
     return callback(proxy);
   }, options);
@@ -108,11 +108,16 @@ try {
   const published = (await assertSucceeds(getDoc(doc(student, pricesPath)))).data();
   assert.equal(published.revision, opened.revision); assert.equal(published.studentOpen, true);
   assert(!JSON.stringify(published).includes('priceSeed')); assert(!JSON.stringify(published).includes('priceModel'));
-  const signal = (await db.doc(statusPath).get()).data(); clock += 3600000;
+  const signal = (await db.doc(statusPath).get()).data();
+  clock += 1800000; reads.length = 0;
   await api.advanceWisStockPrices(); assert.equal(commits.at(-1).length, 2); assert(!commits.at(-1).includes(statusPath));
+  assert.deepEqual(reads.toSorted(), ['site_settings/config', 'site_settings/semester_active', 'semester_manifests/2026-2', marketPath(scope)].toSorted());
   assert.deepEqual((await db.doc(statusPath).get()).data(), signal);
   assert.equal((await getDoc(doc(student, pricesPath))).data().stocks[0].price, 103);
-  checks.push('Missing status and exact own account are readable before launch while page prices and other/missing-owner accounts are denied; first teacher open atomically publishes safe prices and status; later price tick writes two documents and never wakes the menu signal.');
+  reads.length = 0;
+  assert.equal((await api.advanceWisStockPrices()).changed, false);
+  assert.deepEqual(reads, ['site_settings/config', marketPath(scope)]); assert.equal(commits.at(-1).length, 0);
+  checks.push('Missing status and exact own account are readable before launch while page prices and other/missing-owner accounts are denied; first teacher open atomically publishes safe prices and status; a half-hour tick reads four documents and writes two, a same-slot retry reads two and writes zero, and the menu signal stays unchanged.');
 
   const closed = await api.setWisStockMarketHalted(request({ halted: true, expectedRevision: 0, requestId: 'synthetic-close-00001' }));
   await live.until(value => value.events.some(event => event.data()?.halted === true));

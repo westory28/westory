@@ -65,7 +65,8 @@ export function sampleWisStockPriceStep(stock, semesterId, slot, priceSeed = '',
     const anchor = wisStockPriceModelAnchor(stock);
     if (anchor.version !== 1 || !Number.isSafeInteger(anchor.anchorAtMs) || anchor.anchorAtMs < 0
       || !Number.isSafeInteger(anchor.anchorPrice) || anchor.anchorPrice <= 0) throw new RangeError('Invalid price anchor');
-    const days = Math.max(0, (slot * settings.intervalHours * HOUR - anchor.anchorAtMs) / DAY);
+    const observationMs = marketContext?.atMs ?? slot * settings.intervalHours * HOUR;
+    const days = Math.max(0, (observationMs - anchor.anchorAtMs) / DAY);
     // A calendar-based reference continues beyond the six-week lesson. The
     // realised price may remain below it, lose money, or reach a daily lower bound.
     const growthBpsPerDay = clamp(vol * 0.08, 12, 40);

@@ -51,7 +51,7 @@ const emptySettings = (): WisStockSettings => ({
   maximumPrice: 10000,
   volatilityBps: 300,
   trendBps: 0,
-  intervalHours: 24,
+  intervalHours: 1,
   automatic: false,
   issuedShares: 100000,
   lotSize: 1,
@@ -201,41 +201,61 @@ export default function TeacherWisStocks({
     market?.studentOpen === true &&
     !market.rules.halted &&
     !saving &&
-    !loading &&
     !error;
   useEffect(() => {
     if (!watchListings) return;
     let stop: (() => void) | undefined;
-    let reloading = false;
+    let connection = 0;
     const connect = () => {
+      const currentConnection = ++connection;
       stop?.();
       stop = undefined;
       if (document.hidden) return;
-      stop = watchWisStockListings(
-        { year, semester },
-        (ids, revision) => {
-          if (reloading || owner.current !== ownerKey) return;
-          const currentIds = latestMarket.current.value?.stocks
-            .map((stock) => stock.id)
-            .sort();
+      let reloading = false;
+      let pending: { ids: string[]; revision?: number } | undefined;
+      const receive = async (ids: string[], revision?: number) => {
+        pending = { ids, revision };
+        if (reloading) return;
+        reloading = true;
+        while (
+          pending &&
+          currentConnection === connection &&
+          owner.current === ownerKey
+        ) {
+          const notice = pending;
+          pending = undefined;
+          const current = latestMarket.current.value;
+          const upToDate =
+            notice.revision !== undefined
+              ? notice.revision <= (current?.revision ?? 0)
+              : JSON.stringify(
+                  current?.stocks.map((stock) => stock.id).sort(),
+                ) === JSON.stringify(notice.ids);
+          if (upToDate) continue;
+          const loaded = await load();
+          if (!loaded) break;
+          // A manual refresh already in flight can return the preceding revision.
+          // Its request has now settled, so one fresh read can catch this notice.
           if (
-            JSON.stringify(currentIds) === JSON.stringify(ids) &&
-            (revision === undefined ||
-              revision <= (latestMarket.current.value?.revision ?? 0))
-          )
-            return;
-          reloading = true;
-          void load();
-        },
-        (failure) => {
-          if (owner.current === ownerKey)
-            setError(wisStockErrorMessage(failure));
-        },
-      );
+            !pending &&
+            currentConnection === connection &&
+            notice.revision !== undefined &&
+            loaded.revision < notice.revision
+          ) {
+            await load();
+          }
+        }
+        reloading = false;
+      };
+      stop = watchWisStockListings({ year, semester }, receive, (failure) => {
+        if (currentConnection === connection && owner.current === ownerKey)
+          setError(wisStockErrorMessage(failure));
+      });
     };
     connect();
     document.addEventListener("visibilitychange", connect);
     return () => {
+      connection++;
       stop?.();
       document.removeEventListener("visibilitychange", connect);
     };
@@ -905,19 +925,6 @@ export default function TeacherWisStocks({
                   />
                 </label>
                 <label>
-                  변동 간격
-                  <select
-                    value={draft.intervalHours}
-                    onChange={(event) =>
-                      set("intervalHours", Number(event.target.value))
-                    }
-                  >
-                    <option value={1}>1시간</option>
-                    <option value={6}>6시간</option>
-                    <option value={24}>24시간</option>
-                  </select>
-                </label>
-                <label>
                   발행 주식 수
                   <input
                     type="number"
@@ -1077,7 +1084,7 @@ export default function TeacherWisStocks({
                     checked={draft.automatic}
                     onChange={(event) => set("automatic", event.target.checked)}
                   />
-                  자동 가격 변동
+                  거래 시간 중 30분마다 자동 가격 변동
                 </label>
               </fieldset>
               {canManage && (
