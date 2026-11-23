@@ -362,6 +362,39 @@ async function test(name, fn, count = 2, supply = 1000) {
     await assert.rejects(state('student0'), error => error.code === 'failed-precondition');
     await assert.rejects(api.getStudentWisStockState(request('student1', { studentUid: 'student0' })), error => error.code === 'invalid-argument');
   });
+  await test('orders accept an older Google login with a valid general session and reject expired or foreign proofs', async () => {
+    const uid = 'student0', oldAuthTime = Math.floor(Date.now() / 1000) - 2 * 3600;
+    const oldSession = db.doc(`application_sessions/${uid}/sessions/${oldAuthTime}`);
+    const revision = 'c'.repeat(64);
+    await oldSession.set({ ...(await get(sessionPath(uid))), authTime: oldAuthTime, sessionRevision: revision,
+      highRiskExpiresAt: Timestamp.fromMillis(1) });
+    const buyer = request(uid);
+    buyer.auth.token.auth_time = oldAuthTime;
+    buyer.data._session = { ...proof, revision };
+    await api.transferStudentWisStock({ ...buyer, data: { ...buyer.data,
+      direction: 'DEPOSIT', amount: 5000, requestId: 'general_session_deposit_01' } });
+    const orderRequest = side => ({ auth: buyer.auth, data: { ...buyer.data,
+      requestId: `general_session_${side}_0001`, stockId, side, quantity: 1,
+      quote: { price: 100, atMs: clock, marketRevision: 1 } } });
+    const buy = orderRequest('BUY');
+    const accepted = await api.placeStudentWisStockOrder(buy);
+    assert.equal(accepted.order.status, 'PENDING');
+    assert.equal((await api.placeStudentWisStockOrder(buy)).duplicate, true);
+    assert.equal(commits.at(-1).writes.length, 0);
+    clock = accepted.order.dueAtMs;
+    assert.equal((await settle(accepted.order.id)).order.status, 'FILLED');
+    const sell = orderRequest('SELL');
+    const pendingSell = await api.placeStudentWisStockOrder(sell);
+    assert.equal(pendingSell.order.status, 'PENDING');
+    const cancelled = await api.cancelStudentWisStockOrder({ ...buyer, data: { ...buyer.data, orderId: pendingSell.order.id } });
+    assert.equal(cancelled.order.status, 'CANCELLED');
+
+    const beforeDenied = commits.length + rejected.length;
+    await denied(api.placeStudentWisStockOrder({ ...sell, auth: request('student1').auth }), 'SESSION_PROOF_INVALID');
+    await oldSession.update({ generalExpiresAt: Timestamp.fromMillis(1) });
+    await denied(api.placeStudentWisStockOrder(sell), 'SESSION_EXPIRED');
+    assert.equal(commits.length + rejected.length, beforeDenied, 'Both refusals precede the order transaction');
+  });
   await test('immutable history cursors remain stable while new entries arrive and cannot cross accounts', async () => {
     await transfer('student0', 'DEPOSIT', 5000); const order = (await place('student0')).order;
     await api.cancelStudentWisStockOrder(request('student0', { orderId: order.id }));

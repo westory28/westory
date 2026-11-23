@@ -2,7 +2,7 @@ import { onIdTokenChanged, type User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { getHistoryDictionaryCallable } from "./historyDictionarySession";
-import { ensureSensitiveOperation } from "./sensitiveOperation";
+import { ensureWestoryAppCheck } from "./appCheck";
 import { notifyPointsUpdated, subscribePointsUpdated } from "./appEvents";
 import {
   retryStudentWisStockSession,
@@ -75,9 +75,10 @@ async function boundary(scope: WisStockScope): Promise<Boundary> {
   };
 }
 async function check(b: Boundary) {
+  const token = await b.owner.getIdTokenResult();
   if (
     auth.currentUser !== b.owner ||
-    Number((await b.owner.getIdTokenResult()).claims.auth_time) !== b.epoch
+    Number(token.claims.auth_time) !== b.epoch
   )
     throw changed();
 }
@@ -478,7 +479,7 @@ async function mutate(
   if (command.flight) return command.flight;
   ownerCommands.set(flightKey, command);
   // Acquire before the first await: a renewed session must not overtake an
-  // identical order while its step-up or receipt migration is still running.
+  // identical order while its receipt is being prepared or the call is pending.
   const task = prepareMutation(
     scope,
     name,
@@ -502,33 +503,22 @@ async function prepareMutation(
   owner: User,
   command: CommandEntry,
 ) {
-  const original = await boundary(scope);
-  if (original.owner !== owner) throw changed();
-  await ensureSensitiveOperation();
   const b = await boundary(scope);
-  // A successful step-up renews auth_time. Capture that authorized session,
-  // while still rejecting a different account or later session changes.
-  if (b.owner !== original.owner) throw changed();
+  if (b.owner !== owner) throw changed();
+  // Student trades use the existing application session proof and App Check.
+  await ensureWestoryAppCheck();
   // An uncertain order retry must keep its original confirmed quote as well as its receipt id.
   const signature = (value: Record<string, unknown>) =>
     commandSignature(name, value);
-  const commandKey = async (ownerKey: string) => {
-    const bytes = await crypto.subtle.digest(
-      "SHA-256",
-      new TextEncoder().encode(
-        JSON.stringify([ownerKey, name, signature(fields)]),
-      ),
-    );
-    return (
-      "westory:student-wispi:" +
-      Array.from(new Uint8Array(bytes), (v) =>
-        v.toString(16).padStart(2, "0"),
-      ).join("")
-    );
-  };
-  const key = await commandKey(b.key);
-  const previousKey =
-    original.key === b.key ? key : await commandKey(original.key);
+  const bytes = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(JSON.stringify([b.key, name, signature(fields)])),
+  );
+  const key =
+    "westory:student-wispi:" +
+    Array.from(new Uint8Array(bytes), (v) =>
+      v.toString(16).padStart(2, "0"),
+    ).join("");
   const task = (async () => {
     await check(b);
     const readPending = (pendingKey: string) => {
@@ -546,7 +536,6 @@ async function prepareMutation(
       pending = readPending(rememberedKey);
     // A receipt belongs to this logical command, including a response lost
     // during same-user renewal. New SDK users retain separate session keys.
-    if (!pending && previousKey !== key) pending = readPending(previousKey);
     if (
       !pending ||
       !/^[A-Za-z0-9_-]{16,80}$/.test(pending.requestId) ||
@@ -561,11 +550,10 @@ async function prepareMutation(
       try {
         sessionStorage.setItem(key, JSON.stringify(pending));
       } catch {}
-      for (const staleKey of new Set([previousKey, rememberedKey])) {
-        if (!staleKey || staleKey === key) continue;
-        requestIds.delete(staleKey);
+      if (rememberedKey && rememberedKey !== key) {
+        requestIds.delete(rememberedKey);
         try {
-          sessionStorage.removeItem(staleKey);
+          sessionStorage.removeItem(rememberedKey);
         } catch {}
       }
     }
