@@ -12,12 +12,14 @@ const evidence = process.env.WIS_STOCKS_QA_DIR || path.join(os.tmpdir(), 'westor
 await fs.mkdir(evidence, { recursive: true });
 const service = `
 import {DEFAULT_WIS_STOCK_MARKET_RULES} from ${JSON.stringify(path.join(root,"functions/wisStockMarketRules.mjs"))};
+import catalog from ${JSON.stringify(path.join(root,"functions/wisStockCatalog.json"))};
 export const qa=window.stockQa={reads:0,saves:0,ruleSaves:0,emergencySaves:0,uid:"teacher",generation:1,toasts:[],failRead:false,failSave:false,holdRead:false,config:{year:'2026',semester:'2'}};
 const params=new URLSearchParams(location.search);
 qa.delayUnit=0.999;Math.random=()=>qa.delayUnit;
 qa.hidden=params.has('hidden');Object.defineProperty(document,'hidden',{get:()=>qa.hidden,configurable:true});
 const settings={name:params.has('long')?'조선 후기 상업 발전과 신분제의 변화에 관한 긴 종목 이름':'합성 역사 종목',description:'합성 역사 배경',period:'조선 후기',initialPrice:100,minimumPrice:1,maximumPrice:10000,volatilityBps:300,trendBps:0,intervalHours:24,automatic:false,issuedShares:100000,lotSize:1,tradingStatus:"ACTIVE"};
 qa.market={semesterId:'2026-2',revision:1,studentOpen:true,rules:structuredClone(DEFAULT_WIS_STOCK_MARKET_RULES),maxStocks:40,historyLimit:120,updatedAtMs:1794643200000,stocks:params.has('empty')?[]:[{id:'stock_000000000000000000000001',settings,price:130,updatedAtMs:1794643200000,nextTickAtMs:1794729600000,history:[{atMs:1794556800000,price:100},{atMs:1794600000000,price:120},{atMs:1794643200000,price:130}]}]};
+if(params.has('exits')){qa.market.catalogSchedule={plan:{version:1,startsAtMs:Date.parse('2026-11-16T09:00:00+09:00')},totalCount:80,listedCount:5,pendingCount:75,dueCount:0,nextListingAtMs:null};qa.market.stocks=catalog.filter(entry=>entry.exitSession!==null&&entry.exitSession<=35).map(entry=>({...structuredClone(qa.market.stocks[0]),id:entry.id,settings:{...settings,name:entry.name}}));}
 export const useAuth=()=>({currentUser:{uid:qa.uid},userData:{role:'teacher'},authGeneration:qa.generation});
 export const useAppToast=()=>({showToast:value=>qa.toasts.push(value)});
 export const getYearSemester=config=>config;
@@ -26,6 +28,7 @@ export const saveWisStock=async(scope,expectedRevision,stockId,settings)=>{qa.sa
 export const saveWisStockMarketRules=async(scope,expectedRevision,rules)=>{qa.ruleSaves++;if(qa.ruleConflict){qa.ruleConflict=false;qa.market.revision++;throw Object.assign(Error('다른 규칙을 확인해 주세요.'),{details:{reason:'WIS_STOCK_REVISION_CONFLICT'}})}if(qa.failSave)throw Error('저장 오류');qa.market.rules={...structuredClone(rules),halted:qa.market.rules.halted};qa.market.revision++;return {...structuredClone(qa.market),changed:true,duplicate:false}};
 export const setWisStockMarketHalted=async(scope,expectedRevision,halted)=>{qa.emergencySaves++;if(qa.failEmergency)throw Error('시장 상태 변경 오류');if(!halted&&expectedRevision!==qa.market.revision)throw Object.assign(Error('최신 상태를 확인해 주세요.'),{details:{reason:'WIS_STOCK_REVISION_CONFLICT'}});qa.market.rules.halted=halted;if(!halted)qa.market.studentOpen=true;qa.market.revision++;return {...structuredClone(qa.market),changed:true,duplicate:false}};
 export const activateWisStockCatalogPlan=async(scope,expectedRevision,startsAtMs)=>{qa.planSaves=(qa.planSaves||0)+1;if(qa.failPlan)throw Error('일정 적용 오류');if(expectedRevision!==qa.market.revision)throw Object.assign(Error('최신 상태를 확인해 주세요.'),{details:{reason:'WIS_STOCK_REVISION_CONFLICT'}});qa.market.catalogSchedule={plan:{version:1,startsAtMs},totalCount:80,listedCount:0,pendingCount:80,dueCount:0,nextListingAtMs:startsAtMs};qa.market.revision++;return{...structuredClone(qa.market),changed:true,duplicate:false}};
+export const activateWisStockCatalogExits=async(scope,revision,exitOverrides)=>{qa.exitSaves=(qa.exitSaves||0)+1;qa.exitPayload={scope,revision,exitOverrides};if(qa.holdExit)await new Promise(resolve=>qa.releaseExit=resolve);if(qa.failExit)throw Error('종료 일정 저장 오류');if(qa.exitConflict){qa.exitConflict=false;qa.market.revision++;throw Object.assign(Error('최신 종료 일정을 확인해 주세요.'),{details:{reason:'WIS_STOCK_REVISION_CONFLICT'}})}qa.market.catalogSchedule.plan={...qa.market.catalogSchedule.plan,exitOverrides,exitsEnabledAtMs:Date.now()};qa.market.revision++;return{...structuredClone(qa.market),changed:true,duplicate:false}};
 export const watchWisStockListings=(scope,next,failed)=>{qa.watches=(qa.watches||0)+1;qa.activeWatches=(qa.activeWatches||0)+1;qa.listingNext=next;qa.listingFail=failed;next(qa.market.stocks.map(stock=>stock.id).sort());return()=>{qa.activeWatches--;qa.listingNext=null;qa.listingFail=null}};
 export const isWisStockRevisionConflict=error=>error.details?.reason==='WIS_STOCK_REVISION_CONFLICT';
 export const wisStockErrorMessage=error=>error.message;
@@ -41,7 +44,7 @@ const server = http.createServer(async(req,res)=>{const pathname=new URL(req.url
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const origin=`http://127.0.0.1:${server.address().port}`, browser=await playwright.chromium.launch({channel:process.env.PLAYWRIGHT_BROWSER_CHANNEL||'msedge',headless:true});
 const errors=[],checks=[];
-async function open(width=1280,query='') {const page=await browser.newPage({viewport:{width,height:1000}});page.on('pageerror',error=>errors.push(error.message));await page.route('**/*',route=>route.request().url().startsWith(origin)?route.continue():route.abort());if(query.includes('clock')){const time=new Date('2026-11-16T01:00:00Z');await page.clock.install({time});await page.clock.pauseAt(time);}await page.goto(origin+query);return page;}
+async function open(width=1280,query='') {const page=await browser.newPage({viewport:{width,height:1000}});page.on('pageerror',error=>errors.push(error.message));await page.route('**/*',route=>route.request().url().startsWith(origin)?route.continue():route.abort());if(query.includes('clock')||query.includes('exits')){const time=new Date(query.includes('exits')?'2026-11-23T11:00:00Z':'2026-11-16T01:00:00Z');await page.clock.install({time});await page.clock.pauseAt(time);}await page.goto(origin+query);return page;}
 const enter=async page=>{await page.getByRole('button',{name:'주식 열기',exact:true}).click();await page.getByRole('button',{name:'종목 관리',exact:true}).waitFor();};
 const deposit=async(page,amount='5000')=>{await page.getByLabel('이체 금액 (위스)',{exact:true}).fill(amount);await page.getByRole('button',{name:'예시 입금',exact:true}).click();await page.getByTestId('demo-stock-cash').filter({hasText:Number(amount).toLocaleString()+' 위스'}).waitFor();};
 const tab=async(page,name)=>page.getByRole('button',{name,exact:true}).press('Enter');
@@ -49,6 +52,60 @@ const assertClickable=async locator=>{await locator.scrollIntoViewIfNeeded();ass
 const choose=async page=>{await page.locator('.wis-stocks__row').filter({hasText:'합성'}).first().press('Enter');await page.getByRole('button',{name:/^종목 (편집|설정 보기)$/}).press('Enter');};
 const assertLayout=async(page,width)=>{const layout=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,width:innerWidth,titleBackground:getComputedStyle(document.querySelector('.teacher-settings-heading')).backgroundColor,tabsBackground:getComputedStyle(document.querySelector('.teacher-settings-navigation')).backgroundColor,headers:document.querySelectorAll('.wis-stocks header').length}));assert(layout.scroll<=width,JSON.stringify(layout));assert.equal(layout.titleBackground,'rgba(0, 0, 0, 0)');assert.equal(layout.tabsBackground,'rgba(0, 0, 0, 0)');assert.equal(layout.headers,0);assert.equal(await page.locator('.teacher-settings-sections.ws-page-tabs').evaluate(element=>getComputedStyle(element).borderBottomWidth),'0px');for(const section of await page.locator('.wis-stock-rules__section').all())assert.equal(await section.evaluate(element=>getComputedStyle(element).borderTopWidth),'0px');};
 try {
+  if (!process.argv.includes('--graduation-only') && !process.argv.includes('--schedule-only')) {
+    const due = [
+      ['stock_ad2eb28b88f3f231b5c7a569','돌끝테크',11],
+      ['stock_cd5e79c20ed959da9e544963','빗살키친',13],
+      ['stock_d44be69b874962add1b17bce','비파메탈',11],
+      ['stock_45bd301c4fcf8a52fa93cbf8','거석리프트',12],
+      ['stock_fe6de8b9fd042d431ff59a8a','위만브릿지',14],
+    ];
+    const overrides = date => Object.fromEntries(due.map(([id,,hour]) => [id,Date.parse(date+'T'+hour+':00:00+09:00')]));
+    for (const width of [390,768,1280]) {
+      const page=await open(width,'?exits');await enter(page);
+      const form=page.getByRole('form',{name:'6주 종료 일정',exact:true});
+      const date=page.getByLabel('지난 종료일 연장 날짜',{exact:true});
+      assert.equal(await date.inputValue(),'2026-11-24');assert.equal(await date.getAttribute('min'),'2026-11-24');
+      for(const [,name] of due)assert.match(await form.innerText(),new RegExp(name));
+      assert.equal(await form.locator('span').filter({hasText:/11\. 24\./}).count(),5);
+      await page.evaluate(()=>window.stockQa.holdExit=true);
+      await page.getByRole('button',{name:'종료 일정 적용',exact:true}).evaluate(button=>{button.click();button.click()});
+      await page.waitForFunction(()=>typeof window.stockQa.releaseExit==='function');
+      assert.equal(await page.evaluate(()=>window.stockQa.exitSaves),1);
+      assert.deepEqual(await page.evaluate(()=>window.stockQa.exitPayload),{scope:{year:'2026',semester:'2'},revision:1,exitOverrides:overrides('2026-11-24')});
+      await page.evaluate(()=>window.stockQa.releaseExit());await form.getByText('자동 종료 적용',{exact:true}).waitFor();
+      assert.equal(await page.getByRole('button',{name:'종료 일정 적용',exact:true}).count(),0);
+      assert.equal(await page.evaluate(()=>window.stockQa.reads),1);
+      await assertLayout(page,width);await page.screenshot({path:path.join(evidence,'exit-schedule-'+width+'.png'),fullPage:true});await page.close();
+    }
+    const retry=await open(390,'?exits');await enter(retry);
+    await retry.getByLabel('지난 종료일 연장 날짜',{exact:true}).fill('2026-11-25');
+    await retry.evaluate(()=>window.stockQa.failExit=true);await retry.getByRole('button',{name:'종료 일정 적용',exact:true}).click();
+    await retry.getByRole('alert').filter({hasText:'종료 일정 저장 오류'}).waitFor();
+    assert.equal(await retry.getByLabel('지난 종료일 연장 날짜',{exact:true}).inputValue(),'2026-11-25');
+    await retry.evaluate(()=>window.stockQa.failExit=false);await retry.getByRole('button',{name:'종료 일정 적용',exact:true}).click();await retry.getByText('자동 종료 적용',{exact:true}).waitFor();
+    assert.equal(await retry.evaluate(()=>window.stockQa.exitSaves),2);assert.deepEqual(await retry.evaluate(()=>window.stockQa.exitPayload.exitOverrides),overrides('2026-11-25'));await retry.close();
+    const conflict=await open(768,'?exits');await enter(conflict);await conflict.getByLabel('지난 종료일 연장 날짜',{exact:true}).fill('2026-11-26');
+    await conflict.evaluate(()=>window.stockQa.exitConflict=true);await conflict.getByRole('button',{name:'종료 일정 적용',exact:true}).click();await conflict.getByRole('alert').filter({hasText:'최신 종료 일정을 확인'}).waitFor();
+    assert.equal(await conflict.getByRole('button',{name:'종료 일정 적용',exact:true}).isDisabled(),true);
+    await conflict.getByRole('button',{name:'최신 자료 확인',exact:true}).click();await conflict.waitForFunction(()=>window.stockQa.completedReads===2);
+    assert.equal(await conflict.getByLabel('지난 종료일 연장 날짜',{exact:true}).inputValue(),'2026-11-26');
+    await conflict.getByRole('button',{name:'종료 일정 적용',exact:true}).click();await conflict.getByText('자동 종료 적용',{exact:true}).waitFor();
+    assert.equal(await conflict.evaluate(()=>window.stockQa.exitPayload.revision),2);assert.deepEqual(await conflict.evaluate(()=>window.stockQa.exitPayload.exitOverrides),overrides('2026-11-26'));await conflict.close();
+    const readonly=await open(390,'?exits&readonly');await enter(readonly);
+    assert.equal(await readonly.getByRole('button',{name:'종료 일정 적용',exact:true}).count(),0);assert.equal(await readonly.getByLabel('지난 종료일 연장 날짜',{exact:true}).count(),0);
+    assert.equal(await readonly.evaluate(()=>window.stockQa.exitSaves||0),0);await readonly.close();
+    const legacyExit=await open(390,'?exits');
+    await legacyExit.evaluate(()=>{const stock=window.stockQa.market.stocks.find(stock=>stock.settings.name==='비파메탈');stock.id='stock_000000000000000000000999';stock.settings.tradingStatus='GRADUATED';});
+    await enter(legacyExit);
+    assert.match(await legacyExit.getByRole('form',{name:'6주 종료 일정',exact:true}).innerText(),/비파메탈/);
+    await legacyExit.getByRole('button',{name:'종료 일정 적용',exact:true}).click();await legacyExit.getByText('자동 종료 적용',{exact:true}).waitFor();
+    assert.deepEqual(await legacyExit.evaluate(()=>window.stockQa.exitPayload.exitOverrides),overrides('2026-11-24'));
+    assert.equal(await legacyExit.evaluate(()=>window.stockQa.exitSaves),1);await legacyExit.close();
+    checks.push('Exit schedule: five overdue catalog exits retain 11/12/13/14 KST hours on Nov 24; duplicate click sends one exact payload, failure/retry and revision refresh preserve chosen dates, readonly blocks writes, 390/768/1280 layout passes.');
+    checks.push('A same-name custom GRADUATED stock cannot suppress the canonical catalog exit override required by the server.');
+  }
+  if (!process.argv.includes('--exits-only')) {
   for(const width of [320,390,768,1280]) {
     const graduation=await open(width);await enter(graduation);await choose(graduation);const status=graduation.getByRole('combobox',{name:/^거래 상태/});await status.selectOption('GRADUATED');
     graduation.once('dialog',dialog=>dialog.dismiss());await graduation.getByRole('button',{name:'변경 저장',exact:true}).click();assert.equal(await graduation.evaluate(()=>window.stockQa.saves),0);
@@ -196,7 +253,7 @@ try {
   }
   checks.push('320/390/768/1280/1440: three tabs, keyboard edit/save, preserved stock/rule drafts, long Korean, transparent title/tabs, no overflow, one shared read.');
   const hidden=await open(1280,'?hidden');await enter(hidden);assert.equal(await hidden.evaluate(()=>window.stockQa.reads),0);await hidden.evaluate(()=>{window.stockQa.hidden=false;document.dispatchEvent(new Event('visibilitychange'))});await hidden.getByRole('button',{name:/합성 역사 종목/}).waitFor();await tab(hidden,'주식 차트 관리');await hidden.waitForTimeout(350);assert.equal(await hidden.evaluate(()=>window.stockQa.reads),1);await hidden.close();checks.push('Hidden document and unopened feature perform zero reads; tab changes and time do not poll.');
-  const empty=await open(390,'?empty');await enter(empty);await empty.getByText('등록된 종목이 없습니다.').waitFor();await tab(empty,'주식 차트 관리');await empty.getByText('6주 기획안 · 가상 시세',{exact:true}).waitFor();assert.equal(await empty.locator('.wis-stock-preview__stock').count(),10);assert.deepEqual(await empty.evaluate(()=>[window.stockQa.saves,window.stockQa.ruleSaves]),[0,0]);await tab(empty,'종목 관리');await empty.getByRole('button',{name:'새 종목 추가',exact:true}).click();await empty.getByLabel('종목명',{exact:true}).fill('새 합성 종목');assert.equal(await empty.getByLabel('거래 시간 중 30분마다 자동 가격 변동',{exact:true}).isChecked(),false);await empty.getByRole('button',{name:'종목 등록',exact:true}).click();await empty.getByRole('heading',{name:'새 합성 종목',exact:true}).first().waitFor();await tab(empty,'주식 차트 관리');assert.equal(await empty.getByText('6주 기획안 · 가상 시세',{exact:true}).count(),0);await empty.close();checks.push('Empty-market examples never write; registration only inside new form, new real stock replaces example data.');
+  const empty=await open(390,'?empty');await enter(empty);await empty.getByText('등록된 종목이 없습니다.').waitFor();await tab(empty,'주식 차트 관리');await empty.getByText('6주 기획안 · 미상장 모의 시세',{exact:true}).waitFor();assert.equal(await empty.locator('.wis-stock-preview__stock').count(),10);assert.deepEqual(await empty.evaluate(()=>[window.stockQa.saves,window.stockQa.ruleSaves]),[0,0]);await tab(empty,'종목 관리');await empty.getByRole('button',{name:'새 종목 추가',exact:true}).click();await empty.getByLabel('종목명',{exact:true}).fill('새 합성 종목');assert.equal(await empty.getByLabel('거래 시간 중 30분마다 자동 가격 변동',{exact:true}).isChecked(),false);await empty.getByRole('button',{name:'종목 등록',exact:true}).click();await empty.getByRole('heading',{name:'새 합성 종목',exact:true}).first().waitFor();await tab(empty,'주식 차트 관리');assert.equal(await empty.getByText('6주 기획안 · 미상장 모의 시세',{exact:true}).count(),0);await empty.close();checks.push('Empty-market examples never write; registration only inside new form, new real stock replaces example data.');
   const failure=await open();await failure.evaluate(()=>window.stockQa.failRead=true);await enter(failure);await failure.getByRole('alert').waitFor();await failure.evaluate(()=>window.stockQa.failRead=false);await failure.getByRole('button',{name:'다시 불러오기',exact:true}).click();await choose(failure);await failure.getByLabel('종목명',{exact:true}).fill('보존할 수정');await failure.evaluate(()=>window.stockQa.conflict=true);await failure.getByRole('button',{name:'변경 저장',exact:true}).click();await failure.getByRole('button',{name:'최신 자료 확인',exact:true}).click();assert.equal(await failure.getByLabel('종목명',{exact:true}).inputValue(),'보존할 수정');await failure.getByRole('button',{name:'변경 저장',exact:true}).click();await failure.getByRole('heading',{name:'보존할 수정'}).first().waitFor();
   await tab(failure,'시장 규칙');await failure.getByLabel('매수 수수료 (%)',{exact:true}).fill('3');await failure.evaluate(()=>window.stockQa.ruleConflict=true);await failure.getByRole('button',{name:'규칙 저장',exact:true}).click();await failure.getByRole('button',{name:'최신 자료 확인',exact:true}).click();assert.equal(await failure.getByLabel('매수 수수료 (%)',{exact:true}).inputValue(),'3');await failure.getByRole('button',{name:'규칙 저장',exact:true}).click();await failure.waitForFunction(()=>window.stockQa.market.rules.buyFeeBps===300);await failure.close();checks.push('Read failure retries explicitly; stock/rules CAS conflict refresh preserves draft and requires explicit resave.');
   for (const times of [[0,3600000,86400000],[0,0],[0]]) {
@@ -249,7 +306,7 @@ try {
   for(const width of [320,390,768,1280,1440]) {
     const page=await open(width);await enter(page);await tab(page,'주식 차트 관리');
     const begin=Date.now();await page.getByRole('button',{name:'6주 기획안',exact:true}).click();
-    await page.getByText('6주 기획안 · 가상 시세',{exact:true}).waitFor();
+    await page.getByText('6주 기획안 · 미상장 모의 시세',{exact:true}).waitFor();
     catalogPerf.push({width,firstPlanMs:Date.now()-begin});
     await page.getByLabel('공개 차수',{exact:true}).selectOption('6');assert.equal(await page.locator('.wis-stock-preview__stock').count(),15);
     await page.getByRole('button',{name:/송상네트웍스/}).click();await page.getByText('종목 로드맵·역사 근거',{exact:true}).click();
@@ -271,5 +328,6 @@ try {
   await fs.writeFile(path.join(evidence,'catalog-performance.json'),JSON.stringify(catalogPerf,null,2));
   }
   }
-    assert.deepEqual(errors,[]);await fs.writeFile(path.join(evidence,process.argv.includes('--schedule-only')?'schedule-summary.json':'summary.json'),JSON.stringify({checks,errors},null,2));console.log(JSON.stringify({evidence,checks},null,2));
+  }
+    assert.deepEqual(errors,[]);await fs.writeFile(path.join(evidence,process.argv.includes('--exits-only')?'exit-summary.json':process.argv.includes('--schedule-only')?'schedule-summary.json':'summary.json'),JSON.stringify({checks,errors},null,2));console.log(JSON.stringify({evidence,checks},null,2));
 } finally {await browser.close();await new Promise(resolve=>server.close(resolve));}

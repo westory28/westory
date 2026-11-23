@@ -1,0 +1,87 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { build } from 'esbuild';
+
+const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'westory-bulletins-'));
+const bundle = path.join(directory, 'bulletins.mjs');
+await build({ entryPoints: ['src/pages/teacher/components/points/wisStockDisplayBulletins.ts'], bundle: true, platform: 'node', format: 'esm', outfile: bundle });
+const { createStockBulletinRotation, stockBulletinExpiresAt } = await import(pathToFileURL(bundle));
+const originals = { now: Date.now, setTimeout, clearTimeout, document: globalThis.document };
+let now = Date.parse('2026-11-23T16:30:00+09:00');
+let serial = 0;
+const timers = new Map();
+globalThis.document = { hidden: false };
+Date.now = () => now;
+globalThis.setTimeout = (callback, delay) => { const id = ++serial; timers.set(id, { callback, at: now + delay }); return id; };
+globalThis.clearTimeout = id => timers.delete(id);
+function advance(ms) {
+  const target = now + ms;
+  for (;;) {
+    const next = [...timers.entries()].filter(([, timer]) => timer.at <= target).sort((a, b) => a[1].at - b[1].at)[0];
+    if (!next) break;
+    now = next[1].at;
+    timers.delete(next[0]);
+    next[1].callback();
+  }
+  now = target;
+}
+let current;
+const events = [];
+const rotation = createStockBulletinRotation(value => { current = value; if (value) events.push({ at: now, value }); });
+const baseline = now;
+const stock = (id, atMs = baseline) => ({ id, name: id, price: 40, previousPrice: 100, priceAtMs: atMs, previousClose: 100 });
+const market = stocks => ({ updatedAtMs: now, halted: false, index: null, stocks });
+try {
+  rotation.update(market([stock('비파메탈')]), new Set());
+  assert.equal(current.stocks[0].percent, -60);
+  advance(8_000);
+  assert.equal(current, null);
+  rotation.update(market([stock('비파메탈')]), new Set(['previous:비파메탈']));
+  assert.equal(current, null, 'unchanged event cannot replay on a trade/document update');
+  advance(592_000);
+  assert.equal(events.length, 2);
+  assert.equal(events[1].at, baseline + 600_000);
+  advance(600_000);
+  assert.equal(events.length, 3);
+  advance(600_000);
+  assert.equal(current, null);
+  assert.equal(events.length, 3, '16:30 event is never replayed at 17:00');
+  rotation.update(market([stock('비파메탈')]), new Set(['previous:비파메탈']));
+  assert.equal(current, null, 'fresh document metadata does not revive expired stock events');
+  rotation.update(market([{ id: 'legacy', name: 'legacy', price: 160, previousClose: 100 }]), new Set());
+  assert.equal(current, null, 'daily comparison without an event timestamp is not breaking news');
+  now = baseline + 29 * 60_000 + 59_000;
+  rotation.clear();
+  rotation.update(market([{ id: 'late', name: '늦은상장', price: 300, previousClose: 300, listedAtMs: now, listingPrice: 300 }]), new Set());
+  assert.equal(current.stocks[0].kind, 'listing');
+  advance(1_000);
+  assert.equal(current, null, 'visible page is removed at the half-hour boundary');
+  assert.equal(timers.size, 0, 'expired events leave no polling timer');
+  now = baseline;
+  rotation.update(market(Array.from({ length: 6 }, (_, i) => stock('종목' + i))), new Set());
+  const reached = new Set(current.stocks.map(item => item.id));
+  for (let i = 0; i < 2; i++) { advance(14_000); current.stocks.forEach(item => reached.add(item.id)); }
+  assert.equal(reached.size, 6, 'all current events fit into the current announcement round');
+  advance(14_000);
+  assert.equal(current, null);
+  rotation.update({ ...market([stock('halt')]), halted: true }, new Set());
+  assert.equal(timers.size, 0);
+  assert.equal(current, null);
+  document.hidden = true;
+  rotation.update(market([stock('hidden')]), new Set());
+  assert.equal(current, null);
+  rotation.clear();
+  assert.equal(timers.size, 0);
+  assert.equal(stockBulletinExpiresAt(baseline), baseline + 1_800_000);
+  console.log('PASS: 0/10/20 minute local cadence, strict half-hour expiry, duplicate/stale/legacy suppression, complete paging, halt/hidden/cleanup; no network calls.');
+} finally {
+  rotation.clear();
+  Date.now = originals.now;
+  globalThis.setTimeout = originals.setTimeout;
+  globalThis.clearTimeout = originals.clearTimeout;
+  globalThis.document = originals.document;
+  await fs.rm(directory, { recursive: true });
+}

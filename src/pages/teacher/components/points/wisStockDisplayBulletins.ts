@@ -11,14 +11,17 @@ type Item = { id: string; name: string; atMs: number };
 export type StockBulletinItem = Item &
   (
     | { kind: "listing"; price: number; hasListingPrice: boolean }
-    | { kind: "previous" | "received" | "daily"; percent: number }
+    | { kind: "previous" | "received"; percent: number }
   );
 export type StockBulletin = {
   id: number;
   before: StockBulletinItem[];
   stocks: StockBulletinItem[];
 };
-const day = 24 * 60 * 60 * 1000;
+const slotMs = 30 * 60 * 1000;
+const repeatMs = 10 * 60 * 1000;
+export const stockBulletinExpiresAt = (atMs: number) =>
+  (Math.floor(atMs / slotMs) + 1) * slotMs;
 
 function eligibleItems(
   market: BulletinMarket,
@@ -26,21 +29,15 @@ function eligibleItems(
 ): StockBulletinItem[] {
   const listings: StockBulletinItem[] = [];
   const movements: Extract<StockBulletinItem, { percent: number }>[] = [];
-  let gainer: (typeof movements)[number] | undefined;
-  let decliner: typeof gainer;
-  const recent = (time: number | undefined): time is number =>
-    time !== undefined && time > 0 && time <= now && now - time < day;
+  const current = (time: number | undefined): time is number =>
+    time !== undefined &&
+    Number.isFinite(time) &&
+    time > 0 &&
+    time <= now &&
+    now < stockBulletinExpiresAt(time);
   for (const stock of market.stocks) {
-    const {
-      id,
-      name,
-      price,
-      listedAtMs,
-      priceAtMs,
-      previousPrice,
-      previousClose,
-    } = stock;
-    if (recent(listedAtMs)) {
+    const { id, name, price, listedAtMs, priceAtMs, previousPrice } = stock;
+    if (current(listedAtMs)) {
       listings.push({
         kind: "listing",
         id,
@@ -50,8 +47,10 @@ function eligibleItems(
         hasListingPrice: stock.listingPrice !== undefined,
       });
     }
+    // A document refresh or yesterday's close does not establish when a price
+    // moved. Only an observed tick can create a time-limited breaking headline.
     if (
-      recent(priceAtMs) &&
+      current(priceAtMs) &&
       previousPrice &&
       Math.abs(price - previousPrice) * 100 >= 3 * previousPrice
     ) {
@@ -62,40 +61,15 @@ function eligibleItems(
         atMs: priceAtMs,
         percent: ((price - previousPrice) / previousPrice) * 100,
       });
-    } else if (
-      recent(market.updatedAtMs) &&
-      previousClose &&
-      price !== previousClose
-    ) {
-      const item = {
-        kind: "daily" as const,
-        id,
-        name,
-        atMs: market.updatedAtMs,
-        percent: ((price - previousClose) / previousClose) * 100,
-      };
-      if (Math.abs(price - previousClose) * 100 >= 3 * previousClose)
-        movements.push(item);
-      else if (item.percent > 0 && (!gainer || item.percent > gainer.percent))
-        gainer = item;
-      else if (
-        item.percent < 0 &&
-        (!decliner || item.percent < decliner.percent)
-      )
-        decliner = item;
     }
-  }
-  if (!movements.length) {
-    if (gainer) movements.push(gainer);
-    if (decliner) movements.push(decliner);
   }
   listings.sort((a, b) => b.atMs - a.atMs);
   movements.sort((a, b) => Math.abs(b.percent) - Math.abs(a.percent));
   return [...listings, ...movements];
 }
 
-// Each burst leaves the board clear after at most two pages. Least recently
-// shown headlines come first in the next burst, including on a quiet market.
+// Local deadlines only: each event is announced on receipt, then at its next
+// ten-minute marks, and never beyond its original half-hour market slot.
 export function createStockBulletinRotation(
   publish: (value: StockBulletin | null) => void,
 ) {
@@ -103,60 +77,59 @@ export function createStockBulletinRotation(
   let timer: ReturnType<typeof setTimeout> | undefined;
   let sequence = 0;
   let page: StockBulletinItem[] = [];
-  let pagesInBurst = 0;
   const shown = new Map<string, number>();
-  const inBurst = new Set<string>();
-  const key = (item: StockBulletinItem) => item.kind + ":" + item.id;
-  function rest() {
-    page = [];
-    pagesInBurst = 0;
-    inBurst.clear();
-    publish(null);
-    timer = setTimeout(show, 16_000);
-  }
+  const key = (item: StockBulletinItem) =>
+    `${item.kind}:${item.id}:${item.atMs}`;
+  const occurrence = (item: StockBulletinItem, now: number) =>
+    Math.floor((now - item.atMs) / repeatMs);
+
   function show(priority = new Set<string>()) {
+    clearTimeout(timer);
     timer = undefined;
-    if (!market || market.halted || document.hidden) return;
-    const items = eligibleItems(
-      market,
-      Math.max(Date.now(), market.updatedAtMs),
-    );
-    const available = items
-      .filter((item) => !inBurst.has(key(item)))
-      .sort((a, b) => {
-        const aPriority = priority.has(key(a));
-        const bPriority = priority.has(key(b));
-        if (aPriority || bPriority)
-          return Number(bPriority) - Number(aPriority);
-        return (shown.get(key(a)) ?? 0) - (shown.get(key(b)) ?? 0);
-      });
-    const lead = available[0];
-    if (!lead) {
-      if (page.length) rest();
-      else publish(null);
+    if (!market || market.halted || document.hidden) {
+      page = [];
+      publish(null);
       return;
     }
-    const before = page;
-    page = available.filter((item) => item.kind === lead.kind).slice(0, 2);
-    sequence++;
-    for (const item of page) {
-      shown.set(key(item), sequence);
-      inBurst.add(key(item));
+    const now = Date.now();
+    const items = eligibleItems(market, now);
+    const activeKeys = new Set(items.map(key));
+    for (const eventKey of shown.keys())
+      if (!activeKeys.has(eventKey)) shown.delete(eventKey);
+    const available = items
+      .filter((item) => shown.get(key(item)) !== occurrence(item, now))
+      .sort(
+        (a, b) =>
+          Number(priority.has(`${b.kind}:${b.id}`)) -
+          Number(priority.has(`${a.kind}:${a.id}`)),
+      );
+    const lead = available[0];
+    if (lead) {
+      const before = page.filter(
+        (item) => now < stockBulletinExpiresAt(item.atMs),
+      );
+      page = available.filter((item) => item.kind === lead.kind).slice(0, 2);
+      for (const item of page) shown.set(key(item), occurrence(item, now));
+      publish({ id: ++sequence, before, stocks: page });
+      const deadline = Math.min(
+        now + (page.length > 1 ? 14_000 : 8_000),
+        ...page.map((item) => stockBulletinExpiresAt(item.atMs)),
+      );
+      timer = setTimeout(() => show(priority), Math.max(0, deadline - now));
+      return;
     }
-    publish({ id: sequence, before, stocks: page });
-    const more = available.length > page.length;
-    pagesInBurst++;
-    timer = setTimeout(
-      more && pagesInBurst < 2 ? () => show(priority) : rest,
-      more || pagesInBurst > 1 ? 4_000 : 8_000,
-    );
+    page = [];
+    publish(null);
+    const deadlines = items
+      .map((item) => item.atMs + (occurrence(item, now) + 1) * repeatMs)
+      .filter((time) => time > now && time < stockBulletinExpiresAt(now));
+    if (deadlines.length)
+      timer = setTimeout(show, Math.min(...deadlines) - now);
   }
   function clear() {
     clearTimeout(timer);
     timer = undefined;
     page = [];
-    pagesInBurst = 0;
-    inBurst.clear();
     shown.clear();
     market = null;
     publish(null);
@@ -169,13 +142,13 @@ export function createStockBulletinRotation(
         clear();
         return;
       }
-      if (priority.size) {
-        clearTimeout(timer);
-        inBurst.clear();
-        pagesInBurst = 0;
-        page = [];
-        show(priority);
-      } else if (timer === undefined) show();
+      const now = Date.now();
+      const hasNewPriority = eligibleItems(next, now).some(
+        (item) =>
+          priority.has(`${item.kind}:${item.id}`) &&
+          shown.get(key(item)) !== occurrence(item, now),
+      );
+      if (hasNewPriority || timer === undefined) show(priority);
     },
   };
 }

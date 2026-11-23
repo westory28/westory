@@ -8290,6 +8290,10 @@ exports.activateWisStockCatalogPlan = onCall(
   { region: 'us-central1', memory: '256MiB', maxInstances: 10 },
   wisStockHandlers.activateWisStockCatalogPlan,
 );
+exports.activateWisStockCatalogExits = onCall(
+  { region: 'us-central1', memory: '256MiB', maxInstances: 10 },
+  wisStockHandlers.activateWisStockCatalogExits,
+);
 Object.assign(exports, require('./wisRankingIndex').createWisRankingIndexTriggers({ db }));
 // Use the reviewed scoped query, preserving the live teacher archive boundary.
 exports.listStudentHistoryDictionaryWordsForTeacher = onCall({ region: REGION },

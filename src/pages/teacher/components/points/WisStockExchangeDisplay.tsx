@@ -10,6 +10,7 @@ import WisStockFlapFaces from "./WisStockFlapFaces";
 import type { StockBulletinItem } from "./wisStockDisplayBulletins";
 import { useWisStockDisplayRows } from "./useWisStockDisplayRows";
 import { useWisStockExchangeDisplay } from "./useWisStockExchangeDisplay";
+import { useWisStockBulletinAudio } from "./useWisStockBulletinAudio";
 import "./WisStockExchangeDisplay.css";
 
 function bulletinHeading(stocks: StockBulletinItem[]) {
@@ -138,6 +139,7 @@ export default function WisStockExchangeDisplay({
     retry,
     initial,
   );
+  const audio = useWisStockBulletinAudio(bulletin);
   useLayoutEffect(() => {
     const modal = dialog.current!;
     const frame = panel.current!;
@@ -203,17 +205,52 @@ export default function WisStockExchangeDisplay({
           >
             {status}
           </span>
-          <button
-            type="button"
-            className="wis-exchange__close"
-            onClick={onClose}
-            autoFocus
-            aria-label="전광판 닫기"
-          >
-            <span aria-hidden="true">×</span>{" "}
-            <span className="wis-exchange__close-text">닫기</span>
-          </button>
+          <div className="wis-exchange__actions">
+            <button
+              type="button"
+              aria-label="속보 알림음"
+              aria-pressed={audio.sound}
+              disabled={!audio.soundAvailable}
+              title={
+                audio.soundAvailable
+                  ? undefined
+                  : "이 브라우저는 알림음을 지원하지 않습니다."
+              }
+              onClick={() => void audio.toggleSound()}
+            >
+              알림음 {audio.sound ? "켬" : "끔"}
+            </button>
+            <button
+              type="button"
+              aria-label="속보 음성"
+              aria-pressed={audio.speech}
+              disabled={!audio.speechAvailable}
+              title={
+                audio.speechAvailable
+                  ? undefined
+                  : "이 브라우저는 음성 안내를 지원하지 않습니다."
+              }
+              onClick={audio.toggleSpeech}
+            >
+              음성 {audio.speech ? "켬" : "끔"}
+            </button>
+            <button
+              type="button"
+              className="wis-exchange__close"
+              onClick={onClose}
+              autoFocus
+              aria-label="전광판 닫기"
+            >
+              <span aria-hidden="true">×</span>{" "}
+              <span className="wis-exchange__close-text">닫기</span>
+            </button>
+          </div>
         </div>
+        {audio.message && (
+          <div className="wis-exchange__error" role="status">
+            {audio.message}
+          </div>
+        )}
         {state.status === "error" && (
           <div className="wis-exchange__error" role="alert">
             {state.message}
@@ -340,10 +377,9 @@ export default function WisStockExchangeDisplay({
                 <span>
                   {
                     {
-                      listing: "최근 24시간",
+                      listing: "현재 30분 시간대",
                       previous: "직전 시세 대비",
                       received: "직전 수신 시세 대비",
-                      daily: "전일 대비 · 첫날은 기준가",
                     }[bulletin.stocks[0].kind]
                   }
                 </span>

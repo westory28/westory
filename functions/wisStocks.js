@@ -5,8 +5,10 @@ const { nextWisStockModelPrice, wisStockPriceModelAnchor, wisStockPreviousMarket
 const { normalizeWisStockMarketRules, normalizeWisStockTradingSettings,
   isWisStockTradingSession, wisStockKstSession, wisStockDailyBounds,
   WIS_STOCK_PRICE_INTERVAL_MS, wisStockPriceSlot, nextWisStockPriceTick } = require('./wisStockMarketRules');
-const { normalizeCatalogPlan, catalogScheduleState, applyDueCatalogListings,
+const { normalizeCatalogPlan, readCatalogPlan, catalogScheduleState, applyDueCatalogListings, applyDueCatalogExits,
   drawListingPrice, MIN_LISTING_PRICE, MAX_LISTING_PRICE } = require('./wisStockCatalogSchedule');
+const { catalogExitAtMs } = require('./wisStockCatalogTimeline');
+const stockCatalog = require('./wisStockCatalog.json');
 const { INDEX_HISTORY_LIMIT, emptyIndex, validWisStockIndex, updateWisStockIndex, wisStockIndexState } = require('./wisStockIndex');
 
 // Teacher market administration. Student orders remain separate server commands.
@@ -55,6 +57,8 @@ function reservedMarketBytes(market, scope) {
       const { history, ...data } = stock;
       // Also reserve the model anchor for seedless legacy instruments.
       if (!data.priceModel) data.priceModel = { version: 1, anchorAtMs: 0, anchorPrice: MAX_PRICE };
+      if (!data.graduation) data.graduation = { unitPrice: MAX_PRICE, atMs: Number.MAX_SAFE_INTEGER,
+        plannedAtMs: Number.MAX_SAFE_INTEGER, exitKind: 'delist' };
       return sum + fieldBytes({ ...data, autoEnabledAtMs: 0 }) + fieldBytes('history') + HISTORY_LIMIT * pointSize;
     }, 0);
 }
@@ -117,7 +121,7 @@ function readMarket(snapshot, scope) {
       && stock.history.every(point => safeInt(point.atMs, 0, Number.MAX_SAFE_INTEGER) && safeInt(point.price, 1, MAX_PRICE));
   };
   let rules;
-  try { rules = normalizeWisStockMarketRules(value.rules); normalizeCatalogPlan(value.catalogPlan); } catch { rules = null; }
+  try { rules = normalizeWisStockMarketRules(value.rules); readCatalogPlan(value); } catch { rules = null; }
   if (value.schemaVersion !== 1 || value.semesterId !== scope.semesterId || typeof value.studentOpen !== 'boolean'
     || !rules || (value.priceSeed !== undefined && !/^[a-f0-9]{64}$/.test(value.priceSeed))
     || (value.marketIndex !== undefined && !validWisStockIndex(value.marketIndex))
@@ -176,6 +180,11 @@ function publishStudentMarket(tx, db, scope, previous, updated) {
   tx.set(db.doc(publicStockPath(scope, 'market')), publicStockMarket(updated));
   if (!previous.studentOpen || previous.publicationRevision !== updated.publicationRevision)
     tx.set(db.doc(publicStockPath(scope, 'current')), publicStockStatus(updated));
+}
+function queueCatalogGraduations(tx, db, scope, exited) {
+  for (const exit of exited) tx.create(db.doc(`wis_stock_graduations/${scope.semesterId}_${exit.stockId}`), {
+    schemaVersion: 1, ...scope, ...exit, status: 'PENDING',
+  });
 }
 function nextPrice(stock, semesterId, slot, priceSeed = '', dailyPriceLimitBps, marketContext) {
   // The private seed never enters callable responses. A missing legacy seed is
@@ -413,18 +422,21 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
         publicationRevision: market.publicationRevision + 1, publicationUpdatedAtMs: atMs,
         ...(!input.halted && !market.priceSeed ? { priceSeed: newPriceSeed } : {}) };
       const { market: listed, addedIds } = applyDueCatalogListings(resumed, atMs);
-      const updated = addedIds.length ? updateWisStockIndex(market, listed, atMs) : listed;
-      if (addedIds.length) assertCatalogCapacity(updated, scope);
+      const { market: ended, exited } = applyDueCatalogExits(listed, atMs);
+      const instrumentsChanged = addedIds.length || exited.length;
+      const updated = instrumentsChanged ? updateWisStockIndex(market, ended, atMs) : ended;
+      if (instrumentsChanged) assertCatalogCapacity(updated, scope);
       if (snapshot.exists) tx.update(marketRef, { 'rules.halted': input.halted, studentOpen: updated.studentOpen,
         tradingEpoch: updated.tradingEpoch, publicationRevision: updated.publicationRevision, publicationUpdatedAtMs: atMs,
         ...(updated.priceSeed ? { priceSeed: updated.priceSeed } : {}),
-        ...(addedIds.length ? { stocks: updated.stocks, marketIndex: updated.marketIndex } : {}), revision: updated.revision, updatedAtMs: atMs });
+        ...(instrumentsChanged ? { stocks: updated.stocks, marketIndex: updated.marketIndex } : {}), revision: updated.revision, updatedAtMs: atMs });
       else tx.set(marketRef, updated);
       publishStudentMarket(tx, db, scope, market, updated);
+      queueCatalogGraduations(tx, db, scope, exited);
       tx.create(receiptRef, { schemaVersion: 1, commandType: 'setWisStockMarketHalted', semesterId: scope.semesterId,
         actorUid: actor.uid, payloadHash, revision: updated.revision, previousHalted: market.rules.halted,
         halted: input.halted, studentOpen: updated.studentOpen, tradingEpoch: updated.tradingEpoch,
-        ...(addedIds.length ? { addedIds } : {}), createdAtMs: atMs });
+        ...(addedIds.length ? { addedIds } : {}), ...(exited.length ? { exited } : {}), createdAtMs: atMs });
       return { ...managementState(updated), duplicate: false, changed: true };
     });
   };
@@ -472,6 +484,56 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       return { ...managementState(updated), duplicate: false, changed: true };
     });
   };
+  const activateWisStockCatalogExits = async request => {
+    const actor = await identity(request, true), input = request.data;
+    if (!allowed(input, ['year', 'semester', '_session', 'requestId', 'expectedRevision', 'exitOverrides'])
+      || !record(input.exitOverrides) || !safeInt(input.expectedRevision, 0, Number.MAX_SAFE_INTEGER - 1)
+      || typeof input.requestId !== 'string' || !/^[A-Za-z0-9_-]{16,80}$/.test(input.requestId)) invalid();
+    const scope = scopeInput(input), atMs = now();
+    const overrides = Object.fromEntries(Object.entries(input.exitOverrides).sort(([a], [b]) => a.localeCompare(b)));
+    const payloadHash = hash(JSON.stringify(['activateWisStockCatalogExits', scope.semesterId, input.expectedRevision, overrides]));
+    return db.runTransaction(async tx => {
+      await authority(tx, actor, true);
+      await activeScope(tx, scope);
+      const marketRef = db.doc(marketPath(scope)), receiptRef = db.doc(receiptPath(scope, actor.uid, input.requestId));
+      const [snapshot, receipt] = await Promise.all([tx.get(marketRef), tx.get(receiptRef)]);
+      const market = readMarket(snapshot, scope);
+      if (receipt.exists) {
+        if (receipt.data().commandType !== 'activateWisStockCatalogExits' || receipt.data().payloadHash !== payloadHash)
+          fail('already-exists', '같은 종료 일정 요청의 내용이 달라졌습니다.', 'WIS_STOCK_REQUEST_CONFLICT');
+        return { ...managementState(market), duplicate: true, changed: false };
+      }
+      if (market.revision !== input.expectedRevision)
+        fail('aborted', '시장 상태가 변경되었습니다. 최신 자료를 확인해 주세요.', 'WIS_STOCK_REVISION_CONFLICT');
+      if (!market.catalogPlan) fail('failed-precondition', '상장 일정을 먼저 적용해 주세요.', 'WIS_STOCK_CATALOG_PLAN_REQUIRED');
+      const previousPlan = readCatalogPlan(market);
+      let plan;
+      try { plan = normalizeCatalogPlan({ ...previousPlan, exitsEnabledAtMs: previousPlan.exitsEnabledAtMs || atMs, exitOverrides: overrides }); }
+      catch { fail('invalid-argument', '종목별 종료일은 원래 예정일 이후의 정각 또는 30분으로 설정해 주세요.', 'WIS_STOCK_CATALOG_EXITS_INVALID'); }
+      if (previousPlan.exitsEnabledAtMs) {
+        if (JSON.stringify(plan) !== JSON.stringify(previousPlan))
+          fail('failed-precondition', '이미 적용한 종료 일정은 변경할 수 없습니다.', 'WIS_STOCK_CATALOG_EXITS_LOCKED');
+        return { ...managementState(market), duplicate: false, changed: false };
+      }
+      for (const entry of stockCatalog) {
+        if (entry.exitKind === 'survive' || entry.exitSession === null) continue;
+        const stock = market.stocks.find(item => item.id === entry.id);
+        if (stock?.settings.tradingStatus === 'GRADUATED') continue;
+        if (catalogExitAtMs(entry, plan) <= atMs)
+          fail('failed-precondition', '이미 지난 종료일은 현재 시각 이후로 조정해 주세요.', 'WIS_STOCK_CATALOG_EXIT_PAST');
+      }
+      // Activation is configuration only: never liquidate a holding or invent a
+      // historical quote. The existing half-hour scheduler applies due exits.
+      const updated = { ...market, catalogExits: { enabledAtMs: plan.exitsEnabledAtMs, overrides: plan.exitOverrides },
+        revision: market.revision + 1, updatedAtMs: atMs };
+      assertCatalogCapacity(updated, scope);
+      tx.set(marketRef, updated);
+      publishStudentMarket(tx, db, scope, market, updated);
+      tx.create(receiptRef, { schemaVersion: 1, commandType: 'activateWisStockCatalogExits', semesterId: scope.semesterId,
+        actorUid: actor.uid, payloadHash, plan, revision: updated.revision, createdAtMs: atMs });
+      return { ...managementState(updated), duplicate: false, changed: true };
+    });
+  };
   const advanceWisStockPrices = async event => {
     const atMs = now(), slot = wisStockPriceSlot(atMs);
     const scheduledMs = event?.scheduleTime === undefined ? atMs : Date.parse(event.scheduleTime);
@@ -487,8 +549,9 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       if (current.updatedAtMs > atMs || !isWisStockTradingSession(current.rules, slot * WIS_STOCK_PRICE_INTERVAL_MS)
         || !isWisStockTradingSession(current.rules, atMs)) return { changed: false };
       const { market: listed, addedIds } = applyDueCatalogListings(current, atMs);
-      const priced = advanceMarket(listed, atMs);
-      const changed = addedIds.length ? { ...priced, revision: current.revision + 1, updatedAtMs: atMs } : priced;
+      const { market: ended, exited } = applyDueCatalogExits(listed, atMs);
+      const priced = advanceMarket(ended, atMs);
+      const changed = addedIds.length || exited.length ? { ...priced, revision: current.revision + 1, updatedAtMs: atMs } : priced;
       if (changed === current) return { changed: false };
 
       // Only a real mutation needs both active-semester guards. They remain in
@@ -505,15 +568,22 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       assertMarketCapacity(updated, scope);
       tx.set(marketRef, updated);
       publishStudentMarket(tx, db, scope, current, updated);
+      queueCatalogGraduations(tx, db, scope, exited);
       if (addedIds.length) tx.create(db.doc(receiptPath(scope, 'scheduler',
         hash(JSON.stringify([current.catalogPlan, addedIds])))), {
         schemaVersion: 1, commandType: 'applyWisStockCatalogListings', semesterId: scope.semesterId,
         actorUid: 'scheduler', plan: current.catalogPlan, addedIds, revision: updated.revision, createdAtMs: atMs,
       });
+      if (exited.length) tx.create(db.doc(receiptPath(scope, 'scheduler',
+        hash(JSON.stringify(['catalogExits', current.catalogPlan, current.catalogExits, exited.map(exit => exit.stockId)])))), {
+        schemaVersion: 1, commandType: 'applyWisStockCatalogExits', semesterId: scope.semesterId,
+        actorUid: 'scheduler', plan: readCatalogPlan(current), exited, revision: updated.revision, createdAtMs: atMs,
+      });
       return { changed: true, revision: updated.revision };
     });
   };
-  return { getWisStockManagement, saveWisStock, saveWisStockMarketRules, setWisStockMarketHalted, activateWisStockCatalogPlan, advanceWisStockPrices };
+  return { getWisStockManagement, saveWisStock, saveWisStockMarketRules, setWisStockMarketHalted,
+    activateWisStockCatalogPlan, activateWisStockCatalogExits, advanceWisStockPrices };
 }
 module.exports = { createWisStockHandlers, MAX_STOCKS, HISTORY_LIMIT, MAX_PRICE, marketPath, receiptPath,
   publicStockPath, publicStockStatus, publicStockMarket, publicStockSettings, readMarket,

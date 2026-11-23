@@ -9,13 +9,21 @@ import WisStockOrderPreview from "./WisStockOrderPreview";
 import {
   wisStockCatalog,
   wisStockCatalogWeeks,
-  createWisStockPlanStocks,
 } from "../../../../lib/wisStockCatalog";
+import {
+  createWisStockRulePlanStocks,
+  matchWisStockPlanStocks,
+} from "../../../../lib/wisStockPlanPreview";
 import StockChart, {
   stockObservations,
 } from "../../../../components/common/WisStockPriceChart";
 export { stockObservations } from "../../../../components/common/WisStockPriceChart";
 import "./WisStockCatalog.css";
+import {
+  catalogExitAtMs,
+  catalogSessionAtMs,
+  type WisStockCatalogPlan,
+} from "../../../../../functions/wisStockCatalogTimeline.mjs";
 
 const DAY = 86_400_000;
 const periods = [
@@ -25,6 +33,14 @@ const periods = [
   { key: "all", label: "전체", days: Infinity },
 ] as const;
 const money = (value: number) => value.toLocaleString("ko-KR");
+const planDate = (value: number) =>
+  new Intl.DateTimeFormat("ko-KR", {
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Seoul",
+  }).format(value);
 const catalogById = new Map(
   wisStockCatalog.map((company) => [company.id, company]),
 );
@@ -39,22 +55,39 @@ export default function WisStockChartPreview({
   rules,
   revision,
   semesterId,
+  catalogPlan,
 }: {
   stocks: WisStock[];
   rules: WisStockMarketRules;
   revision: number;
   semesterId: string;
+  catalogPlan?: WisStockCatalogPlan | null;
 }) {
+  const rulesKey = JSON.stringify(rules);
+  const planKey = JSON.stringify(catalogPlan ?? null);
+  const examples = useMemo(
+    () =>
+      createWisStockRulePlanStocks(
+        JSON.parse(rulesKey),
+        semesterId,
+        JSON.parse(planKey) ?? undefined,
+      ),
+    [rulesKey, semesterId, planKey],
+  );
   const planStocks = useMemo(
-    () => createWisStockPlanStocks(rules.dailyPriceLimitBps),
-    [rules.dailyPriceLimitBps],
+    () => matchWisStockPlanStocks(examples, stocks),
+    [examples, stocks],
   );
   const [source, setSource] = useState(stocks.length ? "registered" : "plan");
   const isPlan = source === "plan" || !stocks.length;
   const available = isPlan ? planStocks : stocks;
   const [week, setWeek] = useState(1);
   const visibleStocks = isPlan
-    ? available.filter((stock) => catalogById.get(stock.id)?.week === week)
+    ? available.filter(
+        (stock) =>
+          (catalogById.get(stock.id) || catalogByName.get(stock.settings.name))
+            ?.week === week,
+      )
     : available;
   const [selectedId, setSelectedId] = useState(available[0]?.id || "");
   const [period, setPeriod] = useState<(typeof periods)[number]>(periods[3]);
@@ -62,7 +95,15 @@ export default function WisStockChartPreview({
   const root = useRef<HTMLDivElement>(null);
   const selected =
     visibleStocks.find((stock) => stock.id === selectedId) || visibleStocks[0];
-  const company = isPlan ? catalogById.get(selected.id) : undefined;
+  const company = isPlan
+    ? catalogById.get(selected.id) || catalogByName.get(selected.settings.name)
+    : undefined;
+  const registered = stocks.some((stock) => stock.id === selected.id);
+  const exitAtMs = company ? catalogExitAtMs(company, catalogPlan) : null;
+  const scheduledExit =
+    catalogPlan?.exitsEnabledAtMs !== undefined && company?.id === selected.id;
+  const customCatalogStock =
+    registered && company && company.id !== selected.id;
   const observations = stockObservations(selected);
   const lastAt = observations.at(-1)?.atMs || 0;
   const first =
@@ -91,7 +132,9 @@ export default function WisStockChartPreview({
       <div className="wis-stock-preview__heading">
         <h2>주식 차트 미리보기</h2>
         <span className="wis-stocks__closed">
-          {isPlan ? "6주 기획안 · 가상 시세" : "등록 종목"}
+          {isPlan
+            ? `6주 기획안 · ${registered ? "등록 시세" : "미상장 모의 시세"}`
+            : "등록 종목"}
         </span>
         {isPlan && (
           <span className="wis-stocks__closed">
@@ -100,12 +143,15 @@ export default function WisStockChartPreview({
         )}
         <InfoHelp label="미리보기 자료">
           <p>
-            등록 종목은 저장된 관측 가격을 표시합니다. 6주 기획안은 역사 종목
-            70개와 장기 가치 종목 10개의 가상 시나리오이며, 날짜·등락·퇴장은
-            실제 운영 일정이 아닙니다. 저장된 하루 가격 제한폭에 비례해 종목별
-            등락폭도 달라집니다. 계좌 이체와 주문은 미리보기 안에서만
-            처리합니다.
+            등록된 종목은 두 보기에서 같은 실제 가격 기록을 표시합니다. 미상장
+            종목은 저장된 거래 요일·시간, 30분 주기, 가격 제한폭과 서킷
+            브레이커를 적용한 모의 시세입니다. 규칙을 저장하거나 새로고침하면
+            반영되며, 실제 상장가와 미래 수익을 뜻하지 않습니다. 계좌 이체와
+            주문은 미리보기 안에서만 처리합니다.
           </p>
+          {customCatalogStock && (
+            <p>이름이 같은 개별 등록 종목은 자동 종료 대상에서 제외됩니다.</p>
+          )}
         </InfoHelp>
       </div>
       <div
@@ -154,7 +200,8 @@ export default function WisStockChartPreview({
           {visibleStocks.map((stock, index) => {
             const logo = (
               isPlan
-                ? catalogById.get(stock.id)
+                ? catalogById.get(stock.id) ||
+                  catalogByName.get(stock.settings.name)
                 : catalogByName.get(stock.settings.name)
             )?.logoUrl;
             const baseline = stockObservations(stock)[0]?.price || stock.price;
@@ -281,15 +328,41 @@ export default function WisStockChartPreview({
                     <div>
                       <i
                         style={{
-                          left: `${Math.min(98, Math.max(2, ((event.session - 1) / 209) * 100))}%`,
+                          left: `${Math.min(
+                            98,
+                            Math.max(
+                              2,
+                              catalogPlan
+                                ? (((event.kind === "exit" && exitAtMs !== null
+                                    ? exitAtMs
+                                    : catalogSessionAtMs(
+                                        event.session,
+                                        catalogPlan.startsAtMs,
+                                      )) -
+                                    catalogPlan.startsAtMs) /
+                                    (42 * DAY)) *
+                                    100
+                                : ((event.session - 1) / 209) * 100,
+                            ),
+                          )}%`,
                         }}
                       />
                     </div>
-                    <small>{sessionLabel(event.session)}</small>
+                    <small>
+                      {event.kind === "exit" && exitAtMs !== null
+                        ? planDate(exitAtMs)
+                        : sessionLabel(event.session)}
+                    </small>
                   </div>
                 ))}
               </div>
               <dl>
+                {exitAtMs !== null && (
+                  <div>
+                    <dt>{scheduledExit ? "예정 종료 시각" : "기획 종료"}</dt>
+                    <dd>{planDate(exitAtMs)}</dd>
+                  </div>
+                )}
                 <div>
                   <dt>성장 계기</dt>
                   <dd>{company.riseReason}</dd>
@@ -306,8 +379,11 @@ export default function WisStockChartPreview({
                 </div>
               </dl>
               <p className="wis-stock-catalog__fiction">
-                가격·사건의 발생 시점은 수업용 가정입니다. 상장폐지·합병은
-                기획안이며 계좌를 자동 정산하지 않습니다.
+                성장·하락·합병 이야기는 수업용 가정입니다.
+                {!customCatalogStock &&
+                  (scheduledExit
+                    ? " 종료 예정 시각은 현재 운영 일정을 따릅니다."
+                    : " 자동 종료는 종료 일정을 적용한 뒤 연결됩니다.")}
               </p>
               {company.sourceUrls.length > 0 && (
                 <div className="wis-stock-catalog__sources">

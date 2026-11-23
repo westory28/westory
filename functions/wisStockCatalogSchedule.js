@@ -1,9 +1,10 @@
 const { createHmac } = require('node:crypto');
 const catalog = require('./wisStockCatalog.json');
+const { catalogSessionAtMs, catalogExitAtMs } = require('./wisStockCatalogTimeline');
 const { normalizeWisStockMarketRules, isWisStockTradingSession, wisStockKstSession, nextWisStockPriceTick } = require('./wisStockMarketRules');
 
-// The same reviewed catalog feeds the teacher plan and the server. Only listing
-// times are operational here: synthetic future prices, exits and mergers are not.
+// The same reviewed dates feed the teacher plan and the server. Exits require
+// a separate authenticated activation; synthetic prices never become quotes.
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const KST_OFFSET = 9 * HOUR;
@@ -20,20 +21,65 @@ function invalidPlan() {
 
 function normalizeCatalogPlan(value) {
   if (value === undefined || value === null) return null;
-  if (!record(value) || Object.keys(value).some(key => !['version', 'startsAtMs'].includes(key))
+  if (!record(value) || Object.keys(value).some(key => !['version', 'startsAtMs', 'exitsEnabledAtMs', 'exitOverrides'].includes(key))
     || value.version !== 1 || !Number.isSafeInteger(value.startsAtMs) || value.startsAtMs < 0
     || value.startsAtMs > 8_640_000_000_000_000 - KST_OFFSET - PLAN_SPAN
     || value.startsAtMs % HOUR !== 0) invalidPlan();
   const session = wisStockKstSession(value.startsAtMs);
   if (session.dayOfWeek !== 1 || session.minute !== 540) invalidPlan();
-  return { version: 1, startsAtMs: value.startsAtMs };
+  const plan = { version: 1, startsAtMs: value.startsAtMs };
+  if (value.exitsEnabledAtMs !== undefined) {
+    if (!Number.isSafeInteger(value.exitsEnabledAtMs) || value.exitsEnabledAtMs <= 0
+      || value.exitsEnabledAtMs > 8_640_000_000_000_000 - KST_OFFSET) invalidPlan();
+    plan.exitsEnabledAtMs = value.exitsEnabledAtMs;
+  }
+  if (value.exitOverrides !== undefined) {
+    if (!record(value.exitOverrides)) invalidPlan();
+    const overrides = {};
+    for (const [id, atMs] of Object.entries(value.exitOverrides).sort(([a], [b]) => a.localeCompare(b))) {
+      const entry = catalog.find(item => item.id === id && item.exitKind !== 'survive' && item.exitSession !== null);
+      if (!entry || !Number.isSafeInteger(atMs) || atMs < catalogSessionAtMs(entry.exitSession, value.startsAtMs)
+        || atMs > 8_640_000_000_000_000 - KST_OFFSET || atMs % (30 * 60_000) !== 0) invalidPlan();
+      overrides[id] = atMs;
+    }
+    plan.exitOverrides = overrides;
+  }
+  return plan;
 }
 
 function listingAtMs(entry, plan) {
-  const index = entry.listingSession - 1;
-  const tradingDay = Math.floor(index / 7);
-  return plan.startsAtMs + (Math.floor(tradingDay / 5) * 7 + tradingDay % 5) * DAY
-    + (index % 7) * HOUR;
+  return catalogSessionAtMs(entry.listingSession, plan.startsAtMs);
+}
+
+function readCatalogPlan(market) {
+  const plan = normalizeCatalogPlan(market.catalogPlan);
+  if (market.catalogExits === undefined) return plan;
+  // Keep the stored v1 listing plan compatible with existing student workers.
+  // The management DTO combines both records for the shared teacher timeline.
+  const exits = market.catalogExits;
+  if (!plan || !record(exits) || Object.keys(exits).some(key => !['enabledAtMs', 'overrides'].includes(key))
+    || exits.enabledAtMs === undefined || exits.overrides === undefined) invalidPlan();
+  return normalizeCatalogPlan({ ...plan, exitsEnabledAtMs: exits.enabledAtMs, exitOverrides: exits.overrides });
+}
+
+function applyDueCatalogExits(market, atMs) {
+  const plan = readCatalogPlan(market);
+  if (!plan?.exitsEnabledAtMs || plan.exitsEnabledAtMs > atMs || market.studentOpen !== true)
+    return { market, exited: [] };
+  const rules = normalizeWisStockMarketRules(market.rules);
+  if (rules.halted || !isWisStockTradingSession(rules, atMs)) return { market, exited: [] };
+  const exited = [];
+  const stocks = market.stocks.map(stock => {
+    // Only canonical catalog IDs carry scheduled lifecycle authority. A custom
+    // stock with a matching display name must not be liquidated automatically.
+    const entry = catalog.find(item => item.id === stock.id && item.exitKind !== 'survive');
+    const plannedAtMs = entry ? catalogExitAtMs(entry, plan) : null;
+    if (plannedAtMs === null || plannedAtMs > atMs || stock.settings.tradingStatus === 'GRADUATED') return stock;
+    exited.push({ stockId: stock.id, unitPrice: stock.price, atMs, plannedAtMs, exitKind: entry.exitKind });
+    return { ...stock, settings: { ...stock.settings, tradingStatus: 'GRADUATED' },
+      graduation: { unitPrice: stock.price, atMs, plannedAtMs, exitKind: entry.exitKind } };
+  });
+  return exited.length ? { market: { ...market, stocks }, exited } : { market, exited };
 }
 
 function pendingEntries(market, plan) {
@@ -57,7 +103,7 @@ function nextTradingAtMs(rules, atMs) {
 }
 
 function catalogScheduleState(market, atMs) {
-  const plan = normalizeCatalogPlan(market.catalogPlan);
+  const plan = readCatalogPlan(market);
   if (!plan) return { plan: null, totalCount: catalog.length, listedCount: 0,
     pendingCount: 0, dueCount: 0, nextListingAtMs: null };
   const pending = pendingEntries(market, plan);
@@ -109,4 +155,5 @@ function applyDueCatalogListings(market, atMs, openingPrice = drawListingPrice) 
   return { market: { ...market, stocks: [...market.stocks, ...added] }, addedIds: added.map(stock => stock.id) };
 }
 
-module.exports = { normalizeCatalogPlan, catalogScheduleState, applyDueCatalogListings, drawListingPrice, MIN_LISTING_PRICE, MAX_LISTING_PRICE };
+module.exports = { normalizeCatalogPlan, readCatalogPlan, catalogScheduleState, applyDueCatalogListings, applyDueCatalogExits,
+  drawListingPrice, MIN_LISTING_PRICE, MAX_LISTING_PRICE };

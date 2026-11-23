@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const { createRequire } = require('node:module');
+const { execFileSync } = require('node:child_process');
 const projectId = 'demo-westory-session-wis-stock-trading';
 const host = process.env.FIRESTORE_EMULATOR_HOST;
 if (!/^127\.0\.0\.1:\d+$/.test(host || '') || process.env.GCLOUD_PROJECT !== projectId)
@@ -23,7 +25,8 @@ const { normalizeWisStockMarketRules } = require('../wisStockMarketRules');
 const { inspectWisLedger } = require('../wisLedgerIntegrity');
 const app = initializeApp({ projectId }), db = getFirestore(app);
 const base = 'years/2026/semesters/2', scope = { year: '2026', semester: '2', semesterId: '2026-2' };
-const stockId = 'stock_' + 'a'.repeat(24), hash = text => createHash('sha256').update(text).digest('hex');
+const defaultStockId = 'stock_' + 'a'.repeat(24), hash = text => createHash('sha256').update(text).digest('hex');
+let stockId = defaultStockId;
 const authTime = Math.floor(Date.now() / 1000) - 10, proof = { authorityGeneration: 'w1r2-2026-08-09', protocolVersion: 2, revision: 'b'.repeat(64) };
 let clock = Date.parse('2026-11-16T01:00:00Z'), draw = 60, commits = [], tasks = [], rejected = [];
 const observedDb = { doc: value => db.doc(value), collection: value => db.collection(value), collectionGroup: value => db.collectionGroup(value),
@@ -100,7 +103,8 @@ async function seed(count = 2, issuedShares = 1000) {
     docs[`semester_enrollments/enrollment-${uid}`] = { semesterId: scope.semesterId, studentUid: uid, enrollmentId: `enrollment-${uid}`,
       enrollmentStatus: 'ACTIVE', classId: 'class-one' };
     docs[sessionPath(uid)] = { uid, authTime, schemaVersion: 2, status: 'active', authorityGeneration: proof.authorityGeneration,
-      protocolVersion: 2, sessionRevision: proof.revision, authorityModeAtOpen: 'ENFORCE', generalExpiresAt: Timestamp.fromMillis(clock + 7 * 86400000) };
+      protocolVersion: 2, sessionRevision: proof.revision, authorityModeAtOpen: 'ENFORCE',
+      generalExpiresAt: Timestamp.fromMillis(Math.max(clock, Date.now()) + 7 * 86400000) };
     const wallet = { schemaVersion: 1, policyVersion: 'w7-v1', semesterId: scope.semesterId, accountId, studentUid: uid,
       enrollmentId: `enrollment-${uid}`, classId: 'class-one', grade: '3', classNumber: '1', studentNumber: String(index + 1), displayName: `합성 ${index + 1}`,
       status: 'ACTIVE', revision: 3, balance: 10000, earnedTotal: 10000, rankEarnedTotal: 9500, spentTotal: 0, adjustedTotal: 9500, recentLedgerEntries: ledger };
@@ -123,8 +127,9 @@ async function accounting(uid) {
   return main;
 }
 const evidence = [];
-async function test(name, fn, count = 2, supply = 1000) {
+async function test(name, fn, count = 2, supply = 1000, instrument = defaultStockId) {
   if (process.env.WIS_STOCK_TRADING_TEST_PATTERN && !name.includes(process.env.WIS_STOCK_TRADING_TEST_PATTERN)) return;
+  stockId = instrument;
   await seed(count, supply); const started = Date.now(); await fn();
   evidence.push({ name, elapsedMs: Date.now() - started, transactions: commits.length,
     attemptedReads: commits.reduce((n, c) => n + c.reads, 0) + rejected.reduce((n, c) => n + c.reads, 0),
@@ -152,6 +157,24 @@ async function graduate() {
   assert.equal((await management.saveWisStock(req)).duplicate, true);
   await denied(management.saveWisStock(request('syntheticTeacher', { ...req.data, requestId: 'graduate_synthetic_000002',
     expectedRevision: result.revision, settings: { ...req.data.settings, tradingStatus: 'ACTIVE' } })), 'WIS_STOCK_GRADUATED');
+}
+function legacyTradingFactory() {
+  // Pin the pre-change production baseline. Exercise its strict catalog-plan
+  // reader and original graduation worker against the additive new metadata.
+  const revision = '139ad72f4f67cc826a6579922c91b80ac9a2ac65';
+  const originals = new Set(['./wisStocks', './wisStockCatalogSchedule', './wisStockTrading', './wisStockGraduation']);
+  const cache = new Map(), nativeRequire = createRequire(path.join(__dirname, '../wisStockTrading.js'));
+  const load = name => {
+    if (!originals.has(name)) return nativeRequire(name);
+    if (cache.has(name)) return cache.get(name).exports;
+    const file = name.slice(2) + '.js';
+    const source = execFileSync('git', ['show', `${revision}:functions/${file}`], { cwd: path.join(__dirname, '../..'), encoding: 'utf8' });
+    const module = { exports: {} }; cache.set(name, module);
+    new Function('require', 'module', 'exports', '__filename', '__dirname', source)(load, module, module.exports,
+      path.join(__dirname, '..', file), path.join(__dirname, '..'));
+    return module.exports;
+  };
+  return load('./wisStockTrading').createWisStockTrading;
 }
 (async () => { try {
   await test('499 is ineligible and split 500 deposits require an explicit one-time restricted claim', async () => {
@@ -359,6 +382,63 @@ async function graduate() {
     assert.equal((await get(`${base}/wis_stock_orders/${pending.order.id}`)).status, 'CANCELLED');
     const before = structuredClone(account); await gradTask({}); assert.deepEqual(await get(acctPath('student0')), before);
   });
+  await test('scheduled exits defer past dates and atomically feed the unchanged production graduation worker', async () => {
+    const catalog = require('../wisStockCatalog.json'), { catalogExitAtMs } = require('../wisStockCatalogTimeline');
+    const start = Date.parse('2026-11-16T00:00:00Z');
+    await transfer('student0', 'DEPOSIT', 5000);
+    const buy = await place('student0', 'BUY', 10); clock += 60001; await settle(buy.order.id);
+    const sell = await place('student0', 'SELL', 2, 'scheduled_sell_reserve01');
+    const pendingBuy = await place('student0', 'BUY', 3, 'scheduled_buy_reserve001');
+    clock = Date.parse('2026-11-23T12:00:00Z'); // Activation outside the market session.
+    const market = await get(`${base}/wis_stock_markets/current`);
+    market.catalogPlan = { version: 1, startsAtMs: start }; market.rules.automaticPrices = false;
+    market.stocks[0].price = 123; market.stocks[0].history.push({ atMs: clock, price: 123 });
+    market.stocks[0].updatedAtMs = clock; market.updatedAtMs = clock;
+    await db.doc(`${base}/wis_stock_markets/current`).set(market);
+    await db.doc('users/syntheticTeacher').set({ role: 'teacher', registrationApprovalStatus: 'APPROVED' });
+    const managementOptions = { db: observedDb, now: () => clock, assertSession: async req => ({ uid: req.auth.uid }) };
+    const management = createWisStockHandlers(managementOptions);
+    const exitOverrides = Object.fromEntries(catalog.filter(entry => entry.exitKind !== 'survive'
+      && catalogExitAtMs(entry, market.catalogPlan) <= clock).map(entry =>
+      [entry.id, catalogExitAtMs(entry, market.catalogPlan) + 4 * 86400000]));
+    const command = request('syntheticTeacher', { requestId: 'scheduled_exit_activate01', expectedRevision: market.revision, exitOverrides });
+    const accountBefore = await get(acctPath('student0'));
+    const activated = await management.activateWisStockCatalogExits(command);
+    assert.equal(activated.stocks[0].settings.tradingStatus, 'ACTIVE');
+    assert.deepEqual(await get(acctPath('student0')), accountBefore);
+    assert.equal(await get(`wis_stock_graduations/${scope.semesterId}_${stockId}`), undefined);
+    const legacy = legacyTradingFactory()({ db: observedDb, now: () => clock, delaySeconds: () => draw,
+      enqueueTask: async (data, options) => tasks.push({ data, ...options }) });
+    assert.equal((await legacy.getStudentWisStockState(request('student0'))).stocks[0].settings.tradingStatus, 'ACTIVE');
+    clock = Date.parse('2026-11-24T02:00:00Z');
+    const original = await get(`${base}/wis_stock_markets/current`);
+    const broken = createWisStockHandlers({ ...managementOptions, db: { ...observedDb,
+      runTransaction: (cb, options) => observedDb.runTransaction(tx => cb({ ...tx, create(ref, value) {
+        if (ref.path.startsWith('wis_stock_graduations/')) throw new Error('SYNTHETIC_SCHEDULE_COMMIT_FAILURE');
+        return tx.create(ref, value);
+      } }), options) } });
+    await assert.rejects(broken.advanceWisStockPrices(), /SYNTHETIC_SCHEDULE_COMMIT_FAILURE/);
+    assert.deepEqual(await get(`${base}/wis_stock_markets/current`), original);
+    assert.equal(await get(`wis_stock_graduations/${scope.semesterId}_${stockId}`), undefined);
+    const results = await Promise.all(Array.from({ length: 4 }, () => management.advanceWisStockPrices()));
+    assert.equal(results.filter(result => result.changed).length, 1);
+    const ended = await get(`${base}/wis_stock_markets/current`), instrument = ended.stocks.find(item => item.id === stockId);
+    assert.equal(instrument.price, 123); assert.equal(instrument.settings.tradingStatus, 'GRADUATED');
+    assert.equal(instrument.graduation.plannedAtMs, exitOverrides[stockId]);
+    assert.deepEqual(ended.catalogPlan, market.catalogPlan);
+    const job = await get(`wis_stock_graduations/${scope.semesterId}_${stockId}`);
+    assert.equal(job.unitPrice, 123); assert.equal(job.status, 'PENDING');
+    const worker = () => legacy.settleWisStockOrderTask({ data: { ...scope, kind: 'GRADUATION', stockId } });
+    await Promise.all([worker(), worker()]);
+    const account = await get(acctPath('student0'));
+    assert.equal(account.stockCash, 5220); assert.equal(account.positions[stockId], undefined);
+    assert.equal(account.reservedCash, 0); assert.equal(Object.keys(account.pendingOrders).length, 0);
+    assert.equal((await get(`${base}/wis_stock_orders/${sell.order.id}`)).cancellationReason, 'STOCK_GRADUATED');
+    assert.equal((await get(`${base}/wis_stock_orders/${pendingBuy.order.id}`)).status, 'CANCELLED');
+    assert.equal((await db.collection(`${base}/wis_stock_graduation_receipts`).get()).size, 1);
+    await worker(); assert.deepEqual(await get(acctPath('student0')), account);
+    assert.equal((await accounting('student0')).balance, 5000);
+  }, 2, 1000, require('../wisStockCatalog.json').find(entry => entry.name === '비파메탈').id);
   await test('graduation cancels reservations and liquidates the final price exactly once', async () => {
     await transfer('student0', 'DEPOSIT', 5000);
     const buy = await place('student0', 'BUY', 10); clock += 60001; await settle(buy.order.id);

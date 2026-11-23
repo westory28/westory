@@ -48,6 +48,105 @@ function fixture({ optimisticRetries = false, beforeRead = () => {}, openingPric
   const api = createWisStockHandlers({ db, openingPrice, assertSession: async (request, options) => { sessions.push(options); return { uid: request.auth?.uid, email: request.auth?.token?.email }; }, now: () => clock });
   return { api, documents, reads, writes, sessions, advance: (ms = 3600000) => clock += ms };
 }
+
+function catalogExitFixture(options) {
+  const f = fixture(options), start = Date.parse('2026-11-16T00:00:00Z');
+  const { applyDueCatalogListings } = require('../wisStockCatalogSchedule');
+  const { catalogExitAtMs } = require('../wisStockCatalogTimeline');
+  const catalog = require('../wisStockCatalog.json');
+  const plan = { version: 1, startsAtMs: start };
+  const base = { ...blankMarket(scope), revision: 1, studentOpen: true, catalogPlan: plan,
+    rules: normalizeWisStockMarketRules({ automaticPrices: false }) };
+  const listed = applyDueCatalogListings(base, start + 42 * 86400000).market;
+  // All canonical IDs are registered beforehand so this fixture can count
+  // lifecycle writes without unrelated listing writes at the same boundary.
+  listed.stocks = listed.stocks.map(stock => ({ ...stock, listedAtMs: start, updatedAtMs: start,
+    history: [{ atMs: start, price: stock.price }], priceModel: { ...stock.priceModel, anchorAtMs: start } }));
+  f.documents.set(marketPath(scope), listed);
+  f.advance(7 * 86400000);
+  const exitOverrides = Object.fromEntries(catalog.filter(entry => entry.exitKind !== 'survive'
+    && catalogExitAtMs(entry, plan) <= start + 7 * 86400000)
+    .map(entry => [entry.id, catalogExitAtMs(entry, plan) + 4 * 86400000]));
+  const request = req({ expectedRevision: 1, requestId: 'catalog-exits-activate-01', exitOverrides });
+  f.reads.length = 0; f.writes.length = 0;
+  return { ...f, start, exitOverrides, request };
+}
+
+test('catalog exit activation only stores reviewed future dates, with authority, revision and zero-write replay', async () => {
+  const f = catalogExitFixture();
+  const result = await f.api.activateWisStockCatalogExits(f.request);
+  assert.equal(result.changed, true); assert.equal(f.reads.length, 6); assert.equal(f.writes.length, 3);
+  assert.equal(result.catalogSchedule.plan.exitsEnabledAtMs, f.start + 7 * 86400000);
+  assert.deepEqual(result.catalogSchedule.plan.exitOverrides, f.exitOverrides);
+  assert.deepEqual(f.documents.get(marketPath(scope)).catalogPlan, { version: 1, startsAtMs: f.start });
+  assert.deepEqual(f.documents.get(marketPath(scope)).catalogExits,
+    { enabledAtMs: f.start + 7 * 86400000, overrides: f.exitOverrides });
+  assert.equal(result.stocks.filter(stock => stock.settings.tradingStatus === 'GRADUATED').length, 0);
+  assert(![...f.documents.keys()].some(path => path.startsWith('wis_stock_graduations/')));
+  f.writes.length = 0;
+  assert.equal((await f.api.activateWisStockCatalogExits(f.request)).duplicate, true);
+  assert.equal(f.writes.length, 0);
+  await assert.rejects(f.api.activateWisStockCatalogExits(req({ ...f.request.data, exitOverrides: {} })), reason('WIS_STOCK_REQUEST_CONFLICT'));
+  assert.equal((await f.api.activateWisStockCatalogExits(req({ ...f.request.data, requestId: 'catalog-exits-same-0001', expectedRevision: 2 }))).changed, false);
+  await assert.rejects(f.api.activateWisStockCatalogExits(req({ ...f.request.data, requestId: 'catalog-exits-different1', expectedRevision: 2, exitOverrides: {} })), reason('WIS_STOCK_CATALOG_EXITS_LOCKED'));
+  const other = catalogExitFixture();
+  await assert.rejects(other.api.activateWisStockCatalogExits(req({ ...other.request.data, exitOverrides: {} })), reason('WIS_STOCK_CATALOG_EXIT_PAST'));
+  await assert.rejects(other.api.activateWisStockCatalogExits(req({ ...other.request.data, expectedRevision: 0 })), reason('WIS_STOCK_REVISION_CONFLICT'));
+  other.documents.set('users/manager', { role: 'student' });
+  await assert.rejects(other.api.activateWisStockCatalogExits(other.request), reason('WIS_STOCK_TEACHER_REQUIRED'));
+  assert.equal(other.writes.length, 0);
+});
+
+test('scheduled exits freeze the last actual quote before pricing and create atomic jobs once without account reads', async () => {
+  const f = catalogExitFixture({ optimisticRetries: true });
+  await f.api.activateWisStockCatalogExits(f.request);
+  f.advance(86400000 + 2 * 3600000); // November 24, 11:00 KST, two deferred exits.
+  const market = f.documents.get(marketPath(scope));
+  market.rules.automaticPrices = true;
+  for (const stock of market.stocks) stock.settings.automatic = false;
+  const exiting = market.stocks.filter(stock => f.exitOverrides[stock.id] === f.start + 8 * 86400000 + 2 * 3600000);
+  for (const stock of exiting) { stock.settings.automatic = true; stock.settings.trendBps = 300; stock.nextTickAtMs = f.start; }
+  const originals = structuredClone(exiting);
+  f.reads.length = 0; f.writes.length = 0;
+  const results = await Promise.all([f.api.advanceWisStockPrices(), f.api.advanceWisStockPrices()]);
+  assert.equal(results.filter(result => result.changed).length, 1);
+  const updated = f.documents.get(marketPath(scope));
+  for (const old of originals) {
+    const stock = updated.stocks.find(stock => stock.id === old.id);
+    assert.equal(stock.settings.tradingStatus, 'GRADUATED'); assert.equal(stock.price, old.price);
+    assert.deepEqual(stock.history, old.history);
+    const job = f.documents.get(`wis_stock_graduations/${scope.semesterId}_${old.id}`);
+    assert.equal(job.status, 'PENDING'); assert.equal(job.unitPrice, old.price);
+    assert.equal(job.plannedAtMs, f.exitOverrides[old.id]); assert.equal(job.atMs, f.exitOverrides[old.id]);
+    assert.equal(f.documents.get(publicStockPath(scope, 'market')).stocks.find(stock => stock.id === old.id).settings.tradingStatus, 'GRADUATED');
+  }
+  assert.equal(f.writes.length, 5); // market, public projection, two jobs, one audit receipt.
+  assert(!f.reads.some(path => /accounts|orders|supplies/.test(path)));
+  f.reads.length = 0; f.writes.length = 0;
+  assert.equal((await f.api.advanceWisStockPrices()).changed, false);
+  assert.equal(f.reads.length, 2); assert.equal(f.writes.length, 0);
+});
+
+test('scheduled exits require explicit activation and recover after a halt or closed session', async () => {
+  const inactive = catalogExitFixture();
+  inactive.advance(86400000 + 2 * 3600000);
+  assert.equal((await inactive.api.advanceWisStockPrices()).changed, false);
+  assert.equal(inactive.writes.length, 0);
+  const f = catalogExitFixture();
+  await f.api.activateWisStockCatalogExits(f.request);
+  f.advance(86400000 + 2 * 3600000);
+  const raw = f.documents.get(marketPath(scope)); raw.rules.halted = true;
+  f.writes.length = 0;
+  assert.equal((await f.api.advanceWisStockPrices()).changed, false); assert.equal(f.writes.length, 0);
+  const resumed = await f.api.setWisStockMarketHalted(req({ requestId: 'resume-catalog-exits-01', expectedRevision: raw.revision, halted: false }));
+  assert.equal(resumed.stocks.filter(stock => stock.settings.tradingStatus === 'GRADUATED').length, 2);
+  f.advance(10 * 3600000); // Session closed: remaining three exits wait.
+  f.writes.length = 0;
+  assert.equal((await f.api.advanceWisStockPrices()).changed, false); assert.equal(f.writes.length, 0);
+  f.advance(12 * 3600000); // Next morning's first trading slot.
+  assert.equal((await f.api.advanceWisStockPrices()).changed, true);
+  assert.equal(f.documents.get(marketPath(scope)).stocks.filter(stock => stock.settings.tradingStatus === 'GRADUATED').length, 5);
+});
 test('management requires point authority, forbids students even with portal flags, and reads a single market without writes', async () => {
   const f = fixture(), value = await f.api.getWisStockManagement(req({}));
   assert.equal(value.studentOpen, false); assert.deepEqual(value.stocks, []); assert.equal(value.maxStocks, MAX_STOCKS);

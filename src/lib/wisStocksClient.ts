@@ -4,6 +4,7 @@ import { getYearSemester } from "./semesterScope";
 import { ensureSensitiveOperation } from "./sensitiveOperation";
 import type { SystemConfig } from "../types";
 import type { WisStockMarketRules } from "../../functions/wisStockMarketRules.mjs";
+import type { WisStockCatalogPlan } from "../../functions/wisStockCatalogTimeline.mjs";
 export type { WisStockMarketRules } from "../../functions/wisStockMarketRules.mjs";
 
 export type WisStockConfig =
@@ -48,7 +49,7 @@ export interface WisStockManagement {
   rules: WisStockMarketRules;
   marketIndex?: WisStockMarketIndex;
   catalogSchedule?: {
-    plan: { version: 1; startsAtMs: number } | null;
+    plan: WisStockCatalogPlan | null;
     totalCount: number;
     listedCount: number;
     pendingCount: number;
@@ -150,6 +151,17 @@ export async function activateWisStockCatalogPlan(
   return saveManagement<
     WisStockManagement & { changed: boolean; duplicate: boolean }
   >("activateWisStockCatalogPlan", config, expectedRevision, { startsAtMs });
+}
+export async function activateWisStockCatalogExits(
+  config: WisStockConfig,
+  expectedRevision: number,
+  exitOverrides: Record<string, number>,
+) {
+  return saveManagement<
+    WisStockManagement & { changed: boolean; duplicate: boolean }
+  >("activateWisStockCatalogExits", config, expectedRevision, {
+    exitOverrides,
+  });
 }
 async function saveManagement<T>(
   name: string,

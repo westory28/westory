@@ -502,9 +502,32 @@ export default function WisStockInvestmentBoard({
             <span>
               {ready ? `${rows.length.toLocaleString()}명` : "학생별 투자 현황"}
             </span>
-            <label>
-              정렬
+            <div className="wis-investment-board__sort">
+              <label htmlFor="wis-investment-sort">정렬</label>
+              <InfoHelp
+                label="투자 현황 정렬 기준"
+                sections={[
+                  {
+                    title: "총자산 높은 순",
+                    items: [
+                      "주식 계좌 현금 + 현재 보유 주식의 평가액 기준",
+                      "매수 예약금은 계좌 현금에 포함, 일반 위스 지갑은 제외",
+                      "총자산이 많은 학생부터 표시",
+                    ],
+                  },
+                  {
+                    title: "평가손익 높은 순",
+                    items: [
+                      "현재 보유 주식의 평가액 − 해당 주식의 매수 원가 기준",
+                      "이미 매도해 확정된 실현손익과 수익률은 제외",
+                      "평가이익이 큰 학생부터 표시, 손실은 작은 학생부터 표시",
+                    ],
+                  },
+                  { items: ["같은 금액이면 학년·반·번호순"] },
+                ]}
+              />
               <select
+                id="wis-investment-sort"
                 aria-label="투자 현황 정렬"
                 value={sort}
                 onChange={(event) => {
@@ -516,7 +539,7 @@ export default function WisStockInvestmentBoard({
                 <option value="assets">총자산 높은 순</option>
                 <option value="pnl">평가손익 높은 순</option>
               </select>
-            </label>
+            </div>
           </div>
           <div
             className="wis-investment-board__list"

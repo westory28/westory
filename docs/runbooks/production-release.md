@@ -1,5 +1,11 @@
 # 운영 배포 절차
 
+## 위스피 기획안·종료 일정·전광판 (2026-11-23 후속)
+
+등록 종목은 6주 보기에서도 운영 이력을 사용하고 미상장 모의 시세만 저장된 규칙으로 로컬 계산한다. 기획안 종료일은 별도 활성화 명령으로 연결하며 지난 5종목은 11월 24일 기존 시각으로 연장한다. 원본 catalogPlan v1을 보존하고 catalogExits를 별도로 저장해 기존 거래·정산 worker 호환을 유지한다. [구현·검증·비용 기록](../reviews/wispi-lifecycle-alerts-20261123.md)을 따른다. `prepare-wispi-lifecycle-release.mjs`로 운영 원본을 보존하고 기존 관리 6함수와 신규 activateWisStockCatalogExits만 선택 배포·대조한다. 동일 main의 Vercel 운영 반영 후 교사 화면에서 대상·시각을 확인해 종료 일정을 적용한다. 운영 QA로 학생 정산을 미리 실행하지 않는다.
+
+전광판 속보는 사건의 30분 구간 안에서 10분 간격으로만 재생한다. 알림음·한국어 음성은 독립 설정이며 학생 정보는 음성 합성기에 보내지 않는다. 추가 서버 폴링·구독·스케줄러를 만들지 않는다.
+
 ## 위스피 신규 상장가와 전광판 (2026-11-23)
 
 교사 등록과 예약 상장은 종목당 100~500위스 범위에서 첫 가격을 정한다. 직접 등록에서 최저가·최고가를 좁히면 두 범위가 겹치는 가격만 적용한다. 추첨은 학기의 시장 시드와 종목 ID를 사용하며 첫 시세와 영수증을 기존 트랜잭션에 저장한다. 운영 반영 대상은 `saveWisStock`, `activateWisStockCatalogPlan`, `setWisStockMarketHalted`, `advanceWisStockPrices`다. 네 함수의 운영 소스에 `wisStocks.js`와 `wisStockCatalogSchedule.js` 변경을 적용하고 30분 Scheduler 설정을 대조한다.

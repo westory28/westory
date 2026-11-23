@@ -14,6 +14,7 @@ import WisStockChartPreview from "./WisStockChartPreview";
 import WisStockMarketRules from "./WisStockMarketRules";
 import WisStockInvestmentBoard from "./WisStockInvestmentBoard";
 import WisStockMarketOverview from "./WisStockMarketOverview";
+import { catalogExitAtMs } from "../../../../../functions/wisStockCatalogTimeline.mjs";
 import {
   wisStockQuote,
   quoteNumber,
@@ -32,6 +33,7 @@ import {
   saveWisStock,
   setWisStockMarketHalted,
   activateWisStockCatalogPlan,
+  activateWisStockCatalogExits,
   wisStockErrorMessage,
   isWisStockRevisionConflict,
   type WisStock,
@@ -72,6 +74,8 @@ const planStartDate = (year: string, semester: string) => {
   first.setUTCDate(first.getUTCDate() + ((8 - first.getUTCDay()) % 7));
   return first.toISOString().slice(0, 10);
 };
+const tomorrowKst = () =>
+  new Date(Date.now() + 33 * 3_600_000).toISOString().slice(0, 10);
 export default function TeacherWisStocks({
   config,
   canManage,
@@ -124,6 +128,7 @@ export default function TeacherWisStocks({
   const [templateId, setTemplateId] = useState("");
   const [startsOn, setStartsOn] = useState(() => planStartDate(year, semester));
   const planFlight = useRef(false);
+  const [overdueExitDate, setOverdueExitDate] = useState(tomorrowKst);
   const [draft, setDraft] = useState<WisStockSettings>(emptySettings);
   const [loading, setLoading] = useState(false),
     [saving, setSaving] = useState(false),
@@ -173,6 +178,7 @@ export default function TeacherWisStocks({
     setPeriodFilter(null);
     setTemplateId("");
     setStartsOn(planStartDate(year, semester));
+    setOverdueExitDate(tomorrowKst());
     planFlight.current = false;
     setDraft(emptySettings());
     setError("");
@@ -198,6 +204,26 @@ export default function TeacherWisStocks({
     };
   }, [load]);
   const schedule = market?.catalogSchedule;
+  const overdueExits =
+    schedule?.plan && !schedule.plan.exitsEnabledAtMs
+      ? wisStockCatalog.flatMap((entry) => {
+          const atMs = catalogExitAtMs(entry, schedule.plan);
+          const registered = market?.stocks.find(
+            (stock) => stock.id === entry.id,
+          );
+          return atMs !== null &&
+            atMs <= Date.now() &&
+            registered?.settings.tradingStatus !== "GRADUATED"
+            ? [{ entry, atMs }]
+            : [];
+        })
+      : [];
+  const revisedExits = overdueExits.map(({ entry, atMs }) => ({
+    entry,
+    atMs:
+      Date.parse(`${overdueExitDate}T00:00:00+09:00`) +
+      ((atMs + 9 * 3_600_000) % 86_400_000),
+  }));
   const watchListings =
     tab === "stocks" &&
     market?.studentOpen === true &&
@@ -294,6 +320,55 @@ export default function TeacherWisStocks({
       if (owner.current !== expectedOwner) return;
       applyMarket(result);
       showToast({ title: "상장 일정을 적용했습니다.", tone: "success" });
+    } catch (failure) {
+      if (owner.current === expectedOwner) {
+        setError(wisStockErrorMessage(failure));
+        setConflict(isWisStockRevisionConflict(failure));
+      }
+    } finally {
+      if (owner.current === expectedOwner) {
+        planFlight.current = false;
+        setSaving(false);
+      }
+    }
+  };
+  const activateExits = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (
+      !market ||
+      !schedule?.plan ||
+      !canManage ||
+      saving ||
+      loading ||
+      conflict ||
+      planFlight.current ||
+      schedule.plan.exitsEnabledAtMs
+    )
+      return;
+    if (
+      revisedExits.some(
+        ({ atMs }) => !Number.isFinite(atMs) || atMs <= Date.now(),
+      ) ||
+      (revisedExits.length > 0 && overdueExitDate < tomorrowKst())
+    ) {
+      setError("지난 종료일을 옮길 날짜는 내일 이후로 선택해 주세요.");
+      return;
+    }
+    const expectedOwner = ownerKey;
+    planFlight.current = true;
+    setSaving(true);
+    setError("");
+    try {
+      const result = await activateWisStockCatalogExits(
+        { year, semester },
+        market.revision,
+        Object.fromEntries(
+          revisedExits.map(({ entry, atMs }) => [entry.id, atMs]),
+        ),
+      );
+      if (owner.current !== expectedOwner) return;
+      applyMarket(result);
+      showToast({ title: "종료 일정을 적용했습니다.", tone: "success" });
     } catch (failure) {
       if (owner.current === expectedOwner) {
         setError(wisStockErrorMessage(failure));
@@ -571,8 +646,8 @@ export default function TeacherWisStocks({
             <p>
               시작일 오전 9시부터 기존 80개 기획 종목의 상장 순서를 적용합니다.
               시장이 열려 있는 거래 시간에 도래한 종목만 등록하며, 기존 종목
-              설정은 유지합니다. 적용한 시작일은 바꿀 수 없습니다. 합병·퇴장은
-              자동 실행하지 않습니다.
+              설정은 유지합니다. 적용한 시작일은 바꿀 수 없습니다. 종료 일정은
+              아래에서 별도로 적용합니다.
             </p>
           </InfoHelp>
           {schedule?.plan ? (
@@ -603,6 +678,73 @@ export default function TeacherWisStocks({
               <button type="submit" disabled={saving || loading || conflict}>
                 {saving ? "적용 중…" : "상장 일정 적용"}
               </button>
+            </>
+          ) : (
+            <span>미적용</span>
+          )}
+        </form>
+      )}
+      {market && tab === "stocks" && schedule?.plan && (
+        <form
+          className="wis-stocks__summary wis-stocks__schedule"
+          onSubmit={activateExits}
+          aria-label="6주 종료 일정"
+        >
+          <strong>6주 종료 일정</strong>
+          <InfoHelp
+            label="6주 종료 일정"
+            sections={[
+              {
+                items: [
+                  "기획안의 합병·퇴장일에 해당 종목 거래 종료",
+                  "종료 시 마지막 운영 가격으로 보유 주식 정산, 수수료 없음",
+                  "예약 주문 취소, 정산 위스는 주식 계좌에 반영",
+                  "시장 중지·비공개·휴장 중이면 다음 거래 시간에 처리",
+                  "지난 종료일만 선택한 날짜의 기존 시각으로 연장",
+                ],
+              },
+            ]}
+          />
+          {schedule.plan.exitsEnabledAtMs ? (
+            <>
+              <span>자동 종료 적용</span>
+              {Object.entries(schedule.plan.exitOverrides || {}).map(
+                ([id, atMs]) => (
+                  <span key={id}>
+                    {wisStockCatalog.find((entry) => entry.id === id)?.name ||
+                      id}{" "}
+                    {date(atMs)}
+                  </span>
+                ),
+              )}
+            </>
+          ) : canManage ? (
+            <>
+              {overdueExits.length > 0 && (
+                <label>
+                  지난 종료일 연장
+                  <input
+                    type="date"
+                    aria-label="지난 종료일 연장 날짜"
+                    value={overdueExitDate}
+                    min={tomorrowKst()}
+                    required
+                    disabled={saving || loading}
+                    onChange={(event) => setOverdueExitDate(event.target.value)}
+                  />
+                </label>
+              )}
+              <button type="submit" disabled={saving || loading || conflict}>
+                {saving ? "적용 중…" : "종료 일정 적용"}
+              </button>
+              {revisedExits.map(
+                ({ entry, atMs }) =>
+                  Number.isFinite(atMs) && (
+                    <span key={entry.id}>
+                      {entry.name} {date(atMs)}
+                    </span>
+                  ),
+              )}
             </>
           ) : (
             <span>미적용</span>
@@ -1152,6 +1294,7 @@ export default function TeacherWisStocks({
           rules={market.rules}
           revision={market.revision}
           semesterId={market.semesterId}
+          catalogPlan={market.catalogSchedule?.plan}
         />
       )}
       {market && tab === "investments" && (

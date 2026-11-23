@@ -178,3 +178,39 @@ test('all 80 listings fit the existing history reservation and retain past plan 
     assert.equal(stock.history[0].atMs, atMs);
   }
 });
+
+test('catalog exit metadata validates immutable canonical dates and never shortens the planned lifetime', () => {
+  const { catalogExitAtMs } = require('../wisStockCatalogTimeline');
+  const entry = catalog.find(item => item.name === '비파메탈');
+  const original = catalogExitAtMs(entry, plan());
+  const value = { ...plan(), exitsEnabledAtMs: start + 7 * DAY, exitOverrides: { [entry.id]: original + 4 * DAY } };
+  assert.deepEqual(normalizeCatalogPlan(value), value);
+  for (const patch of [
+    { exitsEnabledAtMs: 0 }, { exitsEnabledAtMs: null }, { exitOverrides: null },
+    { exitOverrides: { invalid: original + DAY } },
+    { exitOverrides: { [entry.id]: original - HOUR } },
+    { exitOverrides: { [entry.id]: original + 1 } },
+    { exitOverrides: { [catalog.find(item => item.exitKind === 'survive').id]: original + DAY } },
+  ]) assert.throws(() => normalizeCatalogPlan({ ...value, ...patch }));
+});
+
+test('due exits use the shared override boundary, preserve histories and keep custom same-name stocks active', () => {
+  const { applyDueCatalogExits } = require('../wisStockCatalogSchedule');
+  const { catalogExitAtMs } = require('../wisStockCatalogTimeline');
+  const entry = catalog.find(item => item.name === '비파메탈');
+  const original = catalogExitAtMs(entry, plan()), deferred = original + 4 * DAY;
+  const listed = applyDueCatalogListings(market(), start + 7 * DAY).market;
+  const source = listed.stocks.find(stock => stock.id === entry.id);
+  const custom = { ...source, id: 'stock_ffffffffffffffffffffffff' };
+  const current = { ...listed, stocks: [source, custom], catalogPlan: { ...plan(), exitsEnabledAtMs: start + 7 * DAY,
+    exitOverrides: { [entry.id]: deferred } } };
+  assert.equal(applyDueCatalogExits(current, deferred - 1).market, current);
+  const result = applyDueCatalogExits(current, deferred);
+  assert.equal(result.exited.length, 1);
+  assert.equal(result.market.stocks[0].settings.tradingStatus, 'GRADUATED');
+  assert.deepEqual(result.market.stocks[0].history, source.history);
+  assert.equal(result.market.stocks[1], custom);
+  assert.equal(applyDueCatalogExits(result.market, deferred).market, result.market);
+  for (const blocked of [{ ...current, studentOpen: false }, { ...current, rules: { ...current.rules, halted: true } }])
+    assert.equal(applyDueCatalogExits(blocked, deferred).market, blocked);
+});

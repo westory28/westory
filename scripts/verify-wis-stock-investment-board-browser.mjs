@@ -90,7 +90,7 @@ export function watchWisStockExchange(year,semester,group,send){
  let trades=Array.from({length:20},(_,i)=>({id:'F'+i,displayName:i===0?'검증학생':'합성학생'+i,atMs:1794787200000-i*10000,stockName:'한양은행',side:i%2?'SELL':'BUY',quantity:i+2,unitPrice:340-i}));
  const emit=()=>{if(qa.displayActive)send({status:'ready',market,trades});};
  qa.displayTick=({prices={},prior={},legacy=false,index=market.index,added=[],halted=market.halted}={})=>{
-   const atMs=market.updatedAtMs+1000;
+   const atMs=Date.now();
    market={...market,updatedAtMs:atMs,index,halted,stocks:[...market.stocks.map(stock=>
      prices[stock.id]!==undefined&&prices[stock.id]!==stock.price
        ? {...stock,price:prices[stock.id],previousPrice:legacy?undefined:prior[stock.id]??stock.price,priceAtMs:legacy?undefined:atMs}:stock),...added]};emit();
@@ -486,7 +486,7 @@ async function checkLiveExchange(page, display, surge) {
   assert(!(await surge.allTextContents()).join("").includes("새체결학생"), "trade rows do not become market popups");
   assert.equal(await quotes.locator(".wis-quote-price__fold").count(), 0, "trade does not turn quote flaps");
 
-  // Check the full eight-second lifetime without waiting on real time for the timeout.
+  // Check the full two-headline lifetime without waiting on real time for the timeout.
   const samples = await page.evaluate(async () => {
     window.boardQa.surgeStartedAt = Date.now();
     window.boardQa.displayTick({ prices: { S0: 315, S1: 310, S2: 341, S3: 310, S4: 321 } });
@@ -539,7 +539,7 @@ async function checkLiveExchange(page, display, surge) {
   await page.evaluate(() => window.boardQa.displayTrade());
   await advanceSurgeTo(7_000);
   assert(await surge.isVisible(), "alert still visible before eight seconds");
-  await advanceSurgeTo(8_100);
+  await advanceSurgeTo(14_100);
   await surge.waitFor({ state: "hidden", timeout: 1_000 });
   await page.clock.resume();
   const first = quotes.first().locator(".wis-quote-price");
@@ -578,7 +578,7 @@ async function checkLiveExchange(page, display, surge) {
   const headlines = surge.locator(".wis-exchange__surge-page > ul > li b");
   const reached = new Set();
   let sawBreak = false;
-  for (let step = 0; step < 18 && reached.size < 6; step++) {
+  for (let step = 0; step < 8 && (reached.size < 6 || !sawBreak); step++) {
     await afterLayout(page);
     if (!await surge.isVisible()) sawBreak = true;
     for (const name of await headlines.allTextContents()) {
@@ -587,10 +587,10 @@ async function checkLiveExchange(page, display, surge) {
     if (!step) assert.deepEqual(await headlines.allTextContents(), ["조선상회","금강철도"]);
     if (step === 1) await waitForVisibleRotation(page, ".wis-exchange__surge-page .wis-flap__fold, .wis-exchange__surge-page .wis-flap__unfold");
     await checkBoardFit(display,"quotes");
-    await page.clock.fastForward(4_010);
+    await page.clock.fastForward(14_010);
   }
-  assert.equal(reached.size, 6, "all six eligible headlines return across bursts");
-  assert(sawBreak, "bursts yield the view to the main board");
+  assert.equal(reached.size, 6, "all six eligible headlines appear once in the current round");
+  assert(sawBreak, "the completed round yields the view until the next ten-minute mark");
   const beforeBulletin = await quoteGeometry(display);
   await page.evaluate(() => window.boardQa.displayTick({prices:{S0:1000,S1:600,S2:600}}));
   await afterLayout(page);
@@ -611,9 +611,9 @@ async function checkLiveExchange(page, display, surge) {
   assert(overlay.width > overlay.indexWidth * 1.5 && Math.abs(overlay.center - overlay.viewport/2) < 1, JSON.stringify(overlay));
   assert.equal(overlay.parent,'wis-exchange','bulletin escapes the center column');
   assertStableQuotes(beforeBulletin, await quoteGeometry(display), 'mixed bulletin opens');
-  await page.clock.fastForward(4_010);
+  await page.clock.fastForward(14_010);
   await afterLayout(page);
-  await page.clock.fastForward(4_010);
+  await page.clock.fastForward(14_010);
   await surge.waitFor({state:'hidden', timeout:2000});
   assertStableQuotes(beforeBulletin, await quoteGeometry(display), 'mixed bulletin closes');
   await page.evaluate(() => window.boardQa.displayTick({prices:{S0:760}}));
@@ -637,6 +637,8 @@ async function checkBulletinCycle(width, height) {
   await page.setViewportSize({width, height});
   await push(page);
   await chartReady(page);
+  await page.clock.install({time: new Date("2026-11-23T16:31:00+09:00")});
+  await page.clock.pauseAt(new Date("2026-11-23T16:31:00+09:00"));
   await page.evaluate(() => {
     const atMs = Date.now() - 60_000;
     window.boardQa.displayFixture = [
@@ -647,7 +649,6 @@ async function checkBulletinCycle(width, height) {
     ];
     Object.defineProperty(Element.prototype, "requestFullscreen", {configurable:true, value:undefined});
   });
-  await page.clock.install();
   const show = () => page.getByRole("button", {name:"전광판 보기", exact:true}).click();
   await show();
   const display = page.getByRole("dialog", {name:"위스피 전광판"});
@@ -659,7 +660,7 @@ async function checkBulletinCycle(width, height) {
   await heading.filter({hasText:"신규 상장"}).waitFor();
   const initial = await popup.innerText();
   for (const term of ["새상회", "상장가", "800"]) assert(initial.includes(term), initial);
-  assert(!initial.includes("옛철도"), "a listing older than 24 hours is excluded");
+  assert(!initial.includes("옛철도"), "a listing outside the current half-hour slot is excluded");
   await page.screenshot({path:path.join(output, "board-listing-popup-" + width + ".png")});
   const pages = [];
   for (let i = 0; i < 16; i++) {
@@ -673,7 +674,9 @@ async function checkBulletinCycle(width, height) {
   assert(pages.some(text=>text.includes("오름상회") && text.includes("+3.00%") && text.includes("직전 시세 대비")), JSON.stringify(pages));
   assert(pages.some(text=>text.includes("내림철도") && text.includes("-3.00%")), JSON.stringify(pages));
   assert(pages.includes(""), "the unobstructed exchange is visible between bulletin cycles");
-  assert(pages.filter(text=>text.includes("신규 상장")).length >= 2, "eligible bulletins repeat without waiting for another market update");
+  assert.equal(pages.filter(text=>text.includes("신규 상장")).length, 1, "headlines do not repeat within ten minutes");
+  await page.clock.fastForward(540_000 - 16 * 4_050);
+  await heading.filter({hasText:"신규 상장"}).waitFor();
   assert.deepEqual(await reads(), budget, "rotating cached market news adds zero observer starts and history calls");
   await page.evaluate(() => window.boardQa.displayStatus("paused"));
   await popup.waitFor({state:"hidden"});
@@ -692,8 +695,8 @@ async function checkBulletinCycle(width, height) {
       window.boardQa.displayFixture = [{id:"legacy", name:"옛상회", price:101, previousClose:100}];
     });
     await show();
-    await heading.filter({hasText:"상승 종목"}).waitFor();
-    assert((await popup.innerText()).includes("전일 대비"));
+    assert.equal(await popup.isVisible(), false, "an undated legacy comparison does not invent a current event");
+    await page.clock.fastForward(10);
     await page.evaluate(() => window.boardQa.displayTick({prices:{legacy:111}, legacy:true}));
     await heading.filter({hasText:"급등 속보"}).waitFor();
     assert((await popup.innerText()).includes("직전 수신 시세 대비"));
@@ -712,7 +715,7 @@ async function checkBulletinCycle(width, height) {
 try {
   await checkBulletinCycle(320, 568);
   await checkBulletinCycle(1280, 720);
-  checks.push("Center popups replay recent confirmed listings and ±3% observed prices on entry, show both types with an unobstructed board between cycles, omit expired listings and trade details, and restart after pause or re-entry. Rotation adds zero watcher registrations and history requests at 320×568 and 1280×720.");
+  checks.push("Center popups replay current-slot confirmed listings and ±3% observed prices on entry, show both types with an unobstructed board between cycles, omit expired listings and trade details, and restart after pause or re-entry. Rotation adds zero watcher registrations and history requests at 320×568 and 1280×720.");
   for (const width of [320, 390, 768, 1280, 1440]) {
     const page = await open(width);
     await assertBlank(page);
@@ -720,6 +723,16 @@ try {
     await chartReady(page);
     assert.equal(await rows(page).count(), 20);
     assert.equal(await firstName(page), "검증학생01");
+    const sortHelp = page.getByRole('button', {name:'투자 현황 정렬 기준', exact:true});
+    await sortHelp.focus();
+    const sortTooltip = page.getByRole('tooltip');
+    await sortTooltip.waitFor();
+    for (const text of ['총자산 높은 순', '평가손익 높은 순', '일반 위스 지갑은 제외', '실현손익과 수익률은 제외', '같은 금액이면 학년·반·번호순'])
+      assert((await sortTooltip.innerText()).includes(text));
+    assert.equal(await sortTooltip.getByRole('listitem').count(), 7);
+    assert(await sortTooltip.evaluate(node => { const box=node.getBoundingClientRect();return box.left >= 0 && box.right <= innerWidth && node.scrollWidth <= node.clientWidth; }), 'sort help fits the viewport');
+    await page.keyboard.press('Escape');
+    await sortTooltip.waitFor({state:'hidden'});
     const more = page.getByRole("button", { name: "더보기", exact: true });
     const moreLayout = await more.evaluate(element => {
       const list = element.closest('.wis-investment-board__list');
@@ -1422,7 +1435,7 @@ try {
         },
       }),
     );
-    await page.clock.install();
+    await page.clock.install({time: new Date("2026-11-23T16:31:00+09:00")});
     await page
       .getByRole("button", { name: "전광판 보기", exact: true })
       .click();
