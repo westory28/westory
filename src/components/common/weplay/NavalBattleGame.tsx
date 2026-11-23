@@ -1,4 +1,11 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   finishWeplayGame,
   normalizeWeplayAnswer,
@@ -179,9 +186,10 @@ export default function NavalBattleGame({
           : 0;
     if (
       Math.abs(shift) > 1 &&
-      Math.max(initialViewportHeight.current, window.innerHeight) -
+      (Math.max(initialViewportHeight.current, window.innerHeight) -
         (viewport?.height || window.innerHeight) >=
-        120
+        120 ||
+        (viewport?.height || window.innerHeight) < 400)
     ) {
       window.scrollBy({ top: shift, behavior: "instant" });
     }
@@ -283,6 +291,10 @@ export default function NavalBattleGame({
     sunkShips: battle.sunkShips,
   });
 
+  useLayoutEffect(() => {
+    if (compactViewport && !guideDemo) keepInputVisible();
+  }, [compactViewport, viewportHeight, guideDemo]);
+
   useEffect(() => {
     alive.current = true;
     if (guideDemo)
@@ -312,11 +324,9 @@ export default function NavalBattleGame({
     document.addEventListener("visibilitychange", syncClock);
     const viewport = window.visualViewport;
     let viewportTimer: number | undefined;
-    let viewportFrame: number | undefined;
     let lastViewportLayout = "";
     const viewportChanged = () => {
       window.clearTimeout(viewportTimer);
-      if (viewportFrame !== undefined) cancelAnimationFrame(viewportFrame);
       // Wait for the keyboard animation to settle. Listening to viewport scroll
       // here would feed our scroll correction back into itself on mobile Safari.
       viewportTimer = window.setTimeout(() => {
@@ -335,18 +345,13 @@ export default function NavalBattleGame({
         const compact =
           document.activeElement === input.current &&
           height < 540 &&
-          inset >= 120;
+          (inset >= 120 || height < 400);
         const layout = `${window.innerWidth}:${height}:${inset}:${compact}`;
         if (layout === lastViewportLayout) return;
         lastViewportLayout = layout;
         setViewportHeight(height);
         setKeyboardInset(compact ? inset : 0);
         setCompactViewport(compact);
-        if (compact) {
-          viewportFrame = requestAnimationFrame(() => {
-            if (alive.current) keepInputVisible();
-          });
-        }
       }, 120);
     };
     refreshViewport.current = viewportChanged;
@@ -360,7 +365,6 @@ export default function NavalBattleGame({
       viewport?.removeEventListener("resize", viewportChanged);
       window.removeEventListener("resize", viewportChanged);
       window.clearTimeout(viewportTimer);
-      if (viewportFrame !== undefined) cancelAnimationFrame(viewportFrame);
       refreshViewport.current = () => undefined;
       effectTimers.current.forEach(clearTimeout);
     };
@@ -769,14 +773,23 @@ export default function NavalBattleGame({
     )
       return;
     const value = normalizeWeplayAnswer(answer);
+    if (!value) return;
+    const submittedElapsed =
+      clock.current.server +
+      performance.now() -
+      clock.current.local -
+      session.startsAtMs;
     const word = [...(special ? [special] : []), ...prompts].find(
       (item) =>
         normalizeWeplayAnswer(item.text) === value &&
+        (guideDemo ||
+          submittedElapsed < item.spawnAtMs + item.fallDurationMs) &&
         !pending.current.has(item.id) &&
         !acceptedRef.current.has(item.id),
     );
     if (!word) {
-      setFeedback("단어를 다시 확인해 주세요.");
+      setAnswer("");
+      setFeedback("오답입니다. 현재 보이는 단어를 입력해 주세요.");
       if (guideDemo) guideInteractive?.onAttempt(false);
       return;
     }
@@ -813,7 +826,7 @@ export default function NavalBattleGame({
   const networkBusy = !guideDemo && (pendingCount > 0 || finishing);
   return (
     <section
-      className={`naval-game${reducedMotion ? " naval-game--still" : ""}${compactViewport ? " naval-game--compact" : ""}${pageHidden ? " naval-game--hidden" : ""}${guideDemo ? " naval-game--guide" : ""}${guideDemo && guideInteractive ? " naval-game--guide-interactive" : ""}`}
+      className={`naval-game${reducedMotion ? " naval-game--still" : ""}${compactViewport ? " naval-game--compact" : ""}${compactViewport && !guideDemo && viewportHeight < 340 ? " naval-game--short" : ""}${pageHidden ? " naval-game--hidden" : ""}${guideDemo ? " naval-game--guide" : ""}${guideDemo && guideInteractive ? " naval-game--guide-interactive" : ""}`}
       style={
         {
           position: "relative",
@@ -822,7 +835,7 @@ export default function NavalBattleGame({
           "--naval-keyboard-inset": `${keyboardInset}px`,
           "--naval-viewport-height": guideDemo
             ? "380px"
-            : `${Math.max(340, Math.min(400, viewportHeight - 8))}px`,
+            : `${Math.max(0, Math.min(400, viewportHeight - 8))}px`,
         } as React.CSSProperties
       }
       aria-label={`${gameTitle} 해전 게임`}

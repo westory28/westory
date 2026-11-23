@@ -207,6 +207,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     () => new Set<string>(),
   );
   const [corePointRewardSettled, setCorePointRewardSettled] = useState(false);
+  const [corePointOverviewFailed, setCorePointOverviewFailed] = useState(false);
   const [corePointOverview, setCorePointOverview] =
     useState<CorePointOverviewState>(EMPTY_CORE_POINT_OVERVIEW);
 
@@ -246,6 +247,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const findRequestKey = (id: string) =>
     JSON.stringify(["find", activeScope, id]);
   const corePointRewardPending = pendingCorePointRequests.has(rewardRequestKey);
+  const overviewRequestKey = JSON.stringify(["overview", activeScope]);
+  const corePointOverviewPending =
+    pendingCorePointRequests.has(overviewRequestKey);
   const beginCorePointRequest = (key: string) => {
     const requests = pendingCorePointRequestsRef.current;
     if (requests.has(key)) return false;
@@ -355,6 +359,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     setHighlightedFootnoteAnchorKey("");
     setFoundCorePointIds([]);
     setCorePointRewardSettled(false);
+    setCorePointOverviewFailed(false);
     setCorePointOverview(EMPTY_CORE_POINT_OVERVIEW);
     viewStartedAtRef.current = Date.now();
     interactedRef.current = false;
@@ -400,6 +405,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
         setHighlightedFootnoteAnchorKey("");
         setFoundCorePointIds([]);
         setCorePointRewardSettled(false);
+        setCorePointOverviewFailed(false);
         setCorePointOverview(EMPTY_CORE_POINT_OVERVIEW);
         viewStartedAtRef.current = Date.now();
         interactedRef.current = false;
@@ -464,7 +470,11 @@ const LessonContent: React.FC<LessonContentProps> = ({
             `${getSemesterCollectionPath(config, "lesson_progress")}/${currentUser.uid}/units`,
           ),
         ),
-      ]);
+      ]).catch((error) => {
+        if (activeScopeRef.current === operationScope)
+          setCorePointOverviewFailed(true);
+        throw error;
+      });
     if (activeScopeRef.current !== operationScope)
       throw new Error("수업 자료가 바뀌었습니다.");
 
@@ -514,7 +524,10 @@ const LessonContent: React.FC<LessonContentProps> = ({
       ? (progressRootSnap.data() as { corePointRewardClaimed?: boolean })
       : null;
     setCorePointOverview(nextOverview);
-    setCorePointRewardSettled(Boolean(progressRoot?.corePointRewardClaimed));
+    setCorePointOverviewFailed(false);
+    setCorePointRewardSettled(
+      (confirmed) => confirmed || Boolean(progressRoot?.corePointRewardClaimed),
+    );
     return nextOverview;
   };
 
@@ -1295,7 +1308,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
           message: `+${totalAwarded}위스가 반영되었습니다.`,
         });
         setCorePointRewardSettled(true);
-        await refreshCorePointOverview(nextFoundIds);
       } else if (pointResult.duplicate) {
         showToast({
           tone: "info",
@@ -1305,25 +1317,24 @@ const LessonContent: React.FC<LessonContentProps> = ({
             "핵심포인트 완주 보상은 이미 반영되었습니다.",
         });
         setCorePointRewardSettled(true);
-        await refreshCorePointOverview(nextFoundIds);
       } else {
         showToast({
-          tone: "info",
-          title: "핵심포인트 완주",
+          tone: "warning",
+          title: "위스를 받지 못했습니다.",
           message:
-            pointResult.blockedMessage ||
-            "전체 핵심포인트를 확인했지만 추가 위스는 지급되지 않았습니다.",
+            pointResult.blockedMessage || "수령 버튼을 다시 눌러 주세요.",
         });
-        setCorePointRewardSettled(true);
-        await refreshCorePointOverview(nextFoundIds);
       }
     } catch (pointError) {
       if (activeScopeRef.current !== operationScope) return;
       console.error("Failed to claim core point reward:", pointError);
       showToast({
         tone: "warning",
-        title: "핵심포인트를 모두 찾았습니다.",
-        message: "위스 반영 상태를 바로 확인하지 못했습니다.",
+        title: "위스를 받지 못했습니다.",
+        message:
+          pointError instanceof Error && pointError.message
+            ? pointError.message
+            : "수령 버튼을 다시 눌러 주세요.",
       });
     } finally {
       endCorePointRequest(rewardRequestKey);
@@ -1491,6 +1502,22 @@ const LessonContent: React.FC<LessonContentProps> = ({
     displayedCorePointFoundCount >= displayedCorePointTotalCount;
   const corePointRewardReady =
     isCorePointCompletionReady && !corePointRewardSettled;
+  const retryCorePointOverview = async () => {
+    if (!beginCorePointRequest(overviewRequestKey)) return;
+    const operationScope = activeScope;
+    try {
+      await refreshCorePointOverview();
+    } catch {
+      if (activeScopeRef.current === operationScope)
+        showToast({
+          tone: "warning",
+          title: "핵심포인트를 확인하지 못했습니다.",
+          message: "다시 확인해 주세요.",
+        });
+    } finally {
+      endCorePointRequest(overviewRequestKey);
+    }
+  };
   const handleCorePointRewardClaim = () => {
     if (!corePointRewardReady || corePointRewardPending) return;
     void claimCorePointCompletionReward(
@@ -1628,6 +1655,20 @@ const LessonContent: React.FC<LessonContentProps> = ({
                 }
               >
                 {floatingCorePointRewardContent}
+              </button>
+            ) : corePointOverviewFailed ? (
+              <button
+                type="button"
+                className="lesson-core-point-floating-status"
+                onClick={() => void retryCorePointOverview()}
+                disabled={corePointOverviewPending}
+                aria-busy={corePointOverviewPending}
+                aria-label="핵심포인트 다시 확인"
+              >
+                {floatingCorePointStatusContent}
+                <span className="lesson-core-point-floating-status__meta">
+                  {corePointOverviewPending ? "확인 중" : "다시 확인"}
+                </span>
               </button>
             ) : (
               <div

@@ -505,3 +505,28 @@
 .naval-effect--cannon .naval-muzzle-flash { left: calc(var(--shot-x) - 32px); top: calc(var(--shot-y) - 32px); }
 .naval-shot-origin .naval-impact { left: calc(var(--shot-target-x) - 11%); top: calc(var(--shot-target-y) - 17%); right: auto; }
 @keyframes naval-mouth-shot { 0% { transform: translate(0,0) scale(1); opacity: 1; } 90% { opacity: 1; } 100% { transform: translate(var(--shot-dx), var(--shot-dy)) scale(.5); opacity: 0; } }
+
+/* Keep words and typing controls together above a landscape/mobile keyboard. */
+.naval-game--short .naval-fuse, .naval-game--short .naval-title-art, .naval-game--short .naval-battle-status { display: none; }
+.naval-game--short .naval-topbar { padding: 4px 8px; }
+.naval-game--short .naval-hud { width: 100%; }
+.naval-game--short .naval-health { top: 36px; bottom: auto; width: 44%; transform: none; }
+.naval-game--short .naval-health--allied { left: 3%; }
+.naval-game--short .naval-health--enemy { left: auto; right: 3%; }
+.naval-game--short .naval-health small { display: none; }
+.naval-game--short .naval-prompts { top: 76px; }
+.naval-game--short .naval-word { min-height: 48px; }
+.naval-game--short .naval-special { top: 76px; padding: 4px 8px; gap: 2px; }
+.naval-game--short .naval-special > span { display: none; }
+.naval-game--short .naval-command { bottom: 52px; }
+.naval-game--short .naval-ammo { bottom: calc(100% + 4px); width: 28%; }
+.naval-game--short .naval-footer { min-height: 48px; padding: 2px 8px; }
+.naval-game--short .naval-commander { display: none; }
+@container naval-game (min-width: 600px) {
+  .naval-game--short .naval-prompts { left: 3%; right: 43%; top: 72px; }
+  .naval-game--short .naval-special { left: 3%; right: 43%; top: 72px; }
+  .naval-game--short .naval-command { left: auto; right: 3%; width: 36%; transform: none; bottom: 52px; }
+  .naval-game--short .naval-ammo { width: 100%; }
+  .naval-game--short .naval-health { width: 25%; }
+  .naval-game--short .naval-health--enemy { left: 32%; right: auto; }
+}

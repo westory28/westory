@@ -5339,6 +5339,7 @@ const createTransactionPayload = ({
 
 const getLessonCorePointTimestampMs = (value) => {
   if (!value) return 0;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   if (typeof value.toMillis === "function") return value.toMillis();
   if (Number(value.seconds || 0) || Number(value.nanoseconds || 0)) {
     return (

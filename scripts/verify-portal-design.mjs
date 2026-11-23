@@ -41,7 +41,7 @@ const toast={showToast(){}};export const useAppToast=()=>toast;
 export const db={};export const doc=(_, ...parts)=>({path:parts.join("/")});
 export const onSnapshot=(ref,success)=>{let active=true;queueMicrotask(()=>{if(active)success({exists:()=>false,data:()=>({}),docs:[]});});return()=>{active=false;};};
 export const getDoc=async(ref)=>window.corePointQa?.getProgress(ref) ?? ({exists:()=>ref.path==="site_settings/config",data:()=>ref.path==="site_settings/config"?config:{}});
-export const getDocFromServer=getDoc;export const getDocs=async()=>({docs:[],empty:true,size:0});
+export const getDocFromServer=getDoc;export const getDocs=async(ref)=>window.corePointQa?.getUnits(ref) ?? ({docs:[],empty:true,size:0});
 export const collection=doc;export const query=(ref)=>ref;export const orderBy=()=>({});export const serverTimestamp=()=>({});
 window.portalDesignQa={writes:[], lessonReads:[], attempts:0};
 const forbidWrite=()=>{window.portalDesignQa.writes.push("blocked");throw new Error("Fixture forbids all application writes")};
@@ -915,7 +915,7 @@ try {
           if (kind === "wis-management") {
             await verifyWisManagement(page, width, label);
           } else if (kind === "core-points") {
-            await verifyCorePointClicks(page, origin);
+            await verifyCorePointClicks(page, origin, evidence);
             checks.push({ label, rapidClicks: true, retries: true });
           } else if (kind === "learning") {
             await verifyStudentLearning(page, label);

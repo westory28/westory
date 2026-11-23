@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 
-export async function verifyCorePointClicks(page, origin) {
+export async function verifyCorePointClicks(page, origin, evidence) {
   await page.addInitScript(() => {
+    const scenario = new URLSearchParams(location.search).get("corePointCase");
     const qa = {
       calls: [],
       bursts: 0,
-      claimed: false,
+      claimed: scenario === "paid",
+      saved: scenario ? ["first", "second"] : [],
+      rootReads: 0,
+      unitReads: 0,
+      failOverview: scenario === "restore",
+      holdOverview: false,
       lesson: {
         unitId: "unit",
         title: "핵심포인트 검사",
@@ -31,22 +37,60 @@ export async function verifyCorePointClicks(page, origin) {
         })),
       },
       getProgress(ref) {
-        if (
-          qa.claimed &&
-          ref.path.endsWith("/lesson_progress/portal-design-fixture")
-        ) {
+        if (ref.path.endsWith("/lesson_progress/portal-design-fixture")) {
+          qa.rootReads++;
+          const snapshot = () => ({
+            exists: () => qa.claimed,
+            data: () => ({ corePointRewardClaimed: qa.claimed }),
+          });
+          if (qa.holdOverview)
+            return new Promise((resolve, reject) => {
+              qa.finishOverview = (fail) =>
+                fail
+                  ? reject(Error("synthetic overview outage"))
+                  : resolve(snapshot());
+            });
+          if (qa.failOverview) {
+            qa.failOverview = false;
+            throw Error("synthetic overview outage");
+          }
+          return snapshot();
+        }
+        if (ref.path.endsWith("/units/unit"))
           return {
             exists: () => true,
-            data: () => ({ corePointRewardClaimed: true }),
+            data: () => ({ corePointFinds: qa.saved }),
           };
-        }
+      },
+      getUnits() {
+        qa.unitReads++;
+        return {
+          docs: [{ id: "unit", data: () => ({ corePointFinds: qa.saved }) }],
+        };
       },
       find: (_config, _unitId, id) =>
-        request(id, (duplicate) => ({ result: { duplicate } })),
+        request(id, (mode) => {
+          qa.saved = [...new Set([...qa.saved, id])];
+          return { result: { duplicate: mode === "duplicate" } };
+        }),
       claim: () =>
-        request("reward", () => {
+        request("reward", (mode) => {
+          if (mode === "blocked")
+            return { awarded: false, duplicate: false, totalAwarded: 0 };
           qa.claimed = true;
-          return { awarded: true, totalAwarded: 500 };
+          return mode === "duplicate"
+            ? {
+                awarded: false,
+                duplicate: true,
+                totalAwarded: 0,
+                settled: true,
+              }
+            : {
+                awarded: true,
+                duplicate: false,
+                totalAwarded: 500,
+                settled: true,
+              };
         }),
     };
     window.corePointQa = qa;
@@ -56,7 +100,7 @@ export async function verifyCorePointClicks(page, origin) {
         qa.finish = (mode) =>
           mode === "fail"
             ? reject(Error("synthetic outage"))
-            : resolve(result(mode === "duplicate"));
+            : resolve(result(mode));
       });
     }
     new MutationObserver((entries) => {
@@ -116,6 +160,16 @@ export async function verifyCorePointClicks(page, origin) {
   );
   await finish("fail");
   await repeat(reward);
+  const readsBeforeClaim = await page.evaluate(
+    () => window.corePointQa.rootReads,
+  );
+  await page.evaluate(() => {
+    window.corePointQa.failOverview = true;
+  });
+  await finish("blocked");
+  await reward.waitFor();
+  assert(await reward.isEnabled(), "an unconfirmed reward remains retryable");
+  await repeat(reward);
   await finish("success");
   await pending.waitFor({ state: "detached" });
   assert.equal(await reward.count(), 0);
@@ -125,5 +179,105 @@ export async function verifyCorePointClicks(page, origin) {
     "second",
     "reward",
     "reward",
+    "reward",
   ]);
+  assert.equal(
+    await page.evaluate(() => window.corePointQa.rootReads),
+    readsBeforeClaim,
+    "confirmed receipt avoids another whole-progress read",
+  );
+
+  await page.goto(
+    `${origin}/?kind=learning&page=note&corePointCase=restore#/student/lesson/note?id=unit`,
+  );
+  const retry = page.getByRole("button", { name: "핵심포인트 다시 확인" });
+  await retry.waitFor();
+  assert.equal(
+    await reward.count(),
+    0,
+    "failed totals must not imply eligibility",
+  );
+  assert.deepEqual(
+    await calls(),
+    [],
+    "restoring completed points does not auto-claim",
+  );
+  const buttonLayout = await retry.evaluate((element) => {
+    const rect = element.getBoundingClientRect(),
+      style = getComputedStyle(element);
+    return {
+      width: rect.width,
+      height: rect.height,
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      bottom: rect.bottom,
+      viewportWidth: innerWidth,
+      viewportHeight: innerHeight,
+      visibility: style.visibility,
+      display: style.display,
+    };
+  });
+  assert(buttonLayout.width >= 44 && buttonLayout.height >= 44);
+  assert(
+    buttonLayout.left >= 0 && buttonLayout.right <= buttonLayout.viewportWidth,
+  );
+  assert(
+    buttonLayout.top >= 0 && buttonLayout.bottom <= buttonLayout.viewportHeight,
+  );
+  assert.equal(buttonLayout.visibility, "visible");
+  assert.notEqual(buttonLayout.display, "none");
+  await page.screenshot({
+    path: `${evidence}/core-points-retry-${page.viewportSize().width}.png`,
+  });
+  const initialReads = await page.evaluate(() => window.corePointQa.rootReads);
+  await page.evaluate(() => {
+    window.corePointQa.holdOverview = true;
+  });
+  await repeat(retry);
+  assert(await retry.isDisabled());
+  assert.equal(
+    await page.evaluate(() => window.corePointQa.rootReads),
+    initialReads + 1,
+    "30 retry clicks issue only one overview request",
+  );
+  await page.evaluate(() => window.corePointQa.finishOverview(true));
+  await page.waitForFunction(
+    () =>
+      !document.querySelector('[aria-label="핵심포인트 다시 확인"]').disabled,
+  );
+  await repeat(retry);
+  await page.evaluate(() => window.corePointQa.finishOverview(false));
+  await reward.waitFor();
+  assert.deepEqual(await calls(), []);
+  const recoveredReads = await page.evaluate(
+    () => window.corePointQa.rootReads,
+  );
+  await repeat(reward);
+  await finish("duplicate");
+  await pending.waitFor({ state: "detached" });
+  assert.equal(await reward.count(), 0);
+  assert.deepEqual(await calls(), ["reward"]);
+  assert.equal(
+    await page.evaluate(() => window.corePointQa.rootReads),
+    recoveredReads,
+  );
+
+  await page.goto(
+    `${origin}/?kind=learning&page=note&corePointCase=paid#/student/lesson/note?id=unit`,
+  );
+  await points.first().waitFor();
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector("[data-exam-highlight]")
+        ?.getAttribute("aria-pressed") === "true",
+  );
+  assert.equal(
+    await reward.count(),
+    0,
+    "a previously paid completion stays settled",
+  );
+  assert.equal(await retry.count(), 0);
+  assert.deepEqual(await calls(), []);
 }

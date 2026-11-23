@@ -23,23 +23,26 @@ const lessons = [{ unitId: 'naval-qa', title: '임진왜란과 수군', isVisibl
 const catalog = lessons.flatMap(lesson => lesson.words.map(text => ({ text, unitId: lesson.unitId, lessonTitle: lesson.title, context: '수업 자료에 등록한 빈칸 정답입니다.' })));
 const service = `
 import {useSyncExternalStore} from 'react';
+import {MENUS} from ${modulePath('src/constants/menus.ts')};
 const params=new URLSearchParams(location.search);
 export const view=params.get('view')||'battle';
 export const config={year:'2026',semester:'2'};
 const readonly=view==='readonly';
 const initialUid='guide-account-a';
+const user=uid=>({uid,email:'qa@example.invalid',getIdTokenResult:async()=>({claims:{auth_time:1700000000}})});
 const profile=(uid,completed)=>({uid,role:view==='lobby'||readonly?'student':'teacher',teacherPortalEnabled:true,staffPermissions:readonly?['lesson_read']:[],email:'qa@example.invalid',name:'검증 사용자',weplayGuideCompleted:completed});
 const authListeners=new Set();
-let authState={config,currentUser:{uid:initialUid,email:'qa@example.invalid'},userData:params.get('profile')==='loading'?null:profile(initialUid,params.get('seen')==='1'),loading:false,configReady:true};
+let authState={config,currentUser:user(initialUid),userData:params.get('profile')==='loading'?null:profile(initialUid,params.get('seen')==='1'),loading:false,configReady:true,menuConfig:MENUS};
 export const auth={get currentUser(){return authState.currentUser}};
 export const useAuth=()=>useSyncExternalStore(listener=>{authListeners.add(listener);return()=>authListeners.delete(listener)},()=>authState);
 export const qa=window.navalQa={calls:[],writes:[],answers:[],completions:[],finishAttempts:[],settings:${JSON.stringify(core.DEFAULT_GAME_SETTINGS)},lessons:${JSON.stringify(lessons)},policy:{...${JSON.stringify(core.DEFAULT_POLICY)},challengeCost:7},balance:params.get('poor')==='1'?0:34,failFinish:0,fail:{},hold:{}};
 qa.heldCalls=[];qa.guideWrites=[];qa.profiles={};
-qa.setAccount=(uid,completed=false,loaded=true)=>{authState={...authState,currentUser:uid?{uid,email:'qa@example.invalid'}:null,userData:uid&&loaded?profile(uid,completed):null};for(const listener of authListeners)listener();};
+qa.setAccount=(uid,completed=false,loaded=true)=>{authState={...authState,currentUser:uid?(authState.currentUser?.uid===uid?authState.currentUser:user(uid)):null,userData:uid&&loaded?profile(uid,completed):null};for(const listener of authListeners)listener();};
 qa.getAccount=()=>authState;
 const management=()=>({settings:structuredClone(qa.settings),lessons:structuredClone(qa.lessons),availableWordCount:6,previewWordCount:6});
 export const getHttpsCallable=async name=>async data=>{
   qa.calls.push({name,data:structuredClone(data)});
+  if(name==='openApplicationSession')return {data:{...data,status:'active',authTime:1700000000,revision:'a'.repeat(64)}};
   if(qa.fail[name]){qa.fail[name]--;throw new Error('QA 연결 오류');}
   if(name==='completeWeplayGuide'){
     if(qa.hold[name])await new Promise(resolve=>qa.heldCalls.push({name,uid:data.accountUid,release:resolve}));
@@ -89,7 +92,7 @@ async function setup(){
   if(view==='lobby'&&new URLSearchParams(location.search).has('resume')){const response=await fetch('/session',{method:'POST',body:JSON.stringify({now:Date.now(),mode:'challenge'})});qa.session=await response.json();qa.session.policy=structuredClone(qa.policy);qa.transport=qa.makeTransport(qa.session);render(null);return;}
   if(view==='management'||view==='readonly'||view==='lobby'){render(null);return;}
   const params=new URLSearchParams(location.search);
-  const response=await fetch('/session',{method:'POST',body:JSON.stringify({now:Date.now(),difficulty:params.get('difficulty')||'mild',legacy:params.get('legacy')==='1',fast:params.get('fast')==='1',long:params.get('long')==='1'})});
+  const response=await fetch('/session',{method:'POST',body:JSON.stringify({now:Date.now(),difficulty:params.get('difficulty')||'mild',legacy:params.get('legacy')==='1',fast:params.get('fast')==='1',long:params.get('long')==='1',inputQa:params.has('inputqa')})});
   qa.session=await response.json();
   qa.transport=qa.makeTransport(qa.session);
   render(qa.session);
@@ -98,14 +101,14 @@ function Fixture({session}){
 const params=new URLSearchParams(location.search);
 const[result,setResult]=useState(view==='result'?{sessionId:'result-fixture',difficulty:session.difficulty,mode:params.get('mode')==='challenge'?'challenge':'practice',correctCount:37,totalWords:60,score:12500,reward:5,cost:2,netWis:3,balance:103,finishedAtMs:Date.now(),missedWords:session.words.filter(word=>word.kind==='normal').slice(0,3),battleVersion:1,battle:{...simulateWeplayBattle(session,0),outcome:params.get('outcome')==='defeat'?'defeat':'victory',sunkShips:3,cannonShots:18,specialCount:2}}:null);
 const[replaying,setReplaying]=useState(false);
-return <MemoryRouter><AppToastProvider><AppDialogProvider>{view==='lobby'?<StudentWeplay/>:!session?<div className='teacher-layout'><ManageWeplay/></div>:<main className='weplay-page'>{!result&&<Game session={session} config={config} preview transport={qa.transport} onShowGuide={()=>{qa.helpRequests=(qa.helpRequests||0)+1}} onComplete={value=>{qa.completed=value;setResult(value);}}/>}{result?.battle&&<NavalResult result={result} preview replaying={replaying} onReplay={()=>{qa.replays=(qa.replays||0)+1;setReplaying(true);}}/>}{result&&<output hidden aria-label='QA 완료 결과'>{JSON.stringify(result)}</output>}</main>}</AppDialogProvider></AppToastProvider></MemoryRouter>}
+return <MemoryRouter initialEntries={[view==='lobby'?'/student/weplay?game=history-rain':'/teacher/weplay?game=history-rain&view=preview']}><AppToastProvider><AppDialogProvider>{view==='lobby'?<StudentWeplay/>:!session?<div className='teacher-layout'><ManageWeplay/></div>:<main className='weplay-page'>{!result&&<Game session={session} config={config} preview transport={qa.transport} onShowGuide={()=>{qa.helpRequests=(qa.helpRequests||0)+1}} onComplete={value=>{qa.completed=value;setResult(value);}}/>}{result?.battle&&<NavalResult result={result} preview replaying={replaying} onReplay={()=>{qa.replays=(qa.replays||0)+1;setReplaying(true);}}/>}{result&&<output hidden aria-label='QA 완료 결과'>{JSON.stringify(result)}</output>}</main>}</AppDialogProvider></AppToastProvider></MemoryRouter>}
 function render(session){createRoot(document.getElementById('root')).render(<Fixture session={session}/>);}
 setup().catch(error=>{qa.error=error.message;throw error;});
 `;
 const bundled = await build({
   stdin: { contents: harness, loader: 'tsx', resolveDir: root }, bundle: true, write: false,
   format: 'esm', platform: 'browser', target: 'es2022', outfile: path.join(os.tmpdir(), 'westory-naval-qa.js'), external: ['/assets/*'],
-  loader: { '.svg': 'dataurl', '.png': 'dataurl', '.webp': 'dataurl' }, define: { 'process.env.NODE_ENV': '"production"', 'import.meta.env.BASE_URL': '"/"' },
+  loader: { '.svg': 'dataurl', '.png': 'dataurl', '.webp': 'dataurl', '.woff': 'dataurl', '.woff2': 'dataurl' }, define: { 'process.env.NODE_ENV': '"production"', 'import.meta.env.BASE_URL': '"/"' },
   plugins: [{ name: 'naval-service-fixture', setup(plugin) {
     plugin.onResolve({ filter: /^fixture:|(?:^|\/)contexts\/AuthContext$|(?:^|\/)lib\/firebase$|^\.\/firebase$/ }, () => ({ path: 'service', namespace: 'fixture' }));
     plugin.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: service, loader: 'ts', resolveDir: root }));
@@ -129,6 +132,11 @@ function createSession(data) {
     session.words = Array.from({ length: 20 }, (_, index) => ({ ...catalog[index % catalog.length], id: 'word-' + (index + 1), stage: index < 7 ? 1 : index < 14 ? 2 : 3, spawnAtMs: Math.floor(index * 2000), fallDurationMs: 10000 }));
   }
   if (data.long) session.words = session.words.map(word => word.kind === 'normal' ? { ...word, text: '대한민국임시정부수립과정' } : word);
+  if (data.inputQa) session.words = [
+    { ...session.words.find(word=>word.kind==='normal'), id:'expired-normal', text:'거북선', spawnAtMs:0, fallDurationMs:1000 },
+    { ...session.words.find(word=>word.kind==='normal'), id:'current-normal', text:'이순신', spawnAtMs:1500, fallDurationMs:30000 },
+    { ...session.words.find(word=>word.kind==='special'), id:'expired-special', text:'천상열차분야지도', kind:'special', spawnAtMs:0, fallDurationMs:1000, stage:1 },
+  ];
   if (data.fast) { session.acceptedEvents = session.words.filter(word => word.kind === 'normal' && word.stage === 1).map(word => ({ wordId:word.id, elapsedMs:word.spawnAtMs+100 })); session.acceptedWordIds=session.acceptedEvents.map(event=>event.wordId);session.correctCount=session.acceptedEvents.length; }
   return session;
 }
@@ -143,10 +151,10 @@ const server = http.createServer(async (request, response) => {
     }
     const files = { '/qa.js': ['text/javascript', js], '/qa.css': ['text/css', css], '/tailwind.js': ['text/javascript', tailwind] };
     if (files[pathname]) { response.setHeader('Content-Type', files[pathname][0]); response.end(files[pathname][1]); return; }
-    if (/\.(png|webp|jpg|svg)$/.test(pathname)) {
+    if (/\.(png|webp|jpg|svg|json)$/.test(pathname)) {
       const target = path.resolve(root, 'public', '.' + pathname);
       if (!target.startsWith(path.join(root, 'public') + path.sep)) throw new Error('Invalid asset path');
-      response.setHeader('Content-Type', pathname.endsWith('.svg') ? 'image/svg+xml' : pathname.endsWith('.webp') ? 'image/webp' : 'image/png');
+      response.setHeader('Content-Type', pathname.endsWith('.json') ? 'application/json' : pathname.endsWith('.svg') ? 'image/svg+xml' : pathname.endsWith('.webp') ? 'image/webp' : 'image/png');
       response.end(await fs.readFile(target)); return;
     }
     response.setHeader('Content-Type', 'text/html; charset=utf-8'); response.end(html);
@@ -164,6 +172,9 @@ async function open(view = 'battle', width = 1280, query = '', options = {}) {
   await page.clock.pauseAt(new Date('2026-09-29T03:00:10Z'));
   await page.goto(`${origin}/?view=${view}&${query}`);
   await page.waitForFunction(() => Boolean(window.navalQa));
+  if (view==='management'||(view==='lobby'&&!new URLSearchParams(query).has('resume'))) {
+    await page.locator('.weplay-studio-intro').getByRole('button',{name:/건너뛰기/}).click();
+  }
   return page;
 }
 async function capture(page, name) {
@@ -186,6 +197,68 @@ async function advanceTo(page, elapsed) {
 }
 let failure = null;
 try {
+  if (process.env.WEPLAY_QA_INPUT_ONLY === '1') {
+    for (const [width,height] of [[390,360],[390,300],[768,300],[844,220],[844,180],[1280,300]]) {
+      const page=await open('battle',width,'seen=1&inputqa=1');
+      await advanceTo(page,2200);
+      if ([[390,360],[768,300],[1280,300]].some(([w,h])=>w===width&&h===height)) {
+        assert.equal(await page.locator('.naval-game--compact').count(),0,'Keyboard-closed layout is unchanged');
+        await page.locator('.naval-word').evaluateAll(elements=>{for(const element of elements)for(const animation of element.getAnimations()){animation.pause();animation.currentTime=800;}});
+        await capture(page,`input-keyboard-closed-${width}`);
+      }
+      await page.getByRole('textbox',{name:'단어 입력'}).focus();
+      await page.setViewportSize({width,height});
+      await page.evaluate(()=>window.dispatchEvent(new Event('resize')));
+      await page.clock.runFor(300);
+      await page.locator('.naval-game--compact').waitFor();
+      const geometry=await page.evaluate(()=>{
+        const scene=document.querySelector('.naval-scene').getBoundingClientRect();
+        const elements=['.naval-hud','.naval-word strong','.naval-input-frame input','.naval-input-frame button','.naval-footer'];
+        return {width:innerWidth,height:visualViewport.height,scrollY,scene:{top:scene.top,bottom:scene.bottom,height:scene.height},elements:elements.map(selector=>{const r=document.querySelector(selector).getBoundingClientRect();return{selector,top:r.top,bottom:r.bottom,left:r.left,right:r.right,height:r.height}})};
+      });
+      assert.ok(geometry.scene.top>=0&&geometry.scene.bottom<=height,JSON.stringify(geometry));
+      assert.ok(geometry.elements.every(r=>r.top>=0&&r.bottom<=height&&r.left>=0&&r.right<=width),JSON.stringify(geometry));
+      assert.ok(geometry.elements.filter(r=>r.selector.includes('input')||r.selector.includes('button')).every(r=>r.height>=44),JSON.stringify(geometry));
+      layoutMeasurements.push(geometry);
+      await page.locator('.naval-word').evaluateAll(elements=>{for(const element of elements)for(const animation of element.getAnimations()){animation.pause();animation.currentTime=800;}});
+      await capture(page,`input-keyboard-viewport-${width}x${height}`);
+      await page.getByRole('textbox',{name:'단어 입력'}).fill('틀린단어');
+      await page.getByRole('textbox',{name:'단어 입력'}).press('Enter');
+      assert.equal(await page.getByRole('textbox',{name:'단어 입력'}).inputValue(),'');
+      assert.match(await page.locator('.naval-feedback').textContent(),/오답/);
+      assert.equal(await page.evaluate(()=>window.navalQa.answers.length),0);
+      await page.close();
+    }
+    checks.push('390/768/844/1280 widths and 180–360px keyboard heights keep words, timer, 44px input/submit and footer visible; incorrect input clears without RPC');
+    const expired=await open('battle',390,'seen=1&inputqa=1');
+    await advanceTo(expired,500);
+    const input=expired.getByRole('textbox',{name:'단어 입력'});
+    await input.fill('거북선');
+    await advanceTo(expired,1600);
+    await input.press('Enter');
+    assert.equal(await input.inputValue(),'');
+    assert.match(await expired.locator('.naval-feedback').textContent(),/오답/);
+    await input.fill('천상열차분야지도'); await input.press('Enter');
+    assert.equal(await input.inputValue(),'');
+    assert.equal(await expired.evaluate(()=>window.navalQa.answers.length),0);
+    assert.equal(await expired.locator('.naval-ammo').getAttribute('aria-label'),'포탄 장전 0 / 2');
+    assert.equal(await expired.locator('.naval-effect--cannon').count(),0);
+    assert.equal(await expired.locator('.naval-hud-score strong').textContent(),'0');
+    await input.fill('오답'); await input.dispatchEvent('compositionstart'); await input.press('Enter');
+    assert.equal(await input.inputValue(),'오답');
+    await input.dispatchEvent('compositionend'); await input.press('Enter');
+    assert.equal(await input.inputValue(),'');
+    await input.fill('이순신'); await input.press('Enter');
+    await expired.waitForFunction(()=>window.navalQa.answers.length===1);
+    assert.equal(await expired.locator('.naval-ammo').getAttribute('aria-label'),'포탄 장전 1 / 2');
+    await expired.setViewportSize({width:844,height:220}); await expired.evaluate(()=>window.dispatchEvent(new Event('resize'))); await expired.clock.runFor(300);
+    assert.equal(await expired.locator('.naval-game--short').count(),1,'Rotation must not lose compact layout when inset resets');
+    assert.equal(await expired.locator('.naval-scene').evaluate(element=>{const r=element.getBoundingClientRect();return r.top>=0&&r.bottom<=visualViewport.height}),true,'Rotated scene stays entirely in the visible viewport');
+    await expired.setViewportSize({width:390,height:950}); await expired.evaluate(()=>window.dispatchEvent(new Event('resize'))); await expired.clock.runFor(300);
+    assert.equal(await expired.locator('.naval-game--compact').count(),0);
+    await expired.close();
+    checks.push('Expired normal/special words clear as wrong answers with zero RPC, score, ammo or cannon; IME Enter is preserved, next live word loads normally, rotation and keyboard dismissal recover');
+  } else {
   if (process.env.WEPLAY_QA_GUIDE_ONLY !== '1') {
     for (const mode of ['practice', 'challenge']) {
       const cannon = await open('lobby', mode === 'practice' ? 390 : 1280, 'seen=1');
@@ -444,18 +517,19 @@ try {
   const account=await open('lobby',390);guide=account.locator('.weplay-guide[open]');await guide.waitFor();
   await account.evaluate(()=>{window.navalQa.hold.completeWeplayGuide=true});await guide.getByRole('button',{name:'건너뛰기',exact:true}).click();
   await account.waitForFunction(()=>window.navalQa.heldCalls.length===1);
-  await account.evaluate(()=>window.navalQa.setAccount('guide-account-b',false));await account.locator('.weplay-guide[open]').waitFor();
+  await account.evaluate(()=>window.navalQa.setAccount('guide-account-b',false));
+  await account.waitForFunction(()=>window.navalQa.calls.filter(call=>call.name==='getWeplayLobby').length===2&&document.querySelector('.weplay-guide[open]')?.getAttribute('aria-busy')==='false');
   await account.evaluate(()=>window.navalQa.heldCalls[0].release());await account.clock.runFor(100);
   assert.equal(await account.locator('.weplay-guide[open]').count(),1,'Old account response cannot close the new account guide');
   assert.equal(await account.locator('.weplay-guide[open]').getAttribute('aria-busy'),'false');
-  assert.equal(await account.locator('.weplay-guide [role=alert]').count(),0);
+  assert.equal(await account.locator('.weplay-guide [role=alert]:not(.ws-toast-announcer:empty)').count(),0,'Old account response must not show an error in the new account guide (empty toast live region is not an error)');
   assert.equal(await account.evaluate(()=>window.navalQa.getAccount().userData.weplayGuideCompleted),false);
   await account.evaluate(()=>{window.navalQa.hold.completeWeplayGuide=false});await account.locator('.weplay-guide[open]').getByRole('button',{name:'건너뛰기',exact:true}).click();
   await account.waitForFunction(()=>!document.querySelector('.weplay-guide[open]'));
   assert.deepEqual(await account.evaluate(()=>window.navalQa.guideWrites),['guide-account-a','guide-account-b']);await account.close();
   checks.push('Held completion from account A cannot close, complete, busy-lock, or show an error in account B; B requires its own completion');
 
-  const seen=await open('management',1280,'seen=1');await seen.getByRole('button',{name:'체험 시작',exact:true}).waitFor();
+  const seen=await open('management',1280,'seen=1');await seen.getByRole('button',{name:'연습 체험 시작',exact:true}).waitFor();
   assert.equal(await seen.locator('.weplay-guide[open]').count(),0);
   await seen.getByRole('button',{name:'게임 안내',exact:true}).click();await seen.locator('.weplay-guide[open]').waitFor();
   await capture(seen,'guide-teacher-manual-1280');await seen.keyboard.press('Escape');
@@ -470,6 +544,7 @@ try {
   const ids=await resumed.locator('input[id]').evaluateAll(elements=>elements.map(element=>element.id));assert.equal(new Set(ids).size,ids.length,'Live battle and frozen demo must not duplicate input IDs');
   await capture(resumed,'guide-live-game-manual-390');await resumed.close();
   checks.push('Completed teacher account opens manual guide without another write; active restored student battle is not auto-interrupted, manual guide clearly keeps live clock running, and demo/live input IDs differ');
+  }
   }
   assert.deepEqual(errors, []); assert.deepEqual(requests, []);
 } catch (error) { failure = error.stack; process.exitCode = 1; }

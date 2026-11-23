@@ -224,7 +224,7 @@
       "sourceFile": "index.js",
       "file": "productionSource.js",
       "originalSha256": "b1e4d2e8137f26f789f1037850e668c5194b5089421225d1ee275b6869b672cf",
-      "sha256": "c5bc270de0945f446f24bb43c2ff0169b62858a3a555e256ff1247512b7f30c7",
+      "sha256": "27921f3f3851496c25138ed4dd1c47508659311f04eb61efd7f5bf2d393b9cf5",
       "changes": [
         "Reuse the root initialized Firebase Admin app.",
         "Lesson core-point record and completion catalog now exclude deleted/foreign-class sources and require an active writable semester, enrollment and classroom.",
@@ -234,7 +234,8 @@
         "2026-10-22: Register History Classroom failed-result notifications as teacher events.",
         "2026-11-07: Restrict analysis achievement profile confirmations to teachers and the existing administrator.",
         "2026-11-09: Bound exam endpoint memory/concurrency and separate snapshot-only state/receipt reads from mutation transactions.",
-        "2026-11-14: Think Cloud private dedupe index, atomic response signal, bounded per-instance submit queue and restricted US submit endpoint; verified against each live source archive and deployed without unrelated gateway changes."
+        "2026-11-14: Think Cloud private dedupe index, atomic response signal, bounded per-instance submit queue and restricted US submit endpoint; verified against each live source archive and deployed without unrelated gateway changes.",
+        "2026-11-23: Accept numeric lesson revision timestamps in core-point completion so reward validation selects the same current source as the student catalogue; preserve one-time ledger and receipt semantics."
       ]
     },
     {

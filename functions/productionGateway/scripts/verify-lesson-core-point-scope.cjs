@@ -9,7 +9,8 @@ const wis = require('../wisEconomy');
 const gateway = require('../commandGateway');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { Timestamp } = require('firebase-admin/firestore');
-const source=fs.readFileSync(require.resolve('../productionSource'),'utf8');
+const { selectVisibleLessons } = require('../../studentLessonAccess');
+const source=fs.readFileSync(process.env.WESTORY_CORE_POINT_SOURCE || require.resolve('../productionSource'),'utf8');
 const ast=ts.createSourceFile('productionSource.js',source,ts.ScriptTarget.Latest,true);
 const names=new Set(['getLessonCorePointTimestampMs','getLessonUpdatedAtMs','getLatestLessonsByUnitIdForCorePoints','isStudentVisibleLessonForCorePoints','normalizeLessonCorePointIds','readEffectiveVisibleLessonCorePointCatalog','getLessonCorePointCompletion','assertLessonCorePointActiveScope','resolveLessonCorePointActiveEnrollmentId','assertLessonCorePointActiveEnrollment','executeLessonCorePointBusinessCommand','LESSON_CORE_POINT_COMMAND_TYPES','LESSON_CORE_POINT_REWARD_AMOUNT','LESSON_CORE_POINT_REWARD_SOURCE_ID','LESSON_CORE_POINT_RECENT_LEDGER_LIMIT']);
 const declarations=[];
@@ -38,7 +39,7 @@ function fixture(){
  }));const writes=[];let wrote=false;
  const snapshot=path=>({id:path.split('/').at(-1),exists:docs.has(path),data:()=>structuredClone(docs.get(path))});
  const tx={get:async ref=>{assert(!wrote,'read after write');return ref.collection?{docs:[...docs.keys()].filter(p=>p.startsWith(ref.path+'/')&&!p.slice(ref.path.length+1).includes('/')).map(snapshot)}:snapshot(ref.path);},getAll:async(...refs)=>Promise.all(refs.map(ref=>tx.get(ref))),set:(ref,value,options)=>{wrote=true;writes.push(ref.path);docs.set(ref.path,options?.merge?{...docs.get(ref.path),...value}:value);},create:(ref,value)=>{assert(!docs.has(ref.path));tx.set(ref,value);}};
- const execute=(type='recordLessonCorePointFind',unitId=ownUnit)=>api.execute({transaction:tx,command:{commandId:'fixture',commandType:type,payload:{year:'2026',semester:'2',unitId,corePointId:'point'}},actor:{uid},receiptId:'fixture-receipt',timestamp:Timestamp.now()});
+ const execute=(type='recordLessonCorePointFind',unitId=ownUnit)=>{wrote=false;return api.execute({transaction:tx,command:{commandId:'fixture',commandType:type,payload:{year:'2026',semester:'2',unitId,corePointId:'point'}},actor:{uid},receiptId:'fixture-receipt',timestamp:Timestamp.now()});};
  return{docs,writes,tx,execute};
 }
 (async()=>{
@@ -51,6 +52,26 @@ function fixture(){
  }
  {
   const f=fixture();assert.equal((await f.execute()).result.foundCount,1);assert.equal(f.writes.length,1);checks++;
+ }
+ {
+  // The display API already accepts numeric millisecond timestamps. The reward
+  // must select that same newest revision, not require a superseded highlight.
+  const f=fixture();
+  const old=lesson(ownUnit,{updatedAt:Timestamp.fromMillis(1700000000000),worksheetExamHighlights:[{id:'old-point',widthRatio:0.1,heightRatio:0.1}]});
+  const current=lesson(ownUnit,{updatedAt:1800000000000});
+  f.docs.set(`${root}/lessons/own`,old);f.docs.set(`${root}/lessons/new`,current);
+  const visible=selectVisibleLessons([old,current],[],'class-one').scopedLessons;
+  const catalog=await api.catalog(f.tx,'2026','2','class-one');
+  assert.deepEqual(Array.from(catalog.find(row=>row.unitId===ownUnit).corePointIds),visible[0].worksheetExamHighlights.map(point=>point.id));
+  for(const unit of [ownUnit,sharedUnit])f.docs.set(`${root}/lesson_progress/${uid}/units/${unit}`,{corePointFinds:['point']});
+  const result=await f.execute('claimLessonCorePointReward');assert.equal(result.result.awarded,true);assert.equal(result.result.amount,500);assert.equal(result.result.corePointFoundCount,2);assert.equal(f.writes.length,6);checks++;
+  const retry=await f.execute('claimLessonCorePointReward');assert.equal(retry.result.duplicate,true);assert.equal(retry.result.amount,0);assert.equal(f.writes.length,7);assert.equal(f.docs.get(`semester_wis_accounts/${accountId}`).balance,1000);assert.equal([...f.docs.keys()].filter(key=>key.startsWith('semester_wis_ledger/')).length,1);checks++;
+ }
+ {
+  const f=fixture();
+  f.docs.set(`${root}/lessons/new`,lesson(ownUnit,{updatedAt:1800000000000,worksheetExamHighlights:[{id:'new-point',widthRatio:0.1,heightRatio:0.1}]}));
+  for(const unit of [ownUnit,sharedUnit])f.docs.set(`${root}/lesson_progress/${uid}/units/${unit}`,{corePointFinds:['point']});
+  await assert.rejects(f.execute('claimLessonCorePointReward'),error=>error.details?.reason==='LESSON_CORE_POINTS_REMAINING');assert.equal(f.writes.length,0);checks++;
  }
  for(const unit of ['foreign-unit','hidden-unit','deleted-unit','malformed-unit']){
   const f=fixture();await assert.rejects(f.execute('recordLessonCorePointFind',unit),error=>error.details?.reason==='LESSON_CORE_POINT_NOT_CANONICAL');assert.equal(f.writes.length,0);checks++;

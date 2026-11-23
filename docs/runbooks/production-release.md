@@ -1,5 +1,9 @@
 # 운영 배포 절차
 
+## 핵심포인트 수령 복구·이순신 입력 (2026-11-23)
+
+전체 진행 조회 실패의 수동 재시도와 지급 확정 상태를 유지하고, 이순신의 키보드 축소 화면·만료 키워드 입력을 고친다. [검증 기록](../reviews/lesson-reward-naval-input-20261123.md)을 따른다. 핵심포인트 최신 자료의 숫자형 수정 시각은 화면 조회와 동일하게 해석한다. `prepare-core-point-reward-release.mjs before`를 통과한 운영 원본 준비본의 `executeLessonCorePointCommand` 하나만 배포하고 `after`로 전체 소스·자원·환경·IAM을 대조한다. 같은 main의 Vercel 배포를 승격하고 지정 Chrome 프로필에서 교사 체험을 확인한다. 보상은 기존 학기당 1회 500위스이며, 소급 확인은 `repair-lesson-core-point-rewards.mjs`의 현재 학기 읽기 전용 계획에서 기존 지급·환수와 미완료를 구분한다. 이 도구는 지급하지 않으며 개인별 계획은 Git 제외 경로에 보관한다. Functions 전체·rules·학생 공개 상태는 변경하지 않는다.
+
 ## 위스피 교사 전광판과 학생 투자 랭킹 (2026-11-21)
 
 교사 전광판에는 표시용 시세와 선택 학급의 최근 자발적 체결 최대 20건을 제공한다. `scripts/prepare-wispi-display-release.mjs prepare`가 기존 운영 소스를 보존한 세 함수의 배포 경로를 만든다. 해당 경로에서 대상 함수만 배포한 뒤 `verify`로 소스와 런타임을 대조한다. 전광판 규칙과 `wis_stock_display_trades`의 학급별 시각 내림차순 색인을 반영한다. 첫 설치 때는 `node scripts/bootstrap-wispi-exchange.cjs`로 대상 건수를 확인하고 `--apply`로 시세와 최근 체결을 채운다. 재실행 시 기존 체결을 건너뛴다.
