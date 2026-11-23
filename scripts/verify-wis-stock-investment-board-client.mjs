@@ -72,11 +72,13 @@ try{
   assert.deepEqual(qa.listeners.get(trades).filters,[["where","classKey","==","3_1"],["orderBy","atMs","desc"],["limit",20]]);
   emit(market,marketValue);assert.equal(screen.at(-1).status,"loading");emitTrades([fill]);assert.equal(screen.at(-1).trades[0].quantity,1);
   const beforeReads=qa.reads.length,beforeRegistrations=qa.registrations.length;
-  emit(market,{...marketValue,index:{value:999,previousClose:1000}});emitTrades([{...fill,side:"SELL"}]);
+  const listed={...marketValue.stocks[0],listedAtMs:now-10000,listingPrice:100,priceAtMs:now,previousPrice:145};
+  emit(market,{...marketValue,updatedAtMs:now,stocks:[listed],index:{value:999,previousClose:1000}});emitTrades([{...fill,side:"SELL"}]);
+  assert.deepEqual(screen.at(-1).market.stocks[0],listed);
   assert.equal(screen.at(-1).market.index.value,999);assert.equal(screen.at(-1).trades[0].side,"SELL");assert.equal(qa.reads.length,beforeReads);assert.equal(qa.registrations.length,beforeRegistrations);
   const detached=qa.listeners.get(trades);
   stopDisplay();assert.deepEqual([...qa.listeners.keys()],[session]);const count=screen.length;detached.error({code:"permission-denied"});assert.equal(screen.length,count);
-  checks.push("Opening adds two bounded listeners with shared exact session, updates add zero requests, closing removes both. Class selection is applied on the server.");
+  checks.push("Opening adds two bounded listeners with shared exact session. Both legacy quotes and listing/prior-price metadata arrive on the same market listener; updates add zero requests, closing removes both. Class selection is applied on the server.");
 
   stopDisplay=watchWisStockExchange("2026","2","all",state=>screen.push(state));await tick();assert.deepEqual(qa.listeners.get(trades).filters,[["orderBy","atMs","desc"],["limit",20]]);
   emit(market,null);emitTrades();assert.equal(screen.at(-1).market,null);assert.deepEqual(screen.at(-1).trades,[]);
@@ -90,6 +92,9 @@ try{
   checks.push("Missing market and empty fills are distinct, cached quotes/fills or session are hidden. Hiding/offline removes all listeners. Return reauthenticates before reconnecting.");
 
   stopDisplay();stopDisplay=watchWisStockExchange("2026","2","3:1",state=>screen.push(state));await tick();emit(market,marketValue);emitTrades([{...fill,classKey:"3_2"}]);assert.equal(screen.at(-1).status,"error");
+  stopDisplay();stopDisplay=watchWisStockExchange("2026","2","all",state=>screen.push(state));await tick();
+  emit(market,{...marketValue,stocks:[{...listed,listedAtMs:-1}]});
+  assert.equal(screen.at(-1).status,"error");assert(!qa.listeners.has(market));assert(!qa.listeners.has(trades));
   stopDisplay();stopDisplay=watchWisStockExchange("2026","2","all",state=>screen.push(state));await tick();advance(15_001);assert.equal(screen.at(-1).status,"error");assert(!qa.listeners.has(trades));
   stopDisplay();stopDisplay=watchWisStockExchange("2026","2","all",state=>screen.push(state));await tick();emit(session,{...sessionValue(),status:"revoked"});assert.equal(qa.listeners.size,0);assert.equal(errors.length,1);assert.equal(screen.at(-1).status,"error");
   checks.push("Malformed scope and denied session clear data. An unconfirmed feed times out and stops, with no auto-retry loop.");

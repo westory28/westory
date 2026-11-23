@@ -118,6 +118,8 @@
 .wis-exchange__surge li + li { margin-top: .3em; border-top: 1px solid var(--exchange-line); }
 .wis-exchange__surge li > b { color: var(--exchange-text); }
 .wis-exchange__surge li > strong { font-size: clamp(36px, 4.5vw, 100px); font-weight: 800; line-height: 1.16; }
+.wis-exchange__surge li > strong small { font-size: .5em; }
+.wis-exchange__surge li > time { flex-basis: 100%; color: var(--exchange-muted); font-size: clamp(14px, 1vw, 24px); }
 .wis-exchange__index-main { min-width: 0; width: 100%; }
 .wis-exchange__index h3 { display: grid; gap: 0; }
 .wis-exchange__index h3 > span { font-size: clamp(30px, 4vw, 76px); line-height: 1.1; letter-spacing: -.055em; font-weight: 800; }

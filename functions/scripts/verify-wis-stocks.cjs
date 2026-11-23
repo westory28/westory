@@ -3,6 +3,7 @@ const { test } = require('node:test');
 const { createHash } = require('node:crypto');
 const { createWisStockHandlers, marketPath, publicStockPath, publicStockMarket, publicStockStatus, HISTORY_LIMIT, MAX_STOCKS, MAX_MARKET_BYTES, reservedMarketBytes, normalizeSettings, advanceMarket, blankMarket } = require('../wisStocks');
 const { normalizeWisStockMarketRules } = require('../wisStockMarketRules');
+const { drawListingPrice } = require('../wisStockCatalogSchedule');
 const HALF_HOUR = 30 * 60_000;
 const scope = { year: '2026', semester: '2', semesterId: '2026-2' };
 const initial = () => ({ name: '합성 역사 종목', description: '시험용 배경', period: '시험 시대', initialPrice: 100, minimumPrice: 1,
@@ -10,7 +11,7 @@ const initial = () => ({ name: '합성 역사 종목', description: '시험용 �
 const req = data => ({ auth: { uid: 'manager', token: { email: 'manager@yongshin-ms.ms.kr' } }, data: { year: scope.year, semester: scope.semester, ...data } });
 const saveInput = (settings = initial(), expectedRevision = 0, stockId = '', requestId = 'stock-request-00000001') => req({ settings, expectedRevision, stockId, requestId });
 const reason = value => error => error.details?.reason === value;
-function fixture({ optimisticRetries = false, beforeRead = () => {} } = {}) {
+function fixture({ optimisticRetries = false, beforeRead = () => {}, openingPrice = (_seed, _semester, _id, minimum) => minimum } = {}) {
   let clock = Date.parse('2026-11-16T00:00:00Z'); // Monday 09:00 KST.
   const documents = new Map([
     ['users/manager', { role: 'teacher', teacherPortalEnabled: true, staffPermissions: ['point_manage'] }],
@@ -44,7 +45,7 @@ function fixture({ optimisticRetries = false, beforeRead = () => {} } = {}) {
       return result;
     }
   } };
-  const api = createWisStockHandlers({ db, assertSession: async (request, options) => { sessions.push(options); return { uid: request.auth?.uid, email: request.auth?.token?.email }; }, now: () => clock });
+  const api = createWisStockHandlers({ db, openingPrice, assertSession: async (request, options) => { sessions.push(options); return { uid: request.auth?.uid, email: request.auth?.token?.email }; }, now: () => clock });
   return { api, documents, reads, writes, sessions, advance: (ms = 3600000) => clock += ms };
 }
 test('management requires point authority, forbids students even with portal flags, and reads a single market without writes', async () => {
@@ -212,10 +213,58 @@ test('no-op edits do not write, stale revision and changed semester do not write
   await assert.rejects(f.api.getWisStockManagement(req({})), reason('WIS_STOCK_SCOPE_CHANGED'));
   assert.equal((await f.api.advanceWisStockPrices()).changed, false); assert.equal(f.writes.length, 2);
 });
+test('direct listings commit one server draw, including bounded endpoints and old-client receipt retries', async () => {
+  const f = fixture({ openingPrice: drawListingPrice });
+  let revision = 0;
+  for (const [minimumPrice, maximumPrice] of [[1, 100], [500, 1000], [310, 420]]) {
+    const input = saveInput({ ...initial(), initialPrice: 9999, minimumPrice, maximumPrice }, revision, '', `opening-range-request-${revision}`);
+    f.reads.length = 0; f.writes.length = 0;
+    const result = await f.api.saveWisStock(input);
+    revision = result.revision;
+    const stock = result.stocks.find(item => item.id === result.savedStockId);
+    assert.equal(f.reads.length, 6); assert.equal(f.writes.length, 2);
+    assert.equal(f.documents.get(marketPath(scope)).stocks.at(-1).listedAtMs, stock.updatedAtMs);
+    assert(Number.isInteger(stock.price) && stock.price >= Math.max(100, minimumPrice) && stock.price <= Math.min(500, maximumPrice));
+    assert.equal(stock.settings.initialPrice, stock.price); assert.equal(stock.priceModel.anchorPrice, stock.price);
+    assert.equal(stock.dayOpenPrice, stock.price); assert.deepEqual(stock.history, [{ atMs: stock.updatedAtMs, price: stock.price }]);
+    assert.equal(f.writes[1].data.settings.initialPrice, stock.price);
+    assert.equal((await f.api.saveWisStock(input)).duplicate, true); assert.equal(f.writes.length, 2);
+    await assert.rejects(f.api.saveWisStock(req({ ...input.data, settings: { ...input.data.settings, initialPrice: 9876 } })), reason('WIS_STOCK_REQUEST_CONFLICT'));
+    const unchanged = await f.api.saveWisStock(saveInput(stock.settings, revision, stock.id, 'unchanged-opening-price'));
+    assert.equal(unchanged.changed, false); assert.equal(f.writes.length, 2);
+    f.advance(1000);
+    const edited = await f.api.saveWisStock(saveInput({ ...stock.settings, description: '상장 후 편집' }, revision, stock.id, `edited-opening-price-${revision}`));
+    revision = edited.revision;
+    assert.equal(f.documents.get(marketPath(scope)).stocks.at(-1).listedAtMs, stock.updatedAtMs);
+  }
+  const before = structuredClone(f.documents.get(marketPath(scope)));
+  for (const range of [{ minimumPrice: 1, maximumPrice: 99 }, { minimumPrice: 501, maximumPrice: 10000 }])
+    await assert.rejects(f.api.saveWisStock(saveInput({ ...initial(), ...range }, revision, '', 'disjoint-opening-price')), reason('WIS_STOCK_LISTING_RANGE_INVALID'));
+  assert.deepEqual(f.documents.get(marketPath(scope)), before);
+});
+test('previously listed high-price instruments retain their receipts, opening quote and subsequent history', async () => {
+  const f = fixture(), original = await f.api.saveWisStock(saveInput());
+  const oldSettings = normalizeSettings({ ...initial(), initialPrice: 1200, minimumPrice: 800 });
+  const market = f.documents.get(marketPath(scope)), stock = market.stocks[0];
+  delete stock.listedAtMs;
+  stock.settings = oldSettings;
+  stock.price = 1300; stock.dayOpenPrice = 1200; stock.priceModel.anchorPrice = 1200;
+  stock.history = [{ atMs: stock.updatedAtMs, price: 1200 }, { atMs: stock.updatedAtMs + HALF_HOUR, price: 1300 }];
+  stock.updatedAtMs += HALF_HOUR;
+  const receipt = [...f.documents.entries()].find(([key]) => key.includes('/wis_stock_receipts/'))[1];
+  receipt.settings = oldSettings;
+  receipt.payloadHash = createHash('sha256').update(JSON.stringify([scope.semesterId, 0, '', oldSettings])).digest('hex');
+  const before = structuredClone(stock);
+  f.writes.length = 0;
+  assert.equal((await f.api.saveWisStock(saveInput(oldSettings))).duplicate, true);
+  assert.equal((await f.api.saveWisStock(saveInput(oldSettings, original.revision, stock.id, 'high-priced-legacy-edit'))).changed, false);
+  assert.deepEqual(f.documents.get(marketPath(scope)).stocks[0], before);
+  assert.equal(f.writes.length, 0);
+});
 test('invalid and public/trading payloads are rejected, prices stay integer and bounded', async () => {
   const f = fixture();
   for (const patch of [{ initialPrice: 0 }, { initialPrice: 1.5 }, { volatilityBps: 1001 }, { trendBps: -301 },
-    { maximumPrice: 99 }, { intervalHours: 2 }, { name: ' ' }, { studentOpen: true }, { automatic: 'true' }]) {
+    { maximumPrice: 0 }, { intervalHours: 2 }, { name: ' ' }, { studentOpen: true }, { automatic: 'true' }]) {
     await assert.rejects(f.api.saveWisStock(saveInput({ ...initial(), ...patch })), reason('WIS_STOCK_INPUT_INVALID'));
   }
   await assert.rejects(f.api.saveWisStock({ ...saveInput(), data: { ...saveInput().data, studentOpen: true } }), reason('WIS_STOCK_INPUT_INVALID'));
@@ -538,6 +587,12 @@ test('saved market limit changes scale scheduled prices without extra I/O or dup
   const f = fixture();
   await f.api.saveWisStock(saveInput({ ...initial(), initialPrice: 10000, maximumPrice: 1000000, automatic: true }));
   const original = structuredClone(f.documents.get(marketPath(scope)));
+  // This existing high-priced stock makes one basis point observable as one Wis.
+  const stock = original.stocks[0];
+  Object.assign(stock, { price: 10000, dayOpenPrice: 10000 });
+  stock.settings.initialPrice = 10000;
+  stock.priceModel.anchorPrice = 10000;
+  stock.history[0].price = 10000;
   f.advance();
   let rises = 0, falls = 0;
   for (let seed = 0; seed < 24; seed++) {

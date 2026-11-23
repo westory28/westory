@@ -423,9 +423,26 @@ async function test(name, fn, count = 2, supply = 1000) {
     const display = await get(`${base}/wis_stock_display/market`);
     assert.equal(display.halted, true);
     assert.deepEqual(display.index, { value: 1000, previousClose: 1000 });
-    assert.deepEqual(display.stocks, [{ id: stockId, name: '합성검증종목', price: 100, previousClose: 100 }]);
+    const stock = halt.data.after.data().stocks[0], firstAt = stock.history[0].atMs;
+    assert.deepEqual(display.stocks, [{ id: stockId, name: '합성검증종목', price: 100, previousClose: 100,
+      listedAtMs: firstAt, listingPrice: 100, priceAtMs: firstAt }]);
     await api.onWisStockMarketTradingWrite(halt);
     assert.equal(commits.at(-1).writes.length, 0);
+    const { HISTORY_LIMIT } = require('../wisStocks');
+    const history = Array.from({length: HISTORY_LIMIT}, (_, i) => ({atMs: firstAt + i * 1800000, price: 100 + i}));
+    const latest = history.at(-1);
+    const activeStock = {...stock, history, price: latest.price, updatedAtMs: latest.atMs};
+    const ticks = await marketWrite({stocks: [activeStock], updatedAtMs: latest.atMs});
+    await api.onWisStockMarketTradingWrite(ticks);
+    const [quote] = (await get(`${base}/wis_stock_display/market`)).stocks;
+    assert.equal(quote.previousPrice, history.at(-2).price);
+    assert.equal(quote.priceAtMs, latest.atMs);
+    assert.equal(quote.listedAtMs, undefined, 'A full legacy history cannot establish a listing date');
+    const knownListing = await marketWrite({stocks: [{...activeStock, listedAtMs: firstAt - 1800000}]});
+    await api.onWisStockMarketTradingWrite(knownListing);
+    const [known] = (await get(`${base}/wis_stock_display/market`)).stocks;
+    assert.equal(known.listedAtMs, firstAt - 1800000);
+    assert.equal(known.listingPrice, 100);
   });
   await test('supply exhaustion and parallel sell reservations never exceed issued or held quantities', async () => {
     for (let i = 0; i < 3; i++) await transfer(`student${i}`, 'DEPOSIT', 5000);

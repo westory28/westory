@@ -19,6 +19,10 @@ export type ExchangeQuote = {
   name: string;
   price: number;
   previousClose: number | null;
+  listedAtMs?: number;
+  listingPrice?: number;
+  previousPrice?: number;
+  priceAtMs?: number;
 };
 export type ExchangeMarket = {
   updatedAtMs: number;
@@ -64,6 +68,12 @@ function parseMarket(
         !name(stock?.id) ||
         !name(stock.name) ||
         !positiveInt(stock.price) ||
+        (stock.listedAtMs !== undefined && !date(stock.listedAtMs)) ||
+        (stock.listingPrice !== undefined &&
+          !positiveInt(stock.listingPrice)) ||
+        (stock.previousPrice !== undefined &&
+          !positiveInt(stock.previousPrice)) ||
+        (stock.priceAtMs !== undefined && !date(stock.priceAtMs)) ||
         (stock.previousClose !== null && !positiveInt(stock.previousClose)),
     )
   )

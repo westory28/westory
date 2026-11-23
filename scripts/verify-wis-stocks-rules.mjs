@@ -321,20 +321,23 @@ try {
   const command = request({ expectedRevision: 0, stockId: '', settings, requestId: 'concurrent-stock-request-1' });
   const created = await Promise.all(Array.from({ length: 8 }, () => api.saveWisStock(command)));
   assert(created.every(item => item.stocks.length === 1 && item.savedStockId === created[0].savedStockId));
+  const openingPrice = created[0].stocks[0].price;
+  assert(Number.isInteger(openingPrice) && openingPrice >= 100 && openingPrice <= 500);
+  assert(created.every(item => item.stocks[0].settings.initialPrice === openingPrice && item.stocks[0].price === openingPrice));
   assert.equal((await db.collection(`${root}/wis_stock_receipts`).get()).size, 1);
   assert.equal(totalWrites(), 2, 'Eight identical commands commit one market and one receipt write');
   checks.push('8 concurrent duplicate registrations produce one stock, one receipt, two committed writes');
   clock += 1800000;
   await Promise.all(Array.from({ length: 8 }, () => api.advanceWisStockPrices()));
   const market = await api.getWisStockManagement(request({}));
-  assert.equal(market.stocks[0].price, 103); assert.equal(market.stocks[0].history.length, 2); assert.equal(market.revision, 2);
+  assert.equal(market.stocks[0].price, Math.round(openingPrice * 103 / 100)); assert.equal(market.stocks[0].history.length, 2); assert.equal(market.revision, 2);
   assert.equal(totalWrites(), 3, 'Eight concurrent ticks commit one market write');
   await api.advanceWisStockPrices();
   assert.equal(totalWrites(), 3, 'Same slot scheduler retry makes zero writes');
   assert.equal(commits.at(-1).reads, 2);
   checks.push('8 concurrent half-hour ticks advance exactly once; same-slot retry reads two documents and writes zero');
   const edits = await Promise.allSettled(['첫 수정', '둘째 수정'].map((name, index) => api.saveWisStock(request({ expectedRevision: 2,
-    stockId: market.stocks[0].id, settings: { ...settings, name }, requestId: `conflicting-stock-request-${index}` }))));
+    stockId: market.stocks[0].id, settings: { ...market.stocks[0].settings, name }, requestId: `conflicting-stock-request-${index}` }))));
   assert.equal(edits.filter(item => item.status === 'fulfilled').length, 1);
   assert.equal(edits.filter(item => item.status === 'rejected' && item.reason.details.reason === 'WIS_STOCK_REVISION_CONFLICT').length, 1);
   assert.equal(totalWrites(), 5, 'Conflicting edit loser has no committed writes');
@@ -372,7 +375,7 @@ try {
   const afterRace = await api.getWisStockManagement(request({}));
   assert.equal(afterRace.revision, beforeRace.revision + commandWins + 1);
   assert.equal(afterRace.studentOpen, false);
-  assert.equal(afterRace.stocks.find(stock => stock.id === market.stocks[0].id).price, 106);
+  assert.equal(afterRace.stocks.find(stock => stock.id === market.stocks[0].id).price, Math.round(market.stocks[0].price * 103 / 100));
   assert.equal(totalWrites() - raceWrites, commandWins * 2 + 1);
   for (const [index, command] of [racingRules, racingStock].entries()) if (race[index].status === 'fulfilled') {
     const writes = totalWrites();
@@ -505,12 +508,14 @@ try {
   assert(scheduled.every(result => result.stocks.length === 12));
   assert.equal(totalWrites() - beforeCatalogWrites, 3, 'Eight identical activations commit market, public prices and one receipt');
   assert(commits.slice(beforeCatalogCommits).every(commit => commit.reads === commit.attempts * 6));
-  assert.deepEqual(scheduled[0].stocks.find(stock => stock.id === manual.id), manual);
   assert.equal(scheduled[0].stocks.filter(stock => stock.settings.name === manual.settings.name).length, 1);
   assert(scheduled[0].stocks.filter(stock => stock.id !== manual.id).every(stock =>
     stock.history.length === 1 && stock.history[0].atMs === clock));
   const scheduledMarket = (await db.doc(`${root}/wis_stock_markets/current`).get()).data();
   assert.equal(scheduledMarket.stocks.length, 12);
+  assert.deepEqual(scheduledMarket.stocks.find(stock => stock.id === manual.id), manual);
+  assert(scheduledMarket.stocks.filter(stock => stock.id !== manual.id).every(stock => stock.listedAtMs === clock
+    && stock.price >= 100 && stock.price <= 500 && stock.history[0].price === stock.price));
   assert.equal((await db.doc(`${root}/wis_stock_public/market`).get()).data().stocks.length, 12);
   assert.deepEqual((await db.doc(`${root}/wis_stock_public/current`).get()).data(), menuSignal);
   const catalogWrites = totalWrites();

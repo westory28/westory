@@ -1,3 +1,4 @@
+const { createHmac } = require('node:crypto');
 const catalog = require('./wisStockCatalog.json');
 const { normalizeWisStockMarketRules, isWisStockTradingSession, wisStockKstSession, nextWisStockPriceTick } = require('./wisStockMarketRules');
 
@@ -68,9 +69,18 @@ function catalogScheduleState(market, atMs) {
       ? nextTradingAtMs(rules, Math.max(atMs, firstDue)) : null };
 }
 
-function listingSettings(entry) {
+const MIN_LISTING_PRICE = 100;
+const MAX_LISTING_PRICE = 500;
+
+// A separate stream per instrument makes the first quote reproducible across
+// transaction retries, delayed listing batches and changes in listing order.
+function drawListingPrice(seed, semesterId, stockId, minimum = MIN_LISTING_PRICE, maximum = MAX_LISTING_PRICE) {
+  const sample = createHmac('sha256', seed || '').update(`wispi-listing-v1\n${semesterId}\n${stockId}`).digest().readUInt32BE();
+  return minimum + Math.floor(sample / 0x1_0000_0000 * (maximum - minimum + 1));
+}
+function listingSettings(entry, initialPrice) {
   return { name: entry.name, period: entry.week ? periods[entry.week - 1] : '상시 가치 종목',
-    description: `${entry.tagline}\n${entry.fact}`, initialPrice: entry.basePrice,
+    description: `${entry.tagline}\n${entry.fact}`, initialPrice,
     minimumPrice: 1, maximumPrice: 1_000_000,
     volatilityBps: entry.growthProfile === 'VALUE' ? 180 : 300,
     trendBps: entry.growthProfile === 'VALUE' ? 35 : 0,
@@ -78,7 +88,7 @@ function listingSettings(entry) {
     issuedShares: 100_000, lotSize: 1, tradingStatus: 'ACTIVE' };
 }
 
-function applyDueCatalogListings(market, atMs) {
+function applyDueCatalogListings(market, atMs, openingPrice = drawListingPrice) {
   const plan = normalizeCatalogPlan(market.catalogPlan);
   if (!plan || market.studentOpen !== true) return { market, addedIds: [] };
   const rules = normalizeWisStockMarketRules(market.rules);
@@ -87,8 +97,8 @@ function applyDueCatalogListings(market, atMs) {
   if (!pending.length) return { market, addedIds: [] };
   const { dayKey } = wisStockKstSession(atMs);
   const added = pending.map(({ entry }) => {
-    const settings = listingSettings(entry);
-    return { id: entry.id, settings, price: settings.initialPrice,
+    const settings = listingSettings(entry, openingPrice(market.priceSeed, market.semesterId, entry.id));
+    return { id: entry.id, settings, price: settings.initialPrice, listedAtMs: atMs,
       priceModel: { version: 1, anchorAtMs: atMs, anchorPrice: settings.initialPrice },
       dayKey, dayOpenPrice: settings.initialPrice, haltedUntilMs: 0,
       updatedAtMs: atMs, nextTickAtMs: nextWisStockPriceTick(atMs),
@@ -99,4 +109,4 @@ function applyDueCatalogListings(market, atMs) {
   return { market: { ...market, stocks: [...market.stocks, ...added] }, addedIds: added.map(stock => stock.id) };
 }
 
-module.exports = { normalizeCatalogPlan, catalogScheduleState, applyDueCatalogListings };
+module.exports = { normalizeCatalogPlan, catalogScheduleState, applyDueCatalogListings, drawListingPrice, MIN_LISTING_PRICE, MAX_LISTING_PRICE };

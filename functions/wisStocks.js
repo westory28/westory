@@ -5,7 +5,8 @@ const { nextWisStockModelPrice, wisStockPriceModelAnchor, wisStockPreviousMarket
 const { normalizeWisStockMarketRules, normalizeWisStockTradingSettings,
   isWisStockTradingSession, wisStockKstSession, wisStockDailyBounds,
   WIS_STOCK_PRICE_INTERVAL_MS, wisStockPriceSlot, nextWisStockPriceTick } = require('./wisStockMarketRules');
-const { normalizeCatalogPlan, catalogScheduleState, applyDueCatalogListings } = require('./wisStockCatalogSchedule');
+const { normalizeCatalogPlan, catalogScheduleState, applyDueCatalogListings,
+  drawListingPrice, MIN_LISTING_PRICE, MAX_LISTING_PRICE } = require('./wisStockCatalogSchedule');
 const { INDEX_HISTORY_LIMIT, emptyIndex, validWisStockIndex, updateWisStockIndex, wisStockIndexState } = require('./wisStockIndex');
 
 // Teacher market administration. Student orders remain separate server commands.
@@ -66,7 +67,7 @@ function assertCatalogCapacity(market, scope) {
   const plan = normalizeCatalogPlan(market.catalogPlan);
   const reserved = plan ? applyDueCatalogListings({ ...market, studentOpen: true,
     rules: { ...market.rules, halted: false, tradingDays: [0, 1, 2, 3, 4, 5, 6], openMinuteKst: 0, closeMinuteKst: 1440 } },
-  plan.startsAtMs + 42 * 24 * HOUR).market : market;
+  plan.startsAtMs + 42 * 24 * HOUR, () => MAX_LISTING_PRICE).market : market;
   if (reserved.stocks.length > MAX_STOCKS)
     fail('resource-exhausted', '상장 예정 종목을 포함하면 등록 한도를 초과합니다.', 'WIS_STOCK_CAPACITY');
   assertMarketCapacity(reserved, scope);
@@ -77,14 +78,15 @@ const ruleInput = value => {
   try { return normalizeWisStockMarketRules(value); }
   catch (error) { fail('invalid-argument', error.message, error.reason || 'WIS_STOCK_RULES_INVALID'); }
 };
-function normalizeSettings(value) {
+function normalizeSettings(value, newListing = false) {
   if (!allowed(value, SETTINGS)
     || typeof value.name !== 'string' || !value.name.trim() || value.name.trim().length > 60
     || typeof value.description !== 'string' || value.description.trim().length > 1000
     || typeof value.period !== 'string' || value.period.trim().length > 80
     || !safeInt(value.initialPrice, 1, MAX_PRICE)
     || !safeInt(value.minimumPrice, 1, MAX_PRICE) || !safeInt(value.maximumPrice, 1, MAX_PRICE)
-    || value.minimumPrice > value.initialPrice || value.initialPrice > value.maximumPrice
+    || value.minimumPrice > value.maximumPrice
+    || (!newListing && (value.minimumPrice > value.initialPrice || value.initialPrice > value.maximumPrice))
     || !safeInt(value.volatilityBps, 0, 1000) || !safeInt(value.trendBps, -300, 300)
     || ![1, 6, 24].includes(value.intervalHours) || typeof value.automatic !== 'boolean'
     || !['HISTORICAL', 'VALUE'].includes(value.growthProfile ?? 'HISTORICAL') || value.growthProfile === null) invalid();
@@ -109,6 +111,7 @@ function readMarket(snapshot, scope) {
       && (stock.settings.tradingStatus !== 'GRADUATED' || (record(stock.graduation)
         && stock.graduation.unitPrice === stock.price && safeInt(stock.graduation.atMs, 1, Number.MAX_SAFE_INTEGER)))
       && safeInt(stock.updatedAtMs, 0, Number.MAX_SAFE_INTEGER) && safeInt(stock.nextTickAtMs, 0, Number.MAX_SAFE_INTEGER)
+      && (stock.listedAtMs === undefined || safeInt(stock.listedAtMs, 0, stock.updatedAtMs))
       && (stock.autoEnabledAtMs === undefined || safeInt(stock.autoEnabledAtMs, 0, Number.MAX_SAFE_INTEGER))
       && Array.isArray(stock.history) && stock.history.length > 0 && stock.history.length <= HISTORY_LIMIT
       && stock.history.every(point => safeInt(point.atMs, 0, Number.MAX_SAFE_INTEGER) && safeInt(point.price, 1, MAX_PRICE));
@@ -217,7 +220,7 @@ function advanceMarket(market, atMs) {
   });
   return changed ? { ...market, rules, stocks, lastPriceSlot: slot, revision: market.revision + 1, updatedAtMs: atMs } : market;
 }
-function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession, now = Date.now }) {
+function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession, now = Date.now, openingPrice = drawListingPrice }) {
   const managementState = market => state(market, now());
   const identity = async (request, write = false) => {
     const session = await assertSession(request, write ? { highRisk: true, recentAuth: true } : {});
@@ -263,14 +266,14 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       || !safeInt(input.expectedRevision, 0, Number.MAX_SAFE_INTEGER - 1)
       || typeof input.requestId !== 'string' || !/^[A-Za-z0-9_-]{16,80}$/.test(input.requestId)
       || (input.stockId !== '' && !/^stock_[a-f0-9]{24}$/.test(input.stockId))) invalid();
-    const scope = scopeInput(input), settings = normalizeSettings(input.settings);
-    const payloadHash = hash(JSON.stringify([scope.semesterId, input.expectedRevision, input.stockId, settings]));
+    const scope = scopeInput(input), submitted = normalizeSettings(input.settings, input.stockId === '');
+    const payloadHash = hash(JSON.stringify([scope.semesterId, input.expectedRevision, input.stockId, submitted]));
     const preProfilePayloadHash = !Object.hasOwn(input.settings, 'growthProfile')
       ? hash(JSON.stringify([scope.semesterId, input.expectedRevision, input.stockId,
-        Object.fromEntries(SETTINGS.filter(key => key !== 'growthProfile').map(key => [key, settings[key]]))])) : '';
+        Object.fromEntries(SETTINGS.filter(key => key !== 'growthProfile').map(key => [key, submitted[key]]))])) : '';
     const legacyPayloadHash = !Object.hasOwn(input.settings, 'growthProfile') && TRADING_SETTINGS.every(key => !Object.hasOwn(input.settings, key))
       ? hash(JSON.stringify([scope.semesterId, input.expectedRevision, input.stockId,
-        Object.fromEntries(SETTINGS.filter(key => key !== 'growthProfile' && !TRADING_SETTINGS.includes(key)).map(key => [key, settings[key]]))])) : '';
+        Object.fromEntries(SETTINGS.filter(key => key !== 'growthProfile' && !TRADING_SETTINGS.includes(key)).map(key => [key, submitted[key]]))])) : '';
     const atMs = now(), newPriceSeed = randomBytes(32).toString('hex');
     return db.runTransaction(async tx => {
       await authority(tx, actor, true);
@@ -292,6 +295,13 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       if (market.revision !== input.expectedRevision) fail('aborted', '가격이나 종목 설정이 변경되었습니다. 새로고침 후 다시 저장해 주세요.', 'WIS_STOCK_REVISION_CONFLICT');
       const previous = market.stocks.find(stock => stock.id === input.stockId);
       if (input.stockId && !previous) fail('not-found', '종목을 찾지 못했습니다. 새로고침해 주세요.', 'WIS_STOCK_NOT_FOUND');
+      const id = previous?.id || `stock_${hash(`${scope.semesterId}\n${actor.uid}\n${input.requestId}`).slice(0, 24)}`;
+      const settings = { ...submitted };
+      if (!previous) {
+        const minimum = Math.max(MIN_LISTING_PRICE, settings.minimumPrice), maximum = Math.min(MAX_LISTING_PRICE, settings.maximumPrice);
+        if (minimum > maximum) fail('invalid-argument', '최저가와 최고가 사이에 100~500위스의 상장가가 포함되어야 합니다.', 'WIS_STOCK_LISTING_RANGE_INVALID');
+        settings.initialPrice = openingPrice(market.priceSeed || newPriceSeed, scope.semesterId, id, minimum, maximum);
+      }
       if (previous && (settings.initialPrice !== previous.settings.initialPrice
         || previous.price < settings.minimumPrice || previous.price > settings.maximumPrice)) {
         fail('invalid-argument', '기준가는 등록 후 바꿀 수 없으며, 가격 범위에는 현재가가 포함되어야 합니다.', 'WIS_STOCK_PRICE_RANGE_INVALID');
@@ -308,8 +318,7 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
         return { ...managementState(market), savedStockId: previous.id, duplicate: false, changed: false };
       }
       if (!previous && market.stocks.length >= MAX_STOCKS) fail('resource-exhausted', `종목은 학기당 ${MAX_STOCKS}개까지 등록할 수 있습니다.`, 'WIS_STOCK_CAPACITY');
-      const id = previous?.id || `stock_${hash(`${scope.semesterId}\n${actor.uid}\n${input.requestId}`).slice(0, 24)}`;
-      const stock = previous ? { ...previous, settings } : { id, settings, price: settings.initialPrice,
+      const stock = previous ? { ...previous, settings } : { id, settings, price: settings.initialPrice, listedAtMs: atMs,
         priceModel: { version: 1, anchorAtMs: atMs, anchorPrice: settings.initialPrice },
         dayKey: wisStockKstSession(atMs).dayKey, dayOpenPrice: settings.initialPrice, haltedUntilMs: 0,
         updatedAtMs: atMs, nextTickAtMs: nextWisStockPriceTick(atMs), history: [{ atMs, price: settings.initialPrice }] };
@@ -377,7 +386,7 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
     if (!allowed(input, ['year', 'semester', '_session', 'requestId', 'expectedRevision', 'halted'])
       || typeof input.halted !== 'boolean' || !safeInt(input.expectedRevision, 0, Number.MAX_SAFE_INTEGER - 1)
       || typeof input.requestId !== 'string' || !/^[A-Za-z0-9_-]{16,80}$/.test(input.requestId)) invalid();
-    const scope = scopeInput(input), atMs = now();
+    const scope = scopeInput(input), atMs = now(), newPriceSeed = randomBytes(32).toString('hex');
     const payloadHash = hash(JSON.stringify(['setWisStockMarketHalted', scope.semesterId, input.expectedRevision, input.halted]));
     return db.runTransaction(async tx => {
       await authority(tx, actor, true);
@@ -402,7 +411,7 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
         rules: { ...market.rules, halted: input.halted }, revision: market.revision + 1, updatedAtMs: atMs,
         tradingEpoch: market.tradingEpoch + (input.halted ? 1 : 0),
         publicationRevision: market.publicationRevision + 1, publicationUpdatedAtMs: atMs,
-        ...(!input.halted && !market.priceSeed ? { priceSeed: randomBytes(32).toString('hex') } : {}) };
+        ...(!input.halted && !market.priceSeed ? { priceSeed: newPriceSeed } : {}) };
       const { market: listed, addedIds } = applyDueCatalogListings(resumed, atMs);
       const updated = addedIds.length ? updateWisStockIndex(market, listed, atMs) : listed;
       if (addedIds.length) assertCatalogCapacity(updated, scope);
@@ -429,6 +438,7 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
     try { plan = normalizeCatalogPlan({ version: 1, startsAtMs: input.startsAtMs }); }
     catch (error) { fail('invalid-argument', error.message, 'WIS_STOCK_CATALOG_PLAN_INVALID'); }
     if (String(new Date(plan.startsAtMs + 9 * HOUR).getUTCFullYear()) !== scope.year) invalid();
+    const newPriceSeed = randomBytes(32).toString('hex');
     const payloadHash = hash(JSON.stringify(['activateWisStockCatalogPlan', scope.semesterId, input.expectedRevision, plan]));
     return db.runTransaction(async tx => {
       await authority(tx, actor, true);
@@ -448,12 +458,12 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
           fail('failed-precondition', '이미 적용한 상장 일정의 시작일은 변경할 수 없습니다.', 'WIS_STOCK_CATALOG_PLAN_LOCKED');
         return { ...managementState(market), duplicate: false, changed: false };
       }
-      const planned = { ...market, catalogPlan: plan };
+      const planned = { ...market, catalogPlan: plan, priceSeed: market.priceSeed || newPriceSeed };
       // Reserve the complete plan before accepting it. This in-memory projection
       // is only a capacity check; future stocks/history are never persisted.
       assertCatalogCapacity(planned, scope);
       const { market: listed, addedIds } = applyDueCatalogListings(planned, atMs);
-      const updated = updateWisStockIndex(market, { ...listed, priceSeed: market.priceSeed || randomBytes(32).toString('hex'),
+      const updated = updateWisStockIndex(market, { ...listed,
         revision: market.revision + 1, updatedAtMs: atMs }, atMs);
       tx.set(marketRef, updated);
       publishStudentMarket(tx, db, scope, market, updated);

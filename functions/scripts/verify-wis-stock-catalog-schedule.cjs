@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const catalog = require('../wisStockCatalog.json');
-const { normalizeCatalogPlan, catalogScheduleState, applyDueCatalogListings } = require('../wisStockCatalogSchedule');
+const { normalizeCatalogPlan, catalogScheduleState, applyDueCatalogListings, drawListingPrice } = require('../wisStockCatalogSchedule');
 const { normalizeWisStockMarketRules } = require('../wisStockMarketRules');
 const { normalizeSettings, reservedMarketBytes, MAX_MARKET_BYTES } = require('../wisStocks');
 
@@ -71,6 +71,7 @@ test('the first opening adds only due stocks with one actual observation and no 
     assert.deepEqual(stock.history, [{ atMs: start, price: stock.settings.initialPrice }]);
     assert.deepEqual(stock.priceModel, { version: 1, anchorAtMs: start, anchorPrice: stock.settings.initialPrice });
     assert.equal(stock.nextTickAtMs, start + HOUR / 2);
+    assert.equal(stock.listedAtMs, start);
     assert.equal(stock.updatedAtMs, start);
     assert.equal(stock.dayKey, '2026-11-16');
     assert.equal(stock.haltedUntilMs, 0);
@@ -105,6 +106,24 @@ test('retries, renamed matching IDs and manually registered matching names canno
     assert.deepEqual(repeat.addedIds, []);
   }
 });
+test('planned stocks receive a repeatable semester-specific draw when they first list', () => {
+  const original = market({ priceSeed: 'c'.repeat(64) });
+  const all = applyDueCatalogListings(original, start + 42 * DAY).market.stocks;
+  const opened = applyDueCatalogListings(original, start).market;
+  const catchUp = applyDueCatalogListings(opened, start + 42 * DAY).market.stocks;
+  const prices = stocks => Object.fromEntries(stocks.map(stock => [stock.id, stock.price]));
+  assert.deepEqual(prices(all), prices(catchUp));
+  assert(new Set(all.map(stock => stock.price)).size > 40);
+  for (const stock of all) {
+    assert(Number.isInteger(stock.price) && stock.price >= 100 && stock.price <= 500);
+    assert.equal(stock.settings.initialPrice, stock.price); assert.equal(stock.dayOpenPrice, stock.price);
+    assert.equal(stock.priceModel.anchorPrice, stock.price); assert.equal(stock.history[0].price, stock.price);
+  }
+  const other = applyDueCatalogListings({ ...original, semesterId: '2027-1' }, start + 42 * DAY).market.stocks;
+  assert.notDeepEqual(prices(all), prices(other));
+  const values = new Set(Array.from({ length: 5000 }, (_, id) => drawListingPrice(original.priceSeed, original.semesterId, String(id))));
+  assert(values.has(100) && values.has(500));
+});
 
 test('closed, unpublished and halted markets defer listings and catch up at the actual reopened time', () => {
   for (const current of [market({ studentOpen: false }), market({ rules: normalizeWisStockMarketRules({ halted: true }) })]) {
@@ -122,6 +141,7 @@ test('closed, unpublished and halted markets defer listings and catch up at the 
   assert.deepEqual(result.addedIds, catalog.filter(entry => dueAt(entry) <= reopen).map(entry => entry.id));
   for (const stock of result.market.stocks) {
     assert.deepEqual(stock.history, [{ atMs: reopen, price: stock.settings.initialPrice }]);
+    assert.equal(stock.listedAtMs, reopen);
     assert.equal(stock.priceModel.anchorAtMs, reopen);
     assert.equal(stock.nextTickAtMs, start + 7 * DAY + HOUR + HOUR / 2);
   }
@@ -147,7 +167,11 @@ test('all 80 listings fit the existing history reservation and retain past plan 
   assert.equal(result.addedIds.length, 80);
   assert.equal(catalogScheduleState(result.market, atMs).nextListingAtMs, null);
   assert.equal(catalogScheduleState(result.market, atMs).pendingCount, 0);
-  assert(reservedMarketBytes(result.market, { year: '2026', semester: '2' }) < MAX_MARKET_BYTES);
+  const scope = { year: '2026', semester: '2' };
+  const bytes = reservedMarketBytes(result.market, scope);
+  const legacy = { ...result.market, stocks: result.market.stocks.map(({ listedAtMs, ...stock }) => stock) };
+  assert.equal(bytes - reservedMarketBytes(legacy, scope), 80 * (Buffer.byteLength('listedAtMs') + 1 + 8));
+  assert(bytes < MAX_MARKET_BYTES);
   for (const stock of result.market.stocks) {
     assert.equal(stock.settings.tradingStatus, 'ACTIVE', 'Exits and mergers are planning-only in this patch');
     assert.equal(stock.history.length, 1);

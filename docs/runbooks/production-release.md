@@ -1,5 +1,11 @@
 # 운영 배포 절차
 
+## 위스피 신규 상장가와 전광판 (2026-11-23)
+
+교사 등록과 예약 상장은 종목당 100~500위스 범위에서 첫 가격을 정한다. 직접 등록에서 최저가·최고가를 좁히면 두 범위가 겹치는 가격만 적용한다. 추첨은 학기의 시장 시드와 종목 ID를 사용하며 첫 시세와 영수증을 기존 트랜잭션에 저장한다. 운영 반영 대상은 `saveWisStock`, `activateWisStockCatalogPlan`, `setWisStockMarketHalted`, `advanceWisStockPrices`다. 네 함수의 운영 소스에 `wisStocks.js`와 `wisStockCatalogSchedule.js` 변경을 적용하고 30분 Scheduler 설정을 대조한다.
+
+교사 전광판 가운데의 속보 팝업은 시세 문서에 담긴 관측 시각·직전 시세·비교 기준가·상장 시각으로 급등락과 신규 상장을 순차 표시한다. `onWisStockMarketTradingWrite`의 운영 소스에서 `wisStockDisplay.js`를 갱신한다. `npm run test:wispi-trading`과 `node scripts/verify-wis-stock-investment-board-browser.mjs`에서 시세 생성, 팝업 전환, 구독 횟수를 확인한다.
+
 ## 학생 위스피 거래 인증 (2026-11-23)
 
 학생의 매수·매도·주문 취소·주식 지갑 입출금·지원금 수령은 로그인 시각이 오래됐어도 유효한 일반 세션으로 처리한다. 학생 클라이언트는 App Check와 현재 계정·학기의 세션 증명을 사용한다. 서버는 학생 본인과 세션 유효성, 학적, 시장 공개·거래 조건을 검사한다. 중복 클릭이나 응답 유실 후 재시도의 주문 번호와 원래 견적은 유지한다. `npm run verify:wispi-client`와 `npm run test:wispi-trading`으로 확인하고 학생 화면 변경은 Vercel로 배포한다.

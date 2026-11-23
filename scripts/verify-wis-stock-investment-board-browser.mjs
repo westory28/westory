@@ -30,6 +30,7 @@ const audited = [
   "src/pages/teacher/components/points/WisStockExchangeDisplay.tsx",
   "src/pages/teacher/components/points/WisStockExchangeDisplay.css",
   "src/pages/teacher/components/points/useWisStockExchangeDisplay.ts",
+  "src/pages/teacher/components/points/wisStockDisplayBulletins.ts",
   "src/pages/teacher/components/points/WisStockQuotePrice.tsx",
   "src/pages/teacher/components/points/WisStockQuotePrice.css",
   "src/pages/teacher/components/points/WisStockQuotePages.tsx",
@@ -83,12 +84,16 @@ qa.pricePush=raw=>{qa.last=raw;listeners.filter(item=>item.active).forEach(item=
 export function watchWisStockExchange(year,semester,group,send){
  qa.displayStarts=(qa.displayStarts||0)+1;qa.displayActive=true;qa.displayGroup=group;
  const names=['조선상회','금강철도','한양은행','한글 이름이 긴 주식회사'];
- const stocks=Array.from({length:23},(_,i)=>({id:'S'+i,name:names[i]||'합성종목'+i,price:i===22?9876543:300+i*5,previousClose:i===0?200:i===22?1234567:300+i*5+[10,-10,0][i%3]}));
- let market={updatedAtMs:Date.now(),halted:false,index:{value:1052.16,previousClose:1034.5},stocks};
+ const stocks=Array.from({length:23},(_,i)=>({id:'S'+i,name:names[i]||'합성종목'+i,price:i===22?9876543:300+i*5,previousClose:i===22?9654321:300+i*5+[2,-2,0][i%3]}));
+ const initialAt=Date.now();
+ let market={updatedAtMs:initialAt,halted:false,index:{value:1052.16,previousClose:1034.5},stocks:qa.displayFixture??stocks.map(stock=>({...stock,previousPrice:stock.price-1,priceAtMs:initialAt-60_000}))};
  let trades=Array.from({length:20},(_,i)=>({id:'F'+i,displayName:i===0?'검증학생':'합성학생'+i,atMs:1794787200000-i*10000,stockName:'한양은행',side:i%2?'SELL':'BUY',quantity:i+2,unitPrice:340-i}));
  const emit=()=>{if(qa.displayActive)send({status:'ready',market,trades});};
- qa.displayTick=({prices={},index=market.index,added=[],halted=market.halted}={})=>{
-   market={...market,updatedAtMs:market.updatedAtMs+1000,index,halted,stocks:[...market.stocks.map(stock=>({...stock,price:prices[stock.id]??stock.price})),...added]};emit();
+ qa.displayTick=({prices={},prior={},legacy=false,index=market.index,added=[],halted=market.halted}={})=>{
+   const atMs=market.updatedAtMs+1000;
+   market={...market,updatedAtMs:atMs,index,halted,stocks:[...market.stocks.map(stock=>
+     prices[stock.id]!==undefined&&prices[stock.id]!==stock.price
+       ? {...stock,price:prices[stock.id],previousPrice:legacy?undefined:prior[stock.id]??stock.price,priceAtMs:legacy?undefined:atMs}:stock),...added]};emit();
  };
  let sequence=0;
  qa.displayTrade=(count=1)=>{
@@ -478,13 +483,13 @@ async function checkLiveExchange(page, display, surge) {
   await page.evaluate(() => window.boardQa.displayTrade(2));
   await names.filter({hasText:"새체결학생3"}).waitFor();
   assert.deepEqual((await names.allTextContents()).slice(0,3), ["새체결학생3","새체결학생2","새체결학생"], "batch with tied timestamps returns to newest page in server order");
-  assert.equal(await surge.isVisible(), false);
+  assert(!(await surge.allTextContents()).join("").includes("새체결학생"), "trade rows do not become market popups");
   assert.equal(await quotes.locator(".wis-quote-price__fold").count(), 0, "trade does not turn quote flaps");
 
   // Check the full eight-second lifetime without waiting on real time for the timeout.
   const samples = await page.evaluate(async () => {
     window.boardQa.surgeStartedAt = Date.now();
-    window.boardQa.displayTick({ prices: { S0: 315, S1: 320, S2: 341, S3: 310, S4: 321 } });
+    window.boardQa.displayTick({ prices: { S0: 315, S1: 310, S2: 341, S3: 310, S4: 321 } });
     await new Promise(requestAnimationFrame);
     return Array.from(document.querySelectorAll(".wis-exchange__quote-grid > li")).slice(0, 6).map(cell => {
       const top = cell.querySelector(".wis-quote-price__fold");
@@ -546,7 +551,9 @@ async function checkLiveExchange(page, display, surge) {
   await afterLayout(page);
   await display.getByRole("button", {name:"이전 종목 페이지",exact:true}).press("Enter");
   await quotes.locator(".wis-ticker-tile__current").getByText("신규상장").waitFor();
-  assert.equal(await surge.isVisible(), false, "new listings start a fresh baseline");
+  await surge.waitFor();
+  assert.match(await surge.innerText(), /신규\s*상장/);
+  assert(!(await surge.innerText()).includes("+600.00%"), "a listing does not create a price jump from the previous close");
   await page.evaluate(() => window.boardQa.displayTick({prices:{S0:325}}));
   await display.getByRole("button", {name:"다음 종목 페이지",exact:true}).press("Enter");
   const currentFace = quotes.first().locator(".wis-ticker-tile__current");
@@ -554,10 +561,10 @@ async function checkLiveExchange(page, display, surge) {
   assert.equal(await currentFace.locator(".wis-quote-price__fold").count(),0,"returning to a stock does not replay its offscreen ticks");
   await page.evaluate(() => window.boardQa.displayStatus("paused"));
   await quotes.first().waitFor({ state: "hidden" });
-  await page.evaluate(() => window.boardQa.displayTick({ prices: { S0: 500 } }));
+  await page.evaluate(() => window.boardQa.displayTick({ prices: { S0: 500 }, prior: { S0: 499 } }));
   await first.waitFor();
   assert.match(await first.textContent(), /500/);
-  assert.equal(await surge.isVisible(), false, "price jump across a subscription pause is not a live surge");
+  assert(!(await surge.allTextContents()).join("").includes("+53.85%"), "the pre-pause price is not a confirmed prior tick");
   assert.equal(await quotes.locator(".wis-quote-price__fold").count(), 0);
   assert.equal(await trades.locator(".wis-flap__fold").count(), 0, "reconnection establishes a fresh feed baseline");
   await page.evaluate(() => {
@@ -566,21 +573,28 @@ async function checkLiveExchange(page, display, surge) {
   });
   await first.getByText("현재가 502위스").waitFor({ state: "attached" });
   await first.locator(".wis-quote-price__transition").waitFor({ state: "detached" });
-  assert.equal(await surge.isVisible(), false, "quick successive updates settle on the final price");
+  assert.match(await first.textContent(), /502/, "quick successive updates settle on the final price");
   await page.evaluate(() => window.boardQa.displayTick({prices:{S0:1004,S1:608,S2:614,S3:527,S4:513,S5:487}}));
   const headlines = surge.locator(".wis-exchange__surge-page > ul > li b");
-  for (const expected of [["조선상회","금강철도"],["한양은행","한글 이름이 긴 주식회사"],["합성종목4","합성종목5"]]) {
-    await headlines.filter({hasText:expected[0]}).waitFor();
-    assert.deepEqual(await headlines.allTextContents(),expected);
-    if (expected[0] !== "조선상회") await waitForVisibleRotation(page, ".wis-exchange__surge-page .wis-flap__fold, .wis-exchange__surge-page .wis-flap__unfold");
+  const reached = new Set();
+  let sawBreak = false;
+  for (let step = 0; step < 18 && reached.size < 6; step++) {
+    await afterLayout(page);
+    if (!await surge.isVisible()) sawBreak = true;
+    for (const name of await headlines.allTextContents()) {
+      if (["조선상회","금강철도","한양은행","한글 이름이 긴 주식회사","합성종목4","합성종목5"].includes(name)) reached.add(name);
+    }
+    if (!step) assert.deepEqual(await headlines.allTextContents(), ["조선상회","금강철도"]);
+    if (step === 1) await waitForVisibleRotation(page, ".wis-exchange__surge-page .wis-flap__fold, .wis-exchange__surge-page .wis-flap__unfold");
     await checkBoardFit(display,"quotes");
     await page.clock.fastForward(4_010);
   }
-  await surge.waitFor({state:"hidden"});
+  assert.equal(reached.size, 6, "all six eligible headlines return across bursts");
+  assert(sawBreak, "bursts yield the view to the main board");
   const beforeBulletin = await quoteGeometry(display);
   await page.evaluate(() => window.boardQa.displayTick({prices:{S0:1000,S1:600,S2:600}}));
   await afterLayout(page);
-  assert.equal(await surge.isVisible(), false, 'a move smaller than 5% is not a bulletin');
+  assert(!(await surge.allTextContents()).join("").includes("-0.40%"), 'a move smaller than 3% is not a rapid-move headline');
   await page.evaluate(() => window.boardQa.displayTick({prices:{S0:950,S1:660,S2:480}}));
   await surge.waitFor();
   assert.equal(await surge.locator('.wis-exchange__surge-heading strong').innerText(), '급등·급락 속보');
@@ -598,17 +612,14 @@ async function checkLiveExchange(page, display, surge) {
   assert.equal(overlay.parent,'wis-exchange','bulletin escapes the center column');
   assertStableQuotes(beforeBulletin, await quoteGeometry(display), 'mixed bulletin opens');
   await page.clock.fastForward(4_010);
-  await headlines.filter({hasText:'조선상회'}).waitFor();
-  assert((await surge.locator('.wis-exchange__surge-page > ul').innerText()).includes('-5.00%'), '-5% boundary appears');
+  await afterLayout(page);
   await page.clock.fastForward(4_010);
-  await surge.waitFor({state:'hidden'});
+  await surge.waitFor({state:'hidden', timeout:2000});
   assertStableQuotes(beforeBulletin, await quoteGeometry(display), 'mixed bulletin closes');
   await page.evaluate(() => window.boardQa.displayTick({prices:{S0:760}}));
   await surge.waitFor();
-  assert.equal(await surge.locator('.wis-exchange__surge-heading strong').innerText(), '급락 속보');
-  assert((await surge.locator('.wis-exchange__surge-page > ul').innerText()).includes('-20.00%'));
-  await page.clock.fastForward(8_100);
-  await surge.waitFor({state:'hidden'});
+  assert.match(await surge.locator('.wis-exchange__surge-heading strong').innerText(), /급락 속보/);
+  assert((await surge.locator('.wis-exchange__surge-page > ul > li').filter({hasText:"조선상회"}).innerText()).includes('-20.00%'));
   await page.evaluate(() => window.boardQa.displayTick({ halted: true, prices: { S0: 700 } }));
   await display.getByText("거래 정지", { exact: true }).waitFor();
   assert.equal(await surge.isVisible(), false);
@@ -621,7 +632,87 @@ async function checkLiveExchange(page, display, surge) {
   assert.equal(await trades.locator(".wis-flap__fold").count(),0,"a batched offline/reconnect snapshot is a baseline");
 }
 
+async function checkBulletinCycle(width, height) {
+  const page = await open(width);
+  await page.setViewportSize({width, height});
+  await push(page);
+  await chartReady(page);
+  await page.evaluate(() => {
+    const atMs = Date.now() - 60_000;
+    window.boardQa.displayFixture = [
+      {id:"rise", name:"오름상회", price:103, previousClose:103, previousPrice:100, priceAtMs:atMs},
+      {id:"fall", name:"내림철도", price:97, previousClose:97, previousPrice:100, priceAtMs:atMs},
+      {id:"listed", name:"새상회", price:800, previousClose:800, listedAtMs:atMs, listingPrice:800},
+      {id:"old", name:"옛철도", price:200, previousClose:200, listedAtMs:atMs-86_400_000, listingPrice:100},
+    ];
+    Object.defineProperty(Element.prototype, "requestFullscreen", {configurable:true, value:undefined});
+  });
+  await page.clock.install();
+  const show = () => page.getByRole("button", {name:"전광판 보기", exact:true}).click();
+  await show();
+  const display = page.getByRole("dialog", {name:"위스피 전광판"});
+  const popup = display.locator(".wis-exchange__surge");
+  const heading = popup.locator(".wis-exchange__surge-heading strong");
+  const close = display.getByRole("button", {name:"전광판 닫기", exact:true});
+  const reads = () => page.evaluate(() => [window.boardQa.subscriptions, window.boardQa.displayStarts, window.boardQa.historyRequests.length]);
+  const budget = await reads();
+  await heading.filter({hasText:"신규 상장"}).waitFor();
+  const initial = await popup.innerText();
+  for (const term of ["새상회", "상장가", "800"]) assert(initial.includes(term), initial);
+  assert(!initial.includes("옛철도"), "a listing older than 24 hours is excluded");
+  await page.screenshot({path:path.join(output, "board-listing-popup-" + width + ".png")});
+  const pages = [];
+  for (let i = 0; i < 16; i++) {
+    const text = await popup.isVisible() ? await popup.innerText() : "";
+    assert(!text.includes("검증학생") && !text.includes("매수") && !text.includes("매도"), "fills stay in the trade panel");
+    assert(!text.includes("옛철도"));
+    if (text !== pages.at(-1)) pages.push(text);
+    await checkBoardFit(display, "quotes");
+    await page.clock.fastForward(4_050);
+  }
+  assert(pages.some(text=>text.includes("오름상회") && text.includes("+3.00%") && text.includes("직전 시세 대비")), JSON.stringify(pages));
+  assert(pages.some(text=>text.includes("내림철도") && text.includes("-3.00%")), JSON.stringify(pages));
+  assert(pages.includes(""), "the unobstructed exchange is visible between bulletin cycles");
+  assert(pages.filter(text=>text.includes("신규 상장")).length >= 2, "eligible bulletins repeat without waiting for another market update");
+  assert.deepEqual(await reads(), budget, "rotating cached market news adds zero observer starts and history calls");
+  await page.evaluate(() => window.boardQa.displayStatus("paused"));
+  await popup.waitFor({state:"hidden"});
+  await page.clock.fastForward(40_000);
+  assert.equal(await popup.isVisible(), false);
+  await page.evaluate(() => window.boardQa.replayTrades());
+  await heading.filter({hasText:"신규 상장"}).waitFor();
+  await close.click();
+  assert.equal(await page.evaluate(() => window.boardQa.displayActive), false);
+  await show();
+  await heading.filter({hasText:"신규 상장"}).waitFor();
+  await close.click();
+  if (width === 320) {
+    // Legacy snapshots have no listing date or confirmed previous tick.
+    await page.evaluate(() => {
+      window.boardQa.displayFixture = [{id:"legacy", name:"옛상회", price:101, previousClose:100}];
+    });
+    await show();
+    await heading.filter({hasText:"상승 종목"}).waitFor();
+    assert((await popup.innerText()).includes("전일 대비"));
+    await page.evaluate(() => window.boardQa.displayTick({prices:{legacy:111}, legacy:true}));
+    await heading.filter({hasText:"급등 속보"}).waitFor();
+    assert((await popup.innerText()).includes("직전 수신 시세 대비"));
+    await close.click();
+    await page.evaluate(() => {
+      window.boardQa.displayFixture = [{id:"flat", name:"보합상회", price:100, previousClose:100}];
+    });
+    await show();
+    await display.getByText("실시간 연결", {exact:true}).waitFor();
+    assert.equal(await popup.isVisible(), false, "a flat legacy snapshot invents neither an IPO nor a move");
+    await close.click();
+  }
+  await page.close();
+}
+
 try {
+  await checkBulletinCycle(320, 568);
+  await checkBulletinCycle(1280, 720);
+  checks.push("Center popups replay recent confirmed listings and ±3% observed prices on entry, show both types with an unobstructed board between cycles, omit expired listings and trade details, and restart after pause or re-entry. Rotation adds zero watcher registrations and history requests at 320×568 and 1280×720.");
   for (const width of [320, 390, 768, 1280, 1440]) {
     const page = await open(width);
     await assertBlank(page);
@@ -1363,7 +1454,7 @@ try {
     }
     await setPanel("시세");
     assert.equal(await display.locator(".wis-exchange__index-value").innerText(), "1,052.16pt");
-    assert.equal(await surge.isVisible(), false, "previous-close gain on entry is not a live surge");
+    assert(!/급등|급락/.test((await surge.locator(".wis-exchange__surge-heading strong").allTextContents()).join("")), "small daily moves do not become rapid-move alerts");
     await page.evaluate(() => window.boardQa.displayTick({ index: { value: 987.23, previousClose: 1000 } }));
     await display.locator(".wis-exchange__index-change .is-down").waitFor();
     assert.match(await display.locator(".wis-exchange__index-value").innerText(), /987.23/);
@@ -1503,7 +1594,7 @@ try {
   checks.push(
     "Fullscreen exchange at six viewport sizes including 320×568 and 1280×720: no scrolling/clipping, two quotes per row, all 23 stocks and all 20 fills reachable, mobile panel switching, TV font sizes, Escape focus restoration and watcher disposal. Native fullscreen keeps help visible within its subtree.",
     "In both motion settings the eight-second quote cycle visibly folds old/new faces row by row, with pause and manual paging. Prices and trades flip with reduced motion enabled. A new fill moves the previous first row down; replays and reconnects do not replay fills.",
-    "Live quote sequence: row-ordered split flaps, initial/unchanged/reconnected prices, immediate prior-tick ±5% threshold, absolute-magnitude ordered mixed bulletins, timed dismissal, new listings and halted market.",
+    "Live quote sequence: row-ordered split flaps, initial/unchanged/reconnected prices, confirmed ±3% headlines, absolute-magnitude ordered mixed bulletins, timed breaks, new listings and halted market.",
     "One-row quote heading, click/keyboard help with Escape/outside/focus dismissal, stable row boundaries throughout all pages and bulletin appearance/disappearance, and wide centered overlay outside the index column.",
     "Height-only and width-only resize: every quote page remains readable, rows fit without clipping, and returning to the original viewport restores the same heading/window/row geometry.",
   );

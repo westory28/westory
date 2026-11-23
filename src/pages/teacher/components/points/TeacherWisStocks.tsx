@@ -131,6 +131,8 @@ export default function TeacherWisStocks({
   const formRef = useRef<HTMLFormElement>(null);
   const selected = market?.stocks.find((stock) => stock.id === selectedId);
   const graduated = selected?.settings.tradingStatus === "GRADUATED";
+  const listingFloor = Math.max(100, draft.minimumPrice);
+  const listingCeiling = Math.min(500, draft.maximumPrice);
   const dirty =
     selectedId !== null &&
     JSON.stringify(draft) !==
@@ -910,17 +912,17 @@ export default function TeacherWisStocks({
                   />
                 </label>
                 <label>
-                  기준가 (위스)
+                  상장가 (위스)
                   <input
-                    type="number"
-                    min={1}
-                    max={1000000}
-                    step={1}
-                    required
-                    value={draft.initialPrice}
-                    disabled={Boolean(selected)}
-                    onChange={(event) =>
-                      set("initialPrice", event.target.valueAsNumber)
+                    readOnly
+                    value={
+                      selected
+                        ? selected.settings.initialPrice
+                        : listingFloor === listingCeiling
+                          ? listingFloor
+                          : listingFloor < listingCeiling
+                            ? `${listingFloor}~${listingCeiling} 중 무작위`
+                            : "최저가·최고가를 확인하세요"
                     }
                   />
                 </label>
@@ -1004,7 +1006,11 @@ export default function TeacherWisStocks({
                   <input
                     type="number"
                     min={1}
-                    max={1000000}
+                    max={
+                      selected
+                        ? 1000000
+                        : Math.min(500, draft.maximumPrice || 500)
+                    }
                     step={1}
                     required
                     value={draft.minimumPrice}
@@ -1017,7 +1023,9 @@ export default function TeacherWisStocks({
                   최고가 (위스)
                   <input
                     type="number"
-                    min={1}
+                    min={
+                      selected ? 1 : Math.max(100, draft.minimumPrice || 100)
+                    }
                     max={1000000}
                     step={1}
                     required

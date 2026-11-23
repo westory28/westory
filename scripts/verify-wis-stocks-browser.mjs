@@ -56,7 +56,18 @@ try {
     assert.match(confirmation,/마지막 가격인 130 위스/);assert.match(confirmation,/되돌릴 수 없습니다/);assert.equal(await graduation.evaluate(()=>window.stockQa.saves),1);assert.equal(await status.isDisabled(),true);assert.equal(await graduation.getByLabel('종목명',{exact:true}).isDisabled(),true);assert.equal(await graduation.getByRole('button',{name:'변경 저장',exact:true}).isDisabled(),true);await assertLayout(graduation,width);await graduation.screenshot({path:path.join(evidence,'graduation-readonly-'+width+'.png'),fullPage:true});await graduation.close();
   }
   checks.push('Graduation at 320/390/768/1280px: confirm includes last price and irreversible settlement; cancel sends no save, accept sends exactly one synthetic save, completed graduation locks editor and submit.');
-  const newStock=await open();await enter(newStock);await newStock.getByRole('button',{name:'새 종목 추가',exact:true}).click();assert.equal(await newStock.getByRole('combobox',{name:/^거래 상태/}).locator('option[value="GRADUATED"]').count(),0);await newStock.close();
+  const newStock=await open();await enter(newStock);await newStock.getByRole('button',{name:'새 종목 추가',exact:true}).click();assert.equal(await newStock.getByRole('combobox',{name:/^거래 상태/}).locator('option[value="GRADUATED"]').count(),0);
+  const listingPrice = newStock.getByLabel('상장가 (위스)', {exact:true});
+  const floor = newStock.getByLabel('최저가 (위스)', {exact:true});
+  const ceiling = newStock.getByLabel('최고가 (위스)', {exact:true});
+  assert.equal(await listingPrice.isEditable(), false);
+  assert.equal(await listingPrice.inputValue(), '100~500 중 무작위');
+  await floor.fill('250'); await ceiling.fill('400');
+  assert.equal(await listingPrice.inputValue(), '250~400 중 무작위');
+  await ceiling.fill('99');
+  assert.equal(await ceiling.evaluate(input => input.validity.valid), false);
+  assert.deepEqual(await newStock.evaluate(() => [window.stockQa.reads,window.stockQa.saves]), [1,0]);
+  await newStock.close();
   checks.push('New instrument cannot be registered as already graduated.');
   if(!process.argv.includes('--graduation-only')) {
   for (const width of [320,390,768,1280,1440]) {

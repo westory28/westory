@@ -1,6 +1,7 @@
 'use strict';
 
 const { wisStockIndexState } = require('./wisStockIndex');
+const { HISTORY_LIMIT } = require('./wisStocks');
 
 /** Teacher display projection. Never copy private model inputs or account metadata. */
 function marketDisplay(market) {
@@ -14,7 +15,14 @@ function marketDisplay(market) {
     stocks: market.stocks.map(stock => {
       const priorClose = stock.history.findLast(point => point.atMs < dayStart);
       const previousClose = priorClose?.price ?? stock.dayOpenPrice ?? stock.history[0]?.price ?? null;
-      return { id: stock.id, name: stock.settings.name, price: stock.price, previousClose };
+      const first = stock.history[0], last = stock.history.at(-1), previous = stock.history.at(-2);
+      // Older stocks have no listing timestamp. A truncated series cannot establish an IPO date.
+      const listedAtMs = stock.listedAtMs ?? (stock.history.length < HISTORY_LIMIT
+        && first?.price === stock.settings.initialPrice ? first.atMs : undefined);
+      return { id: stock.id, name: stock.settings.name, price: stock.price, previousClose,
+        ...(listedAtMs !== undefined ? { listedAtMs, listingPrice: stock.settings.initialPrice } : {}),
+        ...(last?.price === stock.price ? { priceAtMs: last.atMs,
+          ...(previous && previous.atMs < last.atMs ? { previousPrice: previous.price } : {}) } : {}) };
     }),
   };
 }

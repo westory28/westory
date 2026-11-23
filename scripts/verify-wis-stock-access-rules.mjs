@@ -113,7 +113,7 @@ try {
   await api.advanceWisStockPrices(); assert.equal(commits.at(-1).length, 2); assert(!commits.at(-1).includes(statusPath));
   assert.deepEqual(reads.toSorted(), ['site_settings/config', 'site_settings/semester_active', 'semester_manifests/2026-2', marketPath(scope)].toSorted());
   assert.deepEqual((await db.doc(statusPath).get()).data(), signal);
-  assert.equal((await getDoc(doc(student, pricesPath))).data().stocks[0].price, 103);
+  assert.equal((await getDoc(doc(student, pricesPath))).data().stocks[0].price, Math.round(created.stocks[0].price * 103 / 100));
   reads.length = 0;
   assert.equal((await api.advanceWisStockPrices()).changed, false);
   assert.deepEqual(reads, ['site_settings/config', marketPath(scope)]); assert.equal(commits.at(-1).length, 0);

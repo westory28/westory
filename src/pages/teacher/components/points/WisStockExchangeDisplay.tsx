@@ -7,23 +7,60 @@ import { Movement, direction } from "./WisStockMovement";
 import WisStockQuotePages from "./WisStockQuotePages";
 import WisStockTradeFeed, { exchangeDateTime } from "./WisStockTradeFeed";
 import WisStockFlapFaces from "./WisStockFlapFaces";
+import type { StockBulletinItem } from "./wisStockDisplayBulletins";
 import { useWisStockDisplayRows } from "./useWisStockDisplayRows";
 import { useWisStockExchangeDisplay } from "./useWisStockExchangeDisplay";
 import "./WisStockExchangeDisplay.css";
 
-function surgeList(stocks: { id: string; name: string; percent: number }[]) {
+function bulletinHeading(stocks: StockBulletinItem[]) {
+  if (stocks[0].kind === "listing") return "신규 상장";
+  const up = stocks.some((item) => item.kind !== "listing" && item.percent > 0);
+  const down = stocks.some(
+    (item) => item.kind !== "listing" && item.percent < 0,
+  );
+  const sharp = stocks.some(
+    (item) => item.kind !== "listing" && Math.abs(item.percent) >= 3,
+  );
+  if (!sharp)
+    return up && down ? "상승·하락 종목" : up ? "상승 종목" : "하락 종목";
+  return up && down ? "급등·급락 속보" : up ? "급등 속보" : "급락 속보";
+}
+function surgeList(stocks: StockBulletinItem[]) {
   return (
-    <ul aria-label="실시간 급등·급락 종목">
+    <ul aria-label={bulletinHeading(stocks)}>
       {stocks.map((stock) => (
-        <li key={stock.id} className={"is-" + direction(stock.percent)}>
+        <li
+          key={stock.id}
+          className={
+            stock.kind === "listing"
+              ? "is-listing"
+              : "is-" + direction(stock.percent)
+          }
+        >
           <b>{stock.name}</b>
-          <strong>
-            <span aria-hidden="true">{stock.percent > 0 ? "▲ " : "▼ "}</span>
-            <span className="sr-only">
-              {stock.percent > 0 ? "급등 " : "급락 "}
-            </span>
-            {signedQuote(stock.percent, 2)}%
-          </strong>
+          {stock.kind === "listing" ? (
+            <strong>
+              <small>{stock.hasListingPrice ? "상장가" : "현재가"} </small>
+              {quoteNumber(stock.price)}
+              <small> 위스</small>
+            </strong>
+          ) : (
+            <strong>
+              <span aria-hidden="true">{stock.percent > 0 ? "▲ " : "▼ "}</span>
+              <span className="sr-only">
+                {stock.percent > 0 ? "상승 " : "하락 "}
+              </span>
+              {signedQuote(stock.percent, 2)}%
+            </strong>
+          )}
+          <time dateTime={new Date(stock.atMs).toISOString()}>
+            {exchangeDateTime.format(stock.atMs)}{" "}
+            {stock.kind === "listing"
+              ? stock.hasListingPrice
+                ? "상장"
+                : "상장 확인"
+              : "시세"}
+          </time>
         </li>
       ))}
     </ul>
@@ -31,17 +68,34 @@ function surgeList(stocks: { id: string; name: string; percent: number }[]) {
 }
 
 function initialQuotes(market: WisStockManagement): ExchangeMarket {
+  const updatedAtMs = Math.max(
+    market.updatedAtMs,
+    ...market.stocks.map((stock) => stock.updatedAtMs),
+  );
   return {
-    updatedAtMs: market.updatedAtMs,
+    updatedAtMs,
     halted: !market.studentOpen || market.rules.halted,
     index: market.marketIndex?.history.length ? market.marketIndex : null,
     stocks: market.stocks.map((stock) => {
-      const { change } = wisStockQuote(stock, market.updatedAtMs);
+      const { change } = wisStockQuote(stock, updatedAtMs);
+      const latest = stock.history.at(-1);
+      const previous = stock.history.at(-2);
+      const first = stock.history[0];
       return {
         id: stock.id,
         name: stock.settings.name,
         price: stock.price,
         previousClose: change === null ? null : stock.price - change,
+        ...(previous &&
+        latest?.price === stock.price &&
+        previous.atMs < latest.atMs
+          ? { previousPrice: previous.price, priceAtMs: latest.atMs }
+          : {}),
+        ...(first &&
+        stock.history.length < market.historyLimit &&
+        first.price === stock.settings.initialPrice
+          ? { listedAtMs: first.atMs, listingPrice: first.price }
+          : {}),
       };
     }),
   };
@@ -76,11 +130,13 @@ export default function WisStockExchangeDisplay({
     query.addEventListener("change", update);
     return () => query.removeEventListener("change", update);
   }, []);
+  const initial = useMemo(() => initialQuotes(initialMarket), [initialMarket]);
   const { state, flips, bulletin, tradeSession } = useWisStockExchangeDisplay(
     year,
     semester,
     classKey,
     retry,
+    initial,
   );
   useLayoutEffect(() => {
     const modal = dialog.current!;
@@ -107,7 +163,6 @@ export default function WisStockExchangeDisplay({
     };
   }, []);
   const rows = useWisStockDisplayRows(panel);
-  const initial = useMemo(() => initialQuotes(initialMarket), [initialMarket]);
   const market = state.status === "ready" ? (state.market ?? initial) : null;
   const index = market?.index;
   const trades = state.status === "ready" ? state.trades : null;
@@ -281,14 +336,17 @@ export default function WisStockExchangeDisplay({
           {bulletin && (
             <div className="wis-exchange__surge">
               <div className="wis-exchange__surge-heading">
-                <strong>
-                  {bulletin.stocks.every((stock) => stock.percent > 0)
-                    ? "급등 속보"
-                    : bulletin.stocks.every((stock) => stock.percent < 0)
-                      ? "급락 속보"
-                      : "급등·급락 속보"}
-                </strong>
-                <span>직전 시세 대비</span>
+                <strong>{bulletinHeading(bulletin.stocks)}</strong>
+                <span>
+                  {
+                    {
+                      listing: "최근 24시간",
+                      previous: "직전 시세 대비",
+                      received: "직전 수신 시세 대비",
+                      daily: "전일 대비 · 첫날은 기준가",
+                    }[bulletin.stocks[0].kind]
+                  }
+                </span>
               </div>
               <div className="wis-exchange__surge-page">
                 {surgeList(bulletin.stocks)}
