@@ -34,6 +34,7 @@ const audited = [
   "src/pages/teacher/components/points/WisStockQuotePrice.css",
   "src/pages/teacher/components/points/WisStockQuotePages.tsx",
   "src/pages/teacher/components/points/WisStockQuotePages.css",
+  "src/pages/teacher/components/points/WisStockQuoteHelp.tsx",
   "src/pages/teacher/components/points/WisStockTradeFeed.tsx",
   "src/pages/teacher/components/points/WisStockTradeFeed.css",
   "src/pages/teacher/components/points/WisStockMovement.tsx",
@@ -275,6 +276,62 @@ const fillNames = fillRows + " > .wis-exchange__trade-content .wis-exchange__tra
 async function afterLayout(page) {
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
+async function quoteGeometry(display) {
+  return display.evaluate(dialog => {
+    const box = node => {
+      const {x, y, width, height} = node.getBoundingClientRect();
+      return {x, y, width, height};
+    };
+    return {
+      heading: box(dialog.querySelector('.wis-exchange__quote-heading')),
+      window: box(dialog.querySelector('.wis-exchange__quote-window')),
+      rows: [...dialog.querySelectorAll('.wis-exchange__quote-grid > li[data-quote-id]')].map(box),
+    };
+  });
+}
+function assertStableQuotes(before, after, reason) {
+  const sameBox = (first, second, label) => {
+    for (const key of ['x', 'y', 'width', 'height']) {
+      assert(Math.abs(first[key] - second[key]) < 1, `${reason}: ${label}.${key}: ${first[key]} -> ${second[key]}`);
+    }
+  };
+  sameBox(before.heading, after.heading, 'heading');
+  sameBox(before.window, after.window, 'quote window');
+  for (let i = 0; i < Math.min(before.rows.length, after.rows.length); i++) {
+    sameBox(before.rows[i], after.rows[i], `row ${i}`);
+  }
+}
+async function checkQuoteHelp(page, display) {
+  const info = display.getByRole('button', {name:'종목 시세 표시 기준', exact:true});
+  await info.hover();
+  await info.focus();
+  assert.equal(await info.getAttribute('aria-expanded'), 'false', 'quote help opens only on activation');
+  const before = await quoteGeometry(display);
+  await info.click();
+  assert.equal(await info.getAttribute('aria-expanded'), 'true');
+  const popup = display.locator('[id="' + await info.getAttribute('aria-controls') + '"]');
+  await popup.waitFor({state:'visible'});
+  for (const term of ['현재가', '전일 대비', '위스']) assert((await popup.innerText()).includes(term));
+  assert(await popup.evaluate(node => !document.fullscreenElement || document.fullscreenElement.contains(node)), 'quote help belongs to the fullscreen subtree');
+  assertStableQuotes(before, await quoteGeometry(display), 'opening help');
+  await page.keyboard.press('Escape');
+  assert.equal(await info.getAttribute('aria-expanded'), 'false');
+  assert(await display.isVisible(), 'help Escape leaves the exchange open');
+  await info.press('Enter');
+  assert.equal(await info.getAttribute('aria-expanded'), 'true');
+  await display.locator('.wis-exchange__bar h2').click();
+  assert.equal(await info.getAttribute('aria-expanded'), 'false', 'outside click closes quote help');
+  await info.press('Enter');
+  await page.keyboard.press('Tab');
+  assert.equal(await info.getAttribute('aria-expanded'), 'false', 'focus leaving closes quote help');
+  assertStableQuotes(before, await quoteGeometry(display), 'closing help');
+  const heading = await display.locator('.wis-exchange__quote-heading').evaluate(node => {
+    const bounds = node.getBoundingClientRect();
+    return {height:bounds.height, scroll:node.scrollWidth, width:node.clientWidth, children:[...node.children].map(child=>({top:child.getBoundingClientRect().top,bottom:child.getBoundingClientRect().bottom})),top:bounds.top,bottom:bounds.bottom};
+  });
+  assert(heading.height <= 48 && heading.scroll <= heading.width + 1, JSON.stringify(heading));
+  assert(heading.children.every(child=>child.top>=heading.top-1&&child.bottom<=heading.bottom+1), 'one-row quote heading');
+}
 async function checkBoardFit(display, kind) {
   const problems = await display.evaluate((dialog, kind) => {
     const board = dialog.querySelector(".wis-exchange");
@@ -317,15 +374,20 @@ async function visitQuotePages(page, display) {
   const quotes = display.locator(stockRows);
   const next = display.getByRole("button", {name:"다음 종목 페이지", exact:true});
   const seen = new Set();
+  const geometry = await quoteGeometry(display);
   for (let pageNumber = 0; pageNumber < 24; pageNumber++) {
     const ids = await quotes.evaluateAll(cells => cells.map(cell => cell.dataset.quoteId));
     if (pageNumber && ids[0] === "S0") break;
     await checkBoardFit(display, "quotes");
+    assertStableQuotes(geometry, await quoteGeometry(display), 'quote page transition');
     for (const id of ids) { assert(!seen.has(id), "repeated quote " + id); seen.add(id); }
     if (!(await next.count())) break;
     await next.press("Enter");
     await page.waitForFunction(({selector, first}) => document.querySelector(selector)?.dataset.quoteId !== first, {selector:stockRows, first:ids[0]});
     await afterLayout(page);
+    await page.clock.fastForward(1_200);
+    await afterLayout(page);
+    assertStableQuotes(geometry, await quoteGeometry(display), 'settled quote page');
   }
   assert.deepEqual([...seen], Array.from({length:23}, (_,i) => "S" + i), "all listed quotes reachable in source order");
   assert.equal(await quotes.first().getAttribute("data-quote-id"), "S0", "quote pages wrap to first");
@@ -422,7 +484,7 @@ async function checkLiveExchange(page, display, surge) {
   // Check the full eight-second lifetime without waiting on real time for the timeout.
   const samples = await page.evaluate(async () => {
     window.boardQa.surgeStartedAt = Date.now();
-    window.boardQa.displayTick({ prices: { S0: 315, S1: 320, S2: 341, S3: 290, S4: 321 } });
+    window.boardQa.displayTick({ prices: { S0: 315, S1: 320, S2: 341, S3: 310, S4: 321 } });
     await new Promise(requestAnimationFrame);
     return Array.from(document.querySelectorAll(".wis-exchange__quote-grid > li")).slice(0, 6).map(cell => {
       const top = cell.querySelector(".wis-quote-price__fold");
@@ -505,7 +567,7 @@ async function checkLiveExchange(page, display, surge) {
   await first.getByText("현재가 502위스").waitFor({ state: "attached" });
   await first.locator(".wis-quote-price__transition").waitFor({ state: "detached" });
   assert.equal(await surge.isVisible(), false, "quick successive updates settle on the final price");
-  await page.evaluate(() => window.boardQa.displayTick({prices:{S0:1004,S1:608,S2:614,S3:493,S4:513,S5:487}}));
+  await page.evaluate(() => window.boardQa.displayTick({prices:{S0:1004,S1:608,S2:614,S3:527,S4:513,S5:487}}));
   const headlines = surge.locator(".wis-exchange__surge-page > ul > li b");
   for (const expected of [["조선상회","금강철도"],["한양은행","한글 이름이 긴 주식회사"],["합성종목4","합성종목5"]]) {
     await headlines.filter({hasText:expected[0]}).waitFor();
@@ -515,6 +577,38 @@ async function checkLiveExchange(page, display, surge) {
     await page.clock.fastForward(4_010);
   }
   await surge.waitFor({state:"hidden"});
+  const beforeBulletin = await quoteGeometry(display);
+  await page.evaluate(() => window.boardQa.displayTick({prices:{S0:1000,S1:600,S2:600}}));
+  await afterLayout(page);
+  assert.equal(await surge.isVisible(), false, 'a move smaller than 5% is not a bulletin');
+  await page.evaluate(() => window.boardQa.displayTick({prices:{S0:950,S1:660,S2:480}}));
+  await surge.waitFor();
+  assert.equal(await surge.locator('.wis-exchange__surge-heading strong').innerText(), '급등·급락 속보');
+  assert.deepEqual(await headlines.allTextContents(), ['한양은행','금강철도'], 'mixed moves sort by absolute percentage');
+  const mixed = surge.locator('.wis-exchange__surge-page > ul');
+  assert((await mixed.locator('.is-down').innerText()).includes('-20.00%'));
+  assert((await mixed.locator('.is-up').innerText()).includes('+10.00%'));
+  const overlay = await surge.evaluate(node => {
+    const rect = node.getBoundingClientRect();
+    const board = node.closest('.wis-exchange');
+    const index = board.querySelector('.wis-exchange__index').getBoundingClientRect();
+    return {width:rect.width,indexWidth:index.width,center:(rect.left+rect.right)/2,viewport:innerWidth,parent:node.parentElement.parentElement.className};
+  });
+  assert(overlay.width > overlay.indexWidth * 1.5 && Math.abs(overlay.center - overlay.viewport/2) < 1, JSON.stringify(overlay));
+  assert.equal(overlay.parent,'wis-exchange','bulletin escapes the center column');
+  assertStableQuotes(beforeBulletin, await quoteGeometry(display), 'mixed bulletin opens');
+  await page.clock.fastForward(4_010);
+  await headlines.filter({hasText:'조선상회'}).waitFor();
+  assert((await surge.locator('.wis-exchange__surge-page > ul').innerText()).includes('-5.00%'), '-5% boundary appears');
+  await page.clock.fastForward(4_010);
+  await surge.waitFor({state:'hidden'});
+  assertStableQuotes(beforeBulletin, await quoteGeometry(display), 'mixed bulletin closes');
+  await page.evaluate(() => window.boardQa.displayTick({prices:{S0:760}}));
+  await surge.waitFor();
+  assert.equal(await surge.locator('.wis-exchange__surge-heading strong').innerText(), '급락 속보');
+  assert((await surge.locator('.wis-exchange__surge-page > ul').innerText()).includes('-20.00%'));
+  await page.clock.fastForward(8_100);
+  await surge.waitFor({state:'hidden'});
   await page.evaluate(() => window.boardQa.displayTick({ halted: true, prices: { S0: 700 } }));
   await display.getByText("거래 정지", { exact: true }).waitFor();
   assert.equal(await surge.isVisible(), false);
@@ -1253,8 +1347,9 @@ try {
       }
       await afterLayout(page);
     };
-    const surge = display.locator(".wis-exchange__index .wis-exchange__surge");
+    const surge = display.locator(".wis-exchange__surge");
     await setPanel("시세");
+    await checkQuoteHelp(page, display);
     assert((await quotes.count()) > 0 && (await quotes.count()) < 23);
     await page.screenshot({path:path.join(output, "board-dialog-" + width + ".png")});
     if (tv || width===390) await checkAutomaticQuotePages(page,display);
@@ -1332,6 +1427,7 @@ try {
       await checkLiveExchange(page, display, surge);
     } else if (width === 1440) {
       const previousCount = await quotes.count();
+      const originalGeometry = await quoteGeometry(display);
       await page.setViewportSize({width,height:610});
       await page.waitForFunction(({selector, previousCount}) => {
         const count = document.querySelectorAll(selector).length;
@@ -1340,8 +1436,24 @@ try {
       await afterLayout(page);
       await checkBoardFit(display,"quotes");
       await checkBoardFit(display,"trades");
+      await visitQuotePages(page,display);
       await page.setViewportSize({width,height});
+      await page.waitForFunction(({selector, previousCount}) => document.querySelectorAll(selector).length === previousCount, {selector:stockRows, previousCount});
       await afterLayout(page);
+      await checkBoardFit(display,"quotes");
+      await checkBoardFit(display,"trades");
+      assertStableQuotes(originalGeometry, await quoteGeometry(display), 'height-only resize returns to its original layout');
+      await page.setViewportSize({width:1024,height});
+      await afterLayout(page);
+      await checkBoardFit(display,"quotes");
+      await checkBoardFit(display,"trades");
+      await visitQuotePages(page,display);
+      await page.setViewportSize({width,height});
+      await page.waitForFunction(({selector, previousCount}) => document.querySelectorAll(selector).length === previousCount, {selector:stockRows, previousCount});
+      await afterLayout(page);
+      await checkBoardFit(display,"quotes");
+      await checkBoardFit(display,"trades");
+      assertStableQuotes(originalGeometry, await quoteGeometry(display), 'width resize returns to its original layout');
     } else if (width === 320) {
       await page.evaluate(() => window.boardQa.displayTick({prices:{S0:600,S1:610,S2:620,S3:630,S4:640,S5:650}}));
       await surge.waitFor();
@@ -1372,10 +1484,28 @@ try {
     assert.deepEqual(await page.evaluate(()=>[window.boardQa.displayStarts,window.boardQa.displayStops,window.boardQa.displayActive]),[1,1,false]);
     await page.close();
   }
+  {
+    const page = await open(1280);
+    await push(page);
+    await chartReady(page);
+    await page.getByRole('button', {name:'전광판 보기', exact:true}).click();
+    const display = page.getByRole('dialog', {name:'위스피 전광판'});
+    await display.waitFor();
+    await page.waitForFunction(() => document.fullscreenElement?.classList.contains('wis-exchange'));
+    await checkQuoteHelp(page, display);
+    await page.screenshot({path:path.join(output,'board-dialog-native-fullscreen-1280.png')});
+    await display.getByRole('button', {name:'전광판 닫기', exact:true}).click();
+    await display.waitFor({state:'hidden'});
+    await page.waitForFunction(() => !document.fullscreenElement);
+    assert.deepEqual(await page.evaluate(()=>[window.boardQa.displayStarts,window.boardQa.displayStops,window.boardQa.displayActive]),[1,1,false]);
+    await page.close();
+  }
   checks.push(
-    "Fullscreen exchange at six viewport sizes including 320×568 and 1280×720: no scrolling/clipping, two quotes per row, all 23 stocks and all 20 fills reachable, mobile panel switching, TV font sizes, Escape focus restoration and watcher disposal.",
+    "Fullscreen exchange at six viewport sizes including 320×568 and 1280×720: no scrolling/clipping, two quotes per row, all 23 stocks and all 20 fills reachable, mobile panel switching, TV font sizes, Escape focus restoration and watcher disposal. Native fullscreen keeps help visible within its subtree.",
     "In both motion settings the eight-second quote cycle visibly folds old/new faces row by row, with pause and manual paging. Prices and trades flip with reduced motion enabled. A new fill moves the previous first row down; replays and reconnects do not replay fills.",
-    "Live quote sequence: row-ordered split flaps, initial/unchanged/reconnected prices, immediate prior-tick 5% threshold, simultaneous surges, timed dismissal, new listings and halted market.",
+    "Live quote sequence: row-ordered split flaps, initial/unchanged/reconnected prices, immediate prior-tick ±5% threshold, absolute-magnitude ordered mixed bulletins, timed dismissal, new listings and halted market.",
+    "One-row quote heading, click/keyboard help with Escape/outside/focus dismissal, stable row boundaries throughout all pages and bulletin appearance/disappearance, and wide centered overlay outside the index column.",
+    "Height-only and width-only resize: every quote page remains readable, rows fit without clipping, and returning to the original viewport restores the same heading/window/row geometry.",
   );
   assert.deepEqual(errors, []);
   assert.deepEqual(blocked, []);

@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ExchangeQuote } from "../../../../lib/wisStockExchangeDisplayClient";
 import WisStockQuotePrice, {
   type QuotePriceTransition,
 } from "./WisStockQuotePrice";
 import { Movement } from "./WisStockMovement";
 import WisStockFlapFaces from "./WisStockFlapFaces";
+import WisStockQuoteHelp from "./WisStockQuoteHelp";
 import "./WisStockQuotePages.css";
 
 const pageIntervalMs = 8_000;
@@ -59,8 +60,55 @@ export default function WisStockQuotePages({
   const start = turn.first < total ? turn.first : Math.max(0, pages - 1) * size;
   const current = stocks?.slice(start, start + size) ?? [];
   const previous = active && start === turn.first ? turn.previous : undefined;
-  const slots = Math.min(size, Math.max(current.length, previous?.length ?? 0));
+  const slots = Math.min(size, total);
   const visibleRows = Math.ceil(slots / 2);
+  const measureGrid = useRef<HTMLUListElement>(null);
+  const visibleGrid = useRef<HTMLUListElement>(null);
+  const dimensions = useRef({ width: 0, viewport: 0, row: 0, name: 0 });
+  useLayoutEffect(() => {
+    const source = measureGrid.current!;
+    const target = visibleGrid.current!;
+    const measure = () => {
+      if (!source.clientWidth || !source.children.length) return;
+      const sameSize =
+        dimensions.current.width === source.clientWidth &&
+        dimensions.current.viewport === window.innerHeight;
+      const cells = Array.from(source.children);
+      const nameHeight = (cell: Element) =>
+        cell.querySelector(".wis-exchange__quote-name")!.getBoundingClientRect()
+          .height;
+      const name = Math.max(
+        sameSize ? dimensions.current.name : 0,
+        ...cells.map(nameHeight),
+      );
+      const row = Math.ceil(
+        Math.max(
+          sameSize ? dimensions.current.row : 0,
+          ...cells.map(
+            (cell) =>
+              cell.getBoundingClientRect().height + name - nameHeight(cell),
+          ),
+        ),
+      );
+      dimensions.current = {
+        width: source.clientWidth,
+        viewport: window.innerHeight,
+        row,
+        name,
+      };
+      target.style.gridAutoRows = `${row}px`;
+      target.style.setProperty("--wis-quote-name-height", `${name}px`);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(source);
+    for (const cell of source.children) observer.observe(cell);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [stocks]);
   const nextPage = (step: number) => {
     if (!active || document.hidden || pages < 2) return;
     const destination =
@@ -109,7 +157,10 @@ export default function WisStockQuotePages({
       aria-labelledby="wis-exchange-quotes"
     >
       <div className="wis-exchange__heading wis-exchange__quote-heading">
-        <h3 id="wis-exchange-quotes">종목 시세</h3>
+        <div className="wis-exchange__quote-title">
+          <h3 id="wis-exchange-quotes">종목 시세</h3>
+          <WisStockQuoteHelp />
+        </div>
         {pages > 1 && (
           <div
             className="wis-exchange__pager wis-exchange__quote-controls"
@@ -128,7 +179,7 @@ export default function WisStockQuotePages({
               className="wis-exchange__quote-page"
               aria-label={`전체 ${total}종목 중 ${start + 1}번째부터 ${start + current.length}번째까지`}
             >
-              {start + 1}–{start + current.length}/{total}
+              {Math.floor(start / size) + 1}/{pages}
             </span>
             <button
               type="button"
@@ -153,16 +204,13 @@ export default function WisStockQuotePages({
             </button>
           </div>
         )}
-        <span>
-          현재가 · 전일 대비 <b>단위 위스</b>
-        </span>
       </div>
       <div
         className="wis-exchange__quote-window wis-exchange__window"
         role="region"
         aria-label="종목 시세 목록"
       >
-        <ul className="wis-exchange__quote-grid">
+        <ul ref={visibleGrid} className="wis-exchange__quote-grid">
           {Array.from({ length: slots }, (_, index) => {
             const stock = current[index];
             const old = previous?.[index];
@@ -202,6 +250,17 @@ export default function WisStockQuotePages({
               </li>
             );
           })}
+        </ul>
+        <ul
+          ref={measureGrid}
+          className="wis-exchange__quote-grid wis-exchange__quote-measure"
+          aria-hidden="true"
+        >
+          {stocks?.map((stock) => (
+            <li key={stock.id}>
+              <QuoteFace stock={stock} />
+            </li>
+          ))}
         </ul>
         {stocks && !stocks.length && (
           <p className="wis-exchange__empty">상장된 종목이 없습니다.</p>

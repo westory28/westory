@@ -78,14 +78,14 @@ export function useWisStockExchangeDisplay(
             delayMs: Math.round(Math.floor(index / 2) * rowDelayMs),
           });
           const percent = ((stock.price - from) / from) * 100;
-          if (percent >= surgePercent)
+          if (Math.abs(percent) >= surgePercent)
             rising.push({ id: stock.id, name: stock.name, percent });
         });
         activeFlips = moves;
         setFlips(moves);
         if (rising.length) {
           clearTimeout(surgeTimer);
-          rising.sort((a, b) => b.percent - a.percent);
+          rising.sort((a, b) => Math.abs(b.percent) - Math.abs(a.percent));
           const pageSize = 2;
           const dwellMs =
             rising.length <= pageSize ? surgeDurationMs : surgeDurationMs / 2;

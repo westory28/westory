@@ -13,12 +13,15 @@ import "./WisStockExchangeDisplay.css";
 
 function surgeList(stocks: { id: string; name: string; percent: number }[]) {
   return (
-    <ul aria-label="실시간 급등 종목">
+    <ul aria-label="실시간 급등·급락 종목">
       {stocks.map((stock) => (
-        <li key={stock.id}>
+        <li key={stock.id} className={"is-" + direction(stock.percent)}>
           <b>{stock.name}</b>
           <strong>
-            <span aria-hidden="true">▲ </span>
+            <span aria-hidden="true">{stock.percent > 0 ? "▲ " : "▼ "}</span>
+            <span className="sr-only">
+              {stock.percent > 0 ? "급등 " : "급락 "}
+            </span>
             {signedQuote(stock.percent, 2)}%
           </strong>
         </li>
@@ -196,10 +199,7 @@ export default function WisStockExchangeDisplay({
               state.status === "ready" && (!narrow || mobilePanel === "quotes")
             }
           />
-          <section
-            className={"wis-exchange__index" + (bulletin ? " has-surge" : "")}
-            aria-label="위스피 종합지수"
-          >
+          <section className="wis-exchange__index" aria-label="위스피 종합지수">
             <div className="wis-exchange__index-main">
               <h3>
                 <span lang="en">WsPI</span>
@@ -238,30 +238,6 @@ export default function WisStockExchangeDisplay({
                 </p>
               )}
             </div>
-            <div
-              className="wis-exchange__bulletin"
-              role="status"
-              aria-live="polite"
-            >
-              {bulletin && (
-                <div className="wis-exchange__surge">
-                  <div className="wis-exchange__surge-heading">
-                    <strong>급등 속보</strong>
-                    <span>직전 시세 대비</span>
-                  </div>
-                  <div className="wis-exchange__surge-page">
-                    {surgeList(bulletin.stocks)}
-                    {bulletin.before.length > 0 && (
-                      <WisStockFlapFaces
-                        key={bulletin.id}
-                        before={surgeList(bulletin.before)}
-                        after={surgeList(bulletin.stocks)}
-                      />
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
             {market && (
               <div
                 className="wis-exchange__breadth"
@@ -296,6 +272,36 @@ export default function WisStockExchangeDisplay({
             classKey={classKey}
             session={tradeSession}
           />
+        </div>
+        <div
+          className="wis-exchange__bulletin"
+          role="status"
+          aria-live="polite"
+        >
+          {bulletin && (
+            <div className="wis-exchange__surge">
+              <div className="wis-exchange__surge-heading">
+                <strong>
+                  {bulletin.stocks.every((stock) => stock.percent > 0)
+                    ? "급등 속보"
+                    : bulletin.stocks.every((stock) => stock.percent < 0)
+                      ? "급락 속보"
+                      : "급등·급락 속보"}
+                </strong>
+                <span>직전 시세 대비</span>
+              </div>
+              <div className="wis-exchange__surge-page">
+                {surgeList(bulletin.stocks)}
+                {bulletin.before.length > 0 && (
+                  <WisStockFlapFaces
+                    key={bulletin.id}
+                    before={surgeList(bulletin.before)}
+                    after={surgeList(bulletin.stocks)}
+                  />
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </dialog>,
