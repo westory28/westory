@@ -24,6 +24,10 @@ type Plan = {
   paidWis: number;
   skippedCount: number;
   lastError?: string;
+  mode?: "week" | "recurring";
+  enabled?: boolean;
+  manualOverride?: boolean;
+  origin?: "recurring" | null;
   week: { endsAtMs: number };
 };
 const weekIdAt = (time: number) =>
@@ -36,6 +40,7 @@ const statuses: Record<string, string> = {
   disabled: "지급 안 함",
   settling: "지급 중",
   paid: "지급 완료",
+  recurring: "매주 자동 지급",
 };
 
 export default function WeplayWeeklyRewards({
@@ -62,16 +67,18 @@ export default function WeplayWeeklyRewards({
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState(categories[0].id);
   const [weekId, setWeekId] = useState(() => weekIdAt(Date.now()));
+  const [mode, setMode] = useState<"week" | "recurring">("recurring");
+  const [enabled, setEnabled] = useState(false);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [retry, setRetry] = useState(0);
-  const scope = `${currentUser?.uid}/${authGeneration}/${config?.year}/${config?.semester}/${canRead}/${canWrite}/${gameId}/${category}/${weekId}`;
+  const scope = `${currentUser?.uid}/${authGeneration}/${config?.year}/${config?.semester}/${canRead}/${canWrite}/${gameId}/${category}/${weekId}/${mode}`;
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
-  const busy = useRef(false);
+  const busy = useRef<string | null>(null);
   const requestRef = useRef<{ fingerprint: string; id: string }>();
   const call = async (name: string, values: object) => {
     const fn = await getHistoryDictionaryCallable<object, Plan>(name, {
@@ -82,11 +89,15 @@ export default function WeplayWeeklyRewards({
         ...getYearSemester(config),
         gameId,
         category,
-        weekId,
+        weekId: mode === "recurring" ? weekIdAt(Date.now()) : weekId,
+        mode,
         ...values,
       })
     ).data;
   };
+  useEffect(() => {
+    setSaving(false);
+  }, [scope]);
   useEffect(() => {
     let active = true;
     setPlan(null);
@@ -99,6 +110,7 @@ export default function WeplayWeeklyRewards({
         if (active) {
           setPlan(value);
           setTiers(value.tiers);
+          setEnabled(value.enabled === true);
         }
       })
       .catch((reason) => {
@@ -121,9 +133,14 @@ export default function WeplayWeeklyRewards({
     !plan ||
     loading ||
     saving ||
-    plan.week.endsAtMs <= Date.now() ||
-    ["paid", "settling"].includes(plan.status);
-  const dirty = !!plan && JSON.stringify(tiers) !== JSON.stringify(plan.tiers);
+    (mode === "week" &&
+      (plan.week.endsAtMs <= Date.now() ||
+        ["paid", "settling"].includes(plan.status)));
+  const dirty =
+    !!plan &&
+    (JSON.stringify(tiers) !== JSON.stringify(plan.tiers) ||
+      (mode === "week" && plan.origin === "recurring") ||
+      (mode === "recurring" && enabled !== Boolean(plan.enabled)));
   const valid = tiers.every(
     (tier, index) =>
       Number.isSafeInteger(tier.throughRank) &&
@@ -134,12 +151,16 @@ export default function WeplayWeeklyRewards({
       tier.wis <= 100000,
   );
   const save = async () => {
-    if (locked || !dirty || !valid || busy.current) return;
-    busy.current = true;
+    if (locked || !dirty || !valid || busy.current === scope) return;
+    busy.current = scope;
     setSaving(true);
     setError("");
     const started = scope;
-    const payload = { tiers, revision: plan.revision };
+    const payload = {
+      tiers,
+      revision: plan.revision,
+      ...(mode === "recurring" ? { enabled } : {}),
+    };
     const fingerprint = JSON.stringify([scope, payload]);
     if (requestRef.current?.fingerprint !== fingerprint)
       requestRef.current = { fingerprint, id: crypto.randomUUID() };
@@ -151,6 +172,7 @@ export default function WeplayWeeklyRewards({
       if (scopeRef.current === started) {
         setPlan(value);
         setTiers(value.tiers);
+        setEnabled(value.enabled === true);
         requestRef.current = undefined;
         showToast({ title: "주간 보상 설정을 저장했습니다.", tone: "success" });
       }
@@ -162,7 +184,7 @@ export default function WeplayWeeklyRewards({
             : "저장하지 못했습니다. 다시 시도해 주세요.",
         );
     } finally {
-      busy.current = false;
+      if (busy.current === started) busy.current = null;
       if (scopeRef.current === started) setSaving(false);
     }
   };
@@ -192,20 +214,39 @@ export default function WeplayWeeklyRewards({
       </summary>
       <div className="weplay-weekly-rewards-controls">
         <label>
-          주차{" "}
-          <input
-            type="date"
-            aria-label="보상 주차"
-            value={weekId}
+          적용
+          <select
+            aria-label="보상 적용 방식"
+            value={mode}
             disabled={saving}
             onChange={(event) => {
-              if (event.target.value)
-                setWeekId(
-                  weekIdAt(Date.parse(`${event.target.value}T12:00:00+09:00`)),
-                );
+              setPlan(null);
+              setMode(event.target.value as "week" | "recurring");
             }}
-          />
+          >
+            <option value="recurring">매주 반복</option>
+            <option value="week">주차별 설정</option>
+          </select>
         </label>
+        {mode === "week" && (
+          <label>
+            주차{" "}
+            <input
+              type="date"
+              aria-label="보상 주차"
+              value={weekId}
+              disabled={saving}
+              onChange={(event) => {
+                if (event.target.value)
+                  setWeekId(
+                    weekIdAt(
+                      Date.parse(`${event.target.value}T12:00:00+09:00`),
+                    ),
+                  );
+              }}
+            />
+          </label>
+        )}
         <label>
           전체 랭킹{" "}
           <select
@@ -221,8 +262,25 @@ export default function WeplayWeeklyRewards({
             ))}
           </select>
         </label>
+        {mode === "recurring" && plan && (
+          <label>
+            매주 지급
+            <select
+              aria-label="매주 지급"
+              value={enabled ? "on" : "off"}
+              disabled={locked}
+              onChange={(event) => setEnabled(event.target.value === "on")}
+            >
+              <option value="on">사용</option>
+              <option value="off">중지</option>
+            </select>
+          </label>
+        )}
         {plan && (
           <span className="weplay-weekly-rewards-status">
+            {mode === "week" && plan.origin === "recurring"
+              ? "매주 반복 · "
+              : ""}
             {statuses[plan.status] || plan.status}
           </span>
         )}
@@ -237,6 +295,12 @@ export default function WeplayWeeklyRewards({
       {loading && <p role="status">보상 설정을 불러오는 중…</p>}
       {plan && (
         <>
+          {mode === "recurring" && (
+            <p className="weplay-weekly-rewards-status">
+              이번 주부터 · 현재 학기까지
+              {plan.manualOverride ? " · 이번 주는 주차별 설정 우선" : ""}
+            </p>
+          )}
           <div className="weplay-weekly-rewards-tiers">
             {tiers.map((tier, index) => (
               <div className="weplay-weekly-rewards-tier" key={index}>
@@ -321,7 +385,11 @@ export default function WeplayWeeklyRewards({
               disabled={locked || !dirty || !valid}
               onClick={() => void save()}
             >
-              {saving ? "저장 중…" : "보상 설정 저장"}
+              {saving
+                ? "저장 중…"
+                : mode === "week" && plan.origin === "recurring"
+                  ? "이 주차만 저장"
+                  : "보상 설정 저장"}
             </button>
           </div>
           {!valid && (

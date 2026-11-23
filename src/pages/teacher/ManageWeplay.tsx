@@ -43,7 +43,7 @@ import WeplayTitleEditor from "./components/WeplayTitleEditor";
 import { getWeplayGameTitle } from "../../lib/weplayTitle";
 
 import YutManagement from "./components/YutManagement";
-import RhythmGameEntry from "../../components/common/weplay/rhythm/RhythmGameEntry";
+import RhythmManagement from "./components/RhythmManagement";
 import WeplayStudioIntro from "../../components/common/weplay/WeplayStudioIntro";
 import { prepareWeplayIntroAudio } from "../../components/common/weplay/weplayIntroAudio";
 import WeplayGameFrame from "../../components/common/weplay/WeplayGameFrame";
@@ -55,8 +55,7 @@ import { withWeplayRequestTimeout } from "../../components/common/weplay/request
 export default function ManageWeplay() {
   const [params] = useSearchParams();
   const { userData, currentUser } = useAuth();
-  if (params.get("game") === "gungdeok-rock")
-    return <RhythmGameEntry portal="teacher" />;
+  if (params.get("game") === "gungdeok-rock") return <RhythmManagement />;
   if (params.get("game") === "joseon-yut") {
     if (!canReadLessonManagement(userData, currentUser?.email)) {
       return <p role="alert">위플레이 관리 화면을 볼 권한이 없습니다.</p>;
@@ -366,17 +365,29 @@ function NavalWeplayManagement() {
       </main>
     );
   return (
-    <PortalWorkspace className="teacher-sub-workspace teacher-sub-workspace--page teacher-weplay-workspace">
+    <PortalWorkspace
+      className={
+        selectedGame && !previewView
+          ? "ws-page yut-management teacher-weplay-workspace"
+          : "teacher-sub-workspace teacher-sub-workspace--page teacher-weplay-workspace"
+      }
+    >
       <main
         ref={mainRef}
         tabIndex={-1}
-        className={`teacher-sub-content teacher-weplay-content${previewView ? " is-game-preview" : ""}`}
+        className={`${selectedGame && !previewView ? "" : "teacher-sub-content "}teacher-weplay-content${previewView ? " is-game-preview" : ""}`}
       >
         {!selectedGame && (
           <WeplayGameCatalog portal="teacher" gameTitle={gameTitle} />
         )}
         <div hidden={!selectedGame}>
-          <div className="teacher-weplay-title ws-page-header">
+          <div
+            className={
+              previewView
+                ? "teacher-weplay-title ws-page-header"
+                : "teacher-weplay-title weplay-heading"
+            }
+          >
             <div className="teacher-weplay-heading">
               <h1 tabIndex={-1}>{gameTitle}</h1>
               <button
@@ -577,18 +588,13 @@ function NavalWeplayManagement() {
                 </section>
               )}
               <div hidden={previewView}>
-                {!previewView && <WeplayWeeklyRewards gameId="history-rain" />}
-                {!previewView && (
-                  <WeplayPolicyPanel gameId="history-rain" active />
-                )}
                 {!canWrite && (
                   <p className="teacher-weplay-notice">
                     읽기 전용입니다. 게임 체험은 이용할 수 있습니다.
                   </p>
                 )}
-                <div className="teacher-weplay-management">
-                  <div className="teacher-weplay-section teacher-weplay-settings-column ws-surface">
-                    <WeplayTitleEditor title={gameTitle} />
+                <div className="yut-management-layout teacher-weplay-management">
+                  <div className="yut-management-settings teacher-weplay-settings-column ws-surface">
                     <form noValidate onSubmit={(event) => void save(event)}>
                       <section
                         className="teacher-weplay-settings"
@@ -613,8 +619,8 @@ function NavalWeplayManagement() {
                             )}
                           </div>
                         </div>
-                        <div className="teacher-weplay-operation-row">
-                          <label className="teacher-weplay-toggle">
+                        <div className="teacher-weplay-operation-row yut-management-publication">
+                          <label className="yut-management-toggle">
                             <input
                               type="checkbox"
                               checked={draft.enabled}
@@ -623,7 +629,7 @@ function NavalWeplayManagement() {
                                 update({ enabled: event.target.checked })
                               }
                             />
-                            학생 게임 사용 허용
+                            학생에게 공개
                           </label>
                           <div className="teacher-weplay-counts">
                             <span>
@@ -655,13 +661,21 @@ function NavalWeplayManagement() {
                         />
                       </section>
                     </form>
+                    <WeplayTitleEditor title={gameTitle} />
                   </div>
                   <section
-                    className="teacher-weplay-section teacher-weplay-preview-controls ws-surface"
+                    className="yut-management-preview teacher-weplay-preview-controls ws-surface"
                     aria-labelledby="weplay-preview-title"
                   >
-                    <div className="teacher-weplay-preview-toolbar">
-                      <h2 id="weplay-preview-title">교사 체험</h2>
+                    <h2 id="weplay-preview-title">교사 체험</h2>
+                    <img
+                      className="teacher-weplay-preview-art"
+                      src={`${import.meta.env.BASE_URL}assets/weplay/naval/catalog-yi-sunsin.webp?v=sujagi-2`}
+                      alt=""
+                      width={960}
+                      height={720}
+                    />
+                    <div className="yut-management-preview-actions">
                       <button
                         className="teacher-weplay-button is-primary"
                         disabled={saving}
@@ -674,19 +688,16 @@ function NavalWeplayManagement() {
                         체험하기
                       </button>
                     </div>
-                    <img
-                      className="teacher-weplay-preview-art"
-                      src={`${import.meta.env.BASE_URL}assets/weplay/naval/catalog-yi-sunsin.webp?v=sujagi-2`}
-                      alt=""
-                      width={960}
-                      height={720}
-                    />
                     <p className="teacher-weplay-note">
                       위스·랭킹·학생 기록에 반영되지 않습니다.
                       {dirty && " 저장 전 설정으로 체험합니다."}
                     </p>
                   </section>
                 </div>
+                {!previewView && <WeplayWeeklyRewards gameId="history-rain" />}
+                {!previewView && (
+                  <WeplayPolicyPanel gameId="history-rain" active />
+                )}
               </div>
             </>
           )}

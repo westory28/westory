@@ -10,7 +10,7 @@ const { initializeApp } = require('firebase-admin/app'); initializeApp({ project
 const { getFirestore, Timestamp } = require('firebase-admin/firestore');
 const path = require('node:path');
 const sourceRoot = process.env.WEPLAY_RANKING_SOURCE_ROOT || path.resolve(__dirname, '..');
-const { createWeplayWeeklyRewardHandlers, normalizeTiers, selection, planIdFor, SETTLEMENT_GRACE_MS } = require(path.join(sourceRoot, 'weplayWeeklyRewards'));
+const { createWeplayWeeklyRewardHandlers, normalizeTiers, selection, planIdFor, policyIdFor, SETTLEMENT_GRACE_MS } = require(path.join(sourceRoot, 'weplayWeeklyRewards'));
 const { accountIdFor } = require(path.join(sourceRoot, 'studentWisWallet'));
 const { weekAt } = require(path.join(sourceRoot, 'weplayRankingStore'));
 const db = getFirestore(), scope = { year: '2026', semester: '2' }, semesterId = '2026-2', base = 'years/2026/semesters/2';
@@ -88,6 +88,77 @@ async function main() {
   await api.saveWeplayWeeklyRewards(req('manager', { ...data, gameId: 'gungdeok-rock', category: 'arirang:normal', requestId: randomUUID() }));
   atMs = selected.week.endsAtMs + SETTLEMENT_GRACE_MS;
   assert.equal((await api.settleWeplayWeeklyRewards()).completed, 4); assert.equal((await queueRef.get()).size, 0);
+  // Recurring changes do not rewrite elapsed weeks even after a long outage.
+  atMs = Date.parse('2026-11-17T12:00:00+09:00'); await seed();
+  const initialWeek = weekAt(atMs), weekly = 7 * 86400000;
+  const recurring = { mode: 'recurring', enabled: true, revision: 0, requestId: randomUUID(), tiers: [{ throughRank: 1, wis: 100 }] };
+  reset(); const initial = await api.getWeplayWeeklyRewards(req('manager', { mode: 'recurring' }));
+  assert.equal(initial.enabled, false); assert.equal(counts.writes, 0); const recurringGetCounts = { ...counts };
+  reset(); await api.saveWeplayWeeklyRewards(req('manager', { ...recurring, enabled: false, tiers: [] }));
+  assert.equal(counts.writes, 0, 'Unchanged disabled policy must not write');
+  await assert.rejects(api.saveWeplayWeeklyRewards(req('reader', recurring)), error => error.code === 'permission-denied');
+  await assert.rejects(api.saveWeplayWeeklyRewards(req('a', recurring)), error => error.code === 'permission-denied');
+  reset(); const recurringSaved = await api.saveWeplayWeeklyRewards(req('manager', recurring));
+  const recurringSaveCounts = { ...counts }; assert.equal(recurringSaved.enabled, true); assert.equal(counts.writes, 5);
+  reset(); await api.saveWeplayWeeklyRewards(req('manager', recurring)); assert.equal(counts.writes, 0); const recurringRetryCounts = { ...counts };
+  await assert.rejects(api.saveWeplayWeeklyRewards(req('manager', { ...recurring, tiers: [{ throughRank: 1, wis: 1 }] })), error => error.code === 'invalid-argument');
+  const firstId = planIdFor(selection(req().data));
+  assert.equal((await db.doc(`${base}/weplay_weekly_rewards/${firstId}`).get()).data().tiers[0].wis, 100, 'Enable must apply to this week immediately');
+  const manualWeek = weekAt(initialWeek.startsAtMs + weekly);
+  await api.saveWeplayWeeklyRewards(req('manager', { ...data, tiers: [{ throughRank: 1, wis: 70 }], weekId: manualWeek.id, requestId: randomUUID() }));
+  atMs = initialWeek.startsAtMs + weekly * 4 + 86400000;
+  await api.saveWeplayWeeklyRewards(req('manager', { ...recurring, tiers: [{ throughRank: 1, wis: 250 }], revision: 1, requestId: randomUUID() }));
+  const policyId = policyIdFor(selection(req().data)), policyRef = db.doc(`${base}/weplay_weekly_reward_policies/${policyId}`);
+  const recurringQueue = db.doc(`weplay_weekly_reward_queue/recurring_${hash(`${semesterId}/${policyId}`)}`);
+  assert.equal((await policyRef.get()).data().nextWeekStartsAtMs, manualWeek.startsAtMs, 'Saving cannot skip the durable catch-up cursor');
+  await policyRef.update({ lastError: 'unavailable' });
+  reset(); await api.expandRecurringPlan(recurringQueue); const expandCounts = { ...counts };
+  assert.equal((await policyRef.get()).data().nextWeekStartsAtMs, manualWeek.endsAtMs, 'One invocation expands only one week');
+  assert.equal((await policyRef.get()).data().lastError, null, 'Successful retry clears the prior error');
+  await Promise.all([api.expandRecurringPlan(recurringQueue), api.expandRecurringPlan(recurringQueue)]);
+  await api.expandRecurringPlan(recurringQueue);
+  const weeks = Array.from({ length: 5 }, (_, index) => weekAt(initialWeek.startsAtMs + weekly * index));
+  const planRefs = weeks.map(week => db.doc(`${base}/weplay_weekly_rewards/${planIdFor({ gameId: 'joseon-yut', category: 'wins', week })}`));
+  const plans = await db.getAll(...planRefs);
+  assert.deepEqual(plans.map(snap => snap.data().tiers[0].wis), [100, 70, 100, 100, 250]);
+  assert.equal(plans[1].data().origin, undefined, 'Explicit manual week is preserved');
+  for (const ref of planRefs) await db.doc(`${base}/weplay_weekly_rankings/${ref.id}`).set({ rows: [{ uid: 'a', score: 10 }] });
+  await api.settleWeplayWeeklyRewards();
+  assert.equal(await balance('a'), 470, 'Only four ended weeks settle with their original amounts');
+  assert.equal((await db.collection('semester_wis_ledger').get()).size, 4);
+  // Disabling stops this week's automatic award, but keeps unpaid older plans.
+  await api.saveWeplayWeeklyRewards(req('manager', { ...recurring, enabled: false, tiers: [{ throughRank: 1, wis: 250 }], revision: 2, requestId: randomUUID() }));
+  assert.equal((await planRefs[4].get()).data().status, 'disabled');
+  assert.equal((await recurringQueue.get()).exists, false);
+  reset(); await api.saveWeplayWeeklyRewards(req('manager', { ...recurring, enabled: false, tiers: [{ throughRank: 1, wis: 250 }], revision: 3, requestId: randomUUID() }));
+  assert.equal(counts.writes, 0);
+  // OFF after an outage still catches up prior enabled weeks, without paying
+  // the current or later disabled week. Past plans remain unchanged.
+  atMs += weekly;
+  await api.saveWeplayWeeklyRewards(req('manager', { ...recurring, revision: 3, requestId: randomUUID() }));
+  atMs += weekly * 3;
+  await api.saveWeplayWeeklyRewards(req('manager', { ...recurring, enabled: false, revision: 4, requestId: randomUUID() }));
+  assert.equal((await recurringQueue.get()).exists, true);
+  for (let step = 0; step < 4; step++) await api.expandRecurringPlan(recurringQueue);
+  assert.equal((await recurringQueue.get()).exists, false);
+  const oldPaid = (await planRefs[0].get()).data(); assert.equal(oldPaid.status, 'paid'); assert.equal(oldPaid.tiers[0].wis, 100);
+  const autoWeek = await api.getWeplayWeeklyRewards(req());
+  assert.equal(autoWeek.origin, 'recurring');
+  await api.saveWeplayWeeklyRewards(req('manager', { tiers: autoWeek.tiers, revision: autoWeek.revision, requestId: randomUUID() }));
+  const manualSameAmount = await api.getWeplayWeeklyRewards(req());
+  assert.equal(manualSameAmount.origin, null, 'Same amount can become an explicit weekly override');
+  reset(); await api.saveWeplayWeeklyRewards(req('manager', { tiers: manualSameAmount.tiers, revision: manualSameAmount.revision, requestId: randomUUID() }));
+  assert.equal(counts.writes, 0, 'Unchanged explicit override remains a no-op');
+  // The next active semester may not generate plans in this archived scope.
+  await api.saveWeplayWeeklyRewards(req('manager', { ...recurring, revision: 5, requestId: randomUUID() }));
+  atMs += weekly;
+  const before = (await db.collection(`${base}/weplay_weekly_rewards`).get()).size;
+  await db.doc('site_settings/semester_active').update({ semesterId: '2027-1' });
+  await api.expandRecurringPlan(recurringQueue);
+  assert.equal((await recurringQueue.get()).exists, false);
+  assert.equal((await db.collection(`${base}/weplay_weekly_rewards`).get()).size, before);
+  await assert.rejects(api.saveWeplayWeeklyRewards(req('manager', { ...recurring, revision: 6, requestId: randomUUID() })), error => error.code === 'failed-precondition');
+  console.log(JSON.stringify({ recurring: 'PASS current-week enable, OFF no-op, permissions, receipt replay, past-rate freeze, manual override, bounded concurrent catch-up, disable and semester cutoff', get: recurringGetCounts, save: recurringSaveCounts, retry: recurringRetryCounts, expansionOverManual: expandCounts }));
   console.log(JSON.stringify({ result: 'PASS weekly reward authority, no-op, CAS, duplicate save, partial failure, concurrent retry, exact tier payouts, deleted user, week cutoff and due queue', save: saveCounts, retry: retryCounts, sessionGuardReadsAdditional: 3 }));
 }
 main().then(() => db.terminate()).catch(error => { console.error(error); process.exitCode = 1; return db.terminate(); });
