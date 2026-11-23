@@ -63,7 +63,63 @@
 }
 
 .teacher-settings-sitemap-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   max-width: 100%;
+}
+
+.teacher-settings-sitemap-tabs button {
+  min-height: 44px;
+}
+
+.teacher-settings-menu-order {
+  display: flex;
+  gap: 4px;
+}
+
+.teacher-settings-menu-order button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 40px;
+  min-height: 44px;
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  color: var(--ws-text-muted, #64748b);
+  font-size: 12px;
+}
+
+.teacher-settings-menu-order button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.teacher-settings-menu-order button:not(:disabled):hover {
+  color: var(--ws-primary, #2563eb);
+  background: var(--ws-surface-subtle, #f8fafc);
+}
+
+.teacher-settings-menu-order svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.teacher-settings-menu-order--child {
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.teacher-settings-menu-order--child button {
+  flex: 0 0 40px;
 }
 
 .teacher-settings-sitemap-preview {

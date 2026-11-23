@@ -1,0 +1,36 @@
+button.ws-wis-stock-load-more[type="button"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ws-primary, #2563eb);
+  font: inherit;
+  font-weight: 600;
+  box-shadow: none;
+  filter: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+button.ws-wis-stock-load-more[type="button"] > span {
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+button.ws-wis-stock-load-more[type="button"]:not(:disabled):hover {
+  background: var(--ws-primary-soft, #eff6ff);
+}
+
+button.ws-wis-stock-load-more[type="button"]:focus-visible {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: -3px;
+}

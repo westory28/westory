@@ -20,6 +20,7 @@ import { useAppToast } from "../../components/common/AppToastProvider";
 import type { StudentWisStockInstrument } from "../../lib/studentWisStockTypes";
 import StudentWisStockAccountPanel from "./components/wispi/StudentWisStockAccountPanel";
 import StudentWisStockRanking from "./components/wispi/StudentWisStockRanking";
+import StudentWisStockReadStatus from "./components/wispi/StudentWisStockReadStatus";
 import "./components/wispi/studentWisStocks.css";
 
 const money = (value: number) => value.toLocaleString("ko-KR");
@@ -438,17 +439,12 @@ export default function StudentWisStocks() {
       <header className="ws-page-header">
         <h1>위스피(WsPI)</h1>
       </header>
-      {status.status === "loading" && (
-        <p role="status">위스피를 불러오는 중입니다.</p>
-      )}
-      {status.status === "error" && (
-        <div role="alert" className="student-wispi-error">
-          <p>{status.error}</p>
-          <button type="button" onClick={status.retry}>
-            다시 불러오기
-          </button>
-        </div>
-      )}
+      <StudentWisStockReadStatus
+        loading={status.status === "loading"}
+        error={status.error}
+        label="위스피"
+        retry={status.retry}
+      />
       {status.status === "ready" && !opened && (
         <p>아직 위스피가 열리지 않았습니다.</p>
       )}
@@ -499,25 +495,20 @@ export default function StudentWisStocks() {
               <StudentWisStockAccountPanel tradingEnabled={tradingEnabled} />
             ) : (
               <>
-                {market.status === "loading" && (
-                  <p role="status">시세를 불러오는 중입니다.</p>
-                )}
-                {market.status === "error" && (
-                  <div role="alert" className="student-wispi-error">
-                    <p>{market.error}</p>
-                    <button type="button" onClick={market.retry}>
-                      다시 불러오기
-                    </button>
-                  </div>
-                )}
-                {account.status === "error" && (
-                  <div role="alert" className="student-wispi-error">
-                    <p>{account.error}</p>
-                    <button type="button" onClick={account.retry}>
-                      주식 지갑 다시 불러오기
-                    </button>
-                  </div>
-                )}
+                <StudentWisStockReadStatus
+                  loading={market.status === "loading"}
+                  error={market.error}
+                  label="주식 시세"
+                  retry={market.retry}
+                />
+                <StudentWisStockReadStatus
+                  loading={
+                    market.status === "ready" && account.status === "loading"
+                  }
+                  error={account.error}
+                  label="주식 지갑"
+                  retry={account.retry}
+                />
                 {market.data && selected && (
                   <div
                     className={`student-wispi-list-pending${mobileDetail ? " is-detail" : ""}`}

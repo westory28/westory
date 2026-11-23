@@ -321,7 +321,7 @@ const SettingsInterface: React.FC = () => {
   };
 
   const getChildDraftKey = (portal: PortalType, parentIndex: number) =>
-    `${portal}-${parentIndex}`;
+    `${portal}-${menuConfig[portal][parentIndex]?.url || parentIndex}`;
 
   const updateChildDraft = (
     portal: PortalType,
@@ -427,9 +427,15 @@ const SettingsInterface: React.FC = () => {
 
   const saveMenuConfig = async () => {
     if (savingMenu || loading || loadError) return;
+    const normalized = sanitizeMenuConfig(menuConfig);
+    if (
+      loadedMenus.current &&
+      JSON.stringify(normalized) ===
+        JSON.stringify(sanitizeMenuConfig(loadedMenus.current))
+    )
+      return;
     setSavingMenu(true);
     try {
-      const normalized = sanitizeMenuConfig(menuConfig);
       const baseline = loadedMenus.current;
       await runTransaction(db, async (transaction) => {
         const reference = doc(db, "site_settings", "menu_config");
@@ -615,7 +621,7 @@ const SettingsInterface: React.FC = () => {
                 <div
                   role="tablist"
                   aria-label="사이트맵 미리보기 대상"
-                  className="teacher-settings-sitemap-tabs ws-page-tabs"
+                  className="teacher-settings-sitemap-tabs"
                 >
                   {(["student", "teacher"] as PortalType[]).map((portal) => {
                     const stats = getPortalMenuStats(portal);
@@ -626,10 +632,10 @@ const SettingsInterface: React.FC = () => {
                         role="tab"
                         aria-selected={activePortal === portal}
                         onClick={() => setActivePortal(portal)}
-                        className={`min-w-0 flex-1 rounded-lg px-4 py-2 text-sm font-bold transition ${
+                        className={`min-w-0 rounded-full border px-4 py-2 text-sm font-bold transition ${
                           activePortal === portal
-                            ? "bg-blue-600 text-white shadow-sm"
-                            : "text-gray-600 hover:bg-white hover:text-gray-900"
+                            ? "border-blue-600 bg-blue-600 text-white"
+                            : "border-gray-300 text-gray-600 hover:bg-blue-50 hover:text-blue-600"
                         }`}
                       >
                         {getPortalLabel(portal)}
@@ -695,7 +701,7 @@ const SettingsInterface: React.FC = () => {
               >
                 {menuConfig[activePortal].map((item, idx) => (
                   <div
-                    key={`preview-${activePortal}-${item.url}-${idx}`}
+                    key={`preview-${activePortal}-${item.url}`}
                     className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
                   >
                     <div
@@ -706,6 +712,30 @@ const SettingsInterface: React.FC = () => {
                       </span>
                     </div>
                     <div className="bg-white p-3">
+                      <div className="teacher-settings-menu-order mb-3">
+                        <button
+                          type="button"
+                          aria-label={`${item.name} 상위 메뉴 앞으로`}
+                          onClick={() => moveParent(activePortal, idx, -1)}
+                          disabled={idx === 0}
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="m14 6-6 6 6 6" />
+                          </svg>
+                          앞으로
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`${item.name} 상위 메뉴 뒤로`}
+                          onClick={() => moveParent(activePortal, idx, 1)}
+                          disabled={idx === menuConfig[activePortal].length - 1}
+                        >
+                          뒤로
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="m10 6 6 6-6 6" />
+                          </svg>
+                        </button>
+                      </div>
                       {activePortal === "student" && (
                         <button
                           type="button"
@@ -721,7 +751,7 @@ const SettingsInterface: React.FC = () => {
                         <ul className="space-y-1.5">
                           {item.children.map((child, childIdx) => (
                             <li
-                              key={`preview-child-${child.url}-${childIdx}`}
+                              key={`preview-child-${child.url}`}
                               className="teacher-settings-sitemap-child flex items-center justify-between gap-2 border-b border-dashed border-gray-200 pb-1 text-sm"
                             >
                               <span
@@ -751,6 +781,34 @@ const SettingsInterface: React.FC = () => {
                                   숨김
                                 </span>
                               )}
+                              <div className="teacher-settings-menu-order teacher-settings-menu-order--child">
+                                <button
+                                  type="button"
+                                  aria-label={`${child.name} 하위 메뉴 위로`}
+                                  onClick={() =>
+                                    moveChild(activePortal, idx, childIdx, -1)
+                                  }
+                                  disabled={childIdx === 0}
+                                >
+                                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="m6 14 6-6 6 6" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-label={`${child.name} 하위 메뉴 아래로`}
+                                  onClick={() =>
+                                    moveChild(activePortal, idx, childIdx, 1)
+                                  }
+                                  disabled={
+                                    childIdx === item.children!.length - 1
+                                  }
+                                >
+                                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="m6 10 6 6 6-6" />
+                                  </svg>
+                                </button>
+                              </div>
                             </li>
                           ))}
                         </ul>
@@ -818,7 +876,7 @@ const SettingsInterface: React.FC = () => {
               </div>
               {menuConfig[activePortal].map((item, parentIndex) => (
                 <div
-                  key={`${activePortal}-${item.url}-${parentIndex}`}
+                  key={`${activePortal}-${item.url}`}
                   className="border border-gray-200 rounded-xl overflow-hidden"
                 >
                   <div className="p-4 bg-gray-50 border-b border-gray-200">
@@ -940,7 +998,7 @@ const SettingsInterface: React.FC = () => {
                     {item.children && item.children.length > 0 ? (
                       item.children.map((child, childIndex) => (
                         <div
-                          key={`${child.url}-${childIndex}`}
+                          key={child.url}
                           className="rounded-lg border border-gray-200 p-3"
                         >
                           <div className="flex flex-wrap items-center gap-2 mb-2">

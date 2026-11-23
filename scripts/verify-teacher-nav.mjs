@@ -130,3 +130,32 @@ Object.assign(renamed.teacher.find(item => item.url === qnaPath), { name: '우�
 assert(renderNavigation('teacher', ADMIN_EMAIL, sanitizeMenuConfig(renamed)).includes('aria-label="우리 반 공신문고"'), 'Configured label is retained');
 assert(!readFileSync(resolve('src/pages/teacher/Settings.tsx'), 'utf8').includes('Gongsinmoongo'), 'Q&A no longer exists inside settings');
 console.log('PASS: teacher-access standalone Q&A, dictionary-adjacent placement, saved menu migration, active route, student/staff exclusion, configured labels and unchanged lesson access.');
+
+const previousStudentOrder = ['/student/lesson/note', '/student/quiz', '/student/score', '/student/points', '/student/mypage', '/student/weplay'];
+const previous = cloneDefaultMenus();
+delete previous.orderVersion;
+previous.student.sort((left, right) => previousStudentOrder.indexOf(left.url) - previousStudentOrder.indexOf(right.url));
+previous.student.find(item => item.url === '/student/weplay').children = previous.student.find(item => item.url === '/student/weplay').children.filter(child => !child.url.includes('gungdeok-rock'));
+const updated = sanitizeMenuConfig(previous);
+assert.deepEqual(Array.from(updated.student, item => item.url), Array.from(MENUS.student, item => item.url), 'Previous default order becomes Weplay, Wis, MyPage');
+assert.equal(updated.student.find(item => item.url === '/student/weplay').children.filter(child => child.url.includes('gungdeok-rock')).length, 1, 'Rhythm game gains exactly one menu entry');
+updated.student.sort((left, right) => previousStudentOrder.indexOf(left.url) - previousStudentOrder.indexOf(right.url));
+assert.deepEqual(Array.from(sanitizeMenuConfig(updated).student, item => item.url), previousStudentOrder, 'An explicit saved order is never migrated again');
+const studentMarkup = renderNavigation('student', 'student@fixture.invalid');
+assert(studentMarkup.indexOf('aria-label="위플레이"') < studentMarkup.indexOf('aria-label="위스"'), 'Weplay precedes Wis by default');
+assert.match(studentMarkup, /teacher-sidebar-bottom[\s\S]*<a(?=[^>]*href="#\/student\/mypage")(?=[^>]*aria-label="마이페이지")[^>]*>/, 'MyPage is a direct bottom link');
+assert(!studentMarkup.includes('id="student-menu-mypage"'), 'MyPage is not duplicated in the primary accordion');
+const reordered = cloneDefaultMenus();
+reordered.teacher.unshift(reordered.teacher.splice(reordered.teacher.findIndex(item => item.url === qnaPath), 1)[0]);
+const reorderedMarkup = renderNavigation('teacher', ADMIN_EMAIL, sanitizeMenuConfig(reordered));
+assert(reorderedMarkup.indexOf('aria-label="공부의 神문고"') < reorderedMarkup.indexOf('aria-label="학습 자료 관리"'), 'Configured teacher parent order is respected');
+for (const portal of ['teacher', 'student']) {
+  const custom = cloneDefaultMenus();
+  const points = custom[portal].find(item => item.url === `/${portal}/points`);
+  const shop = points.children.splice(points.children.findIndex(child => child.url === `/${portal}/points?tab=${portal === 'teacher' ? 'products' : 'shop'}`), 1)[0];
+  points.children.unshift(shop);
+  const html = renderNavigation(portal, portal === 'teacher' ? ADMIN_EMAIL : 'student@fixture.invalid', sanitizeMenuConfig(custom));
+  const group = html.slice(html.indexOf(`id="${portal}-menu-points"`));
+  assert(group.indexOf(`href="#${shop.url}"`) < group.indexOf(`href="#/${portal}/points"`), `${portal} Wis children respect the saved order after consolidation`);
+}
+console.log('PASS: default menu migration, saved custom order, rhythm entry, bottom MyPage and both portals\' configured sidebar order.');

@@ -32,7 +32,7 @@ function topReturns(rows) {
     const right = BigInt(b.holdingValue) * BigInt(a.holdingCostBasis);
     return (left === right ? 0 : left > right ? -1 : 1) || a.grade - b.grade || a.classNumber - b.classNumber
       || a.studentNumber - b.studentNumber || a.studentKey.localeCompare(b.studentKey);
-  }).slice(0, 5);
+  });
 }
 const percent = (value, cost) => cost > 0 && value !== null ? (value - cost) / cost * 100 : null;
 function hourlyReturns(points, asOfMs) {
@@ -97,9 +97,26 @@ async function buildRanking(tx, db, scope, asOfMs) {
   }
   const winners = topReturns(held);
   accounts ??= await readAccounts(tx, db, scope, winners);
+  const classRanks = new Map();
   return Promise.all(winners.map(async (row, index) => {
     const account = accounts.get(row.studentKey);
-    const ledger = await tx.get(db.collection(`${root}/wis_stock_history`)
+    const classKey = `${row.grade}_${row.classNumber}`;
+    const classRank = (classRanks.get(classKey) || 0) + 1;
+    classRanks.set(classKey, classRank);
+    const entry = { globalRank: index + 1, classRank, classKey, displayName: row.displayName,
+      returnPercent: percent(row.holdingValue, row.holdingCostBasis),
+      slotId: 'slot_' + account.accountId.slice(8, 48), enrollmentId: account.enrollmentId,
+      accountId: account.accountId, studentUid: account.studentUid,
+      holdingValue: row.holdingValue, holdingCostBasis: row.holdingCostBasis };
+    // Only the default five graphs are prepared daily. Other graphs are read on demand.
+    if (index >= 5) return entry;
+    entry.points = await buildDetail(tx, db, scope, account, market, asOfMs, row);
+    return entry;
+  }));
+}
+
+async function buildDetail(tx, db, scope, account, market, asOfMs, row) {
+    const ledger = await tx.get(db.collection(`${rootOf(scope)}/wis_stock_history`)
       .where('accountId', '==', account.accountId).where('kind', '==', 'ORDER_FILLED')
       .select('accountId', 'studentUid', 'semesterId', 'sequence', 'atMs', 'stockId', 'side', 'quantity', 'unitPrice', 'fee', 'stockCashDelta', 'realizedPnl'));
     const fills = ledger.docs.map(doc => {
@@ -109,48 +126,121 @@ async function buildRanking(tx, db, scope, asOfMs) {
     });
     const { points } = buildWisStockInvestmentHistorySeries({ account, fills, stocks: market.stocks, asOfMs });
     const last = points.at(-1);
-    if (last.holdingValue !== row.holdingValue || last.holdingCostBasis !== row.holdingCostBasis) invalid();
-    const holdings = Object.entries(account.positions).filter(([, p]) => p.quantity > 0)
-      .map(([id, p]) => ({ name: stocks.get(id).settings.name, quantity: p.quantity })).sort((a, b) => a.name.localeCompare(b.name, 'ko'));
-    return { row: { rank: index + 1, displayName: row.displayName, returnPercent: percent(last.holdingValue, last.holdingCostBasis),
-      slotId: 'slot_' + account.accountId.slice(8, 48), enrollmentId: account.enrollmentId },
-    detail: { holdings, points: hourlyReturns(points, asOfMs) } };
-  }));
+    if (row && (last.holdingValue !== row.holdingValue || last.holdingCostBasis !== row.holdingCostBasis)) invalid();
+    return hourlyReturns(points, asOfMs);
 }
 
+const classPattern = /^[1-3]_[1-9][0-9]?$/;
+const rowFields = ['schemaVersion', 'semesterId', 'dayKey', 'asOfMs', 'globalRank', 'classRank', 'classKey',
+  'displayName', 'returnPercent', 'slotId', 'enrollmentId', 'accountId', 'studentUid', 'holdingValue', 'holdingCostBasis'];
+const encodeCursor = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+function decodeCursor(value) {
+  try {
+    if (typeof value !== 'string' || value.length > 300) unavailable();
+    const cursor = JSON.parse(Buffer.from(value, 'base64url').toString());
+    if (!Number.isSafeInteger(cursor.after) || cursor.after < 1 || !Number.isSafeInteger(cursor.rank) || cursor.rank < 1) unavailable();
+    return cursor;
+  } catch { unavailable(); }
+}
+const entriesRef = (head, generation) => head.collection('snapshots').doc(generation).collection('entries');
+
 function createWisStockDailyRanking({ db, now = Date.now, assertSession = assertScoreWorkflowSession }) {
+  // Public graph values only, bounded by semester/day/entry. Every request still checks
+  // current session, publication and target enrollment before consulting this cache.
+  const graphCache = new Map(), graphFlights = new Map();
+  async function graph(scope, summary, row, head) {
+    const key = `${scope.semesterId}:${summary.generation}:${row.globalRank}`;
+    const cached = graphCache.get(key);
+    if (cached && cached.expiresAt > now()) return cached.points;
+    if (graphFlights.has(key)) return graphFlights.get(key);
+    const task = (async () => {
+      let points;
+      if (row.globalRank <= 5) {
+        const saved = (await entriesRef(head, summary.generation).doc(String(row.globalRank)).get()).data();
+        if (saved?.dayKey !== summary.dayKey || saved.asOfMs !== summary.asOfMs) unavailable();
+        points = saved.points;
+      } else {
+        points = await db.runTransaction(async tx => {
+          const [accountDoc, marketDoc] = await tx.getAll(
+            db.doc(`${rootOf(scope)}/wis_stock_accounts/${row.accountId}`), db.doc(`${rootOf(scope)}/wis_stock_markets/current`));
+          const account = accountDoc.data();
+          if (![1, 2].includes(account?.schemaVersion) || account.semesterId !== scope.semesterId
+            || account.accountId !== row.accountId || account.studentUid !== row.studentUid
+            || account.enrollmentId !== row.enrollmentId || account.boardEligible === false) unavailable();
+          const market = readMarket(marketDoc, scope);
+          if (market.updatedAtMs > summary.asOfMs) unavailable();
+          return buildDetail(tx, db, scope, account, market, summary.asOfMs, row);
+        }, { readOnly: true, readTime: Timestamp.fromMillis(summary.asOfMs) });
+      }
+      if (!Array.isArray(points) || points.some((p, i) => !Number.isSafeInteger(p.atMs) || p.atMs <= 0
+        || p.atMs > summary.asOfMs || (i && p.atMs <= points[i - 1].atMs)
+        || !(p.returnPercent === null || Number.isFinite(p.returnPercent)))) unavailable();
+      if (graphCache.size >= 128) graphCache.delete(graphCache.keys().next().value);
+      graphCache.set(key, { points, expiresAt: now() + 30 * 60_000 });
+      return points;
+    })().finally(() => graphFlights.delete(key));
+    graphFlights.set(key, task);
+    return task;
+  }
   async function publishWisStockDailyRanking() {
     const { dayKey, asOfMs } = previousRankingTime(now());
     const settings = (await db.doc('site_settings/config').get()).data();
     if (!settings) return { changed: false };
     const scope = scopeOf(String(settings.year), String(settings.semester));
     const head = db.doc(rankingPath(scope));
-    if ((await head.get()).data()?.asOfMs >= asOfMs) return { changed: false };
+    const previous = (await head.get()).data();
+    if (previous?.asOfMs > asOfMs || (previous?.asOfMs === asOfMs && previous.schemaVersion === 2)) return { changed: false };
     const entries = await db.runTransaction(tx => buildRanking(tx, db, scope, asOfMs),
       { readOnly: true, readTime: Timestamp.fromMillis(asOfMs) });
-    return db.runTransaction(async tx => {
+    const generation = `${dayKey}-v2`, target = entriesRef(head, generation);
+    const base = { schemaVersion: 2, semesterId: scope.semesterId, dayKey, asOfMs };
+    const counts = new Map();
+    for (const row of entries) counts.set(row.classKey, (counts.get(row.classKey) || 0) + 1);
+    const classes = [...counts].sort(([a], [b]) => {
+      const [ag, ac] = a.split('_').map(Number), [bg, bc] = b.split('_').map(Number);
+      return ag - bg || ac - bc;
+    }).map(([key, count]) => ({ key, label: `${key.split('_')[0]}학년 ${key.split('_')[1]}반`, count }));
+    // Stage immutable pages before atomically moving the head, without a 500-student cap.
+    for (let start = 0; start < entries.length; start += 400) await db.runTransaction(async tx => {
+      for (const row of entries.slice(start, start + 400)) tx.set(target.doc(String(row.globalRank)), { ...base, ...row });
+    });
+    const result = await db.runTransaction(async tx => {
       const existing = (await tx.get(head)).data();
-      if (existing?.asOfMs >= asOfMs || previousRankingTime(now()).asOfMs !== asOfMs) return { changed: false };
-      const base = { schemaVersion: 1, semesterId: scope.semesterId, dayKey, asOfMs };
-      tx.set(head, { ...base, rows: entries.map(entry => entry.row) });
-      for (const { row, detail } of entries) tx.set(head.collection('entries').doc(String(row.rank)), { ...base, rank: row.rank, ...detail });
-      for (let rank = entries.length + 1; rank <= (existing?.rows.length || 0); rank++) tx.delete(head.collection('entries').doc(String(rank)));
+      if (existing?.asOfMs > asOfMs || (existing?.asOfMs === asOfMs && existing.schemaVersion === 2)
+        || previousRankingTime(now()).asOfMs !== asOfMs) return { changed: false };
+      tx.set(head, { ...base, generation, classes, total: entries.length });
       return { changed: true, students: entries.length };
     });
+    if (result.changed && previous) {
+      const old = previous.schemaVersion === 2 ? entriesRef(head, previous.generation) : head.collection('entries');
+      const count = previous.schemaVersion === 2 ? previous.total : previous.rows?.length || 0;
+      for (let start = 1; start <= count; start += 400) await db.runTransaction(async tx => {
+        for (let rank = start; rank < start + 400 && rank <= count; rank++) tx.delete(old.doc(String(rank)));
+      });
+    }
+    return result;
   }
 
   async function getStudentWisStockRanking(request) {
-    const data = request.data, detail = data?.rank !== undefined;
+    const raw = request.data;
+    const legacy = raw?.filter === undefined && raw?.cursor === undefined && raw?.entryId === undefined;
+    if (raw?.rank !== undefined && (!legacy || !Number.isInteger(raw.rank) || raw.rank < 1 || raw.rank > 5))
+      throw new HttpsError('invalid-argument', '순위 조회 범위를 확인해 주세요.');
+    const data = raw?.rank === undefined ? raw : { ...raw, entryId: String(raw.rank) };
+    if (data && Object.hasOwn(data, 'rank')) delete data.rank;
+    const detail = data?.entryId !== undefined;
     if (!data || typeof data !== 'object' || Array.isArray(data) || typeof data.year !== 'string' || !/^20\d{2}$/.test(data.year)
       || typeof data.semester !== 'string' || !/^[12]$/.test(data.semester)
-      || Object.keys(data).some(key => !['year', 'semester', '_session', 'dayKey', 'rank'].includes(key))
-      || (detail !== Object.hasOwn(data, 'dayKey')) || (detail && (!Number.isInteger(data.rank) || data.rank < 1 || data.rank > 5
-        || typeof data.dayKey !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(data.dayKey))))
+      || Object.keys(data).some(key => !['year', 'semester', '_session', 'dayKey', 'entryId', 'filter', 'cursor', 'chartCount'].includes(key))
+      || (data.filter !== undefined && !['all', 'my-class'].includes(data.filter) && !classPattern.test(data.filter))
+      || (data.chartCount !== undefined && (!Number.isInteger(data.chartCount) || data.chartCount < 0 || data.chartCount > 5 || detail))
+      || (detail !== Object.hasOwn(data, 'dayKey')) || (detail && (typeof data.entryId !== 'string' || !/^[1-9][0-9]{0,5}$/.test(data.entryId)
+        || typeof data.dayKey !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(data.dayKey) || data.cursor !== undefined)))
       throw new HttpsError('invalid-argument', '순위 조회 범위를 확인해 주세요.');
     const actor = await assertSession(request), uid = request.auth?.uid;
     if (typeof uid !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(uid) || actor.uid !== uid) denied();
     const scope = scopeOf(data.year, data.semester);
-    return db.runTransaction(async tx => {
+    const loaded = await db.runTransaction(async tx => {
       const cutoff = previousRankingTime(now()), { dayKey, asOfMs } = cutoff;
       if (detail && data.dayKey !== dayKey) unavailable();
       const viewerSlot = 'slot_' + hash(`${scope.semesterId}\n${uid}`).slice(0, 40);
@@ -172,38 +262,63 @@ function createWisStockDailyRanking({ db, now = Date.now, assertSession = assert
         || enrollment.enrollmentStatus !== 'ACTIVE' || enrollment.readOnly || !enrollment.classId || enrollment.classId.includes('/')) denied();
       const head = db.doc(rankingPath(scope));
       const [classroom, summary] = (await tx.getAll(db.doc(`semester_classes/${enrollment.classId}`), head,
-        { fieldMask: ['classId', 'semesterId', 'status', 'readOnly', 'schemaVersion', 'dayKey', 'asOfMs', 'rows'] })).map(doc => doc.data());
+        { fieldMask: ['classId', 'semesterId', 'status', 'readOnly', 'grade', 'classNumber', 'schemaVersion', 'dayKey', 'asOfMs', 'generation', 'classes', 'total'] })).map(doc => doc.data());
       if (classroom?.classId !== enrollment.classId || classroom.semesterId !== scope.semesterId || classroom.status !== 'ACTIVE' || classroom.readOnly) denied();
-      const base = { semesterId: scope.semesterId, ...cutoff };
-      if (summary?.dayKey !== dayKey || summary.asOfMs !== asOfMs) {
-        if (detail) unavailable();
-        return { ...base, status: 'NOT_READY', rows: [] };
+      const myClassKey = `${classroom.grade}_${classroom.classNumber}`;
+      if (!classPattern.test(myClassKey)) denied();
+      const filter = data.filter === 'my-class' ? myClassKey : data.filter || 'all';
+      const base = { semesterId: scope.semesterId, ...cutoff, filter, myClassKey };
+      if (summary?.dayKey !== dayKey || summary.asOfMs !== asOfMs || summary.schemaVersion !== 2) {
+        if (detail || data.cursor) unavailable();
+        return { response: { ...base, status: 'NOT_READY', classes: [], rows: [], charts: [], hasMore: false, nextCursor: null } };
       }
-      if (summary.semesterId !== scope.semesterId || summary.schemaVersion !== 1 || !Array.isArray(summary.rows)
-        || summary.rows.length > 5 || summary.rows.some((r, i) => r.rank !== i + 1 || typeof r.displayName !== 'string'
-          || !r.displayName || !Number.isFinite(r.returnPercent) || !/^slot_[a-f0-9]{40}$/.test(r.slotId))) unavailable();
-      const candidates = detail ? summary.rows.filter(row => row.rank === data.rank) : summary.rows;
-      // Retired or changed enrollment may no longer be disclosed. Never substitute a sixth student.
-      const targetSlots = candidates.length ? await tx.getAll(...candidates.map(row => db.doc(`semester_enrollment_slots/${row.slotId}`)),
+      if (summary.semesterId !== scope.semesterId || summary.generation !== `${dayKey}-v2`
+        || !Array.isArray(summary.classes) || !Number.isSafeInteger(summary.total) || summary.total < 0) unavailable();
+      const classes = summary.classes.map(c => {
+        if (!classPattern.test(c.key) || typeof c.label !== 'string' || !Number.isSafeInteger(c.count) || c.count < 1) unavailable();
+        return { key: c.key, label: c.label };
+      });
+      const count = filter === 'all' ? Math.min(legacy ? 5 : 50, summary.total) : summary.classes.find(c => c.key === filter)?.count || 0;
+      const cursor = data.cursor === undefined ? null : decodeCursor(data.cursor);
+      if (cursor && (cursor.dayKey !== dayKey || cursor.filter !== filter || cursor.rank >= count
+        || (filter === 'all' && cursor.after >= 50))) unavailable();
+      const target = entriesRef(head, summary.generation);
+      let candidates;
+      if (detail) {
+        const selected = (await tx.get(target.doc(data.entryId))).data();
+        candidates = selected ? [selected] : [];
+      } else {
+        let query = target.orderBy('globalRank', 'asc');
+        query = filter === 'all' ? query.where('globalRank', '<=', 50) : query.where('classKey', '==', filter);
+        if (cursor) query = query.startAfter(cursor.after);
+        candidates = (await tx.get(query.limit(legacy ? 5 : 10).select(...rowFields))).docs.map(doc => doc.data());
+      }
+      for (const row of candidates) {
+        if (row.schemaVersion !== 2 || row.semesterId !== scope.semesterId || row.dayKey !== dayKey || row.asOfMs !== asOfMs
+          || !Number.isSafeInteger(row.globalRank) || row.globalRank < 1 || !Number.isSafeInteger(row.classRank) || row.classRank < 1
+          || typeof row.displayName !== 'string' || !row.displayName || !Number.isFinite(row.returnPercent)
+          || !/^slot_[a-f0-9]{40}$/.test(row.slotId) || !/^wisacct_[a-f0-9]{64}$/.test(row.accountId)
+          || (filter === 'all' ? row.globalRank > 50 : row.classKey !== filter)) unavailable();
+      }
+      const slots = candidates.length ? await tx.getAll(...candidates.map(row => db.doc(`semester_enrollment_slots/${row.slotId}`)),
         { fieldMask: ['status', 'activeEnrollmentId', 'semesterId'] }) : [];
-      const rows = candidates.filter((row, i) => {
-        const target = targetSlots[i].data();
+      const active = candidates.filter((row, i) => {
+        const target = slots[i].data();
         return target?.semesterId === scope.semesterId && target.activeEnrollmentId === row.enrollmentId && (target.status ?? 'ACTIVE') === 'ACTIVE';
-      }).map(({ rank, displayName, returnPercent }) => ({ rank, displayName, returnPercent }));
-      if (!detail) return { ...base, status: 'READY', rows };
-      if (rows.length !== 1) unavailable();
-      const entry = (await tx.get(head.collection('entries').doc(String(data.rank)))).data();
-      if (entry?.semesterId !== scope.semesterId || entry.schemaVersion !== 1 || entry.dayKey !== dayKey
-        || entry.asOfMs !== asOfMs || entry.rank !== data.rank || !Array.isArray(entry.points) || !Array.isArray(entry.holdings)) unavailable();
-      return { ...base, rank: data.rank, displayName: rows[0].displayName,
-        points: entry.points.map(({ atMs, returnPercent }) => {
-          if (!Number.isSafeInteger(atMs) || atMs <= 0 || atMs > asOfMs || !(returnPercent === null || Number.isFinite(returnPercent))) unavailable();
-          return { atMs, returnPercent };
-        }), holdings: entry.holdings.map(({ name, quantity }) => {
-          if (typeof name !== 'string' || !name || !Number.isSafeInteger(quantity) || quantity <= 0) unavailable();
-          return { name, quantity };
-        }) };
+      });
+      const rankOf = row => filter === 'all' ? row.globalRank : row.classRank;
+      const rows = active.map(row => ({ entryId: String(row.globalRank), rank: rankOf(row), displayName: row.displayName, returnPercent: row.returnPercent }));
+      if (detail && rows.length !== 1) unavailable();
+      const last = candidates.at(-1), hasMore = Boolean(last && rankOf(last) < count);
+      const nextCursor = hasMore ? encodeCursor({ dayKey, filter, after: last.globalRank, rank: rankOf(last) }) : null;
+      return { base, summary, head, active, rows, response: { ...base, status: 'READY', classes, rows, hasMore, nextCursor } };
     }, { readOnly: true });
+    if (!loaded.active) return loaded.response;
+    const selected = detail ? loaded.active : loaded.active.slice(0, legacy ? 0 : data.chartCount ?? (data.cursor ? 0 : 5));
+    const charts = await Promise.all(selected.map(async row => ({ ...loaded.base,
+      entryId: String(row.globalRank), rank: loaded.base.filter === 'all' ? row.globalRank : row.classRank,
+      displayName: row.displayName, points: await graph(scope, loaded.summary, row, loaded.head) })));
+    return detail ? (legacy ? { ...charts[0], holdings: [] } : charts[0]) : { ...loaded.response, charts };
   }
   return { getStudentWisStockRanking, publishWisStockDailyRanking };
 }

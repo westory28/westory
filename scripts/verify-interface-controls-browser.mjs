@@ -31,7 +31,7 @@ const source = (file) =>
 
 const service = `
 import React from 'react';
-export const qa=window.interfaceQa={reads:[],writes:[],toasts:[],notifies:[],fail:false,calendarReads:0,recognitionReads:0};
+export const qa=window.interfaceQa={reads:[],writes:[],transactionReads:0,toasts:[],notifies:[],fail:false,calendarReads:0,recognitionReads:0};
 export const config={year:'2026',semester:'2',showLesson:true,showQuiz:true,showScore:true};
 export const db={};
 export const docs={'site_settings/interface_config':{dashboard:{notice:true,calendar:true,ranking:true},footerText:'Existing footer'},'site_settings/config':config};
@@ -39,7 +39,7 @@ export const useAuth=()=>({user:{uid:'fixture'},userData:{uid:'fixture',grade:3,
 export const doc=(_db,...segments)=>({path:segments.join('/')});
 export const getDocFromServer=async ref=>{qa.reads.push(ref.path);if(qa.fail)throw new Error('fixture-read-failure');return {exists:()=>docs[ref.path]!==undefined,data:()=>structuredClone(docs[ref.path])};};
 export const setDoc=async(ref,value)=>{qa.writes.push({path:ref.path,value});docs[ref.path]={...docs[ref.path],...value};};
-export const runTransaction=async(_db,callback)=>{const writes=[];await callback({get:async ref=>({exists:()=>docs[ref.path]!==undefined,data:()=>structuredClone(docs[ref.path])}),set:(ref,value)=>writes.push({ref,value})});for(const {ref,value}of writes)await setDoc(ref,value);};
+export const runTransaction=async(_db,callback)=>{const writes=[];await callback({get:async ref=>{qa.transactionReads++;return {exists:()=>docs[ref.path]!==undefined,data:()=>structuredClone(docs[ref.path])};},set:(ref,value)=>writes.push({ref,value})});for(const {ref,value}of writes)await setDoc(ref,value);};
 export const serverTimestamp=()=>0;
 export const useAppToast=()=>({showToast:value=>qa.toasts.push(value)});
 export const invalidateSiteSettingDocCache=()=>{};
@@ -243,6 +243,16 @@ try {
     await page.screenshot({ path: shot, fullPage: true });
     screenshots.push(shot);
     await page.getByRole("tab", { name: "사이트맵 메뉴", exact: true }).click();
+    const portalTab = page.getByRole("tab", { name: /^학생 포털/ });
+    const portalStyle = await portalTab.evaluate(element => {
+      const style = getComputedStyle(element);
+      return { radius: parseFloat(style.borderRadius), height: element.getBoundingClientRect().height };
+    });
+    assert(portalStyle.radius >= 20 && portalStyle.height >= 44, 'Portal selector uses accessible badge buttons');
+    await page.getByRole("button", { name: "덩기덕 쿵더Rock 숨기기", exact: true }).waitFor();
+    await page.getByRole("button", { name: "위스 상위 메뉴 앞으로", exact: true }).click();
+    assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), '위스 상위 메뉴 앞으로', 'Moving a menu retains keyboard focus');
+    await page.getByRole("button", { name: "명예의 전당 하위 메뉴 위로", exact: true }).click();
     await page
       .getByRole("button", { name: "마이페이지 전체 숨기기", exact: true })
       .click();
@@ -263,6 +273,13 @@ try {
       ),
       false,
     );
+    const savedMenus = await page.evaluate(() => window.interfaceQa.writes.find(write => write.path === 'site_settings/menu_config').value);
+    assert(savedMenus.student.findIndex(item => item.url === '/student/points') < savedMenus.student.findIndex(item => item.url === '/student/weplay'), 'Parent move is saved');
+    assert.equal(savedMenus.student.find(item => item.url === '/student/points').children[0].url, '/student/points?tab=hall-of-fame', 'Child move is saved');
+    assert.equal(savedMenus.orderVersion, 1, 'Saved order is marked to preserve explicit ordering');
+    assert.deepEqual(await page.evaluate(() => ({ reads: window.interfaceQa.reads.length, transactionReads: window.interfaceQa.transactionReads, writes: window.interfaceQa.writes.length })), { reads: 2, transactionReads: 1, writes: 3 }, 'Moves stay local; menu save reads one current menu and atomically writes menu plus visibility');
+    await page.getByRole('button', { name: '사이트맵 저장', exact: true }).click();
+    assert.deepEqual(await page.evaluate(() => ({ transactionReads: window.interfaceQa.transactionReads, writes: window.interfaceQa.writes.length })), { transactionReads: 1, writes: 3 }, 'Saving unchanged menus adds no server calls');
     assert.equal(
       await page.evaluate(
         () => document.documentElement.scrollWidth > innerWidth,
@@ -279,7 +296,7 @@ try {
   await page.goto(origin);
   await page.getByRole("tab", { name: "사이트맵 메뉴", exact: true }).click();
   await page
-    .getByRole("button", { name: "아바타 꾸미기 숨기기", exact: true })
+    .getByRole("button", { name: "아바타 옷장 숨기기", exact: true })
     .click();
   await page
     .getByRole("button", { name: "마우저구 윷놀이 숨기기", exact: true })

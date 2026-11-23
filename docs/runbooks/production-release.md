@@ -1,5 +1,11 @@
 # 운영 배포 절차
 
+## 위스피 메뉴·지갑·페이지 랭킹 (2026-11-23)
+
+학생 메뉴 순서와 하단 마이페이지, 사이트맵 순서 편집·포털 배지, 본인 지갑 좌우 배치와 교사/학생 목록 내부 더보기를 제공한다. 랭킹은 전날 기준 전체50/학급 투자자 전원을 10명씩 서버 커서 조회하며 기본5명·선택 개인 그래프만 제공한다. [지갑·랭킹 검증](../reviews/wispi-wallet-ranking-20261123.md)과 [메뉴 검증](../reviews/menu-order-20261123.md)을 따른다. 신규 AI·외부 전송은 없으며 기존 게임 공개 설정은 유지한다.
+
+`prepare-wispi-ranking-pages-release.mjs`로 운영 원본을 보존한 준비본의 `getStudentWisStockRanking,publishWisStockDailyRanking` 두 함수만 배포한다. `operate-wispi-ranking-release.mjs index`로 단일 학급/순위 인덱스 READY를 확인한 뒤 서버를 배포하고, 원본·자원·IAM 대조 후 `refresh`로 기존 집계 작업을 한 번 실행한다. 현재 학기 파생 랭킹만 새 스키마로 갱신하며 계좌/거래를 고치지 않는다. 같은 main 커밋의 Vercel Ready 배포를 운영 도메인에 승격한다. 기존 무필터5명/순위 상세 요청 호환을 유지하므로 먼저 열어 둔 화면도 전환 중 사용할 수 있다.
+
 ## 핵심포인트 수령 복구·이순신 입력 (2026-11-23)
 
 전체 진행 조회 실패의 수동 재시도와 지급 확정 상태를 유지하고, 이순신의 키보드 축소 화면·만료 키워드 입력을 고친다. [검증 기록](../reviews/lesson-reward-naval-input-20261123.md)을 따른다. 핵심포인트 최신 자료의 숫자형 수정 시각은 화면 조회와 동일하게 해석한다. `prepare-core-point-reward-release.mjs before`를 통과한 운영 원본 준비본의 `executeLessonCorePointCommand` 하나만 배포하고 `after`로 전체 소스·자원·환경·IAM을 대조한다. 같은 main의 Vercel 배포를 승격하고 지정 Chrome 프로필에서 교사 체험을 확인한다. 보상은 기존 학기당 1회 500위스이며, 소급 확인은 `repair-lesson-core-point-rewards.mjs`의 현재 학기 읽기 전용 계획에서 기존 지급·환수와 미완료를 구분한다. 이 도구는 지급하지 않으며 개인별 계획은 Git 제외 경로에 보관한다. Functions 전체·rules·학생 공개 상태는 변경하지 않는다.

@@ -1,5 +1,12 @@
 # Westory DESIGN.md
 
+## 사이드바와 사이트맵 순서 (2026-11-23)
+
+- 학생 기본 주 메뉴는 학습·평가·점수·위플레이·위스 순서로 배치하고 마이페이지는 교사 설정과 같은 사이드바 하단 링크로 둔다. 마이페이지의 기존 본문 탭과 숨김 조건은 유지한다.
+- 사이트맵의 학생·교사 포털 선택은 기존 파란색·중립색과 full radius를 사용하는 44px 배지 버튼으로 표시한다. 미리보기에서 상위 메뉴는 앞·뒤, 하위 메뉴는 위·아래 버튼으로 순서를 바꾸며, SVG 방향 아이콘·명시적 접근 이름·44px 높이와 키보드 포커스를 유지한다.
+- 저장한 순서는 두 포털 사이드바에 반영한다. 기본 학생 순서 보정은 한 번만 적용하며 이후 사용자 저장 순서를 덮어쓰지 않는다. 메뉴 추가·이동은 게임 공개를 변경하지 않는다. 검증 기록은 `docs/reviews/menu-order-20261123.md`를 따른다.
+- 교사·학생 위스피의 더보기는 공통 `WisStockLoadMore` 버튼을 실제 스크롤 목록의 마지막 행 안에 둔다. 폭은 목록 전체, 높이는 최소 44px이며 기존 색상·12px 여백을 재사용한다. 배경은 투명하고 blur·그림자·고정 또는 겹침 배치를 적용하지 않는다. 표시 건수는 버튼 안 작은 글씨로 유지한다.
+
 ## 교사 위스피 전광판 (2026-11-22)
 
 - 교사가 전광판을 열면 짙은 남흑색(#10151d~#19232d) 그라데이션 위에 파란색과 주황색의 Westory 전체 로고를 원래 비율과 낮은 불투명도로 반복한다. 상단에는 화면명·연결 상태·닫기, 본문에는 종목 시세·위스피 지수·학생 체결 순으로 배치한다. 작은 화면에서는 지수를 먼저 표시한다.
@@ -1475,3 +1482,9 @@ Teacher menu names and lesson tree labels stay on one line. Long labels use elli
 
 - Class detail dialogs use content height with the existing viewport cap and one scrollable body; desktop width is at most 1120px. Short student lists must not reserve a full-height blank panel. Mobile retains the existing full-screen dialog. Limit the subunit selector to 360px on wide screens and align all list-filter labels above their 44px controls. Keep tabs and action controls on the same bottom baseline, with 16px gaps and responsive wrapping.
 - Teacher analysis charts, question rows and submitted-answer summaries show up to two authored core concepts, with short-answer terms as a conservative fallback. Unavailable labels stay `개념 미등록`; do not paraphrase an ambiguous prompt into an invented concept. Question tables use `번호 / 핵심 개념 / 유형 / 정답률 / 응답 학생`, and the full saved question remains inside its expanded detail. Same-concept rows still represent separate questions; no statistical regrouping or new data reads are introduced.
+
+### 학생 주식 지갑·보유 수익률 랭킹 (2026-11-23)
+
+- 학생 주식 지갑은 본문 폭 880px 이상에서 왼쪽 계좌 입출금, 오른쪽 내 투자 현황을 같은 폭으로 배치하고 24px 간격·구분선을 사용한다. 좁은 화면은 입출금 다음에 투자 현황을 표시한다. 보유 종목의 현재가·평가 금액과 총 매수 금액·평가 금액·평가 손익을 기존 14/16/24px 및 상승 빨강·하락 파랑으로 표시한다.
+- 학생 투자 랭킹은 전체 최대 50위, 선택 학급 투자 학생 전체를 서버에서 10명씩 조회하고 하단 더보기로만 추가한다. 전체 순위·우리 학급 순위는 기존 pill 배지와 44px 조작 높이를 사용하며 학급 선택은 같은 행의 select다. 왼쪽 목록은 기존 종목 목록과 같은 최대 min(640px, 75dvh) 내부 스크롤과 마지막 행의 공통 전체 폭 더보기를 사용한다. 오른쪽은 320px 그래프, 본문 760px 이하에서는 한 열로 배치한다. 선택 전 상위 5명, 선택 후 한 학생의 최근 30일 보유 수익률만 표시하며 세부 종목은 노출하지 않는다. 기존 그래프의 파랑·초록·빨강·amber text·본문색과 서로 다른 선 모양, 공통 0축과 기록 없는 구간의 끊김을 재사용한다.
+- 보유 계좌의 마지막 응답이 30초 이상 지난 경우 지갑 진입 때 공유 조회를 한 번 갱신하고 우측 투자 현황에 서버 조회 시각을 표시한다. 이후 폴링은 추가하지 않는다. 주식 읽기는 800ms 이상 걸리면 공통 InlineLoading을 표시한다. 조회 권한·세션 문제는 해당 사유를 유지하고 일시 연결 문제는 현재 문맥의 다시 연결 버튼으로 복구한다. 이 표시 타이머는 서버 요청을 발생시키지 않는다.

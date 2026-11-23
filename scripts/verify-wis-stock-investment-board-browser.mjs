@@ -23,6 +23,8 @@ await fs.mkdir(output, { recursive: true });
 const imp = (file) =>
   JSON.stringify(path.join(root, file).replaceAll("\\", "/"));
 const audited = [
+  "src/components/common/WisStockLoadMore.tsx",
+  "src/components/common/WisStockLoadMore.css",
   "src/pages/teacher/components/points/WisStockInvestmentBoard.tsx",
   "src/pages/teacher/components/points/WisStockInvestmentBoard.css",
   "src/pages/teacher/components/points/WisStockExchangeDisplay.tsx",
@@ -419,6 +421,7 @@ async function checkLiveExchange(page, display, surge) {
 
   // Check the full eight-second lifetime without waiting on real time for the timeout.
   const samples = await page.evaluate(async () => {
+    window.boardQa.surgeStartedAt = Date.now();
     window.boardQa.displayTick({ prices: { S0: 315, S1: 320, S2: 341, S3: 290, S4: 321 } });
     await new Promise(requestAnimationFrame);
     return Array.from(document.querySelectorAll(".wis-exchange__quote-grid > li")).slice(0, 6).map(cell => {
@@ -443,6 +446,14 @@ async function checkLiveExchange(page, display, surge) {
       return { top: times(top), bottom: times(bottom) };
     });
   });
+  // Screenshots and DOM assertions must not consume the lifetime under test.
+  // install() alone continues real time between explicit clock advances.
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
+  const advanceSurgeTo = async elapsed => {
+    const remaining = await page.evaluate(elapsed =>
+      window.boardQa.surgeStartedAt + elapsed - Date.now(), elapsed);
+    if (remaining > 0) await page.clock.fastForward(remaining);
+  };
   assert(samples.slice(0, 5).every(sample => sample && sample.top.duration > 0 &&
     sample.top.hasRotation && sample.bottom.hasRotation && sample.bottom.delay > sample.top.delay), JSON.stringify(samples));
   assert.equal(samples[5], null, "an unchanged quote has no flip");
@@ -457,12 +468,13 @@ async function checkLiveExchange(page, display, surge) {
   for (const term of ["조선상회", "한양은행", "+5.00%", "+10.00%"]) assert(headline.includes(term), headline);
   for (const below of ["금강철도", "한글 이름이 긴 주식회사", "합성종목4"]) assert(!headline.includes(below), headline);
   await page.screenshot({ path: path.join(output, "board-dialog-surge-1920.png") });
-  await page.clock.fastForward(5_000);
+  await advanceSurgeTo(5_000);
   await page.evaluate(() => window.boardQa.displayTrade());
-  await page.clock.fastForward(2_000);
+  await advanceSurgeTo(7_000);
   assert(await surge.isVisible(), "alert still visible before eight seconds");
-  await page.clock.fastForward(1_100);
+  await advanceSurgeTo(8_100);
   await surge.waitFor({ state: "hidden", timeout: 1_000 });
+  await page.clock.resume();
   const first = quotes.first().locator(".wis-quote-price");
   assert.match(await first.textContent(), /315/);
 
@@ -524,10 +536,20 @@ try {
     assert.equal(await rows(page).count(), 20);
     assert.equal(await firstName(page), "검증학생01");
     const more = page.getByRole("button", { name: "더보기", exact: true });
+    const moreLayout = await more.evaluate(element => {
+      const list = element.closest('.wis-investment-board__list');
+      const style = getComputedStyle(element);
+      return { internal: !!list, width: element.getBoundingClientRect().width, listWidth: list?.clientWidth, height: element.getBoundingClientRect().height, filter: style.filter, backdrop: style.backdropFilter, position: style.position };
+    });
+    assert(moreLayout.internal && Math.abs(moreLayout.width - moreLayout.listWidth) < 2 && moreLayout.height >= 44, 'Load more fills the final row inside the list');
+    assert.equal(moreLayout.filter, 'none');
+    assert.equal(moreLayout.backdrop, 'none');
+    assert(!['fixed', 'sticky', 'absolute'].includes(moreLayout.position), 'Load more remains in list flow');
+    await more.scrollIntoViewIfNeeded();
+    await page.locator('.wis-investment-board__list').screenshot({ path: path.join(output, `load-more-${width}.png`) });
     const scrollBefore = await page
       .locator(".wis-investment-board__list")
       .evaluate((el) => {
-        el.scrollTop = 480;
         return { top: el.scrollTop, height: el.clientHeight };
       });
     await more.press("Enter");

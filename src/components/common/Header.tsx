@@ -506,6 +506,7 @@ const Header: React.FC<{
   const consolidateWisGroup = (
     group: TeacherSidebarGroup | undefined,
     shops: TeacherSidebarGroup["children"],
+    configuredChildren: Array<{ resolvedUrl: string }>,
     teacherManagement = false,
   ) => {
     if (!group) return;
@@ -525,11 +526,24 @@ const Header: React.FC<{
       ...group.children.filter(isHall),
       ...shops,
     ];
+    const order = (url: string) => {
+      const index = configuredChildren.findIndex((child) =>
+        teacherManagement && url === "/teacher/points"
+          ? management.some((entry) => entry.resolvedUrl === child.resolvedUrl)
+          : child.resolvedUrl === url,
+      );
+      return index < 0 ? configuredChildren.length : index;
+    };
+    group.children.sort(
+      (left, right) => order(left.resolvedUrl) - order(right.resolvedUrl),
+    );
     group.directUrl = undefined;
   };
   consolidateWisGroup(
     teacherSidebarGroups.find((group) => group.id === "points"),
     shopChildren,
+    resolvedTeacherMenus.find((item) => item.url === "/teacher/points")
+      ?.resolvedChildren || [],
     true,
   );
   const dictionaryChild = resolvedTeacherMenus
@@ -568,6 +582,25 @@ const Header: React.FC<{
       ],
     });
 
+  // Calendar and dictionary are fixed utility destinations. Reorder every
+  // configurable group in the remaining slots, including the Q&A group.
+  const teacherGroupOrder = resolvedTeacherMenus.map(
+    (item) => item.url.split("/").pop() || item.name,
+  );
+  const configuredTeacherGroups = teacherSidebarGroups
+    .filter((group) => teacherGroupOrder.includes(group.id))
+    .sort(
+      (left, right) =>
+        teacherGroupOrder.indexOf(left.id) -
+        teacherGroupOrder.indexOf(right.id),
+    );
+  let configuredGroupIndex = 0;
+  teacherSidebarGroups.forEach((group, index) => {
+    if (teacherGroupOrder.includes(group.id))
+      teacherSidebarGroups[index] =
+        configuredTeacherGroups[configuredGroupIndex++];
+  });
+
   const studentIcons: Record<string, TeacherIconName> = {
     weplay: "game",
     lesson: "lesson",
@@ -598,8 +631,10 @@ const Header: React.FC<{
               : undefined,
           icon: studentIcons[id] || "lesson",
           directUrl:
-            id === "weplay" || !children.length
-              ? resolveTarget(item.url)
+            id === "weplay" || id === "mypage" || !children.length
+              ? id === "mypage"
+                ? children[0]?.resolvedUrl || resolveTarget(item.url)
+                : resolveTarget(item.url)
               : undefined,
           children:
             children.length || id === "points"
@@ -621,6 +656,9 @@ const Header: React.FC<{
   consolidateWisGroup(
     studentSidebarGroups.find((group) => group.id === "points"),
     studentShopChildren,
+    menuItems.flatMap((item) =>
+      getResolvedChildUrls(item.url, getVisibleChildren(item), "student"),
+    ),
   );
 
   const activeDesktopSubmenu = menuItems

@@ -15,6 +15,7 @@ const bundled = await build({ entryPoints: ['src/lib/studentWisStockClient.ts'],
       export const ensureSensitiveOperation=async()=>{await qa.reauth()};
       export const notifyPointsUpdated=()=>{qa.pointsEvents++};
       export const subscribePointsUpdated=fn=>{qa.pointsObservers.add(fn);return ()=>qa.pointsObservers.delete(fn)};
+      export const retryStudentWisStockSession=()=>{qa.sessions.forEach(callbacks=>callbacks.allowed())};
       export const watchStudentWisStockSession=(_owner,_epoch,callbacks)=>{qa.sessions.add(callbacks);queueMicrotask(()=>callbacks.allowed());return ()=>qa.sessions.delete(callbacks)};
     ` }));
   } }],
@@ -33,7 +34,27 @@ async function setup(){
   return {qa,api,storage};
 }
 const until=async predicate=>{for(let n=0;n<100;n++){if(predicate())return;await new Promise(r=>setTimeout(r,5));}throw Error('Fixture timeout');};
+const eventually=async predicate=>{for(let n=0;n<700;n++){if(predicate())return;await new Promise(r=>setTimeout(r,5));}throw Error('Recovery timeout');};
 const checks=[];const check=async(name,run)=>{await run();checks.push(name)};
+
+await check('transient state read retries twice, coalesces viewers and never writes',async()=>{
+  const {qa,api}=await setup();let failures=2;qa.handler=async()=>{if(failures-->0)throw Object.assign(Error('network'),{code:'functions/unavailable'});return state()};
+  const a=[],b=[],stopA=api.watchStudentWisStockState(scope,s=>a.push(s)),stopB=api.watchStudentWisStockState(scope,s=>b.push(s));
+  await eventually(()=>a.at(-1)?.status==='ready'&&b.at(-1)?.status==='ready');
+  assert.equal(qa.calls.length,3);assert(qa.calls.every(c=>c.name==='getStudentWisStockState'));assert.equal(qa.observers.size,1);stopA();stopB();
+});
+await check('retry exhaustion becomes recoverable error; manual reconnect performs one scoped read',async()=>{
+  const {qa,api}=await setup();qa.handler=async()=>{throw Object.assign(Error('network'),{code:'functions/deadline-exceeded'})};
+  const values=[],stop=api.watchStudentWisStockState(scope,s=>values.push(s));await eventually(()=>values.at(-1)?.status==='error');
+  assert.equal(qa.calls.length,3);qa.handler=async()=>state();await api.refreshStudentWisStockState(scope);await until(()=>values.at(-1)?.status==='ready');assert.equal(qa.calls.length,4);stop();
+});
+await check('permission denial is not retried and detaching during a retry prevents the next dispatch',async()=>{
+  const first=await setup();first.qa.handler=async()=>{throw Object.assign(Error('denied'),{code:'functions/permission-denied'})};
+  const values=[],stop=first.api.watchStudentWisStockState(scope,s=>values.push(s));await until(()=>values.at(-1)?.status==='error');assert.equal(first.qa.calls.length,1);stop();
+  const second=await setup();second.qa.handler=async()=>{throw Object.assign(Error('network'),{code:'functions/unavailable'})};
+  const stopSecond=second.api.watchStudentWisStockState(scope,()=>{});await until(()=>second.qa.calls.length===1);stopSecond();
+  await new Promise(r=>setTimeout(r,800));assert.equal(second.qa.calls.length,1);
+});
 await check('response loss and aborted preserve original transfer receipt; successful retry clears it',async()=>{
   for(const code of ['functions/unavailable','functions/aborted']){
     const {qa,api,storage}=await setup();let failure=true;

@@ -4,7 +4,11 @@ import { auth, db } from "./firebase";
 import { getHistoryDictionaryCallable } from "./historyDictionarySession";
 import { ensureSensitiveOperation } from "./sensitiveOperation";
 import { notifyPointsUpdated, subscribePointsUpdated } from "./appEvents";
-import { watchStudentWisStockSession } from "./studentWisStockSession";
+import {
+  retryStudentWisStockSession,
+  watchStudentWisStockSession,
+} from "./studentWisStockSession";
+import { withStudentWisStockReadRetry } from "./studentWisStockReadRetry";
 import type {
   StudentWisStockBonus,
   StudentWisStockHistoryPage,
@@ -122,7 +126,14 @@ async function readState(b: Boundary) {
   reads.set(b.owner, ownerReads);
   const existing = ownerReads.get(b.key);
   if (existing) return existing;
-  const task = invoke<StudentWisStockState>(b, "getStudentWisStockState")
+  const task = withStudentWisStockReadRetry(
+    () => invoke<StudentWisStockState>(b, "getStudentWisStockState"),
+    undefined,
+    () =>
+      auth.currentUser === b.owner &&
+      entries.has(b.key) &&
+      document.visibilityState !== "hidden",
+  )
     .then((value) => accept(value, b))
     .finally(() => {
       if (ownerReads.get(b.key) === task) ownerReads.delete(b.key);
@@ -136,6 +147,7 @@ export function studentWisStockError(error: unknown) {
     message?: string;
     details?: { reason?: string };
   };
+  const code = typeof e.code === "string" ? e.code : "";
   if (e.details?.reason === "WIS_STOCK_MARKET_CLOSED")
     return "위스피의 거래가 중지되었습니다.";
   if (e.details?.reason === "WIS_STOCK_CAMPAIGN_INELIGIBLE")
@@ -148,10 +160,10 @@ export function studentWisStockError(error: unknown) {
     return "출금 가능한 금액을 확인해 주세요. 예약된 위스와 이벤트 지원금 원금은 출금할 수 없습니다.";
   if (
     e.details?.reason?.includes("SESSION") ||
-    e.code?.includes("unauthenticated")
+    code.includes("unauthenticated")
   )
     return "다시 로그인한 뒤 확인해 주세요.";
-  if (e.code?.includes("permission-denied"))
+  if (code.includes("permission-denied"))
     return "지금은 이 작업을 할 수 없습니다. 화면을 다시 열어 주세요.";
   return (
     e.message?.replace(/^Firebase:\s*/, "") ||
@@ -211,6 +223,7 @@ export function watchStudentWisStockState(
           path = null;
         };
         const fail = (error: unknown) => {
+          if (stopped) return;
           readGeneration++;
           send({
             status: "error",
@@ -297,6 +310,10 @@ export function watchStudentWisStockState(
           syncListener(next);
         };
         const refresh = () => {
+          if (!stopped && !sessionReady && current.state.status === "error") {
+            retryStudentWisStockSession(b.owner, b.epoch);
+            return;
+          }
           if (
             stopped ||
             !sessionReady ||
@@ -307,6 +324,8 @@ export function watchStudentWisStockState(
           )
             return;
           refreshing = true;
+          if (current.state.status !== "ready")
+            send({ status: "loading", data: null, error: "" });
           const turn = readGeneration;
           let failed = false;
           void readState(b)
@@ -401,11 +420,15 @@ export function watchStudentWisStockState(
             fail(error);
             dispose();
           },
-          paused: () => {
+          paused: (error) => {
             sessionReady = false;
             readGeneration++;
             disconnect();
-            send({ status: "loading", data: null, error: "" });
+            send(
+              error
+                ? { status: "error", data: null, error: error.message }
+                : { status: "loading", data: null, error: "" },
+            );
           },
         });
         if (stopped) stopSession();

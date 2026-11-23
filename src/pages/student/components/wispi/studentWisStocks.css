@@ -608,87 +608,75 @@
   text-underline-offset: 3px;
 }
 
-.student-wispi-ranking {
-  max-width: 1152px;
+
+.student-wispi-read-status {
   min-width: 0;
-}
-.student-wispi-ranking h2 {
-  margin: 0;
-}
-.student-wispi-rank-list {
-  list-style: none;
-  padding: 0;
-  margin: 16px 0 0;
-  border-top: 1px solid var(--ws-border, #e5e7eb);
-}
-.student-wispi-rank-list > li {
-  border-bottom: 1px solid var(--ws-border, #e5e7eb);
-}
-.student-wispi .student-wispi-rank-list > li > button {
-  width: 100%;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 8px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  text-align: left;
-  font-variant-numeric: tabular-nums;
-}
-.student-wispi .student-wispi-rank-list > li > button:is(:hover, [aria-expanded="true"]) {
-  background: var(--ws-primary-soft, #eff6ff);
-}
-.student-wispi-rank-list button > strong,
-.student-wispi-rank-detail li > span {
-  overflow-wrap: anywhere;
-}
-.student-wispi-rank-list button[aria-expanded="true"] > svg {
-  transform: rotate(180deg);
-}
-.student-wispi-rank-number {
+  margin-block: 12px;
   color: var(--ws-text-muted, #6b7280);
-  font-size: 14px;
-  font-weight: 700;
 }
-.student-wispi-rank-list > li:first-child .student-wispi-rank-number {
-  color: var(--ws-primary, #2563eb);
-}
-.student-wispi-rank-detail {
+.student-wispi-read-status p { margin: 0 0 8px; }
+.student-wispi-account { container-type: inline-size; }
+.student-wispi-wallet-layout {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 24px;
-  padding: 16px 8px 24px;
+  align-items: start;
 }
-.student-wispi-rank-detail h3 {
-  margin: 0 0 12px;
-  color: var(--ws-text-strong, #111827);
-  font-size: 16px;
-  font-weight: 700;
+.student-wispi-wallet-funding,
+.student-wispi-wallet-investments { min-width: 0; }
+.student-wispi-wallet-funding .student-wispi-balances { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.student-wispi-wallet-investments { padding-left: 24px; border-left: 1px solid var(--ws-border, #e5e7eb); }
+.student-wispi-investment-heading { margin-bottom: 16px; }
+.student-wispi-account .student-wispi-investment-heading h2 { margin: 0; }
+.student-wispi-investment-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0 0 16px;
 }
-.student-wispi-rank-chart {
-  position: relative;
-  height: 224px;
+.student-wispi-investment-summary dt { color: var(--ws-text-muted, #6b7280); font-size: 14px; }
+.student-wispi-investment-summary dd { margin: 8px 0 0; font-size: 20px; font-weight: 700; overflow-wrap: anywhere; }
+.student-wispi-investment-summary small { font-size: 12px; font-weight: 500; }
+.student-wispi-investment-summary .student-wispi-balance-note { display: block; margin-top: 4px; }
+.student-wispi-account .is-up { color: var(--ws-danger-text, #b91c1c); }
+.student-wispi-account .is-down { color: var(--ws-primary, #2563eb); }
+.student-wispi-account .is-flat { color: var(--ws-text-muted, #6b7280); }
+.student-wispi-holding-price { flex-shrink: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.student-wispi-holding-price strong { white-space: nowrap; }
+@container (max-width: 879px) {
+  .student-wispi-wallet-layout { grid-template-columns: minmax(0, 1fr); }
+  .student-wispi-wallet-investments { padding: 24px 0 0; border-left: 0; border-top: 1px solid var(--ws-border, #e5e7eb); }
 }
-.student-wispi-rank-records summary {
-  min-height: 44px;
-  padding: 12px 0;
-  color: var(--ws-primary, #2563eb);
-  font-size: 14px;
-  cursor: pointer;
+.student-wispi-ranking { min-width: 0; }
+.student-wispi-ranking h2 { margin: 0; }
+.student-wispi-ranking-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 16px 0; }
+.student-wispi .student-wispi-ranking-filters button { border-radius: 999px; border-color: transparent; background: transparent; }
+.student-wispi .student-wispi-ranking-filters button[aria-pressed="true"] { color: var(--ws-primary, #2563eb); background: var(--ws-primary-soft, #eff6ff); font-weight: 700; }
+.student-wispi-ranking-filters select { min-height: 44px; max-width: 100%; padding: 8px 12px; border: 1px solid var(--ws-border, #e5e7eb); border-radius: 8px; background: var(--ws-surface, #fff); font: inherit; }
+.student-wispi-ranking-filters select:focus-visible { outline: 2px solid var(--ws-ring, #3b82f6); outline-offset: 2px; }
+.student-wispi-ranking-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); align-items: start; gap: 24px; }
+.student-wispi-ranking-results { min-width: 0; }
+.student-wispi-rank-list { max-height: min(640px, 75dvh); overflow: auto; overflow-anchor: none; list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--ws-border, #e5e7eb); }
+.student-wispi-rank-list > li { border-bottom: 1px solid var(--ws-border, #e5e7eb); }
+.student-wispi .student-wispi-rank-list > .student-wispi-rank-entry > button {
+  width: 100%; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center; gap: 12px; padding: 16px 8px;
+  border: 0; border-radius: 0; background: transparent; text-align: left; font-variant-numeric: tabular-nums;
 }
-.student-wispi-rank-records .student-wispi-list {
-  max-height: 224px;
-  overflow: auto;
-}
-.student-wispi-rank-records .student-wispi-list > li {
-  padding: 8px 0;
-  font-size: 14px;
-}
+.student-wispi .student-wispi-rank-list > .student-wispi-rank-entry > button:is(:hover, [aria-pressed="true"]) { background: var(--ws-primary-soft, #eff6ff); }
+.student-wispi-rank-list button > strong { overflow-wrap: anywhere; }
+.student-wispi-rank-list button > b { white-space: nowrap; }
+.student-wispi-rank-number { color: var(--ws-text-muted, #6b7280); font-size: 14px; font-weight: 700; }
+.student-wispi-rank-list > li:first-child .student-wispi-rank-number { color: var(--ws-primary, #2563eb); }
+.student-wispi-rank-more-row { filter: none; backdrop-filter: none; }
+.student-wispi-rank-detail { min-width: 0; padding-left: 24px; border-left: 1px solid var(--ws-border, #e5e7eb); }
+.student-wispi-rank-detail h3 { margin: 0; color: var(--ws-text-strong, #111827); font-size: 16px; font-weight: 700; }
+.student-wispi-rank-detail > p { margin: 8px 0 16px; }
+.student-wispi-rank-chart { position: relative; height: 320px; min-width: 0; }
+.student-wispi-rank-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 16px; padding: 0; list-style: none; }
+.student-wispi-rank-legend li { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
+.student-wispi-rank-legend svg { flex-shrink: 0; }
 @container (max-width: 760px) {
-  .student-wispi-rank-detail {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
-  }
+  .student-wispi-ranking-layout { grid-template-columns: minmax(0, 1fr); }
+  .student-wispi-rank-detail { padding: 24px 0 0; border-left: 0; border-top: 1px solid var(--ws-border, #e5e7eb); }
 }

@@ -2,7 +2,11 @@ import { onIdTokenChanged, type User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { normalizeWisStockMarketRules } from "../../functions/wisStockMarketRules.mjs";
-import { watchStudentWisStockSession } from "./studentWisStockSession";
+import {
+  retryStudentWisStockSession,
+  watchStudentWisStockSession,
+} from "./studentWisStockSession";
+import { isStudentWisStockTransient } from "./studentWisStockReadRetry";
 import type {
   StudentWisStockMarket,
   StudentWisStockStatus,
@@ -87,6 +91,7 @@ type Entry<T> = {
   epoch: number;
   state: WisStockLoad<T>;
   listeners: Set<Listener<T>>;
+  retry: () => void;
   dispose: () => void;
 };
 const stores = {
@@ -131,6 +136,7 @@ function subscribe<T>(
         stopSession: (() => void) | undefined;
       let sessionReady = false;
       let timer: ReturnType<typeof setTimeout> | undefined;
+      let retries = 0;
       const send = (state: WisStockLoad<T>) => {
         if (stopped) return;
         current.state = state;
@@ -155,6 +161,13 @@ function subscribe<T>(
       };
       const fail = (error: unknown) => {
         const code = String((error as { code?: string })?.code || "");
+        if (isStudentWisStockTransient(error)) {
+          disconnect();
+          send(empty());
+          if (retries < 2) timer = setTimeout(connect, 750 * 2 ** retries++);
+          else delayed();
+          return;
+        }
         send({
           status: "error",
           data: null,
@@ -166,6 +179,12 @@ function subscribe<T>(
         });
         dispose();
       };
+      const delayed = () =>
+        send({
+          status: "error",
+          data: null,
+          error: "위스피 연결을 다시 확인해 주세요.",
+        });
       const connect = () => {
         if (stopped || stopSnapshot || !sessionReady) return;
         if (auth.currentUser !== owner) {
@@ -182,7 +201,7 @@ function subscribe<T>(
         const turn = ++generation;
         send(empty());
         timer = setTimeout(() => {
-          if (turn === generation) fail(new Error("timeout"));
+          if (turn === generation) delayed();
         }, 15_000);
         stopSnapshot = onSnapshot(
           doc(
@@ -200,7 +219,7 @@ function subscribe<T>(
               send(empty());
               clearTimeout(timer);
               timer = setTimeout(() => {
-                if (turn === generation) fail(new Error("timeout"));
+                if (turn === generation) delayed();
               }, 15_000);
               return;
             }
@@ -210,6 +229,7 @@ function subscribe<T>(
                 scope,
               );
               clearTimeout(timer);
+              retries = 0;
               send({ status: "ready", data, error: "" });
             } catch (error) {
               fail(error);
@@ -220,6 +240,7 @@ function subscribe<T>(
       };
       const reconnect = () => {
         disconnect();
+        retries = 0;
         connect();
       };
       const current: Entry<T> = {
@@ -227,6 +248,10 @@ function subscribe<T>(
         epoch,
         state: empty(),
         listeners,
+        retry: () => {
+          if (!sessionReady) retryStudentWisStockSession(owner, epoch);
+          else reconnect();
+        },
         dispose,
       };
       entry = current;
@@ -254,10 +279,11 @@ function subscribe<T>(
           connect();
         },
         denied: fail,
-        paused: () => {
+        paused: (error) => {
           sessionReady = false;
           disconnect();
-          send(empty());
+          if (error) delayed();
+          else send(empty());
         },
       });
       if (stopped) stopSession();
@@ -265,6 +291,7 @@ function subscribe<T>(
     if (cancelled) return;
     entry.listeners.add(listener);
     listener(entry.state);
+    if (entry.state.status === "error" && !cancelled) entry.retry();
     const chosen = entry;
     detach = () => {
       chosen.listeners.delete(listener);

@@ -777,16 +777,16 @@ async function sidebarChecks(page, portal, width) {
   if (portal === "teacher") {
     await navigateLink("캘린더");
   } else {
-    const myPageGroup = sidebar.getByRole("button", {
+    const myPageLink = sidebar.getByRole("link", {
       name: "마이페이지",
       exact: true,
     });
-    await myPageGroup.press("Enter");
-    await expanded(myPageGroup, true, "MyPage exposes its controlled children");
-    for (const name of ["내 정보", "아바타 옷장", "내 성적", "오답 노트"])
-      assert.equal(await sidebar.getByRole("link", { name, exact: true }).count(), 1);
-    await navigateLink("내 정보");
-    await expanded(myPageGroup, true, "MyPage child navigation keeps its group open");
+    assert.equal(await myPageLink.evaluate(element => Boolean(element.closest('.teacher-sidebar-bottom'))), true, 'MyPage stays in the bottom area');
+    assert.equal(await sidebar.getByRole("button", { name: "마이페이지", exact: true }).count(), 0, 'MyPage is not duplicated in primary navigation');
+    const primaryLabels = await sidebar.locator('.teacher-sidebar-nav .teacher-sidebar-item[aria-label]').evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')));
+    assert(primaryLabels.indexOf('위플레이') < primaryLabels.indexOf('위스'), 'Weplay precedes Wis');
+    await navigateLink("마이페이지");
+    assert.equal(await myPageLink.getAttribute('aria-current'), 'page');
   }
   await expanded(
     currentGroup,
@@ -797,7 +797,7 @@ async function sidebarChecks(page, portal, width) {
     await sidebar
       .locator('.teacher-sidebar-submenu[aria-hidden="false"]')
       .count(),
-    portal === "teacher" ? 0 : 1,
+    0,
   );
   assert.equal(
     await sidebar

@@ -26,9 +26,12 @@ export interface MenuItem {
 }
 
 export type PortalType = "student" | "teacher";
-export type MenuConfig = Record<PortalType, MenuItem[]>;
+export type MenuConfig = Record<PortalType, MenuItem[]> & {
+  orderVersion?: number;
+};
 
 export const MENUS: MenuConfig = {
+  orderVersion: 1,
   student: [
     {
       name: "학습",
@@ -66,6 +69,16 @@ export const MENUS: MenuConfig = {
       ],
     },
     {
+      name: "위플레이",
+      url: "/student/weplay",
+      icon: "M6 8h12l3 10-3 2-4-4h-4l-4 4-3-2L6 8zm1 3v4m-2-2h4m7-1h.01M18 14h.01",
+      children: [
+        { name: DEFAULT_WEPLAY_GAME_TITLE, url: WEPLAY_STUDENT_URL },
+        { name: "마우저구 윷놀이", url: "/student/weplay?game=joseon-yut" },
+        { name: "덩기덕 쿵더Rock", url: "/student/weplay?game=gungdeok-rock" },
+      ],
+    },
+    {
       name: "위스",
       url: "/student/points",
       icon: "M12 8c-2.761 0-5 1.567-5 3.5S9.239 15 12 15s5-1.567 5-3.5S14.761 8 12 8zm0 0V5m0 10v4m-7-7H3m18 0h-2",
@@ -87,15 +100,6 @@ export const MENUS: MenuConfig = {
         { name: "아바타 옷장", url: "/student/mypage?menu=avatar" },
         { name: "내 성적", url: "/student/mypage?menu=score" },
         { name: "오답 노트", url: "/student/mypage?menu=wrong_note" },
-      ],
-    },
-    {
-      name: "위플레이",
-      url: "/student/weplay",
-      icon: "M6 8h12l3 10-3 2-4-4h-4l-4 4-3-2L6 8zm1 3v4m-2-2h4m7-1h.01M18 14h.01",
-      children: [
-        { name: DEFAULT_WEPLAY_GAME_TITLE, url: WEPLAY_STUDENT_URL },
-        { name: "마우저구 윷놀이", url: "/student/weplay?game=joseon-yut" },
       ],
     },
   ],
@@ -428,10 +432,32 @@ export const sanitizeMenuConfig = (raw: unknown): MenuConfig => {
         !withFallbackChildren.some((item) => item.url === fallbackItem.url),
     );
 
-    return [...withFallbackChildren, ...missingParents];
+    const merged = [...withFallbackChildren, ...missingParents];
+    // Migrate only the previous default order. Saved custom orders and all
+    // subsequent moves (including a deliberate return to the old order) survive.
+    const previousStudentOrder = [
+      "/student/lesson/note",
+      "/student/quiz",
+      "/student/score",
+      "/student/points",
+      "/student/mypage",
+      "/student/weplay",
+    ];
+    if (
+      portal === "student" &&
+      !(Number((raw as Record<string, unknown>).orderVersion) >= 1) &&
+      merged.length === previousStudentOrder.length &&
+      merged.every((item, index) => item.url === previousStudentOrder[index])
+    ) {
+      return fallback.student.map(
+        (item) => merged.find((entry) => entry.url === item.url)!,
+      );
+    }
+    return merged;
   };
 
   return {
+    orderVersion: 1,
     student: parsePortal("student"),
     teacher: parsePortal("teacher"),
   };

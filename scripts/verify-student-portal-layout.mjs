@@ -85,7 +85,9 @@ const render = (portal, collapsed = false) => renderToStaticMarkup(React.createE
 const urls = (html) => [...html.matchAll(/href="#([^"]+)"/g)].map(match => match[1]);
 const submenu = (html, portal, group) => {
   const start = html.indexOf(`id="${portal}-menu-${group}"`);
-  return start < 0 ? "" : html.slice(start).split('<div class="teacher-sidebar-group')[0];
+  // The final primary group ends at </nav>; bottom account links are not
+  // submenu entries when MyPage is pinned below the primary navigation.
+  return start < 0 ? "" : html.slice(start).split(/<div class="teacher-sidebar-group|<\/nav>/)[0];
 };
 
 for (const small of [false, true]) {

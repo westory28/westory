@@ -58,7 +58,7 @@
     "verify:wis-wallet": "node scripts/verify-wis-economy-adapter.mjs && node scripts/verify-wis-shop-client.mjs && node scripts/verify-wis-wallet-browser.mjs",
     "verify:avatar-previews": "node scripts/verify-avatar-character-clothing.mjs && node scripts/render-avatar-item-previews.mjs --check",
     "verify:achievement-analysis": "node scripts/verify-history-achievement.mjs && node scripts/verify-achievement-psychometrics.mjs && node scripts/verify-achievement-analysis.mjs && node scripts/verify-achievement-estimates.mjs",
-    "verify:wispi-client": "node scripts/verify-student-wispi-client.mjs",
+    "verify:wispi-client": "node scripts/verify-student-wispi-client.mjs && node scripts/verify-student-wispi-recovery.mjs",
     "test:wispi-trading": "node scripts/run-wis-stock-tests.mjs trading",
     "test:wispi-access": "node scripts/run-wis-stock-tests.mjs access",
     "verify:wispi-browser": "node scripts/verify-student-wispi-browser.mjs",

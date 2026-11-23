@@ -4,6 +4,7 @@ import type { WisStockManagement } from "../../../../lib/wisStocksClient";
 import { animate, createScope } from "animejs";
 import InfoHelp from "../../../../components/common/InfoHelp";
 import RefreshButton from "../../../../components/common/RefreshButton";
+import WisStockLoadMore from "../../../../components/common/WisStockLoadMore";
 import WisStockReturnHistoryChart from "./WisStockReturnHistoryChart";
 import {
   getWisStockInvestmentHistories,
@@ -557,6 +558,24 @@ export default function WisStockInvestmentBoard({
                     </li>
                   );
                 })}
+                {rows.length > PAGE_SIZE && (
+                  <li className="wis-investment-board__load-more">
+                    {visibleRows.length < rows.length ? (
+                      <WisStockLoadMore
+                        onClick={() =>
+                          setVisibleCount((count) =>
+                            Math.min(count + PAGE_SIZE, rows.length),
+                          )
+                        }
+                        progress={`${visibleRows.length} / ${rows.length}명`}
+                      />
+                    ) : (
+                      <span role="status">
+                        {visibleRows.length} / {rows.length}명
+                      </span>
+                    )}
+                  </li>
+                )}
               </ul>
             ) : (
               <div className="wis-investment-board__empty">
@@ -574,25 +593,6 @@ export default function WisStockInvestmentBoard({
               </div>
             )}
           </div>
-          {ready && rows.length > PAGE_SIZE && (
-            <div className="wis-investment-board__load-more">
-              <span aria-live="polite" aria-atomic="true">
-                {visibleRows.length} / {rows.length}명
-              </span>
-              {visibleRows.length < rows.length && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setVisibleCount((count) =>
-                      Math.min(count + PAGE_SIZE, rows.length),
-                    )
-                  }
-                >
-                  더보기
-                </button>
-              )}
-            </div>
-          )}
         </section>
         <section
           className="wis-investment-board__returns"
