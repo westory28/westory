@@ -141,12 +141,15 @@ try {
     await page.clock.fastForward(1);
     assert.equal(await popup.isVisible(), false);
     await page.clock.fastForward(597_000);
+    assert.equal(await popup.isVisible(), false, 'the previous interval has expired');
+    await page.evaluate(() => window.qa.tick());
     await popup.waitFor();
     assert.equal(await page.evaluate(() => window.qa.tones), 4);
     assert.equal(await page.evaluate(() => window.qa.spoken.length), 1, 'speech stays independently muted');
-    assert.equal(await page.evaluate(() => window.qa.starts), 1, 'local repeats add no subscriptions');
+    assert.equal(await page.evaluate(() => window.qa.starts), 1, 'new quotes use the existing subscription');
     await sound.click();
     await page.clock.fastForward(600_000);
+    await page.evaluate(() => window.qa.tick());
     assert.equal(await page.evaluate(() => window.qa.tones), 4, 'sound stays muted');
     await page.clock.fastForward(600_000);
     assert.equal(await popup.isVisible(), false, 'expired at 17:00');
@@ -206,7 +209,7 @@ try {
       const beforeExpiry = await page.evaluate(() => window.qa.canceled);
       await page.clock.fastForward(500);
       assert.equal(await popup.isVisible(), false);
-      assert(await page.evaluate(before => window.qa.canceled > before, beforeExpiry), 'speech stops at the original half-hour boundary');
+      assert(await page.evaluate(before => window.qa.canceled > before, beforeExpiry), 'speech stops at the ten-minute quote boundary');
       await page.clock.fastForward(1000);await page.evaluate(() => window.qa.tick());
       await popup.waitFor();await page.clock.fastForward(500);
       const beforeDisconnect = await page.evaluate(() => window.qa.canceled);
@@ -357,5 +360,5 @@ try {
   await fs.writeFile(path.join(output, 'native-audio.json'), JSON.stringify(nativeAudio, null, 2) + '\n');
   await nativePage.close();
   assert.deepEqual(failures, []);
-  console.log(JSON.stringify({ passed: true, nativeAudio, widths: [320,390,768,1280,1366,1440,1920], checks: ['80% popup size', 'three-second expiry', 'button/outside/Escape dismissal', 'half-hour expiry', 'ten-minute cadence', 'zero new subscriptions', 'sound and speech on opening', 'delayed voice availability', 'independent sound and speech', 'installed default Korean voice priority', 'bounded named-voice/device fallback', 'immediate user-gesture speech and no-bulletin confirmation', 'not-allowed requires explicit recovery', 'silent-engine watchdog and stale-event isolation', 'disabled/hidden confirmation guard', 'softer lower-register chime envelope', 'keyboard toggles', '44px non-overlapping controls', 'audio and subscription cleanup'], output }));
+  console.log(JSON.stringify({ passed: true, nativeAudio, widths: [320,390,768,1280,1366,1440,1920], checks: ['80% popup size', 'three-second expiry', 'button/outside/Escape dismissal', 'ten-minute expiry', 'ten-minute cadence', 'zero new subscriptions', 'sound and speech on opening', 'delayed voice availability', 'independent sound and speech', 'installed default Korean voice priority', 'bounded named-voice/device fallback', 'immediate user-gesture speech and no-bulletin confirmation', 'not-allowed requires explicit recovery', 'silent-engine watchdog and stale-event isolation', 'disabled/hidden confirmation guard', 'softer lower-register chime envelope', 'keyboard toggles', '44px non-overlapping controls', 'audio and subscription cleanup'], output }));
 } finally { await browser.close();await new Promise(resolve => server.close(resolve)); }

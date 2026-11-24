@@ -109,7 +109,7 @@ try {
   assert.equal(published.revision, opened.revision); assert.equal(published.studentOpen, true);
   assert(!JSON.stringify(published).includes('priceSeed')); assert(!JSON.stringify(published).includes('priceModel'));
   const signal = (await db.doc(statusPath).get()).data();
-  clock += 1800000; reads.length = 0;
+  clock += 600_000; reads.length = 0;
   await api.advanceWisStockPrices(); assert.equal(commits.at(-1).length, 2); assert(!commits.at(-1).includes(statusPath));
   assert.deepEqual(reads.toSorted(), ['site_settings/config', 'site_settings/semester_active', 'semester_manifests/2026-2', marketPath(scope)].toSorted());
   assert.deepEqual((await db.doc(statusPath).get()).data(), signal);
@@ -117,7 +117,7 @@ try {
   reads.length = 0;
   assert.equal((await api.advanceWisStockPrices()).changed, false);
   assert.deepEqual(reads, ['site_settings/config', marketPath(scope)]); assert.equal(commits.at(-1).length, 0);
-  checks.push('Missing status and exact own account are readable before launch while page prices and other/missing-owner accounts are denied; first teacher open atomically publishes safe prices and status; a half-hour tick reads four documents and writes two, a same-slot retry reads two and writes zero, and the menu signal stays unchanged.');
+  checks.push('Missing status and exact own account are readable before launch while page prices and other/missing-owner accounts are denied; first teacher open atomically publishes safe prices and status; a ten-minute tick reads four documents and writes two, a same-slot retry reads two and writes zero, and the menu signal stays unchanged.');
 
   const closed = await api.setWisStockMarketHalted(request({ halted: true, expectedRevision: 0, requestId: 'synthetic-close-00001' }));
   await live.until(value => value.events.some(event => event.data()?.halted === true));

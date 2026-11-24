@@ -4,8 +4,13 @@ import InfoHelp from "../../../../components/common/InfoHelp";
 import type {
   WisStock,
   WisStockMarketRules,
+  WisStockForecast,
+  WisStockSpecialSession,
 } from "../../../../lib/wisStocksClient";
 import WisStockOrderPreview from "./WisStockOrderPreview";
+import WisStockForecastPreview, {
+  WisStockSpecialSessions,
+} from "./WisStockForecastPreview";
 import {
   wisStockCatalog,
   wisStockCatalogWeeks,
@@ -13,6 +18,7 @@ import {
 import {
   createWisStockRulePlanStocks,
   matchWisStockPlanStocks,
+  wisStockPlanDrafts,
 } from "../../../../lib/wisStockPlanPreview";
 import StockChart, {
   stockObservations,
@@ -56,30 +62,33 @@ export default function WisStockChartPreview({
   revision,
   semesterId,
   catalogPlan,
+  specialSessions = [],
+  readForecast,
 }: {
   stocks: WisStock[];
   rules: WisStockMarketRules;
   revision: number;
   semesterId: string;
   catalogPlan?: WisStockCatalogPlan | null;
+  specialSessions?: WisStockSpecialSession[];
+  readForecast?: (stockId: string) => Promise<WisStockForecast>;
 }) {
   const rulesKey = JSON.stringify(rules);
   const planKey = JSON.stringify(catalogPlan ?? null);
-  const examples = useMemo(
-    () =>
-      createWisStockRulePlanStocks(
-        JSON.parse(rulesKey),
-        semesterId,
-        JSON.parse(planKey) ?? undefined,
-      ),
-    [rulesKey, semesterId, planKey],
-  );
-  const planStocks = useMemo(
-    () => matchWisStockPlanStocks(examples, stocks),
-    [examples, stocks],
-  );
   const [source, setSource] = useState(stocks.length ? "registered" : "plan");
   const isPlan = source === "plan" || !stocks.length;
+  const examples = useMemo(
+    () => new Map<string, WisStock>(),
+    [rulesKey, semesterId, planKey],
+  );
+  const drafts = useMemo(
+    () => (isPlan ? wisStockPlanDrafts(semesterId) : []),
+    [isPlan, semesterId],
+  );
+  const planStocks = useMemo(
+    () => matchWisStockPlanStocks(drafts, stocks),
+    [drafts, stocks],
+  );
   const available = isPlan ? planStocks : stocks;
   const [week, setWeek] = useState(1);
   const visibleStocks = isPlan
@@ -93,12 +102,27 @@ export default function WisStockChartPreview({
   const [period, setPeriod] = useState<(typeof periods)[number]>(periods[3]);
   const [orderPending, setOrderPending] = useState(false);
   const root = useRef<HTMLDivElement>(null);
-  const selected =
+  const item =
     visibleStocks.find((stock) => stock.id === selectedId) || visibleStocks[0];
+  const registered = stocks.includes(item);
+  if (!registered && !examples.has(item.id)) {
+    const [example] = createWisStockRulePlanStocks(
+      rules,
+      semesterId,
+      catalogPlan ?? undefined,
+      item.id,
+    );
+    examples.set(item.id, example);
+  }
+  const selected = registered ? item : examples.get(item.id)!;
+  const portfolioStocks = isPlan
+    ? available.map((stock) =>
+        stocks.includes(stock) ? stock : examples.get(stock.id) || stock,
+      )
+    : stocks;
   const company = isPlan
     ? catalogById.get(selected.id) || catalogByName.get(selected.settings.name)
     : undefined;
-  const registered = stocks.some((stock) => stock.id === selected.id);
   const exitAtMs = company ? catalogExitAtMs(company, catalogPlan) : null;
   const scheduledExit =
     catalogPlan?.exitsEnabledAtMs !== undefined && company?.id === selected.id;
@@ -127,24 +151,56 @@ export default function WisStockChartPreview({
     });
     return () => scope.revert();
   }, [selected.id, selected.price, period.key]);
+  const observedChart = (
+    <>
+      <div className="wis-stock-preview__quote">
+        <span>{selected.settings.period || "역사 종목"}</span>
+        <h3>{selected.settings.name}</h3>
+        <strong>
+          {money(selected.price)} <small>위스</small>
+        </strong>
+        <p className={`is-${direction}`}>
+          {change > 0 ? "상승" : change < 0 ? "하락" : "변동 없음"}{" "}
+          {change > 0 ? "+" : ""}
+          {money(change)} ({percent > 0 ? "+" : ""}
+          {percent.toFixed(1)}%) <span>선택 기간 대비</span>
+        </p>
+      </div>
+      <div className={`wis-stock-preview__chart is-${direction}`}>
+        <StockChart stock={selected} days={period.days} variant="candlestick" />
+      </div>
+      <div className="wis-stock-preview__periods" aria-label="차트 기간">
+        {periods.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            aria-pressed={item.key === period.key}
+            onClick={() => setPeriod(item)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </>
+  );
   return (
     <div ref={root} className="wis-stock-preview">
       <div className="wis-stock-preview__heading">
         <h2>주식 차트 미리보기</h2>
         <span className="wis-stocks__closed">
           {isPlan
-            ? `6주 기획안 · ${registered ? "등록 시세" : "미상장 모의 시세"}`
+            ? `6주 기획안 · ${registered ? "등록 종목" : readForecast && catalogPlan ? "상장 예정 종목" : "미상장 모의 시세"}`
             : "등록 종목"}
         </span>
         {isPlan && (
           <span className="wis-stocks__closed">
-            하루 ±{rules.dailyPriceLimitBps / 100}%
+            일반장 하루 ±{rules.dailyPriceLimitBps / 100}%
           </span>
         )}
         <InfoHelp label="미리보기 자료">
           <p>
             등록된 종목은 두 보기에서 같은 실제 가격 기록을 표시합니다. 미상장
-            종목은 저장된 거래 요일·시간, 30분 주기, 가격 제한폭과 서킷
+            종목은 저장된 거래 요일·시간, 10분 주기, 가격 제한폭과 서킷
             브레이커를 적용한 모의 시세입니다. 규칙을 저장하거나 새로고침하면
             반영되며, 실제 상장가와 미래 수익을 뜻하지 않습니다. 계좌 이체와
             주문은 미리보기 안에서만 처리합니다.
@@ -195,6 +251,7 @@ export default function WisStockChartPreview({
           </label>
         )}
       </div>
+      {isPlan && <WisStockSpecialSessions sessions={specialSessions} />}
       <div className="wis-stock-preview__layout">
         <div className="wis-stock-preview__catalog" aria-label="미리보기 종목">
           {visibleStocks.map((stock, index) => {
@@ -229,51 +286,38 @@ export default function WisStockChartPreview({
                   <small>{stock.settings.period || "역사 종목"}</small>
                 </span>
                 <span className="wis-stock-preview__stock-price">
-                  <strong>{money(stock.price)}</strong>
-                  <small
-                    className={`is-${difference > 0 ? "up" : difference < 0 ? "down" : "flat"}`}
-                  >
-                    {difference > 0 ? "+" : ""}
-                    {((difference / baseline) * 100).toFixed(1)}%
-                  </small>
+                  {stocks.includes(stock) ? (
+                    <>
+                      <strong>{money(stock.price)}</strong>
+                      <small
+                        className={`is-${difference > 0 ? "up" : difference < 0 ? "down" : "flat"}`}
+                      >
+                        {difference > 0 ? "+" : ""}
+                        {((difference / baseline) * 100).toFixed(1)}%
+                      </small>
+                    </>
+                  ) : (
+                    <small>{catalogPlan ? "상장 예정" : "미상장"}</small>
+                  )}
                 </span>
               </button>
             );
           })}
         </div>
         <div className="wis-stock-preview__detail">
-          <div className="wis-stock-preview__quote">
-            <span>{selected.settings.period || "역사 종목"}</span>
-            <h3>{selected.settings.name}</h3>
-            <strong>
-              {money(selected.price)} <small>위스</small>
-            </strong>
-            <p className={`is-${direction}`}>
-              {change > 0 ? "상승" : change < 0 ? "하락" : "변동 없음"}{" "}
-              {change > 0 ? "+" : ""}
-              {money(change)} ({percent > 0 ? "+" : ""}
-              {percent.toFixed(1)}%) <span>선택 기간 대비</span>
-            </p>
-          </div>
-          <div className={`wis-stock-preview__chart is-${direction}`}>
-            <StockChart
-              stock={selected}
-              days={period.days}
-              variant="candlestick"
-            />
-          </div>
-          <div className="wis-stock-preview__periods" aria-label="차트 기간">
-            {periods.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                aria-pressed={item.key === period.key}
-                onClick={() => setPeriod(item)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
+          {readForecast && (registered || catalogPlan) ? (
+            <WisStockForecastPreview
+              key={JSON.stringify([semesterId, revision, source, selected.id])}
+              stockId={selected.id}
+              stockName={selected.settings.name}
+              currentLabel={registered ? "등록 시세" : "미상장 모의 시세"}
+              readForecast={readForecast}
+            >
+              {observedChart}
+            </WisStockForecastPreview>
+          ) : (
+            observedChart
+          )}
           {selected.settings.description && (
             <p className="wis-stock-preview__background">
               {selected.settings.description}
@@ -405,7 +449,7 @@ export default function WisStockChartPreview({
           <WisStockOrderPreview
             key={isPlan ? "plan" : "registered"}
             stock={selected}
-            stocks={available}
+            stocks={portfolioStocks}
             rules={rules}
             revision={revision}
             semesterId={semesterId}

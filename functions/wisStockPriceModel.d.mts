@@ -22,7 +22,7 @@ export interface WisStockPriceModelInput {
     growthProfile?: WisStockGrowthProfile;
   };
 }
-/** Return a finite value in [0, 1). The server supplies a private SHA-256 sampler. */
+/** Return a finite value in [0, 1). The server supplies a private deterministic sampler. */
 export type WisStockPriceSampler = (key: string) => number;
 export interface WisStockMarketContext {
   atMs?: number;
@@ -43,7 +43,8 @@ export function sampleWisStockMarketFactors(stock: WisStockPriceModelInput, seme
 };
 export function wisStockPriceModelAnchor(stock: WisStockPriceModelInput): WisStockPriceModelAnchor;
 export function sampleWisStockPriceStep(stock: WisStockPriceModelInput, semesterId: string, slot: number,
-  priceSeed?: string, sampler?: WisStockPriceSampler, dailyPriceLimitBps?: number, marketContext?: WisStockMarketContext): {
+  priceSeed?: string, sampler?: WisStockPriceSampler, dailyPriceLimitBps?: number, marketContext?: WisStockMarketContext,
+  sectorFactors?: ReturnType<typeof sampleWisStockMarketFactors>): {
   movementBps: number;
   regime: 'MANUAL' | 'SIDEWAYS' | 'RISING' | 'FALLING' | 'CORRECTION';
   volatilityScale: number;

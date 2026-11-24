@@ -13,6 +13,7 @@ assert.equal(process.env.GCLOUD_PROJECT, projectId);
 assert.equal(process.env.FIRESTORE_EMULATOR_HOST, '127.0.0.1:18256');
 const auditedSources = ['functions/wisStocks.js', 'functions/wisStockIndex.js', 'functions/wisStockMarketRules.mjs', 'functions/wisStockOrderLifecycle.mjs',
   'functions/wisStockOrderLifecycle.js', 'functions/wisStockAccount.mjs', 'functions/wisStockCatalogSchedule.js',
+  'functions/wisStockQuotePlan.js', 'functions/wisStockMarketFactors.mjs', 'functions/wisStockPriceModel.mjs',
   'functions/wisStockCatalog.json', 'firestore.rules', 'scripts/verify-wis-stocks-rules.mjs'];
 const hashAuditedSources = () => Object.fromEntries(auditedSources
   .map(file => [file, createHash('sha256').update(readFileSync(new URL(`../${file}`, import.meta.url))).digest('hex')]));
@@ -327,7 +328,7 @@ try {
   assert.equal((await db.collection(`${root}/wis_stock_receipts`).get()).size, 1);
   assert.equal(totalWrites(), 2, 'Eight identical commands commit one market and one receipt write');
   checks.push('8 concurrent duplicate registrations produce one stock, one receipt, two committed writes');
-  clock += 1800000;
+  clock += 600_000;
   await Promise.all(Array.from({ length: 8 }, () => api.advanceWisStockPrices()));
   const market = await api.getWisStockManagement(request({}));
   assert.equal(market.stocks[0].price, Math.round(openingPrice * 103 / 100)); assert.equal(market.stocks[0].history.length, 2); assert.equal(market.revision, 2);
@@ -335,7 +336,7 @@ try {
   await api.advanceWisStockPrices();
   assert.equal(totalWrites(), 3, 'Same slot scheduler retry makes zero writes');
   assert.equal(commits.at(-1).reads, 2);
-  checks.push('8 concurrent half-hour ticks advance exactly once; same-slot retry reads two documents and writes zero');
+  checks.push('8 concurrent ten-minute ticks advance exactly once; same-slot retry reads two documents and writes zero');
   const edits = await Promise.allSettled(['첫 수정', '둘째 수정'].map((name, index) => api.saveWisStock(request({ expectedRevision: 2,
     stockId: market.stocks[0].id, settings: { ...market.stocks[0].settings, name }, requestId: `conflicting-stock-request-${index}` }))));
   assert.equal(edits.filter(item => item.status === 'fulfilled').length, 1);

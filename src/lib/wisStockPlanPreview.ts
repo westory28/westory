@@ -32,12 +32,34 @@ function exampleOpeningPrice(id: string, semesterId: string) {
   return 100 + ((hash >>> 0) % 401);
 }
 
+// Catalog identity and editable settings suffice for the list and the empty
+// demo portfolio. Model prices are calculated only for an opened example.
+function planDraft(id: string, semesterId: string): WisStock {
+  const initialPrice = exampleOpeningPrice(id, semesterId);
+  return {
+    id,
+    settings: {
+      ...getWisStockTemplateSettings(id),
+      initialPrice,
+      automatic: true,
+    },
+    price: initialPrice,
+    updatedAtMs: 0,
+    nextTickAtMs: 0,
+    haltedUntilMs: 0,
+    history: [],
+  };
+}
+export const wisStockPlanDrafts = (semesterId: string) =>
+  wisStockCatalog.map((entry) => planDraft(entry.id, semesterId));
+
 /** Local scenario only: called when saved rules/start/semester change, no I/O,
  * timer, wall clock, persisted cache, or production history mutation. */
 export function createWisStockRulePlanStocks(
   input: WisStockMarketRules,
   semesterId: string,
   plan: WisStockCatalogPlan = { version: 1, startsAtMs: EXAMPLE_START },
+  stockId?: string,
 ): WisStock[] {
   const rules = normalizeWisStockMarketRules(input);
   const { startsAtMs } = plan;
@@ -52,33 +74,26 @@ export function createWisStockRulePlanStocks(
   ) {
     if (isWisStockTradingSession(rules, atMs)) sessions.push(atMs);
   }
-  return wisStockCatalog.map((entry) => {
+  const entries = stockId
+    ? wisStockCatalog.filter((entry) => entry.id === stockId)
+    : wisStockCatalog;
+  return entries.map((entry) => {
     const listingAt = catalogSessionAtMs(entry.listingSession, startsAtMs);
     const exitAt = catalogExitAtMs(entry, plan) ?? planEnd;
     const available = sessions.filter(
       (atMs) => atMs >= listingAt && atMs <= exitAt,
     );
-    const initialPrice = exampleOpeningPrice(entry.id, semesterId);
-    const settings = {
-      ...getWisStockTemplateSettings(entry.id),
-      initialPrice,
-      automatic: true,
-    };
+    const stock = planDraft(entry.id, semesterId);
+    const { settings, price: initialPrice } = stock;
     const firstAt = available[0] ?? listingAt;
-    const stock: WisStock = {
-      id: entry.id,
-      settings,
-      price: initialPrice,
-      updatedAtMs: firstAt,
-      nextTickAtMs: 0,
-      haltedUntilMs: 0,
-      priceModel: {
-        version: 1,
-        anchorAtMs: firstAt,
-        anchorPrice: initialPrice,
-      },
-      history: available.length ? [{ atMs: firstAt, price: initialPrice }] : [],
+    stock.updatedAtMs = firstAt;
+    stock.priceModel = {
+      version: 1,
+      anchorAtMs: firstAt,
+      anchorPrice: initialPrice,
     };
+    if (available.length)
+      stock.history.push({ atMs: firstAt, price: initialPrice });
     let dayKey = "";
     let dayOpenPrice = initialPrice;
     if (rules.automaticPrices && !rules.halted) {

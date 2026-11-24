@@ -70,7 +70,7 @@ test('the first opening adds only due stocks with one actual observation and no 
     assert.equal(stock.settings.tradingStatus, 'ACTIVE');
     assert.deepEqual(stock.history, [{ atMs: start, price: stock.settings.initialPrice }]);
     assert.deepEqual(stock.priceModel, { version: 1, anchorAtMs: start, anchorPrice: stock.settings.initialPrice });
-    assert.equal(stock.nextTickAtMs, start + HOUR / 2);
+    assert.equal(stock.nextTickAtMs, start + HOUR / 6);
     assert.equal(stock.listedAtMs, start);
     assert.equal(stock.updatedAtMs, start);
     assert.equal(stock.dayKey, '2026-11-16');
@@ -143,7 +143,7 @@ test('closed, unpublished and halted markets defer listings and catch up at the 
     assert.deepEqual(stock.history, [{ atMs: reopen, price: stock.settings.initialPrice }]);
     assert.equal(stock.listedAtMs, reopen);
     assert.equal(stock.priceModel.anchorAtMs, reopen);
-    assert.equal(stock.nextTickAtMs, start + 7 * DAY + HOUR + HOUR / 2);
+    assert.equal(stock.nextTickAtMs, start + 7 * DAY + HOUR + HOUR / 6);
   }
 });
 

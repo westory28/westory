@@ -4,7 +4,7 @@ const { createHash } = require('node:crypto');
 const { createWisStockHandlers, marketPath, publicStockPath, publicStockMarket, publicStockStatus, HISTORY_LIMIT, MAX_STOCKS, MAX_MARKET_BYTES, reservedMarketBytes, normalizeSettings, advanceMarket, blankMarket } = require('../wisStocks');
 const { normalizeWisStockMarketRules } = require('../wisStockMarketRules');
 const { drawListingPrice } = require('../wisStockCatalogSchedule');
-const HALF_HOUR = 30 * 60_000;
+const TEN_MINUTES = 10 * 60_000;
 const scope = { year: '2026', semester: '2', semesterId: '2026-2' };
 const initial = () => ({ name: '합성 역사 종목', description: '시험용 배경', period: '시험 시대', initialPrice: 100, minimumPrice: 1,
   maximumPrice: 10000, volatilityBps: 300, trendBps: 0, intervalHours: 1, automatic: false });
@@ -48,6 +48,59 @@ function fixture({ optimisticRetries = false, beforeRead = () => {}, openingPric
   const api = createWisStockHandlers({ db, openingPrice, assertSession: async (request, options) => { sessions.push(options); return { uid: request.auth?.uid, email: request.auth?.token?.email }; }, now: () => clock });
   return { api, documents, reads, writes, sessions, advance: (ms = 3600000) => clock += ms };
 }
+
+test('teacher forecast matches delayed ten-minute workers, private index feedback, event closes and scoped rights', async () => {
+  const f = fixture(), start = Date.parse('2026-12-15T18:00:00+09:00');
+  let clock = f.advance(start - Date.parse('2026-11-16T09:00:00+09:00'));
+  const rules = normalizeWisStockMarketRules({ openMinuteKst: 600, closeMinuteKst: 650, dailyPriceLimitBps: 400, circuitBreakerBps: 380 });
+  const make = (n, name, overrides, price = 1003) => {
+    const settings = normalizeSettings({ ...initial(), name, automatic: true, initialPrice: price,
+      minimumPrice: 1, maximumPrice: 100000, ...overrides });
+    return { id: 'stock_' + String(n).padStart(24, '0'), settings, price, updatedAtMs: start - 86400000,
+      nextTickAtMs: start, dayKey: '2026-12-15', dayOpenPrice: price, history: [{ atMs: start - 86400000, price }] };
+  };
+  const stocks = [make(1, '한양건설', {}), make(2, '새금융', { growthProfile: 'VALUE' }), make(3, '한도주',
+    { automatic: false, minimumPrice: 1000, maximumPrice: 1004, tradingStatus: 'SELL_ONLY' }),
+    make(4, '매매 정지', { tradingStatus: 'HALTED' })];
+  const raw = { ...blankMarket(scope), rules, revision: 11, studentOpen: true, updatedAtMs: start - 86400000,
+    lastPriceSlot: Math.floor((start - 86400000) / 1800000), priceSeed: 'd'.repeat(64), stocks };
+  f.documents.set(marketPath(scope), raw);
+  const before = JSON.stringify(raw);
+  const previews = await Promise.all(stocks.map(stock => f.api.getWisStockManagement(req({ forecastStockId: stock.id }))));
+  assert.equal(f.reads.length, stocks.length * 5); assert.equal(f.writes.length, 0);
+  assert.equal(JSON.stringify(raw), before); assert(!JSON.stringify(previews).includes(raw.priceSeed));
+  assert.deepEqual(previews[3].history, []);
+  assert.deepEqual(previews[0].specialSessions.map(item => item.changeBps), [-2000, 1000, 1000]);
+  const expected = previews.map(series => new Map(series.history.map(point => [point.atMs, point.price])));
+  const events = new Map([['2026-12-16', -20], ['2026-12-23', 10], ['2026-12-24', 10]]);
+  for (let day = 16; day <= 25; day++) {
+    const dayKey = '2026-12-' + day, open = Date.parse(dayKey + 'T10:00:00+09:00');
+    if ([0, 6].includes(new Date(open).getUTCDay())) continue;
+    const prior = f.documents.get(marketPath(scope)).stocks.map(stock => stock.price);
+    for (let i = 0; i < 5; i++) {
+      const atMs = open + i * TEN_MINUTES, event = { scheduleTime: new Date(atMs).toISOString() };
+      clock = f.advance(atMs + (i % 3 + 1) * 19000 - clock);
+      await f.api.advanceWisStockPrices(event);
+      const result = f.documents.get(marketPath(scope));
+      result.stocks.forEach((stock, index) => {
+        const quoted = expected[index].get(atMs);
+        if (quoted !== undefined) assert.equal(stock.price, quoted, dayKey + ' / ' + stock.settings.name + ' / ' + i);
+        assert.deepEqual(stock.history[0], stocks[index].history[0]);
+      });
+      assert.equal((await f.api.advanceWisStockPrices(event)).changed, false);
+    }
+    const prices = f.documents.get(marketPath(scope)).stocks.map(stock => stock.price);
+    if (events.has(dayKey)) {
+      prices.slice(0, 3).forEach((price, i) => assert.equal(price, events.get(dayKey) < 0
+        ? Math.round(prior[i] * 0.8) : Math.ceil(prior[i] * 110 / 100)));
+      assert.equal(prices[3], prior[3]);
+    } else assert.equal(prices[2], prior[2], 'Manual price never snaps back to its old bounds');
+  }
+  f.documents.set('users/manager', { role: 'student' });
+  await assert.rejects(f.api.getWisStockManagement(req({ forecastStockId: stocks[0].id })), reason('WIS_STOCK_TEACHER_REQUIRED'));
+  f.documents.set('users/manager', { role: 'teacher' });
+  await assert.rejects(f.api.getWisStockManagement(req({ forecastStockId: [stocks[0].id] })), reason('WIS_STOCK_INPUT_INVALID'));
+});
 
 function catalogExitFixture(options) {
   const f = fixture(options), start = Date.parse('2026-11-16T00:00:00Z');
@@ -183,7 +236,7 @@ test('index reconstruction remains read-only, while actual stock updates atomica
 test('concurrent scheduler transactions retry against the committed index and apply a return once', async () => {
   const f = fixture({ optimisticRetries: true });
   await f.api.saveWisStock(saveInput({ ...initial(), automatic: true, volatilityBps: 0, trendBps: 300 }));
-  f.advance(HALF_HOUR); f.reads.length = 0; f.writes.length = 0;
+  f.advance(TEN_MINUTES); f.reads.length = 0; f.writes.length = 0;
   const results = await Promise.all([f.api.advanceWisStockPrices(), f.api.advanceWisStockPrices()]);
   assert.equal(results.filter(result => result.changed).length, 1);
   assert.equal(f.writes.length, 1);
@@ -215,12 +268,12 @@ test('late deliveries expire with zero reads; a failed current-slot read can ret
   const saved = await f.api.saveWisStock(saveInput({ ...initial(), automatic: true, trendBps: 300, volatilityBps: 0 }));
   const start = saved.stocks[0].updatedAtMs;
   const event = atMs => ({ scheduleTime: new Date(atMs).toISOString() });
-  const delayedAtMs = f.advance(HALF_HOUR + 45_000);
+  const delayedAtMs = f.advance(TEN_MINUTES + 45_000);
   f.reads.length = 0; f.writes.length = 0;
   assert.equal((await f.api.advanceWisStockPrices(event(start))).changed, false);
   assert.equal(f.reads.length, 0); assert.equal(f.writes.length, 0);
   failNextMarketRead = true;
-  const current = event(start + HALF_HOUR);
+  const current = event(start + TEN_MINUTES);
   await assert.rejects(f.api.advanceWisStockPrices(current), failure);
   assert.deepEqual(f.reads, ['site_settings/config', marketPath(scope)]); assert.equal(f.writes.length, 0);
   f.reads.length = 0;
@@ -228,7 +281,7 @@ test('late deliveries expire with zero reads; a failed current-slot read can ret
   assert.equal(f.reads.length, 4); assert.equal(f.writes.length, 1);
   const stock = f.documents.get(marketPath(scope)).stocks[0];
   assert.deepEqual(stock.history.at(-1), { price: 103, atMs: delayedAtMs });
-  assert.equal(stock.nextTickAtMs, start + 2 * HALF_HOUR);
+  assert.equal(stock.nextTickAtMs, start + 2 * TEN_MINUTES);
   f.reads.length = 0; f.writes.length = 0;
   f.advance(1);
   assert.equal((await f.api.advanceWisStockPrices(current)).changed, false);
@@ -237,7 +290,7 @@ test('late deliveries expire with zero reads; a failed current-slot read can ret
 test('due prices cannot publish across a semester switch or an inactive manifest', async () => {
   const f = fixture();
   await f.api.saveWisStock(saveInput({ ...initial(), automatic: true, trendBps: 300, volatilityBps: 0 }));
-  f.advance(HALF_HOUR); f.writes.length = 0;
+  f.advance(TEN_MINUTES); f.writes.length = 0;
   for (const [path, replacement] of [
     ['site_settings/semester_active', { semesterId: '2027-1' }],
     ['semester_manifests/2026-2', { status: 'ARCHIVED' }],
@@ -254,12 +307,12 @@ test('due prices cannot publish across a semester switch or an inactive manifest
 test('turning automatic prices on waits for the next boundary, even on a late delivery', async () => {
   const f = fixture(), saved = await f.api.saveWisStock(saveInput());
   const start = saved.stocks[0].updatedAtMs;
-  f.advance(HALF_HOUR + 5 * 60_000);
+  f.advance(TEN_MINUTES + 5 * 60_000);
   const enabled = await f.api.saveWisStock(saveInput({ ...initial(), automatic: true, volatilityBps: 0, trendBps: 300 },
-    saved.revision, saved.stocks[0].id, 'half-hour-enable-auto'));
-  assert.equal(enabled.stocks[0].nextTickAtMs, start + 2 * HALF_HOUR);
+    saved.revision, saved.stocks[0].id, 'ten-minute-enable-auto'));
+  assert.equal(enabled.stocks[0].nextTickAtMs, start + 2 * TEN_MINUTES);
   f.reads.length = 0; f.writes.length = 0;
-  assert.equal((await f.api.advanceWisStockPrices({ scheduleTime: new Date(start + HALF_HOUR).toISOString() })).changed, false);
+  assert.equal((await f.api.advanceWisStockPrices({ scheduleTime: new Date(start + TEN_MINUTES).toISOString() })).changed, false);
   assert.equal(f.reads.length, 2); assert.equal(f.writes.length, 0);
   f.advance(25 * 60_000);
   assert.equal((await f.api.advanceWisStockPrices()).changed, true);
@@ -271,7 +324,7 @@ test('delayed jobs respect custom opening and closing minutes as well as the sch
   const market = f.documents.get(marketPath(scope)), start = saved.stocks[0].updatedAtMs;
   market.rules = normalizeWisStockMarketRules({ openMinuteKst: 555, closeMinuteKst: 585 });
   market.stocks[0].nextTickAtMs = start;
-  for (const [elapsed, scheduled] of [[20, 0], [25, 30]]) {
+  for (const [elapsed, scheduled] of [[16, 10], [29, 40]]) {
     f.advance(elapsed * 60_000); f.reads.length = 0; f.writes.length = 0;
     assert.equal((await f.api.advanceWisStockPrices({ scheduleTime: new Date(start + scheduled * 60_000).toISOString() })).changed, false);
     assert.deepEqual(f.reads, ['site_settings/config', marketPath(scope)]); assert.equal(f.writes.length, 0);
@@ -348,8 +401,8 @@ test('previously listed high-price instruments retain their receipts, opening qu
   delete stock.listedAtMs;
   stock.settings = oldSettings;
   stock.price = 1300; stock.dayOpenPrice = 1200; stock.priceModel.anchorPrice = 1200;
-  stock.history = [{ atMs: stock.updatedAtMs, price: 1200 }, { atMs: stock.updatedAtMs + HALF_HOUR, price: 1300 }];
-  stock.updatedAtMs += HALF_HOUR;
+  stock.history = [{ atMs: stock.updatedAtMs, price: 1200 }, { atMs: stock.updatedAtMs + TEN_MINUTES, price: 1300 }];
+  stock.updatedAtMs += TEN_MINUTES;
   const receipt = [...f.documents.entries()].find(([key]) => key.includes('/wis_stock_receipts/'))[1];
   receipt.settings = oldSettings;
   receipt.payloadHash = createHash('sha256').update(JSON.stringify([scope.semesterId, 0, '', oldSettings])).digest('hex');
@@ -472,7 +525,7 @@ test('global automatic switch, manual halt, stock halt and closed sessions cost 
   const writes = f.writes.length; assert.equal((await f.api.advanceWisStockPrices()).changed, false);
   assert.equal(f.reads.length, 2); assert.equal(f.writes.length, writes);
   f.documents.get(marketPath(scope)).rules.halted = false;
-  f.advance(6 * 3600000 + HALF_HOUR); // 16:30 KST
+  f.advance(6 * 3600000 + TEN_MINUTES); // 16:30 KST
   f.reads.length = 0;
   assert.equal((await f.api.advanceWisStockPrices()).changed, false);
   assert.deepEqual(f.reads, ['site_settings/config', marketPath(scope)]); assert.equal(f.writes.length, writes);
@@ -504,7 +557,7 @@ test('a short circuit breaker expiring inside the slot cannot wake prices twice'
     volatilityBps: 0, trendBps: 300 }));
   const raw = f.documents.get(marketPath(scope));
   raw.rules = normalizeWisStockMarketRules({ circuitBreakerBps: 200, circuitBreakerMinutes: 1 });
-  const due = f.advance(HALF_HOUR), event = { scheduleTime: new Date(due).toISOString() };
+  const due = f.advance(TEN_MINUTES), event = { scheduleTime: new Date(due).toISOString() };
   assert.equal((await f.api.advanceWisStockPrices(event)).changed, true);
   const paused = f.documents.get(marketPath(scope)).stocks[0];
   assert.equal(paused.haltedUntilMs, due + 60_000);
@@ -512,9 +565,9 @@ test('a short circuit breaker expiring inside the slot cannot wake prices twice'
   f.advance(60_000); f.reads.length = 0; f.writes.length = 0;
   assert.equal((await f.api.advanceWisStockPrices(event)).changed, false);
   assert.equal(f.reads.length, 2); assert.equal(f.writes.length, 0);
-  f.advance(HALF_HOUR - 60_000);
+  f.advance(TEN_MINUTES - 60_000);
   assert.equal((await f.api.advanceWisStockPrices()).changed, true);
-  assert.deepEqual(f.documents.get(marketPath(scope)).stocks[0].history.at(-1), { atMs: due + HALF_HOUR, price: 103 });
+  assert.deepEqual(f.documents.get(marketPath(scope)).stocks[0].history.at(-1), { atMs: due + TEN_MINUTES, price: 103 });
 });
 
 test('rule and issuance failures are closed and cannot open student trading or alter wallet totals', async () => {
@@ -759,9 +812,9 @@ test('100 instrument cap reserves full 120-point histories and enforces Firestor
     reservedBytes100: reservedMarketBytes(usual100, scope), rejectedWorst100Bytes: reservedMarketBytes(tooLarge100, scope), worst100WireBytes: wire, budgetBytes: MAX_MARKET_BYTES }));
 });
 
-test('80 legacy instruments share one half-hour tick, scope validation and public market write', async () => {
+test('80 legacy instruments share one ten-minute tick, scope validation and public market write', async () => {
   const f = fixture(), created = await f.api.saveWisStock(saveInput({ ...initial(), automatic: true, volatilityBps: 0, trendBps: 300 }));
-  await f.api.setWisStockMarketHalted(req({ halted: false, expectedRevision: created.revision, requestId: 'half-hour-first-open' }));
+  await f.api.setWisStockMarketHalted(req({ halted: false, expectedRevision: created.revision, requestId: 'ten-minute-first-open' }));
   const raw = f.documents.get(marketPath(scope));
   const start = raw.stocks[0].updatedAtMs;
   raw.stocks = Array.from({ length: 80 }, (_, index) => {
@@ -770,7 +823,7 @@ test('80 legacy instruments share one half-hour tick, scope validation and publi
     return { ...original, id: `stock_${index.toString(16).padStart(24, '0')}`,
       settings: { ...original.settings, intervalHours }, nextTickAtMs: start + intervalHours * 3600000 };
   });
-  f.reads.length = 0; f.writes.length = 0; f.advance(HALF_HOUR - 1);
+  f.reads.length = 0; f.writes.length = 0; f.advance(TEN_MINUTES - 1);
   assert.equal((await f.api.advanceWisStockPrices()).changed, false);
   assert.deepEqual(f.reads, ['site_settings/config', marketPath(scope)]); assert.equal(f.writes.length, 0);
   f.advance(1);
@@ -781,11 +834,11 @@ test('80 legacy instruments share one half-hour tick, scope validation and publi
       'semester_manifests/2026-2'].toSorted());
     assert.deepEqual(f.writes.map(write => write.path).toSorted(), [marketPath(scope), publicStockPath(scope, 'market')].toSorted());
     assert(f.documents.get(marketPath(scope)).stocks.every(stock => stock.price === price && stock.history.length === slot + 1
-      && stock.nextTickAtMs === start + (slot + 1) * HALF_HOUR));
+      && stock.nextTickAtMs === start + (slot + 1) * TEN_MINUTES));
     f.reads.length = 0; f.writes.length = 0;
     assert.equal((await f.api.advanceWisStockPrices()).changed, false);
     assert.deepEqual(f.reads, ['site_settings/config', marketPath(scope)]); assert.equal(f.writes.length, 0);
-    f.advance(HALF_HOUR);
+    f.advance(TEN_MINUTES);
   }
 });
 

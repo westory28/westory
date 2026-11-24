@@ -33,7 +33,7 @@ export function wisStockPreviewSampler(seed) {
   };
 }
 
-// Use only committed observations before the current half-hour tick. In particular,
+// Use only committed observations before the current scheduled tick. In particular,
 // the current map's prices/index cannot influence later stocks in the same map.
 // Legacy markets without an index start neutral; this function never reads I/O.
 function priorObservations(index, atMs) {
@@ -54,7 +54,7 @@ export function wisStockMarketStress(index, atMs) {
   const history = priorObservations(index, atMs), hour = wisStockPriceSlot(atMs) * WIS_STOCK_PRICE_INTERVAL_MS / HOUR;
   let stress = 0;
   for (let i = 1; i < history.length; i++) {
-    const ageHours = hour - history[i].atMs / HOUR;
+    const ageHours = hour - wisStockPriceSlot(history[i].atMs) * WIS_STOCK_PRICE_INTERVAL_MS / HOUR;
     if (ageHours > 48) continue;
     const returnBps = (history[i].value / history[i - 1].value - 1) * 10000;
     // A prior selloff can temporarily increase uncertainty, never dictate the

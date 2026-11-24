@@ -17,7 +17,7 @@ export function wisStockPriceModelAnchor(stock) {
 }
 
 export function sampleWisStockPriceStep(stock, semesterId, slot, priceSeed = '', sampler,
-  dailyPriceLimitBps = DEFAULT_WIS_STOCK_MARKET_RULES.dailyPriceLimitBps, marketContext) {
+  dailyPriceLimitBps = DEFAULT_WIS_STOCK_MARKET_RULES.dailyPriceLimitBps, marketContext, sectorFactors) {
   const settings = stock.settings;
   if (!Number.isSafeInteger(dailyPriceLimitBps) || dailyPriceLimitBps < WIS_STOCK_RULE_LIMITS.dailyPriceLimitBps[0]
     || dailyPriceLimitBps > WIS_STOCK_RULE_LIMITS.dailyPriceLimitBps[1]
@@ -38,7 +38,7 @@ export function sampleWisStockPriceStep(stock, semesterId, slot, priceSeed = '',
   // In particular 0 volatility + 0 trend remains completely stationary for VALUE.
   if (settings.volatilityBps === 0) return { movementBps: settings.trendBps,
     regime: 'MANUAL', volatilityScale: 0, shockBps: 0, referencePrice: null };
-  const factors = sampleWisStockMarketFactors(stock, semesterId, slot, priceSeed, marketContext);
+  const factors = sectorFactors ?? sampleWisStockMarketFactors(stock, semesterId, slot, priceSeed, marketContext);
   const bell = key => (unit(`${key}:a`) + unit(`${key}:b`) + unit(`${key}:c`)) * 2 / 3 - 1;
   const blend = (channel, span, value) => {
     const index = Math.floor(slot / span), progress = smooth((slot % span) / span);
@@ -56,9 +56,8 @@ export function sampleWisStockPriceStep(stock, semesterId, slot, priceSeed = '',
   const tilt = before.tilt * (1 - phase) + after.tilt * phase;
   const regime = phase < 0.5 ? before.kind : after.kind;
   const volatilityScale = blend('volatility', 36, key => 0.4 + unit(key) ** 2 * 1.4);
-  const slowNoise = blend('noise', 4, bell), fastNoise = bell(`detail:${slot}`);
-  const recent = (stock.history || []).slice(-24).filter(point => Number.isSafeInteger(point.price) && point.price > 0);
-  const average = recent.length ? recent.reduce((sum, point) => sum + point.price, 0) / recent.length : stock.price;
+  const slowNoise = blend('noise', 4, bell);
+  const fastNoise = source.tick ? (source.tick(slot, 0) + source.tick(slot, 1) + source.tick(slot, 2)) * 2 / 3 - 1 : bell(`detail:${slot}`);
   const vol = settings.volatilityBps;
   let referencePrice = null, pull = 0, drift = settings.trendBps;
   if (settings.growthProfile === 'VALUE') {
@@ -75,6 +74,8 @@ export function sampleWisStockPriceStep(stock, semesterId, slot, priceSeed = '',
     pull = clamp((referencePrice / stock.price - 1) * 10000 * 0.045, -vol * 0.45, vol * 0.45);
     drift += growthBpsPerDay / 7;
   } else if (regime === 'CORRECTION') {
+    const recent = (stock.history || []).slice(-24).filter(point => Number.isSafeInteger(point.price) && point.price > 0);
+    const average = recent.length ? recent.reduce((sum, point) => sum + point.price, 0) / recent.length : stock.price;
     pull = clamp((average / stock.price - 1) * 10000 * 0.08, -vol * 0.3, vol * 0.3);
   }
   // Rare news has a multi-step effect, rather than a one-point spike followed by
@@ -83,9 +84,10 @@ export function sampleWisStockPriceStep(stock, semesterId, slot, priceSeed = '',
   const weights = [1, 0.5, 0.25, 0.12, 0.06];
   for (let age = 0; age < weights.length; age++) {
     const eventSlot = slot - age;
-    if (eventSlot >= 0 && unit(`shock:${eventSlot}:occurs`) < 0.012) {
-      shockBps += (unit(`shock:${eventSlot}:side`) < 0.5 ? -1 : 1)
-        * vol * (1.5 + unit(`shock:${eventSlot}:size`) * 1.25) * weights[age];
+    if (eventSlot >= 0 && (source.tick ? source.tick(eventSlot, 3) : unit(`shock:${eventSlot}:occurs`)) < 0.012) {
+      const side = source.tick ? source.tick(eventSlot, 4) : unit(`shock:${eventSlot}:side`);
+      const size = source.tick ? source.tick(eventSlot, 5) : unit(`shock:${eventSlot}:size`);
+      shockBps += (side < 0.5 ? -1 : 1) * vol * (1.5 + size * 1.25) * weights[age];
     }
   }
   // The original model is calibrated to a 10% daily market limit. Scale the

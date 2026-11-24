@@ -32,6 +32,37 @@
   color: var(--ws-text, #1f2937);
   font: inherit;
 }
+.wis-stock-catalog__sessions,
+.wis-stock-catalog__forecast { margin: 16px 0; }
+.wis-stock-catalog__section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wis-stock-catalog__section-title h3 { margin: 0; font-size: 16px; }
+.wis-stock-catalog__sessions table,
+.wis-stock-catalog__slots table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+:is(.wis-stock-catalog__sessions, .wis-stock-catalog__slots) :is(th, td) {
+  padding: 8px;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+  text-align: left;
+}
+:is(.wis-stock-catalog__sessions, .wis-stock-catalog__slots) thead th { color: var(--ws-text-muted, #6b7280); font-size: 12px; }
+:is(.wis-stock-catalog__sessions, .wis-stock-catalog__slots) :is(th, td):last-child { text-align: right; }
+.wis-stock-catalog__slots { max-height: 240px; overflow: auto; }
+.wis-stock-catalog__slots thead th { position: sticky; top: 0; background: var(--ws-bg, #f9fafb); }
+.wis-stock-catalog__sessions .is-down { color: var(--ws-primary, #2563eb); }
+.wis-stock-catalog__sessions .is-up { color: var(--ws-danger-text, #b91c1c); }
+.wis-stock-catalog__range { margin: 8px 0; color: var(--ws-text-muted, #6b7280); font-size: 14px; }
+.wis-stock-catalog__event-prices { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 16px 0; }
+.wis-stock-catalog__event-prices dt { color: var(--ws-text-muted, #6b7280); font-size: 12px; }
+.wis-stock-catalog__event-prices dd { margin: 4px 0 0; font-weight: 700; }
 .wis-stock-preview__symbol img {
   display: block;
   width: 36px;

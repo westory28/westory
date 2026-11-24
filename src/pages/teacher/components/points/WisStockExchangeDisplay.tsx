@@ -19,11 +19,6 @@ function bulletinHeading(stocks: StockBulletinItem[]) {
   const down = stocks.some(
     (item) => item.kind !== "listing" && item.percent < 0,
   );
-  const sharp = stocks.some(
-    (item) => item.kind !== "listing" && Math.abs(item.percent) >= 3,
-  );
-  if (!sharp)
-    return up && down ? "상승·하락 종목" : up ? "상승 종목" : "하락 종목";
   return up && down ? "급등·급락 속보" : up ? "급등 속보" : "급락 속보";
 }
 function surgeList(stocks: StockBulletinItem[]) {
@@ -421,7 +416,7 @@ export default function WisStockExchangeDisplay({
                 <span>
                   {
                     {
-                      listing: "현재 30분 시간대",
+                      listing: "현재 10분 시간대",
                       previous: "직전 시세 대비",
                       received: "직전 수신 시세 대비",
                     }[bulletin.stocks[0].kind]

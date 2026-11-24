@@ -33,6 +33,19 @@ const settings = { name: "합성 종목", description: "", period: "", initialPr
   issuedShares: 100000, lotSize: 1, tradingStatus: "ACTIVE" };
 const checks = [];
 const check = async (name, run) => { await run(); checks.push(name); };
+await check("forecast reads only the selected stock; mismatched and stale series are rejected", async () => {
+  const {qa, client} = await setup(), stockId = "stock_" + "a".repeat(24);
+  const forecast = {stockId,semesterId:"2026-2",revision:1,startsAtMs:1000,asOfMs:1500,endsAtMs:5000,
+    specialSessions:[],history:[{atMs:2000,price:400}]};
+  qa.handler = async () => forecast;
+  assert.deepEqual(await client.getWisStockManagement(scope,stockId), forecast);
+  assert.deepEqual(qa.calls, [{name:"getWisStockManagement",payload:{...scope,forecastStockId:stockId}}]);
+  for (const invalid of [{stockId:"other"}, {semesterId:"2026-1"}, {history:[{atMs:1000,price:400}]}]) {
+    qa.handler = async () => ({...forecast,...invalid});
+    await assert.rejects(client.getWisStockManagement(scope,stockId));
+  }
+  assert.equal(qa.sensitive,0);
+});
 await check("same owner/session/semester reads coalesce; completed reads and other scopes are fresh", async () => {
   const { qa, client } = await setup(); let release;
   qa.handler = () => new Promise(resolve => { release = resolve; });

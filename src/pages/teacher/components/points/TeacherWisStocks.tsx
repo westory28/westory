@@ -1234,7 +1234,7 @@ export default function TeacherWisStocks({
                     checked={draft.automatic}
                     onChange={(event) => set("automatic", event.target.checked)}
                   />
-                  거래 시간 중 30분마다 자동 가격 변동
+                  거래 시간 중 10분마다 자동 가격 변동
                 </label>
               </fieldset>
               {canManage && (
@@ -1290,11 +1290,20 @@ export default function TeacherWisStocks({
       )}
       {market && tab === "preview" && (
         <WisStockChartPreview
+          key={ownerKey}
           stocks={market.stocks}
           rules={market.rules}
           revision={market.revision}
           semesterId={market.semesterId}
           catalogPlan={market.catalogSchedule?.plan}
+          specialSessions={market.specialSessions}
+          readForecast={async (stockId) => {
+            try {
+              return await getWisStockManagement({ year, semester }, stockId);
+            } catch (failure) {
+              throw new Error(wisStockErrorMessage(failure));
+            }
+          }}
         />
       )}
       {market && tab === "investments" && (

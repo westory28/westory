@@ -8,9 +8,9 @@ import { build } from 'esbuild';
 const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'westory-bulletins-'));
 const bundle = path.join(directory, 'bulletins.mjs');
 await build({ entryPoints: ['src/pages/teacher/components/points/wisStockDisplayBulletins.ts'], bundle: true, platform: 'node', format: 'esm', outfile: bundle });
-const { createStockBulletinRotation, stockBulletinExpiresAt } = await import(pathToFileURL(bundle));
+const { createStockBulletinRotation, stockBulletinExpiresAt, isWisStockBreakingMove } = await import(pathToFileURL(bundle));
 const originals = { now: Date.now, setTimeout, clearTimeout, document: globalThis.document };
-let now = Date.parse('2026-11-23T16:30:00+09:00');
+let now = Date.parse('2026-11-23T16:40:00+09:00');
 let serial = 0;
 const timers = new Map();
 globalThis.document = { hidden: false };
@@ -35,6 +35,9 @@ const baseline = now;
 const stock = (id, atMs = baseline) => ({ id, name: id, price: 40, previousPrice: 100, priceAtMs: atMs, previousClose: 100 });
 const market = stocks => ({ updatedAtMs: now, halted: false, index: null, stocks });
 try {
+  for (const [price, qualifies] of [[10999,false],[11000,true],[9001,false],[9000,true]]) {
+    assert.equal(isWisStockBreakingMove(price, 10000), qualifies, String(price));
+  }
   rotation.update(market([stock('비파메탈')]), new Set());
   assert.equal(current.stocks[0].percent, -60);
   advance(2_999);
@@ -44,23 +47,18 @@ try {
   rotation.update(market([stock('비파메탈')]), new Set(['previous:비파메탈']));
   assert.equal(current, null, 'unchanged event cannot replay on a trade/document update');
   advance(597_000);
-  assert.equal(events.length, 2);
-  assert.equal(events[1].at, baseline + 600_000);
-  advance(600_000);
-  assert.equal(events.length, 3);
-  advance(600_000);
   assert.equal(current, null);
-  assert.equal(events.length, 3, '16:30 event is never replayed at 17:00');
+  assert.equal(events.length, 1, 'an event expires at the next ten-minute tick');
   rotation.update(market([stock('비파메탈')]), new Set(['previous:비파메탈']));
   assert.equal(current, null, 'fresh document metadata does not revive expired stock events');
   rotation.update(market([{ id: 'legacy', name: 'legacy', price: 160, previousClose: 100 }]), new Set());
   assert.equal(current, null, 'daily comparison without an event timestamp is not breaking news');
-  now = baseline + 29 * 60_000 + 59_000;
+  now = baseline + 9 * 60_000 + 59_000;
   rotation.clear();
   rotation.update(market([{ id: 'late', name: '늦은상장', price: 300, previousClose: 300, listedAtMs: now, listingPrice: 300 }]), new Set());
   assert.equal(current.stocks[0].kind, 'listing');
   advance(1_000);
-  assert.equal(current, null, 'visible page is removed at the half-hour boundary');
+  assert.equal(current, null, 'visible page is removed at the next ten-minute boundary');
   assert.equal(timers.size, 0, 'expired events leave no polling timer');
   now = baseline;
   rotation.update(market(Array.from({ length: 6 }, (_, i) => stock('종목' + i))), new Set());
@@ -79,8 +77,7 @@ try {
   advance(599_999);
   assert.equal(current, null, 'dismissal suppresses every queued page and repeated snapshots in this round');
   advance(1);
-  assert(current, 'the next ten-minute occurrence remains available');
-  rotation.dismiss();
+  assert.equal(current, null, 'dismissed quotes expire with their original interval');
   rotation.update(market([stock('신규사건', now)]), new Set(['previous:신규사건']));
   assert.equal(current.stocks[0].id, '신규사건', 'dismissal never suppresses a new event');
   rotation.update({ ...market([stock('halt')]), halted: true }, new Set());
@@ -91,8 +88,8 @@ try {
   assert.equal(current, null);
   rotation.clear();
   assert.equal(timers.size, 0);
-  assert.equal(stockBulletinExpiresAt(baseline), baseline + 1_800_000);
-  console.log('PASS: three-second individual bulletins, current-round dismissal/new-event recovery, 0/10/20 minute local cadence, strict half-hour expiry, duplicate/stale/legacy suppression, complete paging, halt/hidden/cleanup; no network calls.');
+  assert.equal(stockBulletinExpiresAt(baseline), baseline + 600_000);
+  console.log('PASS: inclusive ±10% boundaries, three-second bulletins, ten-minute expiry, dismissal/new-event recovery, duplicate/stale/legacy suppression, complete paging and cleanup; no network calls.');
 } finally {
   rotation.clear();
   Date.now = originals.now;

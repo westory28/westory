@@ -1,3 +1,4 @@
+import { nextWisStockPriceTick } from "../../../../../functions/wisStockMarketRules.mjs";
 import type {
   ExchangeMarket,
   ExchangeQuote,
@@ -18,10 +19,12 @@ export type StockBulletin = {
   before: StockBulletinItem[];
   stocks: StockBulletinItem[];
 };
-const slotMs = 30 * 60 * 1000;
-const repeatMs = 10 * 60 * 1000;
-export const stockBulletinExpiresAt = (atMs: number) =>
-  (Math.floor(atMs / slotMs) + 1) * slotMs;
+export const stockBulletinExpiresAt = nextWisStockPriceTick;
+export function isWisStockBreakingMove(price: number, previousPrice: number) {
+  return (
+    previousPrice > 0 && Math.abs(price - previousPrice) * 10 >= previousPrice
+  );
+}
 
 function eligibleItems(
   market: BulletinMarket,
@@ -52,7 +55,7 @@ function eligibleItems(
     if (
       current(priceAtMs) &&
       previousPrice &&
-      Math.abs(price - previousPrice) * 100 >= 3 * previousPrice
+      isWisStockBreakingMove(price, previousPrice)
     ) {
       movements.push({
         kind: stock.comparedToReceived ? "received" : "previous",
@@ -68,8 +71,7 @@ function eligibleItems(
   return [...listings, ...movements];
 }
 
-// Local deadlines only: each event is announced on receipt, then at its next
-// ten-minute marks, and never beyond its original half-hour market slot.
+// Each confirmed event is announced once within its ten-minute quote interval.
 export function createStockBulletinRotation(
   publish: (value: StockBulletin | null) => void,
 ) {
@@ -77,11 +79,9 @@ export function createStockBulletinRotation(
   let timer: ReturnType<typeof setTimeout> | undefined;
   let sequence = 0;
   let page: StockBulletinItem[] = [];
-  const shown = new Map<string, number>();
+  const shown = new Set<string>();
   const key = (item: StockBulletinItem) =>
     `${item.kind}:${item.id}:${item.atMs}`;
-  const occurrence = (item: StockBulletinItem, now: number) =>
-    Math.floor((now - item.atMs) / repeatMs);
 
   function show(priority = new Set<string>()) {
     clearTimeout(timer);
@@ -97,7 +97,7 @@ export function createStockBulletinRotation(
     for (const eventKey of shown.keys())
       if (!activeKeys.has(eventKey)) shown.delete(eventKey);
     const available = items
-      .filter((item) => shown.get(key(item)) !== occurrence(item, now))
+      .filter((item) => !shown.has(key(item)))
       .sort(
         (a, b) =>
           Number(priority.has(`${b.kind}:${b.id}`)) -
@@ -109,7 +109,7 @@ export function createStockBulletinRotation(
         (item) => now < stockBulletinExpiresAt(item.atMs),
       );
       page = [lead];
-      for (const item of page) shown.set(key(item), occurrence(item, now));
+      shown.add(key(lead));
       publish({ id: ++sequence, before, stocks: page });
       const deadline = Math.min(
         now + 3_000,
@@ -120,11 +120,6 @@ export function createStockBulletinRotation(
     }
     page = [];
     publish(null);
-    const deadlines = items
-      .map((item) => item.atMs + (occurrence(item, now) + 1) * repeatMs)
-      .filter((time) => time > now && time < stockBulletinExpiresAt(now));
-    if (deadlines.length)
-      timer = setTimeout(show, Math.min(...deadlines) - now);
   }
   function clear() {
     clearTimeout(timer);
@@ -139,10 +134,7 @@ export function createStockBulletinRotation(
     dismiss() {
       if (!market || page.length === 0) return;
       const now = Date.now();
-      // Dismiss the whole current round, including its queued pages. The next
-      // ten-minute occurrence and genuinely new market events remain eligible.
-      for (const item of eligibleItems(market, now))
-        shown.set(key(item), occurrence(item, now));
+      for (const item of eligibleItems(market, now)) shown.add(key(item));
       page = [];
       show();
     },
@@ -155,8 +147,7 @@ export function createStockBulletinRotation(
       const now = Date.now();
       const hasNewPriority = eligibleItems(next, now).some(
         (item) =>
-          priority.has(`${item.kind}:${item.id}`) &&
-          shown.get(key(item)) !== occurrence(item, now),
+          priority.has(`${item.kind}:${item.id}`) && !shown.has(key(item)),
       );
       if (hasNewPriority || timer === undefined) show(priority);
     },

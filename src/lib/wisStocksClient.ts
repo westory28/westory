@@ -20,7 +20,7 @@ export interface WisStockSettings {
   maximumPrice: number;
   volatilityBps: number;
   trendBps: number;
-  /** Retained in saved settings for compatibility. The live market uses 30-minute slots. */
+  /** Retained in saved settings for compatibility. The live market uses 10-minute slots. */
   intervalHours: number;
   automatic: boolean;
   issuedShares: number;
@@ -47,6 +47,7 @@ export interface WisStockManagement {
   updatedAtMs: number;
   stocks: WisStock[];
   rules: WisStockMarketRules;
+  specialSessions?: WisStockSpecialSession[];
   marketIndex?: WisStockMarketIndex;
   catalogSchedule?: {
     plan: WisStockCatalogPlan | null;
@@ -57,6 +58,23 @@ export interface WisStockManagement {
     nextListingAtMs: number | null;
   };
 }
+export interface WisStockSpecialSession {
+  dayKey: string;
+  label: string;
+  changeBps: number;
+}
+export interface WisStockForecast {
+  semesterId: string;
+  stockId: string;
+  revision: number;
+  asOfMs: number;
+  startsAtMs: number;
+  endsAtMs: number;
+  history: WisStock["history"];
+  specialSessions: WisStockSpecialSession[];
+}
+const validTimestamp = (value: number) =>
+  Number.isSafeInteger(value) && value >= 0 && value <= 8_639_999_999_999_999;
 export interface WisStockMarketIndex {
   baseValue: 1000;
   baseAtMs: number;
@@ -95,13 +113,48 @@ async function service<T>(
     throw changedOwner();
   return result.data;
 }
-export async function getWisStockManagement(config: WisStockConfig) {
+export function getWisStockManagement(
+  config: WisStockConfig,
+): Promise<WisStockManagement>;
+export function getWisStockManagement(
+  config: WisStockConfig,
+  forecastStockId: string,
+): Promise<WisStockForecast>;
+export async function getWisStockManagement(
+  config: WisStockConfig,
+  forecastStockId?: string,
+) {
+  const scope = getYearSemester(config);
+  if (forecastStockId !== undefined) {
+    const forecast = await service<WisStockForecast>("getWisStockManagement", {
+      ...scope,
+      forecastStockId,
+    });
+    if (
+      forecast?.stockId !== forecastStockId ||
+      forecast.semesterId !== `${scope.year}-${scope.semester}` ||
+      !validTimestamp(forecast.asOfMs) ||
+      !validTimestamp(forecast.endsAtMs) ||
+      !Array.isArray(forecast.history) ||
+      forecast.history.some(
+        (point, i) =>
+          !validTimestamp(point?.atMs) ||
+          point.atMs <= forecast.asOfMs ||
+          point.atMs >= forecast.endsAtMs ||
+          (i > 0 && point.atMs <= forecast.history[i - 1].atMs) ||
+          !Number.isSafeInteger(point.price) ||
+          point.price <= 0,
+      ) ||
+      !Array.isArray(forecast.specialSessions)
+    )
+      throw new Error("예정 시세를 확인하지 못했습니다. 다시 조회해 주세요.");
+    return forecast;
+  }
   const owner = auth.currentUser;
   if (!owner) throw changedOwner();
   const epoch = Number((await owner.getIdTokenResult()).claims.auth_time);
   if (auth.currentUser !== owner || !Number.isFinite(epoch))
     throw changedOwner();
-  const scope = getYearSemester(config);
   const key = `${owner.uid}:${epoch}:${scope.year}:${scope.semester}`;
   const existing = flights.get(key);
   if (existing) return existing;

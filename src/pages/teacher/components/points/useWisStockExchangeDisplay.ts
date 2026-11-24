@@ -8,6 +8,7 @@ import type { QuotePriceTransition } from "./WisStockQuotePrice";
 
 import {
   createStockBulletinRotation,
+  isWisStockBreakingMove,
   type StockBulletin,
   type BulletinMarket,
   type BulletinQuote,
@@ -127,10 +128,7 @@ export function useWisStockExchangeDisplay(
               quote.priceAtMs = source.updatedAtMs;
               quote.comparedToReceived = true;
             }
-            if (
-              Math.abs(stock.price - quote.previousPrice) * 100 >=
-              3 * quote.previousPrice
-            )
+            if (isWisStockBreakingMove(stock.price, quote.previousPrice))
               priority.add(
                 (quote.comparedToReceived ? "received:" : "previous:") +
                   stock.id,

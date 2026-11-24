@@ -8282,7 +8282,7 @@ exports.setWisStockMarketHalted = onCall(
   wisStockHandlers.setWisStockMarketHalted,
 );
 exports.advanceWisStockPrices = onSchedule(
-  { schedule: '0,30 * * * *', region: 'us-central1', timeZone: 'Asia/Seoul', maxInstances: 1, memory: '256MiB',
+  { schedule: '*/10 * * * *', region: 'us-central1', timeZone: 'Asia/Seoul', maxInstances: 1, memory: '256MiB',
     retryCount: 2, minBackoffSeconds: 30, maxBackoffSeconds: 120 },
   wisStockHandlers.advanceWisStockPrices,
 );
