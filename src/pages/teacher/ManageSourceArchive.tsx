@@ -538,7 +538,7 @@ const ManageSourceArchive: React.FC = () => {
   if (!canRead) {
     return (
       <div className="ws-page">
-        <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-amber-900 shadow-sm">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-amber-900">
           <h1 className="text-2xl font-extrabold">{UI.title}</h1>
           <p className="mt-2 text-sm">{UI.noAccess}</p>
         </div>
@@ -563,7 +563,7 @@ const ManageSourceArchive: React.FC = () => {
             <button
               type="button"
               onClick={openCreate}
-              className="min-h-11 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+              className="min-h-11 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-700"
             >
               사료 등록
             </button>
@@ -572,14 +572,14 @@ const ManageSourceArchive: React.FC = () => {
       </div>
 
       {!canWrite && (
-        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
           {UI.readOnly}
         </div>
       )}
 
       {(message || errorMessage) && (
         <div
-          className={`mt-4 rounded-2xl px-4 py-3 text-sm font-medium ${
+          className={`mt-4 rounded-lg px-4 py-3 text-sm font-medium ${
             errorMessage
               ? "border border-rose-200 bg-rose-50 text-rose-700"
               : "border border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -601,7 +601,7 @@ const ManageSourceArchive: React.FC = () => {
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
               placeholder="제목, 설명, 태그, 출처 검색"
-              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+              className="min-h-11 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
             />
           </label>
           <label className="space-y-1">
@@ -613,7 +613,7 @@ const ManageSourceArchive: React.FC = () => {
               onChange={(event) =>
                 setTypeFilter(event.target.value as FilterType)
               }
-              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+              className="min-h-11 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
             >
               <option value="all">전체 유형</option>
               {Object.entries(SOURCE_ARCHIVE_TYPE_LABELS).map(
@@ -632,7 +632,7 @@ const ManageSourceArchive: React.FC = () => {
             <select
               value={tagFilter}
               onChange={(event) => setTagFilter(event.target.value)}
-              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+              className="min-h-11 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
             >
               <option value="all">전체 태그</option>
               {availableTags.map((tag) => (
@@ -651,7 +651,7 @@ const ManageSourceArchive: React.FC = () => {
               onChange={(event) =>
                 setStatusFilter(event.target.value as FilterStatus)
               }
-              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+              className="min-h-11 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
             >
               <option value="all">전체 상태</option>
               {Object.entries(SOURCE_ARCHIVE_STATUS_LABELS).map(
@@ -672,7 +672,7 @@ const ManageSourceArchive: React.FC = () => {
               onChange={(event) =>
                 setSortOption(event.target.value as SortOption)
               }
-              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+              className="min-h-11 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
             >
               {SORT_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -691,7 +691,7 @@ const ManageSourceArchive: React.FC = () => {
           <button
             type="button"
             onClick={resetFilters}
-            className="rounded-full border border-gray-200 px-3 py-1.5 text-sm font-semibold text-gray-700 transition hover:border-blue-300 hover:text-blue-600"
+            className="min-h-11 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-bold text-gray-700 transition hover:border-blue-300 hover:text-blue-600"
           >
             필터 초기화
           </button>
@@ -710,7 +710,7 @@ const ManageSourceArchive: React.FC = () => {
           {loading ? (
             <LoadingOverlay />
           ) : visibleAssets.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-gray-200 bg-gray-50 px-6 py-12 text-center text-sm text-gray-500">
+            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-6 py-12 text-center text-sm text-gray-500">
               {UI.emptyList}
             </div>
           ) : (
@@ -721,7 +721,7 @@ const ManageSourceArchive: React.FC = () => {
                     key={asset.id}
                     type="button"
                     onClick={() => handleSelectAsset(asset.id)}
-                    className={`overflow-hidden rounded-3xl border text-left transition ${
+                    className={`overflow-hidden rounded-xl border text-left transition ${
                       selectedId === asset.id && panelMode === "view"
                         ? "border-blue-400 shadow-lg shadow-blue-100"
                         : "border-gray-200 hover:border-blue-200 hover:shadow-md"
@@ -791,7 +791,7 @@ const ManageSourceArchive: React.FC = () => {
                         (current) => current + SOURCE_ARCHIVE_RENDER_PAGE_SIZE,
                       )
                     }
-                    className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-blue-300 hover:text-blue-600"
+                    className="min-h-11 rounded-lg border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 transition hover:border-blue-300 hover:text-blue-600"
                   >
                     더 보기
                   </button>
@@ -801,9 +801,9 @@ const ManageSourceArchive: React.FC = () => {
           )}
         </section>
 
-        <aside className="self-start rounded-3xl border border-gray-200 bg-white p-4 shadow-sm lg:sticky lg:top-24">
+        <aside className="self-start rounded-xl border border-gray-200 bg-white p-4 shadow-sm lg:sticky lg:top-24">
           {panelMode === "view" && !selectedAsset ? (
-            <div className="rounded-3xl border border-dashed border-gray-200 bg-gray-50 px-6 py-12 text-center text-sm text-gray-500">
+            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-6 py-12 text-center text-sm text-gray-500">
               {filteredAssets.length === 0 ? UI.emptyList : UI.emptyDetail}
             </div>
           ) : panelMode === "view" && selectedAsset ? (
@@ -826,7 +826,7 @@ const ManageSourceArchive: React.FC = () => {
               </div>
 
               <div
-                className="overflow-hidden rounded-3xl border border-gray-200 bg-gray-100"
+                className="overflow-hidden rounded-xl border border-gray-200 bg-gray-100"
                 style={{ aspectRatio: getAspectRatio(selectedAsset) }}
               >
                 {getAssetMediaKind(selectedAsset) === "image" &&
@@ -864,7 +864,7 @@ const ManageSourceArchive: React.FC = () => {
 
               {detailHelp && (
                 <div
-                  className={`rounded-2xl px-4 py-3 text-sm ${
+                  className={`rounded-lg px-4 py-3 text-sm ${
                     selectedAsset.processingStatus === "failed"
                       ? "border border-rose-200 bg-rose-50 text-rose-700"
                       : selectedAsset.file.legacyPreviewOnly
@@ -877,7 +877,7 @@ const ManageSourceArchive: React.FC = () => {
               )}
 
               <div className="grid gap-3 text-sm">
-                <div className="rounded-2xl bg-gray-50 px-4 py-3">
+                <div className="rounded-lg bg-gray-50 px-4 py-3">
                   <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                     분류
                   </div>
@@ -891,7 +891,7 @@ const ManageSourceArchive: React.FC = () => {
                       .join(" · ") || "미입력"}
                   </div>
                 </div>
-                <div className="rounded-2xl bg-gray-50 px-4 py-3">
+                <div className="rounded-lg bg-gray-50 px-4 py-3">
                   <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                     유형 / 출처
                   </div>
@@ -902,7 +902,7 @@ const ManageSourceArchive: React.FC = () => {
                     / {selectedAsset.source || "미입력"}
                   </div>
                 </div>
-                <div className="rounded-2xl bg-gray-50 px-4 py-3">
+                <div className="rounded-lg bg-gray-50 px-4 py-3">
                   <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                     업로드 원본
                   </div>
@@ -917,7 +917,7 @@ const ManageSourceArchive: React.FC = () => {
                       : "미리보기 자산만 연결됨"}
                   </div>
                 </div>
-                <div className="rounded-2xl bg-gray-50 px-4 py-3">
+                <div className="rounded-lg bg-gray-50 px-4 py-3">
                   <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                     상태 기록
                   </div>
@@ -935,7 +935,7 @@ const ManageSourceArchive: React.FC = () => {
                 </div>
                 {getAssetMediaKind(selectedAsset) === "pdf" &&
                   selectedAsset.previewText && (
-                    <div className="rounded-2xl bg-gray-50 px-4 py-3">
+                    <div className="rounded-lg bg-gray-50 px-4 py-3">
                       <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                         추출 미리보기
                       </div>
@@ -944,7 +944,7 @@ const ManageSourceArchive: React.FC = () => {
                       </div>
                     </div>
                   )}
-                <div className="rounded-2xl bg-gray-50 px-4 py-3">
+                <div className="rounded-lg bg-gray-50 px-4 py-3">
                   <div className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                     설명
                   </div>
@@ -973,7 +973,7 @@ const ManageSourceArchive: React.FC = () => {
                     type="button"
                     onClick={() => handleOpenOriginal(selectedAsset)}
                     disabled={openingOriginalId === selectedAsset.id}
-                    className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-blue-300 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="min-h-11 rounded-lg border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 transition hover:border-blue-300 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {openingOriginalId === selectedAsset.id
                       ? "파일 여는 중..."
@@ -984,7 +984,7 @@ const ManageSourceArchive: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => openEdit(selectedAsset)}
-                    className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-blue-300 hover:text-blue-600"
+                    className="min-h-11 rounded-lg border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 transition hover:border-blue-300 hover:text-blue-600"
                   >
                     수정
                   </button>
@@ -994,7 +994,7 @@ const ManageSourceArchive: React.FC = () => {
                     type="button"
                     onClick={() => handleDelete(selectedAsset)}
                     disabled={deleting}
-                    className="rounded-full border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="min-h-11 rounded-lg border border-rose-200 px-4 py-2 text-sm font-bold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     삭제
                   </button>
@@ -1016,14 +1016,14 @@ const ManageSourceArchive: React.FC = () => {
                 <button
                   type="button"
                   onClick={closeEditor}
-                  className="rounded-full border border-gray-200 px-3 py-1 text-sm font-semibold text-gray-600 transition hover:border-gray-300 hover:text-gray-900"
+                  className="min-h-11 rounded-lg border border-gray-200 px-3 py-1 text-sm font-bold text-gray-600 transition hover:border-gray-300 hover:text-gray-900"
                 >
                   닫기
                 </button>
               </div>
 
               <div
-                className="overflow-hidden rounded-3xl border border-gray-200 bg-gray-100"
+                className="overflow-hidden rounded-xl border border-gray-200 bg-gray-100"
                 style={{
                   aspectRatio: editorMediaKind === "pdf" ? "3 / 4" : "4 / 3",
                 }}
@@ -1065,7 +1065,7 @@ const ManageSourceArchive: React.FC = () => {
                   type="file"
                   accept="image/*,application/pdf"
                   onChange={handleFileChange}
-                  className="block w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700"
+                  className="block min-h-11 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700"
                 />
                 <span className="block text-xs text-gray-500">
                   이미지 파일은 기존 미리보기 흐름을 유지하고, PDF 파일은 원본을
@@ -1088,7 +1088,7 @@ const ManageSourceArchive: React.FC = () => {
                     }))
                   }
                   placeholder="제목"
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+                  className="min-h-11 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
                 />
               </label>
 
@@ -1105,7 +1105,7 @@ const ManageSourceArchive: React.FC = () => {
                         type: event.target.value as SourceArchiveAssetType,
                       }))
                     }
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+                    className="min-h-11 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
                   >
                     {Object.entries(SOURCE_ARCHIVE_TYPE_LABELS).map(
                       ([value, label]) => (
@@ -1131,7 +1131,7 @@ const ManageSourceArchive: React.FC = () => {
                       }))
                     }
                     placeholder="출처"
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+                    className="min-h-11 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
                   />
                 </label>
               </div>
@@ -1152,7 +1152,7 @@ const ManageSourceArchive: React.FC = () => {
                       }))
                     }
                     placeholder="시대"
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+                    className="min-h-11 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
                   />
                 </label>
                 <label className="space-y-1">
@@ -1170,7 +1170,7 @@ const ManageSourceArchive: React.FC = () => {
                       }))
                     }
                     placeholder="주제"
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+                    className="min-h-11 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
                   />
                 </label>
                 <label className="space-y-1">
@@ -1188,7 +1188,7 @@ const ManageSourceArchive: React.FC = () => {
                       }))
                     }
                     placeholder="단원"
-                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+                    className="min-h-11 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
                   />
                 </label>
               </div>
@@ -1203,7 +1203,7 @@ const ManageSourceArchive: React.FC = () => {
                   value={tagInput}
                   onChange={(event) => setTagInput(event.target.value)}
                   placeholder="태그를 쉼표로 구분해 입력"
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+                  className="min-h-11 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
                 />
               </label>
               <label className="block space-y-1">
@@ -1222,7 +1222,7 @@ const ManageSourceArchive: React.FC = () => {
                   }
                   rows={5}
                   placeholder="설명"
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
+                  className="min-h-11 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-400"
                 />
               </label>
 
@@ -1230,7 +1230,7 @@ const ManageSourceArchive: React.FC = () => {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="min-h-11 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {saving
                     ? "저장 중..."
@@ -1241,7 +1241,7 @@ const ManageSourceArchive: React.FC = () => {
                 <button
                   type="button"
                   onClick={closeEditor}
-                  className="rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-300 hover:text-gray-900"
+                  className="min-h-11 rounded-lg border border-gray-200 px-4 py-2 text-sm font-bold text-gray-700 transition hover:border-gray-300 hover:text-gray-900"
                 >
                   취소
                 </button>
