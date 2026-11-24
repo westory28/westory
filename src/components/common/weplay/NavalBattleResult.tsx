@@ -108,7 +108,16 @@ export default function NavalBattleResult({
             </dd>
           </div>
         </dl>
-        <div className="naval-result-settlement">
+        <div
+          className="naval-result-settlement"
+          data-tone={
+            preview || result.mode === "practice" || result.netWis === 0
+              ? undefined
+              : result.netWis > 0
+                ? "gain"
+                : "loss"
+          }
+        >
           {preview ? (
             <p>교사 체험 · 위스·랭킹·학생 기록에 반영되지 않습니다.</p>
           ) : result.mode === "practice" ? (
