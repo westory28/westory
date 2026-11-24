@@ -362,7 +362,7 @@ const QuizIndex: React.FC = () => {
         <button
           type="button"
           onClick={() => navigate("/student/mypage?menu=wrong_note")}
-          className="inline-flex items-center gap-2 rounded-xl border border-blue-100 bg-white px-4 py-2.5 text-sm font-bold text-blue-700 shadow-sm transition hover:bg-blue-50"
+          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-blue-100 bg-white px-4 py-2 text-sm font-bold text-blue-700 shadow-sm transition hover:bg-blue-50"
         >
           <i className="fas fa-book-open text-xs"></i>
           오답 노트

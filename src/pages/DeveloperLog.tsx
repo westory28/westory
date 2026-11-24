@@ -1472,7 +1472,7 @@ const DeveloperLog: React.FC = () => {
           <button
             type="button"
             onClick={startWrite}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
           >
             <i className="fas fa-pen" aria-hidden="true"></i>
             글쓰기
