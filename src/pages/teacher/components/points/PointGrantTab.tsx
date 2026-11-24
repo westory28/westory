@@ -126,7 +126,7 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
               aria-label="학년 필터"
               value={gradeFilter}
               onChange={(event) => onGradeFilterChange(event.target.value)}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 md:min-h-11"
               disabled={isSubmitting}
             >
               <option value="all">전체 학년</option>
@@ -138,7 +138,7 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
               aria-label="반 필터"
               value={classFilter}
               onChange={(event) => onClassFilterChange(event.target.value)}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 md:min-h-11"
               disabled={isSubmitting || gradeFilter === "all"}
             >
               <option value="all">전체 반</option>
@@ -158,7 +158,7 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
                     "all",
                 )
               }
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700"
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 md:min-h-11"
               disabled={isSubmitting || classFilter === "all"}
             />
             <input
@@ -169,7 +169,7 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
               value={nameSearch}
               onChange={(event) => onNameSearchChange(event.target.value)}
               placeholder="이름 앞부분 검색"
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm"
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm md:min-h-11"
               disabled={isSubmitting}
             />
           </div>
