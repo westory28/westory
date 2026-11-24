@@ -23,6 +23,7 @@ import {
 } from "../../../../lib/yut";
 import {
   getLegalYutMoves,
+  moveYut,
   YUT_BOOST_LIMIT,
   YUT_ROLES,
   YUT_MOVE_ANIMATION_MS,
@@ -686,6 +687,12 @@ export default function YutGame({
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
   const [pending, setPending] = useState("");
+  // Display only: the move the player just confirmed, drawn while the server
+  // decides. It never replaces the room that commands and timers read.
+  const [shownMove, setShownMove] = useState<{
+    request: YutCommand;
+    room: YutRoom;
+  } | null>(null);
   const [throwDelayed, setThrowDelayed] = useState(false);
   const networkBusy = loading || Boolean(pending);
   // Room updates never cover the board or move keyboard focus away from play.
@@ -1557,6 +1564,25 @@ export default function YutGame({
     pendingRef.current = data;
     recoveryCommand.current = recovery;
     const sentAtMs = Date.now();
+    if (action === "move" && activeRoom && data.pieceId && data.route) {
+      try {
+        // The rules are deterministic, so the chosen move is drawn at once.
+        // The server's room takes its place; a refusal or a lost reply
+        // discards it. A move that would end the match waits for the server.
+        const moved = moveYut(
+          activeRoom,
+          uid,
+          data.pieceId,
+          data.route,
+          sentAtMs + serverOffset,
+          data.stack ?? false,
+        );
+        if (moved.status === "playing")
+          setShownMove({ request: data, room: moved });
+      } catch {
+        /* The server explains a move it does not accept. */
+      }
+    }
     try {
       const result = await withYutTimeout(commandYutRoom(config, data));
       if (
@@ -1617,6 +1643,7 @@ export default function YutGame({
         );
       }
     } finally {
+      setShownMove((shown) => (shown?.request === data ? null : shown));
       if (
         mounted.current &&
         pendingRef.current === data &&
@@ -1846,6 +1873,14 @@ export default function YutGame({
     settling && currentToss && (!throwKey || currentToss.key === throwKey)
       ? currentToss.room
       : room;
+  // Only while the confirmed room is still the one the move started from.
+  const shownRoom =
+    shownMove &&
+    room &&
+    shownMove.room.id === room.id &&
+    shownMove.room.revision === room.revision + 1
+      ? shownMove.room
+      : null;
   const resultVisible = !settling && pending !== "throw";
   const primaryAction =
     room?.status === "finished"
@@ -2614,9 +2649,9 @@ export default function YutGame({
               </div>
               <div className="yut-board-area">
                 <YutBoard
-                  room={displayRoom || room}
+                  room={shownRoom || displayRoom || room}
                   uid={uid}
-                  selectedPiece={selectedPiece}
+                  selectedPiece={shownRoom ? "" : selectedPiece}
                   onSelectPiece={selectPiece}
                   moves={moves}
                   onMove={movePiece}
@@ -2635,7 +2670,8 @@ export default function YutGame({
                     room.status === "playing" &&
                     resultVisible &&
                     !moving &&
-                    !phaseWaiting
+                    !phaseWaiting &&
+                    !shownRoom
                   }
                 >
                   {room.status !== "finished" || settling || finishing ? (
