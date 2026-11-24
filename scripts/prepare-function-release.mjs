@@ -15,6 +15,12 @@ import { root, inventory, normalize, resourceFields, resourceValue, sha, sourceU
 //   node scripts/prepare-function-release.mjs <prepare|preflight|verify>
 //     --name commandYutRoomFast --region us-central1 --file yut.js
 //     --baseline 7d75f01c --out output/yut-speed-20261125
+//
+// Two options for a function whose live file is not the baseline:
+//   --hunks 1,3,4      apply only these hunks (numbered as `git diff -U3` lists them)
+//   --whole --live-sha <first 12 hex of the live file's SHA-256>
+//                      release the committed file as it is, for one reviewed
+//                      live version; the lines that differ are recorded.
 const option = (key) => { const index = process.argv.indexOf(`--${key}`); return index > 0 ? String(process.argv[index + 1] || '') : ''; };
 const name = option('name'), region = option('region'), changedFile = option('file'), baseline = option('baseline'), out = option('out');
 assert.match(name, /^[A-Za-z][A-Za-z0-9]{2,62}$/, '--name');
@@ -23,6 +29,11 @@ assert.match(changedFile, /^[A-Za-z0-9_.\/-]+\.(js|mjs|cjs|json)$/, '--file (rel
 assert.ok(!changedFile.includes('..'), '--file');
 assert.match(baseline, /^[0-9a-f]{7,40}$/, '--baseline');
 assert.match(out, /^output\/[A-Za-z0-9_-]+$/, '--out output/<folder>');
+const whole = process.argv.includes('--whole'), liveSha = option('live-sha');
+const chosen = option('hunks') ? option('hunks').split(',').map(Number) : null;
+assert.ok(!whole || /^[0-9a-f]{12}$/.test(liveSha), '--whole needs --live-sha <12 hex>');
+assert.ok(!(whole && chosen), 'Use either --whole or --hunks');
+assert.ok(!chosen || chosen.every((value) => Number.isInteger(value) && value >= 1), '--hunks 1,2,...');
 const audit = path.join(root, out, `${name}-${region}`);
 const release = path.join(audit, 'release');
 const manifestPath = path.join(release, 'manifest.json');
@@ -50,7 +61,9 @@ const candidates = (lines) => {
     list.push({ dropped: dropLead + dropTrail, lines: lines.slice(dropLead, lines.length - dropTrail) });
   return list.filter((item) => item.lines.some((line) => line[0] !== '+')).sort((a, b) => a.dropped - b.dropped);
 };
-const replay = (text, label, shortened = []) => hunks.reduce((current, lines, index) => {
+assert.ok(!chosen || chosen.every((value) => value <= hunks.length), 'No such hunk');
+const replay = (text, label, shortened = [], only = null) => hunks.reduce((current, lines, index) => {
+  if (only && !only.includes(index + 1)) return current;
   const match = candidates(lines).find((item) => current.split(block(item.lines, '+')).length === 2);
   assert.ok(match, `${label}: hunk ${index + 1} must match exactly once`);
   if (match.dropped) shortened.push({ hunk: index + 1, droppedContextLines: match.dropped });
@@ -89,9 +102,15 @@ if (mode === 'prepare') {
   const original = entries.find((entry) => entry.path === changedFile)?.body.toString('utf8');
   assert.ok(original, 'The deployed source does not contain this file');
   const shortened = [];
-  const patched = replay(normalize(original), name, shortened);
   const existingDifference = delta(normalize(original), before);
-  assert.deepEqual(delta(patched, repository), existingDifference, 'The edit must leave every other deployed line as it was');
+  if (whole) assert.ok(sha(normalize(original)).startsWith(liveSha), 'The live file is not the reviewed version');
+  const patched = whole ? repository : replay(normalize(original), name, shortened, chosen);
+  // What the result would be, were the live file the baseline.
+  const intended = chosen ? replay(before, 'baseline', [], chosen) : repository;
+  if (!whole) assert.deepEqual(delta(patched, intended), existingDifference, 'The edit must leave every other deployed line as it was');
+  const liveChange = delta(patched, normalize(original));
+  const linesOf = (sign) => liveChange.filter(([, count]) => Math.sign(count) === sign)
+    .map(([line, count]) => `${Math.abs(count)}x ${line.trim().slice(0, 110)}`);
   await fs.mkdir(path.dirname(release), { recursive: true });
   await fs.mkdir(release); // Refuse to overwrite an older or partial preparation.
   await fs.writeFile(path.join(release, 'original.zip'), bytes);
@@ -111,9 +130,11 @@ if (mode === 'prepare') {
   } }, null, 2) + '\n');
   await fs.writeFile(manifestPath, JSON.stringify({ name, region, source, updateTime: metadata.updateTime,
     originalRevision: metadata.serviceConfig.revision, archiveSha: sha(bytes), configuration: configuration(metadata),
-    iam, expected, changedFiles: [changedFile], hunks: hunks.length, shortened, deployedLinesDifferingFromBaseline: existingDifference.length }, null, 2) + '\n');
-  console.log(JSON.stringify({ name, mode, release, files: entries.length, changedFiles: [changedFile], hunks: hunks.length, shortened,
-    deployedLinesDifferingFromBaseline: existingDifference.length, productionDataReads: 0, productionWrites: 0 }));
+    iam, expected, changedFiles: [changedFile], hunks: hunks.length, appliedHunks: whole ? 'whole file' : chosen || 'all', shortened,
+    deployedLinesDifferingFromBaseline: existingDifference.length, addedToLive: linesOf(1), removedFromLive: linesOf(-1) }, null, 2) + '\n');
+  console.log(JSON.stringify({ name, mode, release, files: entries.length, changedFiles: [changedFile], hunks: hunks.length,
+    appliedHunks: whole ? 'whole file' : chosen || 'all', shortened, deployedLinesDifferingFromBaseline: existingDifference.length,
+    addedToLive: linesOf(1).length, removedFromLive: linesOf(-1).length, productionDataReads: 0, productionWrites: 0 }));
 } else {
   const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
   assert.deepEqual(configuration(metadata), manifest.configuration, 'Runtime configuration changed');
