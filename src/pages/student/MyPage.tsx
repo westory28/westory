@@ -1281,7 +1281,7 @@ const MyPage: React.FC = () => {
                           <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 text-blue-600">
                             <i className="fas fa-chart-column"></i>
                           </span>
-                          <h3 className="text-xl font-black text-slate-900">
+                          <h3 className="text-xl font-extrabold text-slate-900">
                             점수 계산 요약
                           </h3>
                         </div>
@@ -1394,7 +1394,7 @@ const MyPage: React.FC = () => {
 
                 {canUseQuiz && (
                   <section className="ws-flat-section student-my-page__section">
-                    <h3 className="text-xl font-black text-slate-900">
+                    <h3 className="text-xl font-extrabold text-slate-900">
                       나의 평가
                     </h3>
                     <div className="mt-4 flex flex-wrap gap-3">
@@ -1430,7 +1430,7 @@ const MyPage: React.FC = () => {
                 <section className="ws-flat-section student-my-page__section">
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <h3 className="text-xl font-black text-slate-900">
+                      <h3 className="text-xl font-extrabold text-slate-900">
                         {getStudentMenuLabel(
                           menuConfig,
                           "/student/score/performance",
@@ -1510,7 +1510,7 @@ const MyPage: React.FC = () => {
 
                 <div className="student-my-page__columns">
                   <section className="ws-flat-section student-my-page__section">
-                    <h3 className="text-xl font-black text-slate-900">
+                    <h3 className="text-xl font-extrabold text-slate-900">
                       과목별 성취 현황
                     </h3>
                     <div className="mt-6 space-y-4">
@@ -1550,7 +1550,7 @@ const MyPage: React.FC = () => {
                   </section>
 
                   <section className="ws-flat-section student-my-page__section">
-                    <h3 className="text-xl font-black text-slate-900">
+                    <h3 className="text-xl font-extrabold text-slate-900">
                       선택 과목 분석
                     </h3>
                     {selectedInsight ? (
@@ -1620,7 +1620,7 @@ const MyPage: React.FC = () => {
 
                 <div className="student-my-page__columns">
                   <section className="ws-flat-section student-my-page__section">
-                    <h3 className="text-xl font-black text-slate-900">
+                    <h3 className="text-xl font-extrabold text-slate-900">
                       추천 학습
                     </h3>
                     <div className="mt-5 space-y-3">
@@ -1651,7 +1651,7 @@ const MyPage: React.FC = () => {
                   </section>
 
                   <section className="ws-flat-section student-my-page__section">
-                    <h3 className="text-xl font-black text-slate-900">
+                    <h3 className="text-xl font-extrabold text-slate-900">
                       다음 목표
                     </h3>
                     <div className="mt-4 flex items-center gap-4">
@@ -1679,13 +1679,13 @@ const MyPage: React.FC = () => {
                         value={goalScore}
                         onChange={(event) => setGoalScore(event.target.value)}
                         placeholder="이번 학기 평균 85점 이상"
-                        className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                        className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                       />
                       <button
                         type="button"
                         onClick={() => void saveGoal()}
                         disabled={savingGoal}
-                        className="shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-sm font-extrabold text-white transition hover:bg-blue-700 disabled:bg-blue-300"
+                        className="min-h-11 shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-700 disabled:bg-blue-300"
                       >
                         {savingGoal ? "저장 중" : "저장"}
                       </button>

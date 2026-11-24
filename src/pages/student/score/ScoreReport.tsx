@@ -428,7 +428,7 @@ const ScoreReport: React.FC = () => {
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-blue-300 bg-white px-4 text-sm font-extrabold text-blue-700 transition hover:bg-blue-50"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-blue-300 bg-white px-4 text-sm font-bold text-blue-700 transition hover:bg-blue-50"
           >
             <i
               className="fas fa-file-arrow-down text-xs"
@@ -443,7 +443,7 @@ const ScoreReport: React.FC = () => {
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.06)] lg:p-6">
           <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <h2 className="text-xl font-bold text-slate-900">
+              <h2 className="text-xl font-extrabold text-slate-900">
                 교과별 성적 분석
               </h2>
             </div>
@@ -566,7 +566,9 @@ const ScoreReport: React.FC = () => {
         </section>
 
         <aside className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.06)] lg:p-6">
-          <h2 className="text-2xl font-black text-slate-900">분석 리포트</h2>
+          <h2 className="text-2xl font-extrabold text-slate-900">
+            분석 리포트
+          </h2>
 
           <div className="grid grid-cols-2 gap-3">
             <section className="rounded-xl border border-slate-200 p-4">
@@ -643,7 +645,9 @@ const ScoreReport: React.FC = () => {
           </div>
 
           <section className="rounded-xl border border-slate-200 p-4">
-            <h3 className="text-base font-black text-slate-900">리포트 요약</h3>
+            <h3 className="text-base font-extrabold text-slate-900">
+              리포트 요약
+            </h3>
             <ul className="mt-3 space-y-2">
               {summaryItems.map((item) => (
                 <li
@@ -658,7 +662,7 @@ const ScoreReport: React.FC = () => {
           </section>
 
           <section className="rounded-xl border border-slate-200 p-4">
-            <h3 className="text-base font-black text-slate-900">
+            <h3 className="text-base font-extrabold text-slate-900">
               추천 학습 전략
             </h3>
             <ul className="mt-3 space-y-2">
@@ -682,7 +686,7 @@ const ScoreReport: React.FC = () => {
                 <i className="fas fa-star" aria-hidden="true"></i>
               </span>
               <div>
-                <h3 className="text-base font-black text-orange-700">
+                <h3 className="text-base font-extrabold text-orange-700">
                   이번 주 포인트
                 </h3>
                 <p className="mt-1 text-sm font-bold leading-6 text-slate-700">
