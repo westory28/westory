@@ -467,22 +467,24 @@ const HistoryClassroomIndex: React.FC = () => {
         );
         let loadedAssignments: HistoryClassroomAssignment[];
         if (ownAssignees.length) {
+          const ownCopies = await Promise.all(
+            ownAssignees.map((assignee) =>
+              loadStudentHistoryClassroomAssignment(
+                config,
+                assignee,
+                fromServer,
+              ),
+            ),
+          );
           loadedAssignments = sortAssignments(
-            (
-              await Promise.all(
-                ownAssignees.map((assignee) =>
-                  loadStudentHistoryClassroomAssignment(
-                    config,
-                    assignee,
-                    fromServer,
-                  ),
-                ),
-              )
-            ).filter(isVisibleAssignment),
+            ownCopies.filter(isVisibleAssignment),
           );
           if (cancelled) return;
           setAssignments(loadedAssignments);
-          ownAssignees.forEach((assignee) => {
+          ownAssignees.forEach((assignee, index) => {
+            // A deleted assignment never returns to the list.
+            const copy = ownCopies[index];
+            if (!copy || isHistoryClassroomDeleted(copy)) return;
             unsubscribeAssignments.push(
               subscribeStudentHistoryClassroomAssignment(
                 config,
@@ -541,9 +543,14 @@ const HistoryClassroomIndex: React.FC = () => {
         // A new assignment, a removal, a changed reason or a teacher's retry
         // reset reloads the list without a page reload.
         unsubscribeAssignments.push(
-          subscribeOwnHistoryClassroomAssignees(config, studentUid, () => {
-            if (!cancelled) setRefreshVersion((value) => value + 1);
-          }),
+          subscribeOwnHistoryClassroomAssignees(
+            config,
+            studentUid,
+            ownAssignees,
+            () => {
+              if (!cancelled) setRefreshVersion((value) => value + 1);
+            },
+          ),
         );
 
         const assignmentIds = loadedAssignments.map((item) => item.id);

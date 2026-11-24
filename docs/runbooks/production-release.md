@@ -4,10 +4,10 @@
 
 학생 화면은 과제 원본 `history_classrooms/{id}` 대신 서버가 함께 쓰는 두 문서를 읽는다. `history_classroom_student_views/{id}`는 원본에서 대상 학생 명단·사유·재응시 표시·작성자 필드를 뺀 사본이고, `history_classroom_assignees/{id}_{uid}`는 학생 한 명의 배정 사유와 재응시 표시만 담는다. 배정 문서는 공개·삭제 여부와 무관하게 명단에 있는 동안 존재하며, 사본 읽기 규칙은 본인 배정 문서의 존재를 확인한다. 두 문서는 클라이언트에서 쓸 수 없다.
 
-- 서울 `executeCommand`의 과제 저장·삭제·학급/개별 재응시 초기화가 같은 트랜잭션에서 사본과 배정 문서를 다시 쓰고, 명단에서 빠진 학생의 배정 문서를 지운다. 교사 화면과 원본 문서의 내용은 바뀌지 않는다.
+- 서울 `executeCommand`의 과제 저장·삭제가 같은 트랜잭션에서 사본과 배정 문서를 다시 쓰고, 명단에서 빠진 학생의 배정 문서를 지운다. 학급·개별 재응시 초기화는 초기화된 학생의 배정 문서만 다시 쓴다. 배정 문서에는 쓰기 시각을 두지 않아 내용이 같은 재저장은 학생 화면을 다시 불러오게 하지 않는다. 교사 화면과 원본 문서의 내용은 바뀌지 않는다.
 - 학생 목록·풀이·결과 화면은 본인 배정 문서가 있으면 사본을 읽고, 없으면 이전 경로를 그대로 쓴다.
 - 운영 원본이 저장소와 다르므로 `node scripts/prepare-history-copy-release.mjs prepare`로 운영 ZIP에 `productionGateway/assessmentLifecycle.js`의 변경 블록만 적용한다. 스크립트는 변경 전후의 다른 줄이 그대로인지 비교하고, `preflight`로 동시 배포를 확인하며, 배포 뒤 `verify`로 파일별 해시를 대조한다.
-- 순서: Firestore 규칙 → `executeCommand` → 기존 과제 사본 생성 → 프론트엔드. 기존 과제는 `node functions/scripts/sync-history-classroom-student-copies.cjs --semester-id <학기>`로 건수와 지문을 확인한 뒤 `--apply --expect <지문>`으로 만든다. 원본은 읽기만 하며, 다시 실행하면 남은 쓰기가 0이어야 한다.
+- 순서: Firestore 규칙 → `executeCommand` → 기존 과제 사본 생성 → 프론트엔드. 기존 과제는 `node functions/scripts/sync-history-classroom-student-copies.cjs --semester-id <학기>`로 건수와 지문을 확인한 뒤 `--apply --expect <지문>`으로 만든다. 원본은 읽기만 하며, 적용 뒤 남은 쓰기가 있으면 실패로 끝난다. `rosterIdsWithoutDocument`가 0이 아니면 계정 식별자로 쓸 수 없는 명단 항목이 있다는 뜻이므로 원본 읽기를 닫기 전에 확인한다. 프론트엔드 승격 전후에 미리보기의 남은 쓰기가 0인지 확인한다.
 - 검사: `functions/productionGateway/scripts/verify-assessment-lifecycle.cjs`, `npm --prefix functions run test:history-classroom`, `scripts/verify-history-classroom-student-copy-rules.mjs`(에뮬레이터), `functions/scripts/verify-history-classroom-student-copy-sync.cjs`(에뮬레이터), 학생 목록·풀이 브라우저 검사의 `HISTORY_CLASSROOM_STUDENT_COPY=1` 실행.
 
 ## 평가 마감 뒤 답안 변경·선지 단서 보호와 생각모아 참여 위스 (2026-11-24)

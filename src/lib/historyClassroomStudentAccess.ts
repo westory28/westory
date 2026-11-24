@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import {
+  getHistoryClassroomTimestampMs,
   normalizeHistoryClassroomAssignment,
   type HistoryClassroomAssignment,
 } from "./historyClassroom";
@@ -190,19 +191,42 @@ export const subscribeStudentHistoryClassroomAssignment = (
     onError,
   );
 
-// Fires for changes after the first delivery: a new assignment, a removal, a
-// changed reason or a teacher's retry reset.
+const assigneeSignature = (assignees: HistoryClassroomAssignee[]) =>
+  JSON.stringify(
+    assignees
+      .map((item) => [
+        item.assignmentId,
+        item.reason,
+        getHistoryClassroomTimestampMs(item.retryResetAt),
+      ])
+      .sort((left, right) => String(left[0]).localeCompare(String(right[0]))),
+  );
+
+// Fires when the student's own documents differ from the ones already loaded:
+// a new assignment, a removal, a changed reason or a teacher's retry reset.
+// The first delivery is compared too, so a change that lands between the load
+// and the subscription is not missed.
 export const subscribeOwnHistoryClassroomAssignees = (
   config: ConfigLike,
   uid: string,
+  loaded: HistoryClassroomAssignee[],
   onChange: () => void,
 ) => {
-  let initial = true;
+  let current = assigneeSignature(loaded);
   return onSnapshot(
     ownAssigneeQuery(config, uid),
-    () => {
-      if (initial) initial = false;
-      else onChange();
+    (snapshot) => {
+      const next = assigneeSignature(
+        snapshot.docs
+          .map((item) => normalizeHistoryClassroomAssignee(item.data()))
+          .filter(
+            (item): item is HistoryClassroomAssignee =>
+              !!item && item.uid === uid,
+          ),
+      );
+      if (next === current) return;
+      current = next;
+      onChange();
     },
     (error) =>
       console.warn("Failed to watch own history classroom assignments", error),

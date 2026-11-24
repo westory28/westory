@@ -6,11 +6,12 @@
 //
 // The first form prints counts and a fingerprint and writes nothing. The
 // second writes only when the plan still has that fingerprint. Running it
-// again afterwards must report zero pending writes.
+// again afterwards must report zero pending writes; an apply that leaves
+// anything pending exits with a failure.
 const fs = require("node:fs");
 const path = require("node:path");
 const { createHash } = require("node:crypto");
-const { Firestore, Timestamp, FieldValue } = require("@google-cloud/firestore");
+const { Firestore, Timestamp } = require("@google-cloud/firestore");
 const { GoogleAuth, OAuth2Client } = require("google-auth-library");
 const { historyStudentCopy } = require("../productionGateway/assessmentLifecycle");
 
@@ -29,7 +30,12 @@ const encode = (value) => {
 };
 const stable = (value) => JSON.stringify(encode(value));
 const hash = (value) => createHash("sha256").update(stable(value)).digest("hex");
-const withoutUpdatedAt = ({ updatedAt, ...rest }) => rest;
+// Roster entries the server gives no document to (not a usable account id).
+const rosterIdsWithoutDocument = (data, assignees) => new Set([
+  ...(Array.isArray(data?.targetStudentUids) ? data.targetStudentUids : []), data?.targetStudentUid,
+  ...Object.entries(data?.targetStudentAccessMap && typeof data.targetStudentAccessMap === "object" ? data.targetStudentAccessMap : {})
+    .filter(([, allowed]) => allowed === true).map(([uid]) => uid),
+].map((uid) => String(uid || "").trim()).filter(Boolean)).size - assignees.length;
 
 const parseArgs = (args) => {
   const options = { project: "history-quiz-yongsin", semesterId: "", apply: false, expect: "" };
@@ -76,18 +82,17 @@ const createAuthorizedFirestore = async (projectId) => {
 
 // What the copies of one assignment must be, compared with what exists.
 const planAssignment = (semesterId, source, existingView, existingAssignees) => {
-  const copy = historyStudentCopy(semesterId, source.id, source.data(), null);
+  const copy = historyStudentCopy(semesterId, source.id, source.data());
   const writes = [], deletes = [];
   if (!existingView || stable(existingView) !== stable(copy.view)) writes.push({ path: copy.viewPath, data: copy.view });
   const wanted = new Set();
   for (const assignee of copy.assignees) {
     wanted.add(assignee.path);
     const existing = existingAssignees.get(assignee.path);
-    if (!existing || stable(withoutUpdatedAt(existing)) !== stable(withoutUpdatedAt(assignee.data)))
-      writes.push({ path: assignee.path, data: assignee.data, assignee: true });
+    if (!existing || stable(existing) !== stable(assignee.data)) writes.push({ path: assignee.path, data: assignee.data, assignee: true });
   }
   for (const existingPath of existingAssignees.keys()) if (!wanted.has(existingPath)) deletes.push(existingPath);
-  return { writes, deletes };
+  return { writes, deletes, withoutDocument: rosterIdsWithoutDocument(source.data(), copy.assignees) };
 };
 
 const buildPlan = async (db, semesterId) => {
@@ -112,7 +117,7 @@ const buildPlan = async (db, semesterId) => {
   const orphans = [...views.docs.filter((item) => !sourceIds.has(item.id)).map((item) => item.ref.path),
     ...assignees.docs.filter((item) => !sourceIds.has(String(item.data().assignmentId || ""))).map((item) => item.ref.path)];
   const fingerprint = hash({ semesterId, rows: rows.map((row) => ({ id: row.id, updateTime: row.updateTime,
-    writes: row.writes.map((write) => [write.path, write.assignee ? withoutUpdatedAt(write.data) : write.data]), deletes: row.deletes })), orphans });
+    writes: row.writes.map((write) => [write.path, write.data]), deletes: row.deletes })), orphans });
   return { root, rows, orphans, fingerprint, sourceCount: sources.size, viewCount: views.size, assigneeCount: assignees.size };
 };
 
@@ -121,23 +126,25 @@ const summarize = (plan) => ({
   pendingCopyWrites: plan.rows.reduce((total, row) => total + row.writes.filter((write) => !write.assignee).length, 0),
   pendingAssigneeWrites: plan.rows.reduce((total, row) => total + row.writes.filter((write) => write.assignee).length, 0),
   pendingAssigneeDeletes: plan.rows.reduce((total, row) => total + row.deletes.length, 0),
-  orphanDocuments: plan.orphans.length, fingerprint: plan.fingerprint,
+  orphanDocuments: plan.orphans.length,
+  rosterIdsWithoutDocument: plan.rows.reduce((total, row) => total + row.withoutDocument, 0), fingerprint: plan.fingerprint,
 });
+const pending = (summary) => summary.pendingCopyWrites + summary.pendingAssigneeWrites + summary.pendingAssigneeDeletes + summary.orphanDocuments;
 
 const apply = async (db, semesterId, plan) => {
   let written = 0, deleted = 0;
   for (const row of plan.rows.filter((item) => item.writes.length || item.deletes.length)) {
-    await db.runTransaction(async (transaction) => {
+    // Counted only after the transaction commits; its body may run again.
+    const applied = await db.runTransaction(async (transaction) => {
       const sourceRef = db.doc(`${plan.root}/history_classrooms/${row.id}`);
       const source = await transaction.get(sourceRef);
       // A teacher saved in between: the server already rewrote these copies.
-      if (!source.exists || !source.updateTime.isEqual(row.updateTime)) return;
-      for (const write of row.writes) {
-        transaction.set(db.doc(write.path), write.assignee ? { ...write.data, updatedAt: FieldValue.serverTimestamp() } : write.data);
-        written += 1;
-      }
-      for (const stalePath of row.deletes) { transaction.delete(db.doc(stalePath)); deleted += 1; }
+      if (!source.exists || !source.updateTime.isEqual(row.updateTime)) return false;
+      for (const write of row.writes) transaction.set(db.doc(write.path), write.data);
+      for (const stalePath of row.deletes) transaction.delete(db.doc(stalePath));
+      return true;
     });
+    if (applied) { written += row.writes.length; deleted += row.deletes.length; }
   }
   for (const orphanPath of plan.orphans) { await db.doc(orphanPath).delete(); deleted += 1; }
   return { written, deleted };
@@ -153,8 +160,9 @@ const main = async () => {
   }
   if (plan.fingerprint !== options.expect) fail("The plan changed since the preview. Run the preview again.");
   const result = await apply(db, options.semesterId, plan);
-  const after = await buildPlan(db, options.semesterId);
-  console.log(JSON.stringify({ mode: "apply", project: options.project, semesterId: options.semesterId, ...result, remaining: summarize(after) }));
+  const remaining = summarize(await buildPlan(db, options.semesterId));
+  console.log(JSON.stringify({ mode: "apply", project: options.project, semesterId: options.semesterId, ...result, remaining }));
+  if (pending(remaining)) fail("Copies are still pending. Run the preview and apply again.");
 };
 
 if (require.main === module) {
@@ -164,4 +172,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { buildPlan, planAssignment, summarize, apply };
+module.exports = { buildPlan, planAssignment, summarize, pending, apply };

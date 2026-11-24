@@ -506,7 +506,7 @@ const runHistoryStudentCopy = async () => {
   const sourcePath = `${root}/history_classrooms/history-copy`;
   const viewPath = `${root}/history_classroom_student_views/history-copy`;
   const assignee = (uid) => `${root}/history_classroom_assignees/history-copy_${uid}`;
-  const own = (uid) => { const { updatedAt, ...rest } = store.snapshot(assignee(uid)).data; return rest; };
+  const own = (uid) => store.snapshot(assignee(uid)).data;
   const source = {
     title: "학생용 사본 검증", sourceType: "lesson", lessonUnitId: "unit-one", lessonTitle: "수업자료", lessonUnitPath: ["대단원", "중단원"],
     description: "", mapResourceId: "", mapTitle: "", pdfPageImages: [], pdfRegions: [],
@@ -536,6 +536,15 @@ const runHistoryStudentCopy = async () => {
   assert.deepEqual(own("other-uid"), { assignmentId: "history-copy", semesterId, uid: "other-uid", reason: "사유 나", retryResetAt: null });
   assert.equal(store.snapshot(sourcePath).data.targetStudentReasons["other-uid"], "사유 나", "The teacher document is unchanged");
 
+  // A retry reset rewrites the reset student's own document only: the copy and
+  // the other student's document are not written again.
+  const writesBeforeSharedReset = store.writeCount;
+  await execute(admin, "resetAssessmentAttempt", { definitionId: "history_classroom:2026-2:history-copy", studentUid: "other-uid", reason: "다른 학생 해제" });
+  const sharedResetWrites = store.writeCount - writesBeforeSharedReset;
+  assert.deepEqual(own("other-uid").retryResetAt, store.snapshot(sourcePath).data.retryResetByStudentUid["other-uid"]);
+  assert.equal(own("student-uid").retryResetAt, null);
+  assert.equal(store.snapshot(viewPath).data.contentRevision, 1);
+
   // A roster change removes only the leaving student's own document.
   await execute(admin, "saveHistoryClassroomAssignment", { semesterId, sourceId: "history-copy", expectedRevision: 1, reason: "명단 변경",
     source: { ...source, targetStudentUids: ["student-uid"], targetStudentAccessMap: { "student-uid": true }, targetStudentName: "합성 학생",
@@ -545,7 +554,9 @@ const runHistoryStudentCopy = async () => {
   assert.equal(store.snapshot(viewPath).data.contentRevision, 2);
 
   // A teacher reset reaches the student's own document with the same marker.
+  const writesBeforeSingleReset = store.writeCount;
   await execute(admin, "resetAssessmentAttempt", { definitionId: "history_classroom:2026-2:history-copy", studentUid: "student-uid", reason: "사본 해제 검증" });
+  assert.equal(store.writeCount - writesBeforeSingleReset, sharedResetWrites, "A reset writes the same number of documents whatever the roster size");
   const marker = store.snapshot(sourcePath).data.retryResetByStudentUid["student-uid"];
   assert.ok(marker, "The teacher document keeps the reset marker");
   assert.deepEqual(own("student-uid").retryResetAt, marker);

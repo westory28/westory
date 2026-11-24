@@ -1730,9 +1730,16 @@ service cloud.firestore {
       // Students read a roster-free copy of an assignment and one document of
       // their own. Only server commands write either of them.
       match /history_classroom_student_views/{assignmentId} {
+        // The student's own document must name this assignment and this
+        // student; its id alone does not say where the assignment id ends.
+        function ownHistoryAssignee() {
+          return get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/history_classroom_assignees/$(assignmentId + '_' + request.auth.uid)).data;
+        }
+
         allow get: if isAdmin() || isTeacherRole()
           || (canUseWestory()
-            && exists(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/history_classroom_assignees/$(assignmentId + '_' + request.auth.uid)));
+            && ownHistoryAssignee().assignmentId == assignmentId
+            && ownHistoryAssignee().uid == request.auth.uid);
         allow list: if isAdmin() || isTeacherRole();
         allow write: if false;
       }

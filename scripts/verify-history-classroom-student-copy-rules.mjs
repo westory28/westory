@@ -117,10 +117,18 @@ try {
       title: "다른 학생 과제",
       isPublished: true,
     });
+    // An assignment whose id ends where another student's uid could begin:
+    // "shared" + "_" + "x_student" and "shared_x" + "_" + "student" share an id.
+    await setDoc(doc(db, `${views}/shared_x`), {
+      assignmentId: "shared_x",
+      title: "식별자가 겹치는 과제",
+      isPublished: true,
+    });
     for (const [assignmentId, uid, reason] of [
       ["shared", "student", "사유 가"],
       ["shared", "other", "사유 나"],
       ["others-only", "other", "사유 다"],
+      ["shared", "x_student", "사유 라"],
     ]) {
       await setDoc(doc(db, `${assignees}/${assignmentId}_${uid}`), {
         assignmentId,
@@ -135,6 +143,9 @@ try {
   await allow("own assignment copy", () => getDoc(doc(student, views, "shared")));
   await deny("copy of an assignment given to others", () =>
     getDoc(doc(student, views, "others-only")),
+  );
+  await deny("copy reached through another student's look-alike document id", () =>
+    getDoc(doc(student, views, "shared_x")),
   );
   await deny("listing every copy", () => getDocs(collection(student, views)));
   const own = await assertSucceeds(

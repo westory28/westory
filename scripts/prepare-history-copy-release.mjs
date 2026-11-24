@@ -11,7 +11,7 @@ import { root, inventory, normalize, resourceFields, resourceValue, sha, sourceU
 // The repository change to one file is replayed, hunk by hunk, onto the file
 // that is live in production. The live file may lag the repository elsewhere;
 // those lines are left exactly as they are.
-const audit = path.join(root, 'output/history-copy-20261124');
+const audit = path.join(root, 'output/history-copy-20261125');
 const baseline = '7d75f01c';
 const region = 'asia-northeast3';
 const name = 'executeCommand';
@@ -21,7 +21,9 @@ const manifestPath = path.join(release, 'manifest.json');
 
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
 const before = normalize(git('show', `${baseline}:functions/${changedFile}`));
-const repository = normalize(await fs.readFile(path.join(root, 'functions', changedFile), 'utf8'));
+// Only a committed file is released: the working copy must equal HEAD.
+assert.equal(git('status', '--porcelain', '--', `functions/${changedFile}`).trim(), '', 'Commit the lifecycle file before preparing a release');
+const repository = normalize(git('show', `HEAD:functions/${changedFile}`));
 // Each hunk becomes an exact "old block → new block" replacement with up to
 // three lines of context on each side. Where the live file differs from the
 // baseline right next to a change, the context on that side is shortened

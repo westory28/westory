@@ -2,7 +2,7 @@
 // firebase emulators:exec --only firestore --config firebase.login-test.json --project demo-westory-session-history-copy "node functions/scripts/verify-history-classroom-student-copy-sync.cjs"
 const assert = require("node:assert/strict");
 const { Firestore, Timestamp } = require("@google-cloud/firestore");
-const { buildPlan, summarize, apply } = require("./sync-history-classroom-student-copies.cjs");
+const { buildPlan, summarize, pending, apply } = require("./sync-history-classroom-student-copies.cjs");
 
 const host = process.env.FIRESTORE_EMULATOR_HOST || "";
 if (!/^127\.0\.0\.1:\d+$/.test(host)) throw new Error("Local Firestore emulator required");
@@ -14,7 +14,8 @@ const source = (overrides = {}) => ({
   isPublished: true, contentRevision: 3, publishedAt: "2026-08-11T00:00:00.000Z", createdAt: Timestamp.fromMillis(1_000),
   updatedAt: Timestamp.fromMillis(2_000), createdBy: "teacher-uid", updatedBy: "teacher-uid", updateReason: "합성 사유",
   targetStudentUid: "student-a", targetStudentUids: ["student-a", "student-b"],
-  targetStudentAccessMap: { "student-a": true, "student-b": true }, targetStudentNames: ["가 학생", "나 학생"],
+  // "student c" is not a usable account id: the server gives it no document.
+  targetStudentAccessMap: { "student-a": true, "student-b": true, "student c": true }, targetStudentNames: ["가 학생", "나 학생"],
   targetStudentName: "가 학생, 나 학생", targetStudentNumber: "1, 2",
   targetStudentReasons: { "student-a": "사유 가", "student-b": "사유 나" },
   retryResetByStudentUid: { "student-b": Timestamp.fromMillis(5_000) }, ...overrides,
@@ -36,7 +37,8 @@ const count = async (name) => (await db.collection(`${root}/${name}`).get()).siz
 
   const plan = await buildPlan(db, semesterId);
   assert.deepEqual({ ...summarize(plan), fingerprint: undefined }, { teacherDocuments: 2, existingCopies: 1, existingAssigneeDocuments: 2,
-    pendingCopyWrites: 2, pendingAssigneeWrites: 3, pendingAssigneeDeletes: 1, orphanDocuments: 2, fingerprint: undefined });
+    pendingCopyWrites: 2, pendingAssigneeWrites: 3, pendingAssigneeDeletes: 1, orphanDocuments: 2, rosterIdsWithoutDocument: 1, fingerprint: undefined });
+  assert.equal(pending(summarize(plan)), 8);
   assert.equal((await buildPlan(db, semesterId)).fingerprint, plan.fingerprint, "The preview is deterministic and writes nothing");
   assert.equal(await count("history_classroom_student_views"), 1);
 
@@ -51,7 +53,7 @@ const count = async (name) => (await db.collection(`${root}/${name}`).get()).siz
   const own = await get(`${root}/history_classroom_assignees/one_student-b`);
   assert.equal(own.reason, "사유 나");
   assert.equal(own.retryResetAt.toMillis(), 5_000);
-  assert.ok(own.updatedAt);
+  assert.deepEqual(Object.keys(own).sort(), ["assignmentId", "reason", "retryResetAt", "semesterId", "uid"], "No write time: an unchanged rewrite changes nothing");
   assert.equal((await get(`${root}/history_classroom_assignees/one_student-a`)).retryResetAt, null);
   assert.equal((await get(`${root}/history_classroom_student_views/two`)).isPublished, false);
   assert.equal((await db.doc(`${root}/history_classroom_assignees/one_student-gone`).get()).exists, false);
@@ -61,15 +63,14 @@ const count = async (name) => (await db.collection(`${root}/${name}`).get()).siz
     "Teacher documents are never written");
 
   const after = summarize(await buildPlan(db, semesterId));
-  assert.deepEqual([after.pendingCopyWrites, after.pendingAssigneeWrites, after.pendingAssigneeDeletes, after.orphanDocuments], [0, 0, 0, 0],
-    "A second run has nothing left to do");
+  assert.equal(pending(after), 0, "A second run has nothing left to do");
 
   // A teacher save between preview and apply is left to the server's own write.
   const stale = await buildPlan(db, semesterId);
   await db.doc(`${root}/history_classrooms/one`).set(source({ title: "그 사이 저장된 과제" }));
   const changedPlan = await buildPlan(db, semesterId);
   assert.notEqual(changedPlan.fingerprint, stale.fingerprint);
-  const pending = { ...changedPlan, rows: changedPlan.rows.map((row) => ({ ...row, updateTime: stale.rows.find((item) => item.id === row.id).updateTime })) };
-  assert.deepEqual(await apply(db, semesterId, pending), { written: 0, deleted: 0 }, "An outdated row is skipped, not overwritten");
+  const outdated = { ...changedPlan, rows: changedPlan.rows.map((row) => ({ ...row, updateTime: stale.rows.find((item) => item.id === row.id).updateTime })) };
+  assert.deepEqual(await apply(db, semesterId, outdated), { written: 0, deleted: 0 }, "An outdated row is skipped, not overwritten");
   console.log("PASS history classroom student copy sync: preview, apply, idempotence, stale and orphan cleanup, teacher documents untouched");
 })().catch((error) => { console.error(error); process.exitCode = 1; });

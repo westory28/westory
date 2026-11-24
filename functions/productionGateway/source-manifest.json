@@ -72,9 +72,9 @@
       "sourceFile": "assessmentLifecycle.js",
       "file": "assessmentLifecycle.js",
       "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
-      "sha256": "1a10234ce58bdd6d71e42d5373331063eb8ba610b26b53050f42d1348574a59e",
+      "sha256": "2a573226f816c7feb000983ac7c09fa377c5e7318406387583ee8ab2e1087a8c",
       "changes": [
-        "2026-11-24: Keep a roster-free student copy and per-student assignment documents for History Classroom sources in the same transaction as every source write. Lifecycle regression with copy cases passed.",
+        "2026-11-25: Keep a roster-free student copy and per-student assignment documents for History Classroom sources in the same transaction as source save and delete; a retry reset rewrites only the reset students' own documents. Lifecycle regression with copy cases passed.",
         "2026-11-24: Grade a quiz timeout delivered past the 300-second allowance from its saved answers, and withhold option-level misconception labels until submission. Lifecycle and learning regressions passed.",
         "2026-11-11: Freeze an explicitly locked authored mock paper before any attempt; reuse its server-only source for all starts and preparation, retain question/learning revisions, preserve old-client schedules and expose serverNowIso in round overview. Independent review and lifecycle regression passed.",
         "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",

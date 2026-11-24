@@ -39,7 +39,7 @@ const historyRosterUids = (data) => [...new Set([
   ...Object.entries(data?.targetStudentAccessMap && typeof data.targetStudentAccessMap === "object" ? data.targetStudentAccessMap : {})
     .filter(([, allowed]) => allowed === true).map(([uid]) => uid),
 ].map((uid) => String(uid || "").trim()).filter((uid) => /^[A-Za-z0-9_-]{1,128}$/.test(uid)))];
-const historyStudentCopy = (semesterId, sourceId, data, timestamp) => {
+const historyStudentCopy = (semesterId, sourceId, data) => {
   const root = semesterRoot(semesterId);
   return {
     viewPath: `${root}/${HISTORY_STUDENT_VIEW_COLLECTION}/${sourceId}`,
@@ -49,21 +49,31 @@ const historyStudentCopy = (semesterId, sourceId, data, timestamp) => {
       path: `${root}/${HISTORY_ASSIGNEE_COLLECTION}/${sourceId}_${uid}`,
       data: { assignmentId: sourceId, semesterId, uid,
         reason: typeof data?.targetStudentReasons?.[uid] === "string" ? data.targetStudentReasons[uid] : "",
-        retryResetAt: data?.retryResetByStudentUid?.[uid] ?? null, updatedAt: timestamp },
+        retryResetAt: data?.retryResetByStudentUid?.[uid] ?? null },
     })),
   };
 };
 // Rewrites the whole student copy for `next`, and removes the document of
 // every student who left the roster. Callers stay inside their transaction.
-const writeHistoryStudentCopy = (transaction, semesterId, sourceId, previous, next, timestamp) => {
-  const copy = historyStudentCopy(semesterId, sourceId, next, timestamp);
+// An assigned student's document carries no write time, so rewriting it with
+// the same reason and marker changes nothing for that student.
+const writeHistoryStudentCopy = (transaction, semesterId, sourceId, previous, next) => {
+  const copy = historyStudentCopy(semesterId, sourceId, next);
   transaction.set(copy.viewPath, copy.view, { merge: false });
   for (const assignee of copy.assignees) transaction.set(assignee.path, assignee.data, { merge: false });
   const kept = new Set(copy.assignees.map((assignee) => assignee.path));
-  const removed = historyStudentCopy(semesterId, sourceId, previous, timestamp).assignees
+  const removed = historyStudentCopy(semesterId, sourceId, previous).assignees
     .map((assignee) => assignee.path).filter((path) => !kept.has(path));
   for (const path of removed) transaction.delete(path);
   return [copy.viewPath, ...kept, ...removed];
+};
+// A retry reset changes only the marker of the reset students: the copy holds
+// no marker, and the other students' documents stay as they are.
+const writeHistoryStudentResetMarkers = (transaction, semesterId, sourceId, next, uids) => {
+  const reset = new Set(uids);
+  const changed = historyStudentCopy(semesterId, sourceId, next).assignees.filter((assignee) => reset.has(assignee.data.uid));
+  for (const assignee of changed) transaction.set(assignee.path, assignee.data, { merge: false });
+  return changed.map((assignee) => assignee.path);
 };
 const SAVE_ATTEMPT_FIELDS = [
   "attemptId", "studentUid", "semesterId", "assessmentKind", "definitionId", "sourceId", "category", "examRound",
@@ -1225,7 +1235,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         createdBy: snapshot.data?.createdBy || definition.data?.createdBy || actor.actorUid,
       };
       transaction.set(path, savedSource, { merge: false });
-      const studentCopyRefs = writeHistoryStudentCopy(transaction, payload.semesterId, payload.sourceId, snapshot.data, savedSource, timestamp);
+      const studentCopyRefs = writeHistoryStudentCopy(transaction, payload.semesterId, payload.sourceId, snapshot.data, savedSource);
       // Publication changes only after every source guard passes. The client
       // refreshes the definition snapshot and republishes the accepted source.
       if (savedDefinition) transaction.set(definitionPath(definitionId), savedDefinition, { merge: definition.exists });
@@ -1257,7 +1267,7 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         updateReason: payload.reason,
       }, { merge: true });
       const studentCopyRefs = writeHistoryStudentCopy(transaction, payload.semesterId, payload.sourceId, snapshot.data,
-        { ...snapshot.data, isPublished: false, contentRevision: nextRevision, deletedAt: timestamp, updatedAt: timestamp }, timestamp);
+        { ...snapshot.data, isPublished: false, contentRevision: nextRevision, deletedAt: timestamp, updatedAt: timestamp });
       return { target: { kind: "history-classroom-source-delete", id: payload.sourceId, refs: [path, ...studentCopyRefs] }, sourceHash: null, result: { sourceId: payload.sourceId, contentRevision: nextRevision, deleted: true } };
     }
 
@@ -1761,8 +1771,8 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       for (const document of attempts) transaction.set(document.path, { status: "LOCKED", resetAt: timestamp, resetBy: actor.actorUid, resetReason: payload.reason, updatedAt: timestamp }, { merge: true });
       const classResetMarkers = { ...(source?.data?.retryResetByStudentUid || {}), ...Object.fromEntries(resetUids.map((uid) => [uid, timestamp])) };
       if (source?.exists) transaction.set(sourcePath, { retryResetByStudentUid: classResetMarkers }, { merge: true });
-      const classResetCopyRefs = source?.exists ? writeHistoryStudentCopy(transaction, definition.data.semesterId, definition.data.sourceId,
-        source.data, { ...source.data, retryResetByStudentUid: classResetMarkers }, timestamp) : [];
+      const classResetCopyRefs = source?.exists ? writeHistoryStudentResetMarkers(transaction, definition.data.semesterId, definition.data.sourceId,
+        { ...source.data, retryResetByStudentUid: classResetMarkers }, resetUids) : [];
       return { target: { kind: "assessment-attempt-reset", id: `${payload.definitionId}:${resolvedClassId}`, refs: [...attempts.map((item) => item.path), ...(source?.exists ? [sourcePath] : []), ...classResetCopyRefs] }, sourceHash: definition.data?.sourceHash || null, result: { definitionId: payload.definitionId, classId: resolvedClassId, resetCount: attempts.length } };
     }
     if (commandType === ASSESSMENT_COMMAND_TYPES.RESET_ASSESSMENT_ATTEMPT) {
@@ -1777,8 +1787,8 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
       for (const document of attempts) transaction.set(document.path, { status: "LOCKED", resetAt: timestamp, resetBy: actor.actorUid, resetReason: payload.reason, updatedAt: timestamp }, { merge: true });
       const studentResetMarkers = { ...(source?.data?.retryResetByStudentUid || {}), [payload.studentUid]: timestamp };
       if (source?.exists) transaction.set(sourcePath, { retryResetByStudentUid: studentResetMarkers }, { merge: true });
-      const studentResetCopyRefs = source?.exists ? writeHistoryStudentCopy(transaction, definition.data.semesterId, definition.data.sourceId,
-        source.data, { ...source.data, retryResetByStudentUid: studentResetMarkers }, timestamp) : [];
+      const studentResetCopyRefs = source?.exists ? writeHistoryStudentResetMarkers(transaction, definition.data.semesterId, definition.data.sourceId,
+        { ...source.data, retryResetByStudentUid: studentResetMarkers }, [payload.studentUid]) : [];
       return { target: { kind: "assessment-attempt-reset", id: `${payload.definitionId}:${payload.studentUid}`, refs: [...attempts.map((item) => item.path), ...(source?.exists ? [sourcePath] : []), ...studentResetCopyRefs] }, sourceHash: definition.data?.sourceHash || null, result: { definitionId: payload.definitionId, studentUid: payload.studentUid, resetCount: attempts.length } };
     }
     fail("invalid-argument", "Unsupported assessment commandType.", "COMMAND_TYPE_UNSUPPORTED");

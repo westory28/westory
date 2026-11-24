@@ -54,8 +54,9 @@ export const getDoc=async(ref)=>{(window.__docReads||=[]).push(ref.path);const i
 export const getDocFromServer=async(ref)=>{(window.__serverReads||=[]).push(ref.path);return getDoc(ref);};
 const listeners=new Map();window.__listeners=listeners;
 const snapshot=(path,value)=>({id:path.split('/').at(-1),exists:()=>!!value,data:()=>value});
-window.__emit=(path,value)=>listeners.get(path)?.next(snapshot(path,value));window.__deny=path=>listeners.get(path)?.error({code:'permission-denied'});
-export const onSnapshot=(ref,next,error)=>{listeners.set(ref.path,{next,error});const index=ref.path.lastIndexOf('/');const value=rows(ref.path.slice(0,index)).find(item=>item.id===ref.path.slice(index+1));queueMicrotask(()=>{if(listeners.has(ref.path))next(snapshot(ref.path,value));});return()=>listeners.delete(ref.path);};
+const isQueryPath=path=>path.endsWith('/history_classroom_assignees');const querySnapshot=path=>{const docs=rows(path).map(value=>({id:value.id,data:()=>value}));return{docs,empty:!docs.length};};
+window.__emit=(path,value)=>listeners.get(path)?.next(isQueryPath(path)?querySnapshot(path):snapshot(path,value));window.__deny=path=>listeners.get(path)?.error({code:'permission-denied'});
+export const onSnapshot=(ref,next,error)=>{listeners.set(ref.path,{next,error});if(isQueryPath(ref.path)){queueMicrotask(()=>{if(listeners.has(ref.path))next(querySnapshot(ref.path));});return()=>listeners.delete(ref.path);}const index=ref.path.lastIndexOf('/');const value=rows(ref.path.slice(0,index)).find(item=>item.id===ref.path.slice(index+1));queueMicrotask(()=>{if(listeners.has(ref.path))next(snapshot(ref.path,value));});return()=>listeners.delete(ref.path);};
 export const getHttpsCallable=async(name)=>async(input)=>{if(name!=='createHistoryClassroomExemptionRequest')throw new Error('Unexpected callable');window.__exemptionCalls=(window.__exemptionCalls||[]).concat([{name,input}]);return {data:{}};};`;
 const component = JSON.stringify(
   path
@@ -195,6 +196,7 @@ const runStudentCopyScenarios = async () => {
   const othersOnly = { ...shared, id: "assignment-2", title: "다른 학생만의 과제", targetStudentUid: "student-2",
     targetStudentUids: ["student-2"], targetStudentAccessMap: { "student-2": true } };
   const unpublished = { ...shared, id: "assignment-3", title: "아직 공개 전 과제", isPublished: false };
+  const deleted = { ...shared, id: "assignment-5", title: "삭제된 과제", isPublished: false, deletedAt: "2026-08-01T00:00:00.000Z" };
   const open = async (assignments) => {
     const page = await browser.newPage({ viewport: { width: 768, height: 1024 }, hasTouch: true });
     const errors = [];
@@ -207,18 +209,20 @@ const runStudentCopyScenarios = async () => {
   };
 
   // 1. Own assignment, own reason, nothing about anyone else.
-  const { page, errors } = await open([shared, othersOnly, unpublished]);
+  const { page, errors } = await open([shared, othersOnly, unpublished, deleted]);
   await page.getByRole("heading", { name: shared.title, exact: true }).waitFor();
   const bodyText = await page.locator("body").innerText();
   assert.ok(bodyText.includes("본인 배정 사유"), "the student sees their own reason");
-  for (const hidden of ["다른 학생 사유", "다른 학생만의 과제", "아직 공개 전 과제", "다른 학생"])
+  for (const hidden of ["다른 학생 사유", "다른 학생만의 과제", "아직 공개 전 과제", "삭제된 과제", "다른 학생"])
     assert.equal(bodyText.includes(hidden), false, `the list does not show: ${hidden}`);
   const reads = await page.evaluate(() => ({
     queries: window.__readCalls || [], documents: window.__docReads || [],
     deniedTeacherReads: window.__deniedTeacherReads || [], listeners: [...window.__listeners.keys()],
   }));
   assert.equal(reads.queries.filter((path) => path === assigneesPath).length, 1, "one query for the student's own assignment documents");
-  assert.deepEqual([...reads.documents].sort(), [viewPath("assignment-1"), viewPath("assignment-3")], "one copy read per own assignment");
+  assert.deepEqual([...reads.documents].sort(), [viewPath("assignment-1"), viewPath("assignment-3"), viewPath("assignment-5")], "one copy read per own assignment");
+  assert.equal(reads.listeners.includes(viewPath("assignment-5")), false, "a deleted assignment is not watched");
+  assert.ok(reads.listeners.includes(viewPath("assignment-3")), "an unpublished assignment appears when it is published");
   assert.deepEqual(reads.deniedTeacherReads, [], "the teacher documents are never requested");
   assert.equal(reads.queries.some((path) => path.endsWith("/history_classrooms")), false);
   assert.equal(reads.listeners.some((path) => path.includes("/history_classrooms/")), false, "no listener on a teacher document");
@@ -258,6 +262,30 @@ const runStudentCopyScenarios = async () => {
   assert.deepEqual(empty.errors, []);
   await empty.page.close();
   reports.push({ name: "copy: empty list with closed teacher documents", passed: true });
+
+  // 6. A retry reset that lands between the load and the subscription reloads
+  //    the list once, and an unchanged delivery reloads nothing.
+  const racing = await browser.newPage({ viewport: { width: 768, height: 1024 }, hasTouch: true });
+  const racingErrors = [];
+  racing.on("pageerror", (error) => racingErrors.push(error.message));
+  await racing.addInitScript(({ assignment, path }) => {
+    const item = { ...assignment };
+    Object.defineProperty(item, "retryResetByStudentUid", { enumerable: true,
+      get: () => ((window.__resetSeen ||= !!window.__listeners?.has(path)) ? { "student-1": 1790000000000 } : {}) });
+    window.__data = { assignments: [item], legacyAssignments: [], results: [] };
+  }, { assignment: shared, path: assigneesPath });
+  await racing.goto(`http://127.0.0.1:${server.address().port}`);
+  await racing.getByRole("heading", { name: shared.title, exact: true }).waitFor();
+  const ownQueries = () => racing.evaluate((path) => (window.__readCalls || []).filter((item) => item === path).length, assigneesPath);
+  await racing.waitForFunction((path) => (window.__readCalls || []).filter((item) => item === path).length === 2, assigneesPath);
+  await racing.waitForTimeout(400);
+  assert.equal(await ownQueries(), 2, "the missed reset causes exactly one reload");
+  await racing.evaluate((path) => window.__emit(path, undefined), assigneesPath);
+  await racing.waitForTimeout(300);
+  assert.equal(await ownQueries(), 2, "an unchanged delivery reloads nothing");
+  assert.deepEqual(racingErrors, []);
+  await racing.close();
+  reports.push({ name: "copy: change between load and subscription", passed: true });
 
   console.log(`History classroom index (student copy): ${reports.length} cases passed.`);
 };
