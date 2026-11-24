@@ -135,6 +135,9 @@
   width: 100%;
   font-size: 18px;
 }
+.yut-game .yut-entry-menu .yut-piece-style {
+  margin: 12px 0 0;
+}
 .yut-game .yut-move-controls,
 .yut-game .yut-piece-choices {
   display: flex;

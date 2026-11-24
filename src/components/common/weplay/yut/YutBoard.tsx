@@ -9,6 +9,7 @@ import React, {
 import type { YutMove, YutNode, YutRoom, YutRole } from "../../../../lib/yut";
 import { PROFESSIONS, YutPawnArt } from "./YutArt";
 import { YutCaptureReaction, type YutCaughtPlayer } from "./YutReactions";
+import type { YutAvatarSheet, YutAvatarSheets } from "./yutAvatar";
 import "./yut-board.css";
 
 const WIDTH = 720;
@@ -376,6 +377,7 @@ const groupPieces = (room: YutRoom, pieces: BoardPiece[], piece: BoardPiece) =>
 
 function MovingPawn({
   role,
+  avatar,
   node,
   name,
   pieceIds,
@@ -392,6 +394,7 @@ function MovingPawn({
   onArrive,
 }: {
   role: YutRole;
+  avatar?: YutAvatarSheet;
   node: YutNode;
   name: string;
   pieceIds: string[];
@@ -567,13 +570,20 @@ function MovingPawn({
       data-motion-id={motion?.id}
       data-pawn-node={node}
       data-piece-ids={pieceIds.join(",")}
+      data-piece-art={avatar ? "avatar" : undefined}
     >
       <span className="yut-isometric-pawn" aria-hidden="true">
         <i className="yut-pawn-foot-shadow" />
         <span className="yut-pawn-body">
-          <span className="yut-pawn-facing" data-facing={facing}>
+          <span
+            className="yut-pawn-facing"
+            data-facing={facing}
+            // A minimi always faces front: mirroring would swap its collar and ribbon.
+            data-avatar={avatar ? "true" : undefined}
+          >
             <YutPawnArt
               role={role}
+              avatar={avatar}
               motionKey={`${role}:${pieceIds.join("-")}`}
               carried={
                 motion
@@ -628,8 +638,11 @@ export default function YutBoard({
   selectedMove = null,
   onMotionChange,
   onStep,
+  avatars,
 }: {
   room: YutRoom;
+  /** Baked avatar frames by player; a player without one keeps the animal piece. */
+  avatars?: YutAvatarSheets;
   uid: string;
   selectedPiece: string;
   onSelectPiece: (id: string) => void;
@@ -983,6 +996,7 @@ export default function YutBoard({
               <MovingPawn
                 key={`${player.uid}-${ids[0]}`}
                 role={player.role}
+                avatar={avatars?.[player.uid]}
                 node={node}
                 name={player.name}
                 pieceIds={ids}
@@ -1009,7 +1023,11 @@ export default function YutBoard({
           })}
         </div>
         {capture && (
-          <YutCaptureReaction key={capture.id} players={capture.players} />
+          <YutCaptureReaction
+            key={capture.id}
+            players={capture.players}
+            avatars={avatars}
+          />
         )}
         {destinations.map((move) => (
           <button

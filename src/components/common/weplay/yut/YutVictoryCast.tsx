@@ -1,9 +1,16 @@
 import type { YutRoom } from "../../../../../functions/yutCore.mjs";
 import { YutSprite } from "./YutArt";
+import type { YutAvatarSheets } from "./yutAvatar";
 import "./yut-victory-cast.css";
 
 /** Only the winner enters the celebration; opponents remain on their board tiles. */
-export default function YutVictoryCast({ room }: { room: YutRoom }) {
+export default function YutVictoryCast({
+  room,
+  avatars,
+}: {
+  room: YutRoom;
+  avatars?: YutAvatarSheets;
+}) {
   const winner = room.players.find((player) => player.uid === room.winnerUid);
   if (!winner) return null;
   return (
@@ -13,7 +20,11 @@ export default function YutVictoryCast({ room }: { room: YutRoom }) {
         aria-label={`${winner.name} 우승`}
       >
         <div className="yut-victory-cast-winner-figure">
-          <YutSprite role={winner.role} pose="win" />
+          <YutSprite
+            role={winner.role}
+            pose="win"
+            avatar={avatars?.[winner.uid]}
+          />
         </div>
       </div>
     </div>

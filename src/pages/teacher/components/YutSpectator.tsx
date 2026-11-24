@@ -13,6 +13,7 @@ import {
   type YutRoom,
 } from "../../../lib/yut";
 import type { WeplayConfig } from "../../../lib/weplay";
+import { useYutCast } from "../../../components/common/weplay/yut/useYutCast";
 import "./YutSpectator.css";
 
 type View = {
@@ -160,6 +161,14 @@ export default function YutSpectator({
     };
   }, [key, actorKey, year, semester, roomId, attempt, serverOffsetMs]);
 
+  // The students' avatar pieces, as the players themselves see them.
+  const { sheets: avatars } = useYutCast({
+    config,
+    scope: key,
+    uid: actorKey,
+    room,
+  });
+
   useEffect(() => {
     if (!room || room.status !== "playing") return;
     setClock(Date.now());
@@ -229,6 +238,7 @@ export default function YutSpectator({
         <div className="yut-spectator-board">
           <YutBoard
             room={room}
+            avatars={avatars}
             uid=""
             selectedPiece=""
             onSelectPiece={doNothing}
@@ -246,7 +256,7 @@ export default function YutSpectator({
             ).length;
             return (
               <li key={person.uid}>
-                <YutPortrait role={person.role} />
+                <YutPortrait role={person.role} avatar={avatars[person.uid]} />
                 <div>
                   <strong>{person.name}</strong>
                   <span>

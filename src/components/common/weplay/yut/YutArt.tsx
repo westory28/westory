@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import frameAtlases from "./yutCharacterFrames.json";
+import type { YutAvatarSheet } from "./yutAvatar";
 import "./yut-character.css";
 
 export type YutProfession = "sa" | "nong" | "gong" | "sang";
@@ -36,31 +37,45 @@ export const YUT_CHARACTER_SHEETS = [
 const asset = (file: string) =>
   `${import.meta.env.BASE_URL}assets/weplay/yut/${file}`;
 
-/** Every column is a separately drawn complete pose. Never deform body parts. */
+/**
+ * Every column is a separately drawn complete pose. Never deform body parts.
+ * A player's baked avatar sheet replaces the animal atlas frame for frame: the
+ * same three drawings per action, switched by the same CSS steps.
+ */
 export function YutSprite({
   role,
   className = "",
   pose = "idle",
   motionKey,
+  avatar,
 }: {
   role: YutProfession;
   className?: string;
   pose?: YutSpritePose;
   motionKey?: string;
+  avatar?: YutAvatarSheet;
 }) {
   const action = pose === "turn" || pose === "throw" ? "idle" : pose;
   const atlas = frameAtlases[action];
-  const row = atlas.rows[["sa", "nong", "gong", "sang"].indexOf(role)];
   const roleIndex = ["sa", "nong", "gong", "sang"].indexOf(role);
+  const row = avatar ? avatar.actions[action] : atlas.rows[roleIndex];
+  const sheet = avatar
+    ? { href: avatar.url, width: avatar.width, height: avatar.height }
+    : {
+        href: asset(`animation-${action}.webp`),
+        width: atlas.width,
+        height: atlas.height,
+      };
   const phase = Array.from(motionKey || role).reduce(
     (hash, character) => (hash * 31 + character.charCodeAt(0)) % 997,
     0,
   );
   return (
     <span
-      className={`yut-sprite yut-character--${role} yut-sprite--${pose} yut-frame-sprite yut-frame--${action} ${className}`}
+      className={`yut-sprite yut-character--${role} yut-sprite--${pose} yut-frame-sprite yut-frame--${action}${avatar ? " yut-avatar-sprite" : ""} ${className}`}
       data-sprite-action={action}
       data-sprite-frames="3"
+      data-avatar-scale={avatar?.scale}
       style={
         {
           "--idle-duration": `${1400 + roleIndex * 110 + (phase % 4) * 40}ms`,
@@ -88,9 +103,9 @@ export function YutSprite({
             overflow="hidden"
           >
             <image
-              href={asset(`animation-${action}.webp`)}
-              width={atlas.width}
-              height={atlas.height}
+              href={sheet.href}
+              width={sheet.width}
+              height={sheet.height}
             />
           </svg>
         </svg>
@@ -107,8 +122,10 @@ export function YutPawnArt({
   pose = "idle",
   className = "",
   motionKey,
+  avatar,
 }: {
   role: YutProfession;
+  avatar?: YutAvatarSheet;
   carried?: boolean;
   boarding?: boolean;
   walking?: boolean;
@@ -132,7 +149,12 @@ export function YutPawnArt({
       data-carried={carried}
       data-boarding={boarding}
     >
-      <YutSprite role={role} pose={action} motionKey={motionKey} />
+      <YutSprite
+        role={role}
+        pose={action}
+        motionKey={motionKey}
+        avatar={avatar}
+      />
     </span>
   );
 }
@@ -157,13 +179,27 @@ export function YutStackOptionArt({
 
 export function YutPortrait({
   role,
+  avatar,
 }: {
   role: YutProfession;
   pose?: YutSpritePose;
+  avatar?: YutAvatarSheet;
 }) {
   return (
-    <span className="yut-portrait" aria-hidden="true">
-      <YutSprite role={role} pose="idle" />
+    <span
+      className="yut-portrait"
+      aria-hidden="true"
+      // An avatar wears no clan robe: its ring carries the seat colour instead.
+      data-art={avatar ? "avatar" : undefined}
+      style={
+        avatar
+          ? ({
+              "--piece-color": PROFESSIONS[role].color,
+            } as React.CSSProperties)
+          : undefined
+      }
+    >
+      <YutSprite role={role} pose="idle" avatar={avatar} />
     </span>
   );
 }

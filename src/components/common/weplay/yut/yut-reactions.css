@@ -5,6 +5,10 @@
 .yut-pawn-facing[data-facing="left"] {
   transform: scaleX(-1);
 }
+/* A minimi always faces front: its collar, ribbon and school mark are never mirrored. */
+.yut-pawn-facing[data-avatar="true"] {
+  transform: none;
+}
 
 .yut-capture-reaction {
   position: absolute;

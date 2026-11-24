@@ -3,6 +3,7 @@ import { db } from "./firebase";
 import { getHistoryDictionaryCallable } from "./historyDictionarySession";
 import { getSemesterDocPath, getYearSemester } from "./semesterScope";
 import type { WeplayConfig } from "./weplay";
+import type { AvatarLook } from "../features/avatar/catalog";
 import type { YutBoost, YutRoom, YutRoute } from "../../functions/yutCore.mjs";
 export { getYutThrowProbabilities } from "../../functions/yutCore.mjs";
 
@@ -277,6 +278,28 @@ export const commandYutRoom = (config: WeplayConfig, data: YutCommand) =>
     config,
     data,
   );
+/** The players drawn as their saved avatar; everyone else keeps the animal piece. */
+export interface YutCast {
+  cast: Record<string, { look: AvatarLook }>;
+  /** The caller's own choice. Absent without a saved avatar of their own. */
+  piece?: "avatar" | "classic";
+}
+// Read-only and outside the game: it never changes a room or a turn. Without
+// a room it answers the caller's own piece. A deployment that predates it
+// answers invalid-argument, and every piece stays an animal.
+export const getYutCast = (config: WeplayConfig, roomId?: string) =>
+  call<YutCast>("commandYutRoomFast", config, {
+    action: "cast",
+    ...(roomId ? { roomId } : {}),
+  });
+export const setYutPiece = (
+  config: WeplayConfig,
+  piece: "avatar" | "classic",
+) =>
+  call<{ piece: "avatar" | "classic" }>("commandYutRoomFast", config, {
+    action: "piece",
+    piece,
+  });
 export const subscribeYutManagement = (
   config: WeplayConfig,
   onChange: () => void,

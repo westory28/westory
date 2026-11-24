@@ -56,6 +56,8 @@ import { YutTurnGauge } from "./YutReactions";
 import YutVictoryCast from "./YutVictoryCast";
 import YutStackChoice from "./YutStackChoice";
 import { YutEntryScene } from "./YutEntryScene";
+import { useYutCast } from "./useYutCast";
+import type { YutAvatarSheets, YutPieceChoice } from "./yutAvatar";
 import WeplayGameLoading from "../WeplayGameLoading";
 import WeplayRanking from "../WeplayRanking";
 import { invalidateWeplayRanking } from "../../../../lib/weplayRanking";
@@ -104,8 +106,10 @@ export function YutVictory({
   local,
   busy,
   onClaim,
+  avatars,
 }: {
   room: YutRoom;
+  avatars?: YutAvatarSheets;
   uid: string;
   local: boolean;
   busy: boolean;
@@ -128,7 +132,7 @@ export function YutVictory({
           />
         ))}
       </div>
-      <YutVictoryCast room={room} />
+      <YutVictoryCast room={room} avatars={avatars} />
       <span className="yut-victory-ribbon">이번 판의 우승</span>
       <h2>{winner?.name || "참가자"}</h2>
       <strong className="yut-victory-congratulation">축하합니다!</strong>
@@ -775,6 +779,44 @@ export default function YutGame({
     portal === "student" && localPlayerName.current?.scope === accountScope
       ? localPlayerName.current.name
       : undefined;
+  // Avatar pieces are looked up beside the game and never hold it up. A
+  // student's own piece is also known without a room: the choice on the entry
+  // screen, and the single-player match.
+  const signedInUid = currentUser?.uid || "";
+  const onlineRoom = local ? null : room;
+  const cast = useYutCast({
+    config,
+    scope: accountScope,
+    uid: signedInUid,
+    room: onlineRoom,
+    self:
+      portal === "student" &&
+      !onlineRoom &&
+      (local ? localMode === "single" : lobby?.enabled === true),
+  });
+  const ownSheet = cast.sheets[signedInUid];
+  const avatars = useMemo<YutAvatarSheets>(
+    () =>
+      !local
+        ? cast.sheets
+        : ownSheet && localMode === "single"
+          ? { [YUT_PREVIEW_UID]: ownSheet }
+          : {},
+    [local, localMode, cast.sheets, ownSheet],
+  );
+  const [pieceSaving, setPieceSaving] = useState(false);
+  const choosePiece = (choice: YutPieceChoice) => {
+    if (pieceSaving || cast.piece === choice) return;
+    setPieceSaving(true);
+    cast
+      .choose(choice)
+      .catch((failure) => {
+        if (mounted.current) setError(yutErrorMessage(failure));
+      })
+      .finally(() => {
+        if (mounted.current) setPieceSaving(false);
+      });
+  };
   const identityRef = useRef(identity);
   identityRef.current = identity;
   const roomRef = useRef(room);
@@ -2378,6 +2420,23 @@ export default function YutGame({
                       {YUT_PRIVATE_DAILY_LIMIT}회 남음
                     </p>
                   )}
+                  {cast.piece && (
+                    <fieldset className="yut-single-count yut-piece-style">
+                      <legend>내 말</legend>
+                      {(["avatar", "classic"] as const).map((choice) => (
+                        <button
+                          key={choice}
+                          type="button"
+                          className={cast.piece === choice ? "is-selected" : ""}
+                          aria-pressed={cast.piece === choice}
+                          disabled={busy || pieceSaving}
+                          onClick={() => choosePiece(choice)}
+                        >
+                          {choice === "avatar" ? "내 아바타" : "동물 말"}
+                        </button>
+                      ))}
+                    </fieldset>
+                  )}
                 </>
               )}
               {portal === "teacher" && (
@@ -2483,6 +2542,7 @@ export default function YutGame({
                           <YutSprite
                             role={person.role}
                             motionKey={person.uid}
+                            avatar={avatars[person.uid]}
                           />
                         </div>
                         <strong className="yut-seat-name" title={person.name}>
@@ -2584,6 +2644,7 @@ export default function YutGame({
                         {emoteBubble(person.uid)}
                         <YutPortrait
                           role={person.role}
+                          avatar={avatars[person.uid]}
                           pose={
                             room.status === "finished" &&
                             room.winnerUid === person.uid
@@ -2650,6 +2711,7 @@ export default function YutGame({
               <div className="yut-board-area">
                 <YutBoard
                   room={shownRoom || displayRoom || room}
+                  avatars={avatars}
                   uid={uid}
                   selectedPiece={shownRoom ? "" : selectedPiece}
                   onSelectPiece={selectPiece}
@@ -2715,6 +2777,7 @@ export default function YutGame({
                   ) : (
                     <YutVictory
                       room={room}
+                      avatars={avatars}
                       uid={uid}
                       local={local}
                       busy={busy}

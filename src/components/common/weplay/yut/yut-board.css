@@ -194,6 +194,23 @@
   background: #1c2a19b3;
   box-shadow: 0 1px 0 #b9aa6455;
 }
+/* An avatar piece stands on its seat colour and its number wears the same
+   ring, so players in similar outfits are still told apart. */
+.yut-isometric-piece[data-piece-art="avatar"] .yut-pawn-foot-shadow {
+  bottom: 1%;
+  left: 8%;
+  width: 84%;
+  height: 15%;
+  background: var(--piece-color);
+  box-shadow:
+    0 0 0 1.5px #241b12,
+    0 0 0 2.5px #e5cc8b;
+}
+.yut-isometric-piece[data-piece-art="avatar"] .yut-pawn-number {
+  box-shadow:
+    0 0 0 2px var(--piece-color),
+    0 2px 4px #0008;
+}
 .yut-isometric-board .yut-isometric-piece > .yut-isometric-piece-count {
   position: absolute;
   bottom: 0;

@@ -94,6 +94,28 @@
   inset: auto;
   width: 100%;
 }
+/* A player's own avatar, baked into the same three frames per action. A hat
+   or a leap rises above the action's square, as the tall animal frames do. */
+.yut-game .yut-avatar-sprite .yut-drawn-frame {
+  overflow: visible;
+}
+/* Board pieces are drawn below sprite size, where unsmoothed samples stay the
+   most legible. Shown larger from a doubled sheet, smoothing keeps every
+   sprite pixel the same width; a dense screen enlarges the pixels as they are. */
+.yut-game
+  :is(.yut-seat, .yut-portrait, .yut-victory-cast-winner, .yut-capture-portrait)
+  .yut-avatar-sprite[data-avatar-scale="2"] {
+  image-rendering: auto;
+}
+/* Where the square is all the room there is, the figure stands a little
+   smaller on the same ground, so a hat stays inside the square. */
+.yut-game
+  :is(.yut-seat, .yut-victory-cast-winner, .yut-capture-portrait)
+  .yut-avatar-sprite
+  .yut-drawn-frame {
+  transform: scale(0.88);
+  transform-origin: 50% 100%;
+}
 .yut-stack-option-art {
   display: block;
   width: 100%;
@@ -126,6 +148,15 @@
   transform: translateX(-50%) !important;
   animation: none !important;
   background-position-x: 0%;
+}
+/* An avatar wears no clan robe: the ring carries its seat colour, and the
+   face sits inside the ring with room for a hat. */
+.yut-portrait[data-art="avatar"] {
+  border-color: var(--piece-color);
+}
+.yut-game .yut-portrait .yut-avatar-sprite {
+  width: 160% !important;
+  top: 14%;
 }
 .yut-game .yut-button,
 .yut-game .yut-single-count button,

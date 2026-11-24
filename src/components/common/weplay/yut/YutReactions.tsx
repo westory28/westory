@@ -1,6 +1,7 @@
 import React from "react";
 import type { YutRole } from "../../../../lib/yut";
 import { PROFESSIONS, YutSprite } from "./YutArt";
+import type { YutAvatarSheets } from "./yutAvatar";
 import "./yut-reactions.css";
 
 export type YutCaughtPlayer = {
@@ -12,8 +13,10 @@ export type YutCaughtPlayer = {
 
 export function YutCaptureReaction({
   players,
+  avatars,
 }: {
   players: YutCaughtPlayer[];
+  avatars?: YutAvatarSheets;
 }) {
   return (
     <div
@@ -35,6 +38,7 @@ export function YutCaptureReaction({
             >
               <YutSprite
                 role={player.role}
+                avatar={avatars?.[player.uid]}
                 pose={
                   (player.pieceIds?.length || 1) > 1 ? "pair-caught" : "caught"
                 }
