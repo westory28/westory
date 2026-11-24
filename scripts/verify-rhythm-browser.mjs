@@ -1365,6 +1365,44 @@ try {
   await time(challengePage, 0);
   await challengePage.getByRole('button', { name: '도전 시작', exact: true }).click();
   await phase(challengePage, 'playing');
+  // A challenge has no pause: every former pause path leaves the song running.
+  assert.equal(await challengePage.getByRole('button', { name: '일시정지', exact: true }).count(), 0, 'challenge shows no pause button');
+  assert.equal(await challengePage.locator('.weplay-ranking-launch').isDisabled(), true, 'ranking cannot cover a running challenge');
+  await challengePage.keyboard.press('Escape');
+  await challengePage.evaluate(() => {
+    window.dispatchEvent(new Event('blur'));
+    window.rhythmQA.visibility(false);
+  });
+  await frames(challengePage);
+  assert.equal(await challengePage.locator('.rhythm-game--playing').count(), 1, 'Escape, blur and a hidden tab do not pause a challenge');
+  assert.equal(await challengePage.evaluate(() => window.rhythmQA.audioStates().at(-1)), 'running', 'challenge song keeps real time while hidden');
+  await challengePage.evaluate(() => window.rhythmQA.visibility(true));
+  await challengePage.getByRole('button', { name: '전체 화면', exact: true }).click();
+  await challengePage.locator('.rhythm-game--fullscreen').waitFor();
+  await challengePage.getByRole('button', { name: '전체 화면 나가기', exact: true }).click();
+  await challengePage.locator('.rhythm-game--fullscreen').waitFor({ state: 'detached' });
+  assert.equal(await challengePage.locator('.rhythm-game--playing').count(), 1, 'screen changes do not pause a challenge');
+  // The browser, not the player, holds the sound: continue without a pause screen.
+  await challengePage.evaluate(() => window.rhythmQA.audio.at(-1).pause());
+  await challengePage.waitForFunction(() => window.rhythmQA.audioStates().at(-1) === 'running');
+  assert.equal(await challengePage.locator('.rhythm-game--playing').count(), 1, 'an interrupted challenge continues by itself');
+  await challengePage.evaluate(async () => {
+    const player = window.rhythmQA.audio.at(-1);
+    player.context.nativeResume = player.context.resume;
+    player.context.resume = () => Promise.reject(new Error('QA sound still held'));
+    await player.pause();
+  });
+  await phase(challengePage, 'paused');
+  assert.equal(await challengePage.locator('.rhythm-pause-timer').count(), 0, 'a held challenge has no countdown');
+  assert.match(await challengePage.locator('.rhythm-error').textContent(), /계속 연주/);
+  await challengePage.evaluate(() => {
+    const context = window.rhythmQA.audio.at(-1).context;
+    context.resume = context.nativeResume;
+  });
+  await challengePage.getByRole('button', { name: '계속 연주', exact: true }).click();
+  await phase(challengePage, 'playing');
+  assert.equal(await challengePage.locator('.rhythm-error').count(), 0);
+  assert.equal(await challengePage.evaluate(() => window.rhythmQA.rankingCalls.filter(call => call.name === 'finishRhythmRankingGame').length), 0, 'no pause path ends or saves the challenge');
   const challengeNote = feverNotes[0];
   await time(challengePage, challengeNote.time);
   await challengePage.evaluate(() => window.rhythmQA.finishFailure = true);
@@ -1399,6 +1437,41 @@ try {
   await shot(challengePage, 'challenge-limit');
   checks.push({ name: 'fever and challenge', fever: [10, 20, 50, 100], score: expectedFeverScore, practiceRequests: 0, challengeStateRequests: 2, challengeStarts: 2, limit: 30, retrySameRequest: true, paidExplicit: true });
   await challengePage.close();
+  // Practice: a pause shows its remaining seconds and ends by itself after 10 s.
+  const pausePage = await pageFor();
+  await pausePage.goto(`${base}/?open`);
+  await phase(pausePage, 'ready');
+  await pausePage.getByRole('button', { name: '연주 시작', exact: false }).click();
+  await phase(pausePage, 'playing');
+  const pauseSeconds = () => pausePage.locator('.rhythm-pause-timer strong').evaluate(el => Number(el.textContent));
+  const audioClock = () => pausePage.evaluate(() => window.rhythmQA.audio.at(-1).currentTime);
+  await pausePage.locator('.weplay-ranking-launch').click();
+  await phase(pausePage, 'paused');
+  assert.equal(await pauseSeconds(), 10);
+  await pausePage.waitForTimeout(1600);
+  assert.equal(await pauseSeconds(), 10, 'an open ranking holds the pause limit');
+  await pausePage.keyboard.press('Escape');
+  await pausePage.getByRole('button', { name: '계속 연주', exact: true }).click();
+  await phase(pausePage, 'playing');
+  await pausePage.keyboard.press('Escape');
+  await phase(pausePage, 'paused');
+  const pausedAt = Date.now(), pausedClock = await audioClock();
+  assert.equal(await pauseSeconds(), 10, 'every pause starts a full limit');
+  await pausePage.waitForFunction(() => Number(document.querySelector('.rhythm-pause-timer strong')?.textContent) <= 8);
+  await pausePage.evaluate(() => window.rhythmQA.visibility(false));
+  const heldSeconds = await pauseSeconds();
+  await pausePage.waitForTimeout(1600);
+  assert.equal(await pauseSeconds(), heldSeconds, 'hidden seconds do not count and never restart the sound');
+  assert.equal(await pausePage.evaluate(() => window.rhythmQA.audioStates().at(-1)), 'suspended');
+  await pausePage.evaluate(() => window.rhythmQA.visibility(true));
+  await shot(pausePage, 'pause-limit');
+  await phase(pausePage, 'playing');
+  const pausedFor = Date.now() - pausedAt;
+  assert(pausedFor >= 10000 && pausedFor < 14500, `practice pause ends by itself: ${pausedFor}ms`);
+  assert(Math.abs(await audioClock() - pausedClock) < 0.5, 'the pause limit continues from the paused audio position');
+  assert.equal(await pausePage.evaluate(() => window.rhythmQA.audioStates().at(-1)), 'running');
+  checks.push({ name: 'pause rules', challenge: 'no pause by button, Escape, blur, hidden tab, fullscreen or ranking; held sound continues', practiceLimitSeconds: 10, pausedForMs: pausedFor, heldWhileHiddenOrRanking: true });
+  await pausePage.close();
   await antiSpamCheck();
   for (const [width, height] of [
     [1440, 1000],

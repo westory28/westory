@@ -854,6 +854,18 @@
   font-size: 24px;
   color: var(--rh-green);
 }
+.rhythm-pause-timer {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--rh-ink);
+}
+.rhythm-pause-timer strong {
+  margin-right: 4px;
+  font-size: 32px;
+  font-variant-numeric: tabular-nums;
+  color: var(--rh-red);
+}
 .rhythm-pause > div {
   display: flex;
   justify-content: center;
@@ -1237,6 +1249,12 @@
   }
   .rhythm-pause h2 {
     font-size: 20px;
+  }
+  .rhythm-pause-timer {
+    font-size: 16px;
+  }
+  .rhythm-pause-timer strong {
+    font-size: 24px;
   }
   .rhythm-result {
     gap: 16px;

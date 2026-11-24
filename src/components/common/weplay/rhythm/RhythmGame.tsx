@@ -59,6 +59,7 @@ import {
 import "./rhythm.css";
 
 type Phase = "ready" | "starting" | "playing" | "paused" | "result";
+const PAUSE_LIMIT_SECONDS = 10;
 const DIFFICULTIES: { id: RhythmDifficulty; name: string }[] = [
   { id: "easy", name: "중모리 장단" },
   { id: "normal", name: "자진모리 장단" },
@@ -101,6 +102,9 @@ export default function RhythmGame({
   >("idle");
   const [songId, setSongId] = useState(RHYTHM_SONGS[0].id);
   const [mode, setMode] = useState<"practice" | "challenge">("practice");
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  const [pauseLeft, setPauseLeft] = useState(PAUSE_LIMIT_SECONDS);
   const [challenge, setChallenge] = useState<RhythmChallengeState | null>(null);
   const [challengeLoading, setChallengeLoading] = useState(false);
   const challengeLoadingRef = useRef(false);
@@ -201,6 +205,7 @@ export default function RhythmGame({
   );
   const setGamePhase = useCallback((value: Phase) => {
     phaseRef.current = value;
+    if (value === "paused") setPauseLeft(PAUSE_LIMIT_SECONDS);
     setPhase(value);
   }, []);
 
@@ -273,7 +278,10 @@ export default function RhythmGame({
   }, []);
 
   const pause = useCallback(() => {
-    if (phaseRef.current !== "playing") return;
+    // A challenge keeps real time: its song continues through the pause key,
+    // another window, a hidden tab, the ranking and screen changes.
+    if (phaseRef.current !== "playing" || modeRef.current === "challenge")
+      return;
     const player = audio.current;
     const token = generation.current;
     setGamePhase("paused");
@@ -395,7 +403,10 @@ export default function RhythmGame({
         player.dispose();
         return;
       }
-      if (document.hidden || !playableRef.current || portraitRef.current) {
+      if (
+        mode !== "challenge" &&
+        (document.hidden || !playableRef.current || portraitRef.current)
+      ) {
         await player.pause();
         if (token !== generation.current) return;
         setGamePhase("paused");
@@ -440,7 +451,10 @@ export default function RhythmGame({
       }
       await player.resume();
       if (token !== generation.current) return;
-      if (document.hidden || !playableRef.current || portraitRef.current) {
+      if (
+        mode !== "challenge" &&
+        (document.hidden || !playableRef.current || portraitRef.current)
+      ) {
         await player.pause();
         if (token !== generation.current) return;
         setGamePhase("paused");
@@ -461,6 +475,31 @@ export default function RhythmGame({
       }
     }
   };
+  const resumeRef = useRef(resume);
+  resumeRef.current = resume;
+  // A practice pause ends by itself. Only seconds on the visible pause screen
+  // count, so a hidden tab or an open ranking never restarts the sound.
+  useEffect(() => {
+    if (phase !== "paused" || mode === "challenge") return;
+    let left = PAUSE_LIMIT_SECONDS;
+    const timer = window.setInterval(() => {
+      if (
+        document.hidden ||
+        !document.hasFocus() ||
+        !audio.current ||
+        !playableRef.current ||
+        portraitRef.current ||
+        gameRef.current?.querySelector(
+          '.weplay-ranking-launch[aria-expanded="true"]',
+        )
+      )
+        return;
+      left -= 1;
+      setPauseLeft(Math.max(0, left));
+      if (left <= 0) void resumeRef.current();
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [phase, mode]);
   const saveRanking = useCallback(async () => {
     const run = rankingRun.current;
     if (preview || !run?.sessionId || rankingSaveBusy.current) return;
@@ -504,13 +543,39 @@ export default function RhythmGame({
     let frames = 0;
     let slowFrames = 0;
     let previousStrike = strikeId.current;
+    let active = true;
+    let recovering = false;
+    // The browser held the sound, not the player. Continue as soon as the page
+    // is shown again; if the browser refuses, the player continues by hand.
+    const recover = (player: RhythmAudio) => {
+      if (recovering || document.hidden) return;
+      recovering = true;
+      void player.recover().then((running) => {
+        recovering = false;
+        if (
+          running ||
+          !active ||
+          audio.current !== player ||
+          phaseRef.current !== "playing"
+        )
+          return;
+        setGamePhase("paused");
+        setError("소리가 멈췄습니다. 계속 연주를 눌러 주세요.");
+      });
+    };
     const tick = (timestamp: number) => {
-      if (phaseRef.current !== "playing" || !audio.current) return;
-      if (audio.current.state !== "running" || !playableRef.current) {
-        pause();
+      const player = audio.current;
+      if (phaseRef.current !== "playing" || !player) return;
+      if (player.state !== "running" || !playableRef.current) {
+        if (modeRef.current !== "challenge") {
+          pause();
+          return;
+        }
+        recover(player);
+        raf = requestAnimationFrame(tick);
         return;
       }
-      const time = audio.current.currentTime;
+      const time = player.currentTime;
       // A single late frame can be startup or rotation. Switch only after
       // repeated frame stalls during actual inputs, for the rest of this run.
       if (!compactEffects && lastFrame) {
@@ -565,8 +630,20 @@ export default function RhythmGame({
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [phase, chart, song.duration, offset, finish, pause, compactEffects]);
+    return () => {
+      active = false;
+      cancelAnimationFrame(raf);
+    };
+  }, [
+    phase,
+    chart,
+    song.duration,
+    offset,
+    finish,
+    pause,
+    setGamePhase,
+    compactEffects,
+  ]);
 
   const noteWidth = Math.min(106, Math.max(72, canvasWidth * 0.08));
   const closestNoteGap = useMemo(
@@ -810,6 +887,9 @@ export default function RhythmGame({
   };
   const active =
     phase === "playing" || phase === "paused" || phase === "starting";
+  // A challenge only shows this screen when the browser itself held the sound.
+  const pauseTimed =
+    phase === "paused" && mode !== "challenge" && !!audio.current;
   const accuracyTotal = Math.max(
     chart.length,
     score.perfect + score.good + score.ok + score.miss,
@@ -847,7 +927,10 @@ export default function RhythmGame({
           portal={preview ? "teacher" : "student"}
           initialCategory={`${songId}:${difficulty === "easy" ? "normal" : difficulty}`}
           disabled={
-            !playable || phase === "starting" || rankingSave === "saving"
+            !playable ||
+            phase === "starting" ||
+            (mode === "challenge" && phase === "playing") ||
+            rankingSave === "saving"
           }
           onOpen={pause}
         />
@@ -941,7 +1024,11 @@ export default function RhythmGame({
                     },
                     {
                       title: "키보드",
-                      text: "노트의 왼·오에 맞춰 치세요. ← / Z는 왼손, → / X는 오른손입니다. 방향키는 가운데, Z / X는 가장자리입니다. 모바일은 북 위의 원을 누르세요. Escape는 일시정지, Enter와 Space는 선택한 북 버튼입니다.",
+                      text: "노트의 왼·오에 맞춰 치세요. ← / Z는 왼손, → / X는 오른손입니다. 방향키는 가운데, Z / X는 가장자리입니다. 모바일은 북 위의 원을 누르세요. Enter와 Space는 선택한 북 버튼입니다.",
+                    },
+                    {
+                      title: "일시정지",
+                      text: `연습은 일시정지 버튼이나 Escape로 ${PAUSE_LIMIT_SECONDS}초까지 쉴 수 있고, 시간이 지나면 자동으로 이어집니다. 도전은 멈출 수 없으며 화면을 가려도 곡이 계속됩니다.`,
                     },
                     {
                       title: "소리와 판정",
@@ -970,7 +1057,7 @@ export default function RhythmGame({
                 >
                   <RhythmIcon name={muted ? "muted" : "sound"} />
                 </button>
-                {phase === "playing" && (
+                {phase === "playing" && mode !== "challenge" && (
                   <button
                     type="button"
                     className="rhythm-tool rhythm-icon-button"
@@ -1486,6 +1573,11 @@ export default function RhythmGame({
                         ? "장단을 준비하고 있어요"
                         : "잠시 쉬어 가요"}
                     </h2>
+                    {pauseTimed && (
+                      <p className="rhythm-pause-timer" role="timer">
+                        <strong>{pauseLeft}</strong>초 뒤 자동으로 계속
+                      </p>
+                    )}
                     {phase === "paused" && (
                       <div>
                         <button
@@ -1510,7 +1602,9 @@ export default function RhythmGame({
                 <span className="rhythm-sr-only" aria-live="polite">
                   {active
                     ? phase === "paused"
-                      ? "연주를 일시정지했습니다."
+                      ? pauseTimed
+                        ? `연주를 일시정지했습니다. ${PAUSE_LIMIT_SECONDS}초 뒤 자동으로 이어집니다.`
+                        : "연주를 일시정지했습니다."
                       : "연주 중입니다."
                     : ""}
                 </span>

@@ -115,7 +115,22 @@ export class RhythmAudio {
     if (context?.state === "running") await context.suspend();
   }
 
-  /** Resume only from an explicit user action; never auto-resume a hidden tab. */
+  /**
+   * A challenge cannot be paused. After the browser itself held the sound, ask
+   * it to continue; unlike resume(), a refusal keeps the song for another try.
+   */
+  async recover(): Promise<boolean> {
+    const context = this.context;
+    if (!context || context.state === "closed") return false;
+    try {
+      await this.withDeadline(context.resume());
+    } catch {
+      // Still held by the browser or the device.
+    }
+    return this.context === context && context.state === "running";
+  }
+
+  /** Resume from the player's action or the practice pause limit; never in a hidden tab. */
   async resume(): Promise<void> {
     const context = this.context;
     if (!context || context.state === "closed")

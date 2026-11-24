@@ -912,6 +912,32 @@ assert.equal(
 );
 rejectedResume.dispose();
 
+// A challenge cannot be paused: a refused recovery keeps its song for a retry.
+const interrupted = new delayedAudio.RhythmAudio();
+await interrupted.start(songs[0]);
+const interruptedContext = contexts.at(-1);
+await interruptedContext.suspend();
+const nativeResume = interruptedContext.resume;
+interruptedContext.resume = async () => {
+  throw Error("still interrupted");
+};
+assert.equal(await interrupted.recover(), false);
+assert.equal(interruptedContext.state, "suspended");
+assert(
+  interruptedContext.sources.every((source) => !source.disconnected),
+  "Refused recovery keeps the scheduled song",
+);
+interruptedContext.resume = nativeResume;
+assert.equal(await interrupted.recover(), true);
+assert.equal(interrupted.state, "running");
+interrupted.dispose();
+assert.equal(
+  await interrupted.recover(),
+  false,
+  "A disposed player cannot be recovered",
+);
+assert.equal(resumeDeadlines.size, 0);
+
 for (const staleOutcome of ["resolve", "timeout", "reject"]) {
   const player = new delayedAudio.RhythmAudio();
   await player.start(songs[0]);
@@ -971,7 +997,7 @@ assert.equal(
 );
 assert.equal(resumeDeadlines.size, 0);
 console.log(
-  "Rhythm checks passed: four scores, chart density/determinism, alternating hands, earliest eligible note matching, all-chart 159/160ms late and jittered phrases, 220ms mistake recovery and extended mash blocking, count-in/outro exclusions, touch boundaries, fever scoring/reset and exact challenge limit replay, audio scheduling/pause/mute/teardown, resume timeout/rejection/late fulfillment/disposal/replacement races, unsupported browser and server authorization (pending/allowed/denied/error/canceled/timeout).",
+  "Rhythm checks passed: four scores, chart density/determinism, alternating hands, earliest eligible note matching, all-chart 159/160ms late and jittered phrases, 220ms mistake recovery and extended mash blocking, count-in/outro exclusions, touch boundaries, fever scoring/reset and exact challenge limit replay, audio scheduling/pause/mute/teardown, resume timeout/rejection/late fulfillment/disposal/replacement races, challenge sound recovery without ending the song, unsupported browser and server authorization (pending/allowed/denied/error/canceled/timeout).",
 );
 
 if (process.argv.includes("--audio-render")) {
