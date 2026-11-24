@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MutableRefObject,
   type RefObject,
 } from "react";
 import { RhythmNoteArt } from "./RhythmArt";
@@ -35,6 +36,7 @@ export default memo(function RhythmLaneNotes({
   playing,
   offset,
   travelSeconds,
+  sync,
 }: {
   chart: RhythmNote[];
   audio: RefObject<RhythmAudio>;
@@ -42,6 +44,8 @@ export default memo(function RhythmLaneNotes({
   playing: boolean;
   offset: number;
   travelSeconds: number;
+  /** The game calls this right after it judges a note. */
+  sync: MutableRefObject<(() => void) | null>;
 }) {
   const track = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -86,17 +90,21 @@ export default memo(function RhythmLaneNotes({
         active: undefined as RhythmNote | undefined,
       };
     });
-    let frame = 0;
+    // The compositor moves every note. This runs only when a note enters,
+    // expires or is judged, so moving notes never ask for a main-thread frame.
+    let timer = 0;
     let origin = NaN;
     let previousTime = -Infinity;
     const update = () => {
+      window.clearTimeout(timer);
       const time = (audio.current?.currentTime ?? 0) - offset / 1000;
-      // Sample both clocks together. The rAF timestamp can already be stale
-      // when a touch or another task runs before this callback.
+      // Sample both clocks together, at the moment this task actually runs.
       const nextOrigin = performance.now() - time * 1000;
       const realign =
         !Number.isFinite(origin) || Math.abs(nextOrigin - origin) > 32;
       if (realign) origin = nextOrigin;
+      // The cap also re-checks the two clocks while no note changes.
+      let wake = time + 0.25;
       for (const slot of slots) {
         if (time < previousTime) slot.index = 0;
         while (
@@ -105,6 +113,13 @@ export default memo(function RhythmLaneNotes({
         )
           slot.index++;
         const candidate = slot.notes[slot.index];
+        if (candidate)
+          wake = Math.min(
+            wake,
+            candidate.time - travelSeconds > time
+              ? candidate.time - travelSeconds
+              : candidate.time + HIT_WINDOW_SECONDS,
+          );
         const note =
           candidate &&
           candidate.time <= time + travelSeconds &&
@@ -131,18 +146,27 @@ export default memo(function RhythmLaneNotes({
         }
       }
       previousTime = time;
-      if (playing) frame = requestAnimationFrame(update);
+      if (playing)
+        timer = window.setTimeout(
+          update,
+          Math.max(4, (wake - time) * 1000 + 1),
+        );
     };
     update();
+    sync.current = update;
+    // Timers are slowed while a tab is hidden; catch up the moment it returns.
+    document.addEventListener("visibilitychange", update);
     return () => {
-      cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+      if (sync.current === update) sync.current = null;
+      document.removeEventListener("visibilitychange", update);
       for (const { node, motion } of slots) {
         motion.cancel();
         node.style.visibility = "hidden";
         delete node.dataset.noteId;
       }
     };
-  }, [audio, groups, judged, offset, playing, travelSeconds, width]);
+  }, [audio, groups, judged, offset, playing, sync, travelSeconds, width]);
   return (
     <div className="rhythm-note-track" ref={track}>
       {groups.map(([note], index) => (

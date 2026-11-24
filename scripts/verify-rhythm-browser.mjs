@@ -229,6 +229,12 @@ const pageFor = async (
         Element.prototype.requestFullscreen = () =>
           Promise.reject(new Error("QA page fallback"));
       window.rhythmAnimations = [];
+      window.rhythmFrameRequests = 0;
+      const requestFrame = window.requestAnimationFrame;
+      window.requestAnimationFrame = function (callback) {
+        window.rhythmFrameRequests++;
+        return requestFrame.call(window, callback);
+      };
       const animate = Element.prototype.animate;
       Element.prototype.animate = function (...args) {
         window.rhythmAnimations.push({
@@ -315,6 +321,8 @@ const score = (page) =>
     .evaluate((el) => Number(el.textContent.replace(/\D/g, "")));
 const time = async (page, value) => {
   await page.evaluate((value) => (window.rhythmQA.time = value), value);
+  // The game and the lane wake on timers (at most 250 ms apart), not on frames.
+  await page.waitForTimeout(320);
   await frames(page);
 };
 const shot = async (page, name) => {
@@ -1443,7 +1451,15 @@ try {
   await phase(pausePage, 'ready');
   await pausePage.getByRole('button', { name: '연주 시작', exact: false }).click();
   await phase(pausePage, 'playing');
-  const pauseSeconds = () => pausePage.locator('.rhythm-pause-timer strong').evaluate(el => Number(el.textContent));
+  // Notes move on the compositor and the game wakes on timers: no frame loop.
+  await pausePage.locator('[data-note-id]').first().waitFor();
+  const frameRequests = await pausePage.evaluate(() => window.rhythmFrameRequests);
+  const laneBefore = await pausePage.locator('[data-note-id]').first().evaluate(el => el.getBoundingClientRect().x);
+  await pausePage.waitForTimeout(700);
+  const idleFrameRequests = await pausePage.evaluate(() => window.rhythmFrameRequests) - frameRequests;
+  assert(idleFrameRequests <= 2, `a running song asks for no frame callbacks: ${idleFrameRequests}`);
+  assert(await pausePage.locator('[data-note-id]').first().evaluate(el => el.getBoundingClientRect().x) < laneBefore - 20, 'notes keep moving without frame callbacks');
+  const pauseSeconds =() => pausePage.locator('.rhythm-pause-timer strong').evaluate(el => Number(el.textContent));
   const audioClock = () => pausePage.evaluate(() => window.rhythmQA.audio.at(-1).currentTime);
   await pausePage.locator('.weplay-ranking-launch').click();
   await phase(pausePage, 'paused');
@@ -1932,8 +1948,9 @@ try {
     });
     const effects = await page.evaluate(() => ({
       effects: document.querySelectorAll(".rhythm-hit-effect").length,
-      animation: getComputedStyle(document.querySelector(".rhythm-hit-effect"))
-        .animationDuration,
+      animation: getComputedStyle(
+        document.querySelector(".rhythm-hit-effect b"),
+      ).animationDuration,
       wa: window.rhythmAnimations,
       reduce: matchMedia("(prefers-reduced-motion: reduce)").matches,
     }));
@@ -1942,6 +1959,34 @@ try {
         effects.effects > 0 &&
         parseFloat(effects.animation) >= 0.4,
       "hit effects survive reduced motion",
+    );
+    const animatedProperties = await page.evaluate(() => [
+      ...new Set(
+        document
+          .getAnimations()
+          .filter((animation) =>
+            animation.effect.target?.closest(".rhythm-game"),
+          )
+          .flatMap((animation) =>
+            animation.effect
+              .getKeyframes()
+              .flatMap((keyframe) => Object.keys(keyframe)),
+          ),
+      ),
+    ]);
+    assert(
+      animatedProperties.includes("transform") &&
+        animatedProperties.every((name) =>
+          [
+            "transform",
+            "opacity",
+            "offset",
+            "computedOffset",
+            "easing",
+            "composite",
+          ].includes(name),
+        ),
+      `strike effects animate only compositor properties: ${animatedProperties}`,
     );
     assert(
       effects.wa.some(

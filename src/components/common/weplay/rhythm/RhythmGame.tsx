@@ -43,6 +43,7 @@ import { RhythmAudio } from "./rhythmAudio";
 import { RHYTHM_SONGS } from "./rhythmSongs";
 import {
   COUNT_IN_SECONDS,
+  HIT_WINDOW_SECONDS,
   applyJudgement,
   advanceMissedNotes,
   FEVER_BONUSES,
@@ -181,6 +182,8 @@ export default function RhythmGame({
     }[]
   >([]);
   const strikeId = useRef(0);
+  const laneSync = useRef<(() => void) | null>(null);
+  const frameProbe = useRef({ active: false, stalled: 0, frame: 0 });
   const drumArtRef = useRef<HTMLDivElement>(null);
   const mascotRef = useRef<HTMLDivElement>(null);
   const [feedbackId, setFeedbackId] = useState(0);
@@ -347,6 +350,8 @@ export default function RhythmGame({
     runEndTime.current = 0;
     setCollected([]);
     setCompactEffects(false);
+    cancelAnimationFrame(frameProbe.current.frame);
+    frameProbe.current = { active: false, stalled: 0, frame: 0 };
     setArrivalId(0);
     setLastStrike(null);
     setEffects([]);
@@ -534,15 +539,46 @@ export default function RhythmGame({
     },
     [setGamePhase, saveRanking],
   );
+  // Frames are sampled only right after a strike. Two strikes in a row whose
+  // following frames stall switch to compact effects for the rest of this run;
+  // a single late frame can be startup or rotation.
+  const sampleFrames = useCallback(() => {
+    const probe = frameProbe.current;
+    if (probe.active) return;
+    probe.active = true;
+    let last = 0;
+    let left = 3;
+    let slow = 0;
+    const frame = (timestamp: number) => {
+      if (phaseRef.current !== "playing") {
+        probe.active = false;
+        return;
+      }
+      if (last) {
+        left--;
+        if (timestamp - last >= 40) slow++;
+      }
+      last = timestamp;
+      if (left > 0) {
+        probe.frame = requestAnimationFrame(frame);
+        return;
+      }
+      probe.active = false;
+      probe.stalled = slow >= 2 ? probe.stalled + 1 : 0;
+      if (probe.stalled < 2) return;
+      setCompactEffects(true);
+      setCollected([]);
+      setEffects([]);
+      setLastStrike(null);
+    };
+    probe.frame = requestAnimationFrame(frame);
+  }, []);
+  useEffect(() => () => cancelAnimationFrame(frameProbe.current.frame), []);
   useEffect(() => {
     if (phase !== "playing") return;
-    let raf = 0;
+    let timer = 0;
     let lastDisplayTime = -Infinity;
     let previousCount = -1;
-    let lastFrame = 0;
-    let frames = 0;
-    let slowFrames = 0;
-    let previousStrike = strikeId.current;
     let active = true;
     let recovering = false;
     // The browser held the sound, not the player. Continue as soon as the page
@@ -563,37 +599,23 @@ export default function RhythmGame({
         setError("소리가 멈췄습니다. 계속 연주를 눌러 주세요.");
       });
     };
-    const tick = (timestamp: number) => {
+    // No frame loop: wake at the next miss deadline, count-in digit or progress
+    // step. The main thread then renders only when the screen changes, and a
+    // hidden challenge still ends on time.
+    const wake = () => {
+      window.clearTimeout(timer);
       const player = audio.current;
-      if (phaseRef.current !== "playing" || !player) return;
+      if (!active || phaseRef.current !== "playing" || !player) return;
       if (player.state !== "running" || !playableRef.current) {
         if (modeRef.current !== "challenge") {
           pause();
           return;
         }
         recover(player);
-        raf = requestAnimationFrame(tick);
+        timer = window.setTimeout(wake, 250);
         return;
       }
       const time = player.currentTime;
-      // A single late frame can be startup or rotation. Switch only after
-      // repeated frame stalls during actual inputs, for the rest of this run.
-      if (!compactEffects && lastFrame) {
-        frames++;
-        if (timestamp - lastFrame >= 40) slowFrames++;
-        if (frames === 12) {
-          if (slowFrames >= 4 && strikeId.current - previousStrike >= 2) {
-            setCompactEffects(true);
-            setCollected([]);
-            setEffects([]);
-            setLastStrike(null);
-          }
-          frames = 0;
-          slowFrames = 0;
-          previousStrike = strikeId.current;
-        }
-      }
-      lastFrame = timestamp;
       const advanced = advanceMissedNotes(
         chart,
         judged.current,
@@ -609,41 +631,44 @@ export default function RhythmGame({
         scoreRef.current = next;
         setScore(next);
       }
+      const remaining = Math.max(0, Math.ceil(COUNT_IN_SECONDS - time));
+      if (remaining !== previousCount) {
+        previousCount = remaining;
+        setCountIn(remaining);
+      }
       if (time - lastDisplayTime >= 0.1 || time < lastDisplayTime) {
         lastDisplayTime = time;
         if (progressRef.current)
           progressRef.current.value = Math.max(0, time - COUNT_IN_SECONDS);
-        const remaining = Math.max(0, Math.ceil(COUNT_IN_SECONDS - time));
-        if (remaining !== previousCount) {
-          previousCount = remaining;
-          setCountIn(remaining);
-        }
       }
       if (advanced.terminated) {
         finish(advanced.endedAt, true);
         return;
       }
-      if (time >= song.duration + Math.max(0, offset / 1000)) {
+      const end = song.duration + Math.max(0, offset / 1000);
+      if (time >= end) {
         finish(song.duration);
         return;
       }
-      raf = requestAnimationFrame(tick);
+      let due = Math.min(end, time + 0.25);
+      if (time < COUNT_IN_SECONDS) due = Math.min(due, Math.floor(time) + 1);
+      const pending = chart.find((note) => !judged.current.has(note.id));
+      if (pending)
+        due = Math.min(
+          due,
+          pending.time + HIT_WINDOW_SECONDS + offset / 1000 + 0.002,
+        );
+      timer = window.setTimeout(wake, Math.max(4, (due - time) * 1000));
     };
-    raf = requestAnimationFrame(tick);
+    wake();
+    // Timers are slowed while a tab is hidden; catch up the moment it returns.
+    document.addEventListener("visibilitychange", wake);
     return () => {
       active = false;
-      cancelAnimationFrame(raf);
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", wake);
     };
-  }, [
-    phase,
-    chart,
-    song.duration,
-    offset,
-    finish,
-    pause,
-    setGamePhase,
-    compactEffects,
-  ]);
+  }, [phase, chart, song.duration, offset, finish, pause, setGamePhase]);
 
   const noteWidth = Math.min(106, Math.max(72, canvasWidth * 0.08));
   const closestNoteGap = useMemo(
@@ -794,6 +819,7 @@ export default function RhythmGame({
           replayStroke(pulse, "pulse", PULSE_FRAMES, 200);
         }
       } else {
+        sampleFrames();
         setLastStrike({ kind, id });
         setEffects((previous) => [
           ...previous.slice(-7),
@@ -838,8 +864,9 @@ export default function RhythmGame({
         }
       }
       judged.current.add(note.id);
+      laneSync.current?.();
     },
-    [chart, offset, laneTravelSeconds, finish, compactEffects],
+    [chart, offset, laneTravelSeconds, finish, compactEffects, sampleFrames],
   );
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
@@ -1285,6 +1312,7 @@ export default function RhythmGame({
                       ref={scoreTargetRef}
                       key={arrivalId}
                       className={arrivalId ? "rhythm-score-arrival" : ""}
+                      data-score={score.score.toLocaleString()}
                     >
                       {score.score.toLocaleString()}
                       <small>점</small>
@@ -1346,6 +1374,7 @@ export default function RhythmGame({
                         playing={phase === "playing"}
                         offset={offset}
                         travelSeconds={laneTravelSeconds}
+                        sync={laneSync}
                       />
                       {lastStrike && (
                         <div
@@ -1492,7 +1521,7 @@ export default function RhythmGame({
                                 top: `${effect.y * 100}%`,
                               }}
                               onAnimationEnd={(event) => {
-                                if (event.target === event.currentTarget)
+                                if (event.animationName === "rhythm-hit-word")
                                   setEffects((items) =>
                                     items.filter(
                                       (item) => item.id !== effect.id,
