@@ -8,7 +8,7 @@ import http from 'node:http';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const require=createRequire(import.meta.url), {build}=require('esbuild');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE_PATH||path.join(os.homedir(),'.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright'));
-const evidence=process.env.WIS_STUDENT_STOCK_QA_DIR||path.join(root,'output/wispi-wallet-ranking-20261123/student-browser');
+const evidence=process.env.WIS_STUDENT_STOCK_QA_DIR||path.join(root,'output/wispi-wallet-20261124/student-browser');
 await fs.mkdir(evidence,{recursive:true});
 // Only SDK and callable boundaries are mocked. Actual session/public/account clients,
 // hooks, menu access, student screens and chart execute together in the browser.
@@ -59,7 +59,6 @@ qa.receipts=new Map();
 export const getHistoryDictionaryCallable=async(name,options)=>async fields=>{options?.beforeDispatch?.();qa.calls.push({name,fields:structuredClone(fields)});let result;
 if(name==='placeStudentWisStockOrder'&&qa.holdOrder){qa.holdOrder=false;await new Promise(resolve=>qa.releaseOrder=resolve)}
 if(name==='placeStudentWisStockOrder'&&qa.failOrder){qa.failOrder=false;throw Object.assign(Error('시세가 바뀌었습니다. 다시 주문해 주세요.'),{code:'functions/failed-precondition',details:{reason:'WIS_STOCK_QUOTE_CHANGED'}})}
-if(name==='getStudentWisStockHistory'&&qa.holdHistory){qa.holdHistory=false;await new Promise(resolve=>qa.releaseHistory=resolve)}
 if(name==='getStudentWisStockState'){if(qa.failState){qa.failState=false;throw Error('temporary state connection')}result=qa.state();qa.lastStateServerNowMs=result.serverNowMs;if(qa.holdRead){qa.holdRead=false;await new Promise(resolve=>qa.releaseRead=resolve)}}
 else if(name==='getStudentWisStockRanking'){
  const asOfMs=Math.floor((Date.now()+9*3600000)/86400000)*86400000-9*3600000-60000;
@@ -82,7 +81,15 @@ else if(name==='getStudentWisStockRanking'){
  }
 }
 else if(name==='getStudentWisStockBonus'){result={campaignId:'wispi-deposit-500-v1',threshold:500,amount:500,status:qa.bonusClaimed?'CLAIMED':qa.bonusEnabled?(qa.depositTotal>=500?'ELIGIBLE':'INELIGIBLE'):'DISABLED',qualifyingDepositAmount:Math.min(500,qa.depositTotal||0)};}
-else if(name==='getStudentWisStockHistory'){if(qa.failHistory===fields.cursor){qa.failHistory=null;throw Error('내역 조회 실패')}const start=Number(fields.cursor||0),entries=qa.records.slice(start,start+20);result={semesterId:fields.year+'-'+fields.semester,entries,nextCursor:start+20<qa.records.length?String(start+20):'',hasMore:start+20<qa.records.length};}
+else if(name==='getStudentWisStockHistory' && fields.view==='returns') {
+  if(qa.holdReturns){qa.holdReturns=false;await new Promise(resolve=>qa.releaseReturns=resolve);}
+  if(qa.failReturns){qa.failReturns=false;throw Error('그래프 조회 실패');}
+  const asOfMs=Date.now();
+  result={semesterId:fields.year+'-'+fields.semester,asOfMs,points:[{atMs:asOfMs-3*86400000,returnPercent:-2.5},{atMs:asOfMs-2*86400000,returnPercent:null},{atMs:asOfMs-86400000,returnPercent:1.5},{atMs:asOfMs,returnPercent:23.46}]};
+}
+else if(name==='getStudentWisStockHistory'){if(qa.failHistory===fields.cursor){qa.failHistory=null;throw Error('내역 조회 실패')}const start=Number(fields.cursor||0),entries=qa.records.slice(start,start+20);result={semesterId:fields.year+'-'+fields.semester,entries,nextCursor:start+20<qa.records.length?String(start+20):'',hasMore:start+20<qa.records.length};
+  if(qa.holdHistory){qa.holdHistory=false;await new Promise(resolve=>qa.releaseHistory=resolve);}
+}
 else if(qa.receipts.has(fields.requestId)){result={...qa.receipts.get(fields.requestId),duplicate:true,changed:false,state:qa.state()}}
 else if(name==='transferStudentWisStock'){const amount=fields.amount;let profit=0,principal=0;if(fields.direction==='DEPOSIT'){qa.mainCash-=amount;qa.account.stockCash+=amount;qa.account.outstandingPrincipal+=amount;qa.account.lastDepositAtMs=Date.now();qa.depositTotal=(qa.depositTotal||0)+amount}else{principal=Math.min(amount,qa.account.outstandingPrincipal);profit=amount-principal;qa.account.outstandingPrincipal-=principal;qa.account.stockCash-=amount;qa.mainCash+=amount;}qa.account.revision++;result={changed:true,duplicate:false,receipt:{withdrawnProfit:profit,principalReturned:principal},state:qa.state()};qa.receipts.set(fields.requestId,result);qa.notifyAccount();}
 else if(name==='claimStudentWisStockBonus'){qa.bonusClaimed=true;qa.account.stockCash+=500;qa.account.eventBonusTotal=500;qa.account.eventBonusRestrictedCash=500;qa.account.revision++;result={changed:true,duplicate:false,state:qa.state(),depositBonus:{campaignId:'wispi-deposit-500-v1',threshold:500,amount:500,status:'CLAIMED',qualifyingDepositAmount:500}};qa.receipts.set(fields.requestId,result);qa.notifyAccount();}
@@ -102,13 +109,232 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const origin='http://127.0.0.1:'+server.address().port,browser=await chromium.launch({channel:process.env.PLAYWRIGHT_BROWSER_CHANNEL||'msedge',headless:true});
 const errors=[],checks=[];
 const chooseStock=async(page,name='청동네트웍스')=>{const row=page.locator('.student-wispi-instruments li button').filter({hasText:name});await row.waitFor({state:'attached'});if(await row.isVisible())await row.click();await page.getByRole('heading',{name,exact:true}).waitFor();};
-async function open(width=390,query='',listOnly=false){const page=await browser.newPage({viewport:{width,height:900}});page.setDefaultTimeout(10000);page.on('pageerror',error=>errors.push(error.message));await page.route('**/*',route=>route.request().url().startsWith(origin)?route.continue():route.abort());await page.clock.install({time:new Date('2026-11-16T01:00:00Z')});await page.goto(origin+query);if(query.includes('preopen')){await page.getByText('아직 위스피가 열리지 않았습니다.',{exact:true}).waitFor();return page;}await page.locator('.student-wispi-instruments li button').first().waitFor();await page.waitForFunction(()=>window.qa.calls.some(call=>call.name==='getStudentWisStockState'));if(!listOnly)await chooseStock(page);return page;}
+async function open(width=390,query='',listOnly=false){const page=await browser.newPage({viewport:{width,height:900}});page.setDefaultTimeout(30000);page.on('pageerror',error=>errors.push(error.message));await page.route('**/*',route=>route.request().url().startsWith(origin)?route.continue():route.abort());await page.clock.install({time:new Date('2026-11-16T01:00:00Z')});await page.goto(origin+query);if(query.includes('preopen')){await page.getByText('아직 위스피가 열리지 않았습니다.',{exact:true}).waitFor();return page;}await page.locator('.student-wispi-instruments li button').first().waitFor();await page.waitForFunction(()=>window.qa.calls.some(call=>call.name==='getStudentWisStockState'));if(!listOnly)await chooseStock(page);return page;}
 const calls=(page,name)=>page.evaluate(name=>window.qa.calls.filter(call=>call.name===name).length,name);
 const account=async page=>{await page.getByRole('button',{name:'주식 지갑',exact:true}).click();await page.getByLabel('위스 금액',{exact:true}).waitFor();};
+const walletTable = '.student-wispi-wallet-investments table';
+const historyCall = 'getStudentWisStockHistory';
+const graphCalls = (page) => page.evaluate(() => window.qa.calls.filter(call => call.name === 'getStudentWisStockHistory' && call.fields.view === 'returns').length);
+const walletFilter = (page, name) => page.getByRole('button', { name, exact: true });
+const walletRows = (page) => page.locator(walletTable + ' tbody tr');
+
+async function waitForRows(page, count) {
+  await page.waitForFunction(({ table, count }) => document.querySelectorAll(table + ' tbody tr').length === count, { table: walletTable, count });
+}
+
+async function setHoldings(page, count) {
+  const before = await calls(page, 'getStudentWisStockState');
+  await page.evaluate(count => {
+    const q = window.qa;
+    q.account.positions = q.market.stocks.slice(0, count).map(stock => ({
+      stockId: stock.id, quantity: 3, reservedSellQuantity: 1, principal: 240, costBasis: 243,
+    }));
+    q.account.revision++;
+    q.notifyAccount();
+  }, count);
+  await page.waitForFunction(expected => window.qa.calls.filter(call => call.name === 'getStudentWisStockState').length === expected, before + 1);
+}
+
+async function checkInternalScrolling(page) {
+  const more = walletFilter(page, '더보기');
+  const scroll = await more.evaluate(button => {
+    const region = button.closest('.student-wispi-wallet-scroll');
+    if (!region || !['auto', 'scroll'].includes(getComputedStyle(region).overflowY)) return null;
+    region.scrollTop = 0;
+    const pageTop = window.scrollY;
+    region.scrollTop = region.scrollHeight;
+    return { insideTableRegion: !!region.querySelector('table'), moved: region.scrollTop > 0, pageStayed: pageTop === window.scrollY };
+  });
+  assert(scroll?.insideTableRegion && scroll.moved && scroll.pageStayed, JSON.stringify(scroll));
+}
 async function deposit(page){await account(page);await page.getByLabel('위스 금액',{exact:true}).fill('5000');await page.getByRole('button',{name:'주식 지갑에 입금',exact:true}).click();await page.getByText('5,000 위스를 주식 지갑에 입금했습니다.',{exact:true}).waitFor();}
 const layout=async(page,width)=>{const result=await page.evaluate(()=>{const header=document.querySelector('.ws-page-header')||document.querySelector('main'),style=getComputedStyle(header);return{width:innerWidth,scroll:document.documentElement.scrollWidth,header:style.backgroundColor,shadow:style.boxShadow,minHeight:style.minHeight,tabs:[...document.querySelectorAll('.ws-page-tabs')].map(el=>getComputedStyle(el).backgroundColor)}});assert(result.scroll<=width,JSON.stringify(result));assert.equal(result.header,'rgba(0, 0, 0, 0)');assert.equal(result.shadow,'none');assert(result.tabs.every(color=>color==='rgba(0, 0, 0, 0)'),JSON.stringify(result));};
 const orderRow=async(page)=>{const boxes=await page.locator('.student-wispi-order-action').evaluate(row=>{const input=row.querySelector('input').getBoundingClientRect(),button=row.querySelector('button').getBoundingClientRect();return{input:{x:input.x,y:input.y,width:input.width,height:input.height},button:{x:button.x,y:button.y,width:button.width,height:button.height},overflow:row.scrollWidth>row.clientWidth}});assert(Math.abs(boxes.input.y-boxes.button.y)<2,JSON.stringify(boxes));assert(boxes.input.x+boxes.input.width<boxes.button.x,JSON.stringify(boxes));assert(boxes.input.height>=44&&boxes.button.height>=44&&!boxes.overflow,JSON.stringify(boxes));};
+async function verifyWalletViews() {
+  for (const width of [390, 768, 1280]) {
+    const wallet = await open(width, '?catalog', true);
+    await setHoldings(wallet, 1);
+    await account(wallet);
+    await waitForRows(wallet, 1);
+    assert.equal(await walletFilter(wallet, '투자 현황').getAttribute('aria-pressed'), 'true');
+    assert.equal(await walletFilter(wallet, '거래 내역').getAttribute('aria-pressed'), 'false');
+    const holding = await walletRows(wallet).innerText();
+    assert.match(holding, /청동네트웍스/);
+    assert.match(holding, /매도 예약\s*1주/);
+    assert.match(holding, /100/);
+    assert.match(holding, /300/);
+    await wallet.getByText(/\+57\s*위스/).first().waitFor();
+    await layout(wallet, width);
+    const boxes = await wallet.evaluate(() => {
+      const funding = document.querySelector('.student-wispi-wallet-funding').getBoundingClientRect();
+      const investments = document.querySelector('.student-wispi-wallet-investments');
+      const book = investments.getBoundingClientRect();
+      const headings = [...document.querySelectorAll('.student-wispi-account h2')];
+      const filters = investments.querySelector('button[aria-pressed]').parentElement;
+      return { fundingRight: funding.right, fundingTop: funding.top, fundingBottom: funding.bottom, bookLeft: book.left, bookTop: book.top,
+        clear: [...headings, filters].every(el => getComputedStyle(el).backgroundColor === 'rgba(0, 0, 0, 0)' && getComputedStyle(el).boxShadow === 'none') };
+    });
+    assert(boxes.clear, JSON.stringify(boxes));
+    if (width === 390) assert(boxes.bookTop > boxes.fundingBottom, JSON.stringify(boxes));
+    else assert(boxes.bookLeft > boxes.fundingRight && Math.abs(boxes.bookTop - boxes.fundingTop) < 2, JSON.stringify(boxes));
+    if (width === 1280) {
+      const row = await wallet.locator('.student-wispi-transfer form').evaluate(form =>
+        [...form.children].map(el => { const rect = el.getBoundingClientRect(); return { top: rect.top, bottom: rect.bottom }; }));
+      assert(Math.max(...row.map(control => control.top)) < Math.min(...row.map(control => control.bottom)), JSON.stringify(row));
+    }
+    assert.equal(await calls(wallet, historyCall), 0);
+    await wallet.screenshot({ path: path.join(evidence, 'wallet-' + width + '.png'), fullPage: true });
+
+    if (width === 1280) {
+      await setHoldings(wallet, 20);
+      await waitForRows(wallet, 20);
+      assert.equal(await walletFilter(wallet, '더보기').count(), 0);
+      await setHoldings(wallet, 21);
+      await walletFilter(wallet, '더보기').waitFor();
+      await waitForRows(wallet, 20);
+      const reads = await calls(wallet, 'getStudentWisStockState');
+      await checkInternalScrolling(wallet);
+      await walletFilter(wallet, '더보기').click();
+      await waitForRows(wallet, 21);
+      assert.equal(await walletFilter(wallet, '더보기').count(), 0);
+      assert.equal(await calls(wallet, 'getStudentWisStockState'), reads);
+      assert.equal(await calls(wallet, historyCall), 0);
+    }
+
+    await walletFilter(wallet, '거래 내역').click();
+    await waitForRows(wallet, 20);
+    assert.equal(await walletFilter(wallet, '거래 내역').getAttribute('aria-pressed'), 'true');
+    assert.equal(await wallet.locator(walletTable).count(), 1);
+    await checkInternalScrolling(wallet);
+    assert.equal(await calls(wallet, historyCall), 1);
+    await layout(wallet, width);
+    await wallet.screenshot({ path: path.join(evidence, 'wallet-history-' + width + '.png'), fullPage: true });
+    assert.equal(await graphCalls(wallet), 0);
+    await walletFilter(wallet, '내 그래프').click();
+    const graph = wallet.getByRole('img', { name: '내 최근 30일 보유 수익률 추이', exact: true });
+    await graph.waitFor();
+    assert.equal(await graphCalls(wallet), 1);
+    await layout(wallet, width);
+    await wallet.screenshot({path:path.join(evidence, 'wallet-graph-' + width + '.png'), fullPage: true});
+    await walletFilter(wallet, '투자 현황').click();
+    assert.equal(await graph.isVisible(), false);
+    await walletFilter(wallet, '내 그래프').click();
+    await graph.waitFor();
+    assert.equal(await graphCalls(wallet), 1);
+    if (width === 1280) {
+      await wallet.evaluate(() => { window.qa.failReturns = true; });
+      await walletFilter(wallet, '주식 지갑 새로고침').click();
+      await walletFilter(wallet, '다시 연결').waitFor();
+      assert.equal(await graphCalls(wallet), 2);
+      await walletFilter(wallet, '다시 연결').click();
+      await graph.waitFor();
+      assert.equal(await graphCalls(wallet), 3);
+      await wallet.evaluate(() => { window.qa.holdReturns = true; });
+      await walletFilter(wallet, '주식 지갑 새로고침').click();
+      await wallet.waitForFunction(() => typeof window.qa.releaseReturns === 'function');
+      await walletFilter(wallet, '투자 현황').click();
+      await wallet.evaluate(() => window.qa.releaseReturns());
+      await wallet.getByRole('table', { name: '보유 종목', exact: true }).waitFor();
+      assert.equal(await graph.isVisible(), false);
+      assert.equal(await graphCalls(wallet), 4);
+      assert.equal(await calls(wallet, historyCall), 5);
+    }
+    await wallet.close();
+  }
+  checks.push('390/768/1280px: one scrollable table, transparent headers, accurate totals and no page overflow. Exactly 20 holdings hide more; 21 show 20 then 21 locally. History and own chart start only on selection. Chart reentry adds zero reads; failed explicit refresh and successful retry each add one. A late graph response leaves the selected table visible.');
+}
+
+async function verifyWalletHistory() {
+  const overlap = await open();
+  await overlap.evaluate(() => { window.qa.duplicateAccount = true; window.qa.holdHistory = true; window.qa.render(); });
+  await overlap.getByRole('button', { name: '주식 지갑', exact: true }).click();
+  await overlap.waitForFunction(() => document.querySelectorAll('.student-wispi-account').length === 2);
+  assert.equal(await calls(overlap, historyCall), 0);
+  await walletFilter(overlap, '거래 내역').evaluateAll(buttons => buttons.forEach(button => button.click()));
+  await overlap.waitForFunction(() => typeof window.qa.releaseHistory === 'function');
+  assert.equal(await calls(overlap, historyCall), 1);
+  assert.equal(await calls(overlap, 'getStudentWisStockState'), 1);
+  assert.equal((await overlap.evaluate(() => window.qa.activePaths())).filter(p => p.includes('wis_stock_accounts')).length, 1);
+  await overlap.evaluate(() => window.qa.releaseHistory());
+  await waitForRows(overlap, 40);
+  await overlap.evaluate(() => { const q = window.qa; q.failHistory = ''; q.account.revision++; q.notifyAccount(); });
+  await overlap.waitForFunction(() => document.querySelectorAll('.student-wispi-read-status button').length === 2);
+  assert.equal(await calls(overlap, historyCall), 2);
+  await overlap.getByRole('button', { name: '다시 연결', exact: true }).evaluateAll(buttons => buttons.forEach(button => button.click()));
+  await waitForRows(overlap, 40);
+  assert.equal(await calls(overlap, historyCall), 3);
+  await overlap.close();
+  checks.push('Two open history filters share one live account request/listener and one first-page request. Account revision invalidates both, and concurrent manual recovery shares one retry.');
+
+  const history = await open();
+  await account(history);
+  await walletFilter(history, '거래 내역').click();
+  await waitForRows(history, 20);
+  const firstRow = await walletRows(history).first().innerText();
+  await history.evaluate(() => { window.qa.failHistory = '20'; });
+  await walletFilter(history, '더보기').click();
+  const reconnect = walletFilter(history, '다시 연결');
+  await reconnect.waitFor();
+  assert.equal(await walletRows(history).count(), 20);
+  await reconnect.click();
+  await waitForRows(history, 40);
+  assert.equal(await walletRows(history).first().innerText(), firstRow);
+  await walletFilter(history, '더보기').click();
+  await waitForRows(history, 43);
+  assert.equal(await walletFilter(history, '더보기').count(), 0);
+  await walletFilter(history, '투자 현황').click();
+  assert.equal(await history.getByRole('table', { name: '거래 내역', exact: true }).count(), 0);
+  await walletFilter(history, '거래 내역').click();
+  await waitForRows(history, 43);
+  const cursors = await history.evaluate(() => window.qa.calls.filter(x => x.name === 'getStudentWisStockHistory' && x.fields.view !== 'returns').map(x => x.fields.cursor));
+  assert.deepEqual(cursors, ['', '20', '20', '40']);
+  await walletFilter(history, '투자 현황').click();
+  const stateCalls = await calls(history, 'getStudentWisStockState');
+  await history.evaluate(() => {const q = window.qa; q.records = q.records.slice(0, 20); q.account.revision++; q.notifyAccount();});
+  await history.waitForFunction(expected => window.qa.calls.filter(c => c.name === 'getStudentWisStockState').length === expected, stateCalls + 1);
+  assert.equal(await calls(history, historyCall), 4);
+  await walletFilter(history, '거래 내역').click();
+  await waitForRows(history, 20);
+  assert.equal(await walletFilter(history, '더보기').count(), 0);
+  assert.equal(await calls(history, historyCall), 5);
+  await history.evaluate(() => {window.qa.records = [];});
+  await walletFilter(history, '주식 지갑 새로고침').click();
+  await history.getByText('아직 내역이 없습니다.', {exact:true}).waitFor();
+  assert.equal(await calls(history, historyCall), 6);
+  assert.equal(await walletFilter(history, '더보기').count(), 0);
+  await history.evaluate(() => {
+    const q = window.qa;
+    q.records = [{id:'old', kind:'DEPOSIT', atMs:Date.now(), stockCashDelta:357, mainCashDelta:-357, earnedDelta:0}];
+    q.holdHistory = true;
+  });
+  await walletFilter(history, '주식 지갑 새로고침').click();
+  await history.waitForFunction(() => typeof window.qa.releaseHistory === 'function');
+  await history.evaluate(() => {
+    const q = window.qa;
+    q.config = {...q.config, semester:'1'};
+    q.status = {...q.status, semesterId:'2026-1'};
+    q.market = {...q.market, semesterId:'2026-1'};
+    q.generation++;
+    q.records = [];
+    q.render();
+  });
+  await history.locator('.student-wispi-instruments li button').first().waitFor();
+  await account(history);
+  await walletFilter(history, '거래 내역').click();
+  await history.getByText('아직 내역이 없습니다.', {exact:true}).waitFor();
+  await history.evaluate(() => window.qa.releaseHistory());
+  await history.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  assert.equal(await walletRows(history).count(), 0);
+  assert.equal(await calls(history, historyCall), 8);
+  await history.close();
+  checks.push('43 trade records append 20/20/3 with the first row preserved. Cursor 20 retries once. Reopening the same revision adds zero calls. Exactly 20 and empty pages hide more. Inactive revisions wait for selection, explicit refresh reads once and a delayed response from the old semester cannot replace the new semester.');
+}
+
 try{
+ if (process.argv.includes('--wallet-only')) {
+   await verifyWalletViews();
+   await verifyWalletHistory();
+ } else {
  if(!process.argv.includes('--graduation-only')){
    if(!process.argv.includes('--wallet-freshness-only')){
    const name='getStudentWisStockRanking';
@@ -157,11 +383,7 @@ try{
    await page.evaluate(()=>{window.qa.emptyFirstRankingPage=true});await page.getByRole('button',{name:'전체 순위',exact:true}).click();await page.getByRole('button',{name:'더보기',exact:true}).waitFor();assert.equal(await page.locator('.student-wispi-rank-list > .student-wispi-rank-entry').count(),0);await page.getByRole('button',{name:'더보기',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('.student-wispi-rank-list > .student-wispi-rank-entry').length===10);assert.equal(await page.locator('.student-wispi-rank-legend li').count(),5);assert.equal(await page.evaluate(()=>window.qa.calls.filter(call=>call.name==='getStudentWisStockRanking').at(-1).fields.chartCount),5);
    await page.evaluate(()=>window.qa.setHalted(true));await page.getByRole('alert').getByText('위스피의 거래가 중지되었습니다.').waitFor();assert.equal(await page.locator('.student-wispi-ranking').count(),0);await page.close();
    checks.push('Ranking: 320/390/768/1280/1440px; first request returns 10 rows plus top-five charts; cached top-five/selected graph, no holdings, user-only 10-row pagination capped at 50 overall, own class 23 and another class 54; scoped rank 1; keyboard, no inactive market/account reads, loading, retry with exact cursor, stale page after filter switch, KST midnight and publication halt.');
-   for(const width of [390,768,1280]){
-     const wallet=await open(width,'',true);await wallet.evaluate(()=>{const q=window.qa;q.account.positions=[{stockId:q.market.stocks[0].id,quantity:3,reservedSellQuantity:1,principal:240,costBasis:243}];q.account.revision++;q.notifyAccount()});await account(wallet);await wallet.getByRole('heading',{name:'내 투자 현황',exact:true}).waitFor();await wallet.locator('.student-wispi-holding-price').filter({hasText:'100 위스'}).waitFor();await wallet.getByText('평가 300 위스',{exact:true}).waitFor();await wallet.getByText('+57 위스',{exact:false}).waitFor();
-     await layout(wallet,width);const boxes=await wallet.evaluate(()=>{const a=document.querySelector('.student-wispi-wallet-funding').getBoundingClientRect(),b=document.querySelector('.student-wispi-wallet-investments').getBoundingClientRect();return{right:a.right,left:b.left,ay:a.y,by:b.y,bottom:a.bottom}});if(width===1280)assert(boxes.left>boxes.right&&Math.abs(boxes.ay-boxes.by)<1,JSON.stringify(boxes));else assert(boxes.by>boxes.bottom,JSON.stringify(boxes));await wallet.screenshot({path:path.join(evidence,'wallet-'+width+'.png'),fullPage:true});await wallet.close();
-   }
-   checks.push('Wallet: funding left and holdings/current price/value/return right at 1280px, single column 390/768px, no extra market subscription; 243 cost/300 value/+57 profit and reservation quantity remain accurate.');
+   await verifyWalletViews();
    }
    const ttl=await open(1280,'',true);
    await ttl.evaluate(()=>{const q=window.qa;q.account.positions=[{stockId:q.market.stocks[0].id,quantity:3,reservedSellQuantity:0,principal:240,costBasis:243}];q.account.revision++;q.notifyAccount()});
@@ -170,13 +392,13 @@ try{
    await ttl.evaluate(()=>{const q=window.qa;q.market.stocks[0].price=125;q.market.revision++;q.holdRead=true;q.duplicateAccount=true;q.render()});
    await ttl.waitForFunction(()=>typeof window.qa.releaseRead==='function');await ttl.getByRole('button',{name:'주식 지갑',exact:true}).click();await ttl.waitForFunction(()=>document.querySelectorAll('.student-wispi-account').length===2);
    assert.equal(await calls(ttl,'getStudentWisStockState'),beforeTtl+1,'two stale wallet mounts share one refresh');
-   await ttl.evaluate(()=>window.qa.releaseRead());await ttl.waitForFunction(()=>[...document.querySelectorAll('.student-wispi-holding-price strong')].length===2&&[...document.querySelectorAll('.student-wispi-holding-price strong')].every(el=>el.textContent.includes('125')));
-   assert.equal(await ttl.locator('.student-wispi-investment-heading time').count(),2);assert.equal(await ttl.locator('.student-wispi-investment-heading time').first().getAttribute('datetime'),await ttl.evaluate(()=>new Date(window.qa.lastStateServerNowMs).toISOString()));
+   await ttl.evaluate(()=>window.qa.releaseRead());await ttl.waitForFunction(() => {const rows = [...document.querySelectorAll('table[aria-label="보유 종목"] tbody tr')];return rows.length === 2 && rows.every(row => row.textContent.includes('125'));});
+   assert.equal(await ttl.locator('.student-wispi-account time').count(),2);assert.equal(await ttl.locator('.student-wispi-account time').first().getAttribute('datetime'),await ttl.evaluate(()=>new Date(window.qa.lastStateServerNowMs).toISOString()));
    await ttl.evaluate(()=>{window.qa.duplicateAccount=false;window.qa.render()});await ttl.getByRole('button',{name:'주식 시장',exact:true}).click();await account(ttl);assert.equal(await calls(ttl,'getStudentWisStockState'),beforeTtl+1,'fresh entry does not refresh');
    await ttl.getByRole('button',{name:'주식 시장',exact:true}).click();await ttl.clock.fastForward(120000);assert.equal(await calls(ttl,'getStudentWisStockState'),beforeTtl+1,'no timed polling');await account(ttl);await ttl.waitForFunction(expected=>window.qa.calls.filter(call=>call.name==='getStudentWisStockState').length===expected,beforeTtl+2);
-   await ttl.evaluate(()=>{const q=window.qa;q.generation++;q.config={...q.config,semester:'1'};q.status={...q.status,semesterId:'2026-1'};q.market={...q.market,semesterId:'2026-1'};q.account.revision++;q.render()});await ttl.locator('.student-wispi-instruments li button').first().waitFor();await account(ttl);await ttl.getByText('1페이지',{exact:true}).waitFor();assert.equal(await calls(ttl,'getStudentWisStockState'),beforeTtl+3,'new semester reads once and never refreshes its fresh result');
+   await ttl.evaluate(()=>{const q=window.qa;q.generation++;q.config={...q.config,semester:'1'};q.status={...q.status,semesterId:'2026-1'};q.market={...q.market,semesterId:'2026-1'};q.account.revision++;q.render()});await ttl.locator('.student-wispi-instruments li button').first().waitFor();await account(ttl);await waitForRows(ttl, 1);assert.equal(await calls(ttl,'getStudentWisStockState'),beforeTtl+3,'new semester reads once and never refreshes its fresh result');
    const ttlPaths=await ttl.evaluate(()=>window.qa.activePaths());assert(ttlPaths.every(p=>!p.includes('/semesters/')||p.includes('/semesters/1/')),JSON.stringify(ttlPaths));
-   await ttl.getByRole('button',{name:'주식 시장',exact:true}).click();await ttl.clock.fastForward(30001);await ttl.evaluate(()=>{window.qa.failState=true});await ttl.getByRole('button',{name:'주식 지갑',exact:true}).click();await ttl.getByText('주식 지갑 연결을 다시 확인해 주세요.',{exact:true}).waitFor();assert.equal(await calls(ttl,'getStudentWisStockState'),beforeTtl+4);await ttl.getByRole('button',{name:'다시 연결',exact:true}).click();await ttl.getByRole('heading',{name:'내 투자 현황',exact:true}).waitFor();assert.equal(await calls(ttl,'getStudentWisStockState'),beforeTtl+5);await ttl.close();
+   await ttl.getByRole('button',{name:'주식 시장',exact:true}).click();await ttl.clock.fastForward(30001);await ttl.evaluate(()=>{window.qa.failState=true});await ttl.getByRole('button',{name:'주식 지갑',exact:true}).click();await ttl.getByText('주식 지갑 연결을 다시 확인해 주세요.',{exact:true}).waitFor();assert.equal(await calls(ttl,'getStudentWisStockState'),beforeTtl+4);await ttl.getByRole('button',{name:'다시 연결',exact:true}).click();await waitForRows(ttl, 1);assert.equal(await calls(ttl,'getStudentWisStockState'),beforeTtl+5);await ttl.close();
    checks.push('Wallet freshness: >30s held-account entry refreshes exactly once, two simultaneous views share one read, fresh reentry adds none, later reentry adds one with no polling, semester change reads once in its own scope, server timestamp is displayed, failed refresh clears stale data and explicit reconnect recovers once.');
 
  }
@@ -190,7 +412,7 @@ try{
  }
  checks.push('Graduated stock at 320/390/768/1280px: actual public/account clients accept state, both buy and sell disabled, explicit final-price settlement reason, zero order commands.');
  const bonus=await open(390);assert.equal(await calls(bonus,'getStudentWisStockBonus'),0,'market tab never reads bonus eligibility');await bonus.evaluate(()=>{const q=window.qa;q.bonusEnabled=true;q.records=[{id:'event',kind:'EVENT_BONUS',atMs:Date.now(),stockCashDelta:500,mainCashDelta:0,earnedDelta:0,campaignId:'fixture'}, {id:'graduation',kind:'ORDER_FILLED',automaticSettlement:'GRADUATION',side:'SELL',stockId:q.market.stocks[0].id,quantity:3,atMs:Date.now()-1000,stockCashDelta:300,mainCashDelta:0,earnedDelta:0}];});
- await account(bonus);await bonus.getByText('위스피 이벤트 보상',{exact:true}).waitFor();await bonus.getByText('종목 졸업 정산 · 매도',{exact:true}).waitFor();
+ await account(bonus);await walletFilter(bonus, '거래 내역').click();await bonus.getByRole('rowheader',{name:/위스피 이벤트 보상/}).waitFor();await bonus.getByRole('rowheader',{name:/종목 졸업 정산 · 매도/}).waitFor();
  await bonus.getByLabel('위스 금액',{exact:true}).fill('500');await bonus.getByRole('button',{name:'주식 지갑에 입금',exact:true}).click();await bonus.getByText('500 위스를 주식 지갑에 입금했습니다.',{exact:true}).waitFor();assert.equal(await calls(bonus,'transferStudentWisStock'),1);assert.equal(await bonus.evaluate(()=>window.qa.account.stockCash),500);assert.equal(await calls(bonus,'claimStudentWisStockBonus'),0);
  await bonus.getByRole('button',{name:'500위스 받기',exact:true}).click();await bonus.getByRole('button',{name:'받기 완료',exact:true}).waitFor();assert.equal(await calls(bonus,'claimStudentWisStockBonus'),1);assert.equal(await bonus.evaluate(()=>window.qa.account.stockCash),1000);assert.equal(await bonus.evaluate(()=>window.qa.toasts.at(-1).tone),'reward');await layout(bonus,390);await bonus.screenshot({path:path.join(evidence,'event-bonus-history-390.png'),fullPage:true});await bonus.close();
  checks.push('Market makes zero eligibility reads; a 500 deposit leaves exactly 500 stock cash until explicit claim adds 500 once and a reward toast. EVENT_BONUS and GRADUATION history labels remain readable through real clients and UI.');
@@ -283,9 +505,8 @@ try{
  checks.push('390/1280px: removing the selected instrument clears the order form instead of substituting another stock; explicit reselection restores the form with its lot size and no unsolicited command or account read.');
  const trade=await open();await deposit(trade);await trade.getByRole('button',{name:'주식 시장',exact:true}).click();await trade.getByLabel('수량',{exact:true}).fill('2');await trade.getByRole('button',{name:'매수 주문 접수',exact:true}).click();await trade.getByRole('button',{name:'청동네트웍스 매수 주문 취소',exact:true}).waitFor();const reads=await calls(trade,'getStudentWisStockState');await trade.clock.fastForward(61000);assert.equal(await calls(trade,'getStudentWisStockState'),reads,'Countdown must not poll');assert.equal(await trade.evaluate(()=>window.qa.account.stockCash),5000);assert((await trade.locator('body').innerText()).includes('체결 확인 중'));await trade.evaluate(()=>window.qa.fill());await trade.getByText('체결 완료',{exact:true}).waitFor();assert.equal(await calls(trade,'getStudentWisStockState'),reads+1);assert.equal(await trade.evaluate(()=>window.qa.account.stockCash),4798);await trade.close();checks.push('Accepted price/reservation stays fixed; 61s countdown does not settle or poll. Only a server account revision refresh displays the fill.');
  const cancel=await open();await deposit(cancel);await cancel.getByRole('button',{name:'주식 시장',exact:true}).click();await cancel.getByRole('button',{name:'매수 주문 접수',exact:true}).click();await cancel.getByRole('button',{name:'청동네트웍스 매수 주문 취소',exact:true}).click();await cancel.waitForFunction(()=>window.qa.account.pendingOrders.length===0);assert.equal(await cancel.evaluate(()=>window.qa.account.reservedCash),0);assert.equal(await calls(cancel,'cancelStudentWisStockOrder'),1);await cancel.close();checks.push('Cancel calls the server once and releases only the confirmed reservation.');
- const overlap=await open();await overlap.evaluate(()=>{const q=window.qa;q.duplicateAccount=true;q.holdHistory=true;q.render()});await overlap.waitForFunction(()=>typeof window.qa.releaseHistory==='function');await overlap.getByRole('button',{name:'주식 지갑',exact:true}).click();await overlap.waitForFunction(()=>document.querySelectorAll('.student-wispi-account').length===2);assert.equal(await calls(overlap,'getStudentWisStockHistory'),1);assert.equal(await calls(overlap,'getStudentWisStockState'),1);assert.equal((await overlap.evaluate(()=>window.qa.activePaths())).filter(p=>p.includes('wis_stock_accounts')).length,1);await overlap.evaluate(()=>window.qa.releaseHistory());await overlap.waitForFunction(()=>document.querySelectorAll('.student-wispi-account').length===2&&document.body.innerText.match(/1페이지/g)?.length===2);await overlap.evaluate(()=>{const q=window.qa;q.failHistory='';q.account.revision++;q.notifyAccount()});await overlap.waitForFunction(()=>document.querySelectorAll('.student-wispi-read-status button').length===2);assert.equal(await calls(overlap,'getStudentWisStockHistory'),2);await overlap.getByRole('button',{name:'다시 연결',exact:true}).evaluateAll(buttons=>buttons.forEach(button=>button.click()));await overlap.waitForFunction(()=>document.querySelectorAll('[role="alert"]').length===0&&document.body.innerText.match(/1페이지/g)?.length===2);assert.equal(await calls(overlap,'getStudentWisStockHistory'),3);await overlap.close();checks.push('Two live account views share one account listener/state request and one overlapping 20-row history request; a revision failure is not cached and concurrent explicit retries share one new history request.');
- const history=await open();await account(history);await history.getByRole('button',{name:'다음',exact:true}).waitFor();await history.evaluate(()=>window.qa.failHistory='20');await history.getByRole('button',{name:'다음',exact:true}).click();await history.getByRole('status').filter({hasText:'거래 내역 연결을 다시 확인해 주세요.'}).getByRole('button',{name:'다시 연결'}).click();await history.getByText('2페이지',{exact:true}).waitFor();await history.getByRole('button',{name:'다음',exact:true}).click();await history.getByText('3페이지',{exact:true}).waitFor();assert.equal(await history.locator('[aria-label="주식 입출금과 매매 내역"] li').count(),3);assert.equal(await history.getByRole('button',{name:'다음',exact:true}).isDisabled(),true);const cursors=await history.evaluate(()=>window.qa.calls.filter(x=>x.name==='getStudentWisStockHistory').map(x=>x.fields.cursor));assert.deepEqual(cursors,['','20','20','40']);await history.close();checks.push('43 history records use 20/20/3 cursor pages, with failed next-page retry retaining the exact failed cursor.');
- const closed=await open();await closed.evaluate(()=>window.qa.setHalted(true));await closed.getByText('위스피의 거래가 중지되었습니다.',{exact:true}).waitFor();assert.equal(await closed.locator('.student-wispi-content').evaluate(el=>el.inert),true);assert.equal(await closed.locator('.student-wispi-content').evaluate(el=>getComputedStyle(el).filter),'blur(5px)');assert((await closed.locator('[data-qa-menu]').innerText()).includes('위스피'));assert.equal(await closed.getByRole('link',{name:'위스피(WsPI)',exact:true}).count(),0,'The page does not duplicate the primary Wis menu');await closed.screenshot({path:path.join(evidence,'closed-390.png'),fullPage:false});await closed.evaluate(()=>{window.qa.screen='account';window.qa.render()});await closed.getByLabel('위스 금액',{exact:true}).waitFor();assert.equal(await closed.getByLabel('위스 금액',{exact:true}).isDisabled(),true);await closed.evaluate(()=>window.qa.setHiddenMenu(true));await closed.waitForFunction(()=>window.qa.routeAllowed===false);await closed.getByText('1페이지',{exact:true}).waitFor();assert.equal(await closed.locator('[data-qa-menu]').innerText(),'');assert.equal((await closed.evaluate(()=>window.qa.activePaths())).some(p=>p.includes('wis_stock_public')),false);assert.equal((await closed.evaluate(()=>window.qa.activePaths())).filter(p=>p.includes('wis_stock_accounts')).length,1);await closed.close();checks.push('Close keeps menu and blurs/inerts the market with exact stop text; settings hide blocks direct route/public subscriptions while My Page account/history remains readable and transfers disabled.');
+ await verifyWalletHistory();
+ const closed=await open();await closed.evaluate(()=>window.qa.setHalted(true));await closed.getByText('위스피의 거래가 중지되었습니다.',{exact:true}).waitFor();assert.equal(await closed.locator('.student-wispi-content').evaluate(el=>el.inert),true);assert.equal(await closed.locator('.student-wispi-content').evaluate(el=>getComputedStyle(el).filter),'blur(5px)');assert((await closed.locator('[data-qa-menu]').innerText()).includes('위스피'));assert.equal(await closed.getByRole('link',{name:'위스피(WsPI)',exact:true}).count(),0,'The page does not duplicate the primary Wis menu');await closed.screenshot({path:path.join(evidence,'closed-390.png'),fullPage:false});await closed.evaluate(()=>{window.qa.screen='account';window.qa.render()});await closed.getByLabel('위스 금액',{exact:true}).waitFor();assert.equal(await closed.getByLabel('위스 금액',{exact:true}).isDisabled(),true);await closed.evaluate(()=>window.qa.setHiddenMenu(true));await closed.waitForFunction(()=>window.qa.routeAllowed===false);await walletFilter(closed, '거래 내역').click();await waitForRows(closed, 20);assert.equal(await closed.locator('[data-qa-menu]').innerText(),'');assert.equal((await closed.evaluate(()=>window.qa.activePaths())).some(p=>p.includes('wis_stock_public')),false);assert.equal((await closed.evaluate(()=>window.qa.activePaths())).filter(p=>p.includes('wis_stock_accounts')).length,1);await closed.close();checks.push('Close keeps menu and blurs/inerts the market with exact stop text; settings hide blocks direct route/public subscriptions while My Page account/history remains readable and transfers disabled.');
  const refresh=await open();await account(refresh);await refresh.evaluate(()=>window.qa.mainCash=12000);await refresh.getByRole('button',{name:'주식 지갑 새로고침'}).click();await refresh.locator('.student-wispi-balances [aria-live="polite"] dd').filter({hasText:'6,000 위스'}).waitFor();assert.equal(await calls(refresh,'getStudentWisStockState'),2);await refresh.evaluate(()=>{window.qa.mainCash=14000;window.dispatchEvent(new CustomEvent('westory:points-updated'))});await refresh.locator('.student-wispi-balances [aria-live="polite"] dd').filter({hasText:'7,000 위스'}).waitFor();assert.equal(await calls(refresh,'getStudentWisStockState'),3);await refresh.close();checks.push('Explicit balance refresh and existing points-updated event refresh one scoped state, including general balance and 50% funding limit.');
  const paused=await open();await paused.evaluate(()=>{window.qa.holdRead=true;window.qa.account.revision++;window.qa.notifyAccount()});await paused.waitForFunction(()=>typeof window.qa.releaseRead==='function');await paused.evaluate(()=>window.qa.changeVisibility(true));await paused.waitForFunction(()=>window.qa.activePaths().length===0);await paused.evaluate(()=>window.qa.releaseRead());assert.equal(await paused.locator('.student-wispi-market').count(),0);await paused.evaluate(()=>window.qa.changeVisibility(false));await paused.getByRole('heading',{name:'청동네트웍스',exact:true}).waitFor();await paused.waitForFunction(()=>window.qa.activePaths().length===4);await paused.evaluate(()=>window.qa.setOffline(true));await paused.waitForFunction(()=>window.qa.activePaths().length===0);await paused.evaluate(()=>window.qa.setOffline(false));await paused.getByRole('heading',{name:'청동네트웍스',exact:true}).waitFor();await paused.close();checks.push('Hidden/offline releases all four SDK watches; late in-flight account response cannot restore data; visible/online revalidates shared session and reconnects.');
  const session=await open();await session.evaluate(()=>{window.qa.sessionClosed=true;window.qa.emit('application_sessions/')});await session.getByRole('alert').first().waitFor();assert.equal(await session.locator('.student-wispi-market').count(),0);await session.waitForFunction(()=>window.qa.activePaths().length===0);await session.close();const expire=await open();await expire.evaluate(()=>{window.qa.sessionMode='ENFORCE';window.qa.expires=Date.now()+1000;window.qa.emit('application_sessions/')});await expire.clock.fastForward(1001);await expire.getByRole('alert').first().waitFor();assert.equal(await expire.locator('.student-wispi-market').count(),0);await expire.close();checks.push('OBSERVE_ONLY accepts expired idle deadline; closed session and ENFORCE natural deadline erase private data and subscriptions.');
@@ -293,6 +514,7 @@ try{
  const unopened=await open(390,'?preopen');assert.equal(await calls(unopened,'getStudentWisStockState'),0);assert.equal(await unopened.getByRole('link',{name:'위스피(WsPI)',exact:true}).count(),0);assert.equal((await unopened.evaluate(()=>window.qa.activePaths())).length,2);await unopened.evaluate(()=>{window.qa.status.studentOpen=true;window.qa.emit('/current')});await chooseStock(unopened);await unopened.waitForFunction(()=>window.qa.activePaths().length===4);assert.equal(await calls(unopened,'getStudentWisStockState'),1);await unopened.close();checks.push('Before first launch: no student menu, market feed or own-account query; first publication opens them with one state read.');
  const boundary=await open();await boundary.evaluate(()=>{window.qa.holdRead=true;window.qa.account.revision++;window.qa.notifyAccount()});await boundary.waitForFunction(()=>typeof window.qa.releaseRead==='function');await boundary.evaluate(()=>{const q=window.qa;q.user={uid:'student-b',getIdTokenResult:async()=>({claims:{auth_time:q.epoch}})};q.epoch++;q.generation++;q.config={...q.config,semester:'1'};q.status={...q.status,semesterId:'2026-1'};q.market={...q.market,semesterId:'2026-1'};q.account={...q.account,revision:2,stockCash:777,accountId:q.accountId()};q.replaceUser(q.user);q.render();q.releaseRead()});await boundary.getByText('사용 가능 777 위스',{exact:true}).waitFor({state:'attached'});await chooseStock(boundary);await boundary.getByText('사용 가능 777 위스',{exact:true}).waitFor();assert.equal(await boundary.getByRole('alert').count(),0);const newPaths=await boundary.evaluate(()=>window.qa.activePaths());assert(newPaths.every(p=>p.includes('/semesters/1/')||p.includes('/student-b/sessions/')),JSON.stringify(newPaths));await boundary.close();checks.push('A held previous-user account response is ignored after UID/auth_time and semester change; only the new user/scope subscriptions and balance remain.');
  const profit=await open();await deposit(profit);await profit.evaluate(()=>{window.qa.account.stockCash=6000;window.qa.account.revision++;window.qa.notifyAccount()});await profit.getByRole('button',{name:'출금',exact:true}).click();await profit.getByLabel('위스 금액',{exact:true}).fill('5000');await profit.getByRole('button',{name:'일반 위스로 출금',exact:true}).click();await profit.getByText('5,000 위스를 출금했습니다.',{exact:true}).waitFor();await profit.getByLabel('위스 금액',{exact:true}).fill('1000');await profit.getByRole('button',{name:'일반 위스로 출금',exact:true}).click();await profit.getByText('1,000 위스를 출금했습니다. 누적 위스에 수익 1,000 위스가 반영되었습니다.',{exact:true}).waitFor();assert.equal(await profit.evaluate(()=>window.qa.mainCash),11000);assert.equal(await profit.evaluate(()=>window.qa.account.stockCash),0);await profit.close();checks.push('Withdrawal feedback distinguishes returned principal from withdrawn profit, using the server receipt only.');
+ }
  }
  }
  assert.deepEqual(errors,[]);await fs.writeFile(path.join(evidence,'summary.json'),JSON.stringify({checks,errors},null,2));console.log(JSON.stringify({evidence,checks},null,2));

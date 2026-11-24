@@ -17,6 +17,7 @@ const { buildWisStockInvestmentBoard, parseWisStockInvestmentBoardSnapshot, norm
 
 const { getDepositBonusStatus, createDepositBonusReceipt, receiptPath: campaignReceiptPath } = require('./wisStockDepositCampaign');
 const { createWisStockGraduation } = require('./wisStockGraduation');
+const { buildWisStockInvestmentHistorySeries } = require('./wisStockInvestmentHistorySeries.mjs');
 const { validateWisStockBonusAccount, assertWisStockBonusReady, wisStockBonusFunding,
   grantWisStockRestrictedBonus, tagWisStockBonusOrder, applyWisStockBonusOrder } = require('./wisStockBonusAccounting');
 
@@ -559,8 +560,32 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
       return { changed: result.changed, duplicate: false, order: result.order, state: state(context, result.next) };
     });
   });
+  async function readWalletReturns(tx, context) {
+    assertOpen(context);
+    const { account, scope, market, atMs: asOfMs } = context;
+    // Old fills set the cost basis of positions that are still held today.
+    const snapshot = await tx.get(db.collection(`${rootPath(scope)}/wis_stock_history`)
+      .where('accountId', '==', account.accountId).where('kind', '==', 'ORDER_FILLED')
+      .select('accountId', 'studentUid', 'semesterId', 'sequence', 'atMs', 'stockId', 'side', 'quantity', 'unitPrice', 'fee', 'stockCashDelta', 'realizedPnl'));
+    const fills = snapshot.docs.map(doc => {
+      const entry = doc.data();
+      if (entry.accountId !== account.accountId || entry.studentUid !== context.actor.uid || entry.semesterId !== scope.semesterId)
+        fail('WIS_STOCK_HISTORY_INVALID');
+      return entry;
+    });
+    const { points } = buildWisStockInvestmentHistorySeries({ account, fills, stocks: market.stocks, asOfMs });
+    const hour = 3_600_000, cutoff = asOfMs - 30 * 24 * hour;
+    const hourly = new Map();
+    for (const point of points) if (point.atMs > cutoff) {
+      const cost = point.holdingCostBasis;
+      hourly.set(Math.floor(point.atMs / hour), { atMs: point.atMs,
+        returnPercent: cost > 0 && point.holdingValue !== null ? (point.holdingValue - cost) / cost * 100 : null });
+    }
+    return { semesterId: scope.semesterId, asOfMs, points: [...hourly.values()] };
+  }
   const getStudentWisStockHistory = checked(async request => {
-    const input = request.data; validateInput(input, ['cursor', 'limit']);
+    const input = request.data, returns = input?.view === 'returns';
+    validateInput(input, returns ? ['view'] : ['cursor', 'limit']);
     const scope = scopeOf(input), actor = await actorFor(request), limit = input.limit ?? 20;
     if (!safe(limit, 1) || limit > 50 || (input.cursor !== undefined && typeof input.cursor !== 'string')) fail('WIS_STOCK_INPUT_INVALID', undefined, 'invalid-argument');
     let cursor;
@@ -571,6 +596,7 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
     }
     return db.runTransaction(async tx => {
       const context = await load(tx, scope, actor, now());
+      if (returns) return readWalletReturns(tx, context);
       let query = db.collection(`${rootPath(scope)}/wis_stock_history`).where('accountId', '==', context.account.accountId)
         .orderBy('sequence', 'desc').orderBy(FieldPath.documentId(), 'desc').limit(limit + 1);
       if (cursor) query = query.startAfter(cursor.sequence, cursor.id);

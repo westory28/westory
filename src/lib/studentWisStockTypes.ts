@@ -126,6 +126,11 @@ export interface StudentWisStockHistoryPage {
   nextCursor: string;
   hasMore: boolean;
 }
+export interface StudentWisStockReturns {
+  semesterId: string;
+  asOfMs: number;
+  points: { atMs: number; returnPercent: number | null }[];
+}
 export interface StudentWisStockMutation {
   changed: boolean;
   duplicate: boolean;

@@ -133,6 +133,40 @@ async function test(name, fn, count = 2, supply = 1000) {
   console.log(`PASS ${name}`);
 }
 (async () => { try {
+  await test('own wallet returns use scoped fills and current quotes; legacy ledger and visibility stay independent', async () => {
+    const returns = (uid = 'student0', fields = {}) => api.getStudentWisStockHistory(request(uid, { view: 'returns', ...fields }));
+    await state('student0'); const baseReads = commits.at(-1).finalReads;
+    const empty = await returns();
+    assert.deepEqual(empty, { semesterId: scope.semesterId, asOfMs: clock, points: [{ atMs: clock, returnPercent: null }] });
+    assert.equal(commits.at(-1).finalReads, baseReads + 1);
+    for (const uid of ['student0', 'student1']) await transfer(uid, 'DEPOSIT', 5000);
+    const myBuy = await place('student0', 'BUY', 2), otherBuy = await place('student1', 'BUY', 1);
+    clock += 60001; await settle(myBuy.order.id); await settle(otherBuy.order.id);
+    const firstTime = clock;
+    clock += 3600000;
+    const stock = (await get(`${base}/wis_stock_markets/current`)).stocks[0];
+    await marketWrite({ stocks: [{ ...stock, price: 150, updatedAtMs: clock,
+      history: [...stock.history, { atMs: clock, price: 150 }] }] });
+    const mySale = await place('student0', 'SELL', 1, 'sell_wallet_return_001');
+    clock += 60001; await settle(mySale.order.id);
+    const result = await returns();
+    assert.deepEqual(result.points, [{ atMs: firstTime, returnPercent: (200 - 202) / 202 * 100 },
+      { atMs: clock, returnPercent: (150 - 101) / 101 * 100 }]);
+    assert.equal(commits.at(-1).finalReads, baseReads + 2);
+    assert.equal(commits.at(-1).writes.length, 0);
+    assert.equal((await api.getStudentWisStockHistory(request('student0', { limit: 1 }))).entries.length, 1);
+    for (const fields of [{ accountId: 'different' }, { studentUid: 'student1' }, { cursor: '' }, { limit: 20 }, { view: 'unknown' }])
+      await denied(returns('student0', fields), 'WIS_STOCK_INPUT_INVALID');
+    await db.doc('site_settings/config').update({ studentMenuVisibility: { wispi: false } });
+    await denied(returns(), 'STUDENT_MENU_HIDDEN');
+    await db.doc('site_settings/config').update({ studentMenuVisibility: { wispi: true } });
+    await marketWrite({ studentOpen: false });
+    await denied(returns(), 'WIS_STOCK_MARKET_CLOSED');
+    assert.ok((await api.getStudentWisStockHistory(request('student0'))).entries.length > 0);
+    await marketWrite({ studentOpen: true });
+    await db.doc(sessionPath('student0')).update({ status: 'closed' });
+    await assert.rejects(returns(), error => error.code === 'unauthenticated');
+  });
   await test('teacher investment history reconstructs only selected filled ledger with no writes and current authority', async () => {
     await transfer('student0', 'DEPOSIT', 5000);
     await transfer('student1', 'DEPOSIT', 5000);

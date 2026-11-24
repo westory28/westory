@@ -13,6 +13,7 @@ import type {
   StudentWisStockBonus,
   StudentWisStockHistoryPage,
   StudentWisStockMutation,
+  StudentWisStockReturns,
   StudentWisStockState,
   WisStockLoad,
   WisStockScope,
@@ -32,6 +33,7 @@ type StateEntry = {
   commands: number;
   seenRevision: number;
   historyReads: Map<string, Promise<StudentWisStockHistoryPage>>;
+  returnsRead?: Promise<StudentWisStockReturns>;
   apply: (state: StudentWisStockState) => void;
   refresh: () => void;
   dispose: () => void;
@@ -44,6 +46,7 @@ const bonusReads = new WeakMap<
 >();
 function invalidateDetails(entry: StateEntry) {
   entry.historyReads.clear();
+  delete entry.returnsRead;
   bonusReads.get(entry.boundary.owner)?.delete(entry.boundary.key);
 }
 type CommandEntry = {
@@ -307,6 +310,8 @@ export function watchStudentWisStockState(
             next.account.revision !== current.state.data.account.revision
           )
             invalidateDetails(current);
+          else if (next.marketRevision !== current.state.data.marketRevision)
+            delete current.returnsRead;
           send({ status: "ready", data: next, error: "" });
           syncListener(next);
         };
@@ -729,5 +734,44 @@ export async function getStudentWisStockHistory(
       if (pending?.get(cursor) === task) pending.delete(cursor);
     });
   pending?.set(cursor, task);
+  return task;
+}
+
+export async function getStudentWisStockReturns(scope: WisStockScope) {
+  const b = await boundary(scope);
+  const entry = entries.get(b.key);
+  if (entry?.boundary.owner !== b.owner || entry.state.status !== "ready")
+    throw changed();
+  if (entry.returnsRead) return entry.returnsRead;
+  const task = invoke<StudentWisStockReturns>(b, "getStudentWisStockHistory", {
+    view: "returns",
+  })
+    .then((data) => {
+      if (
+        data?.semesterId !== `${scope.year}-${scope.semester}` ||
+        !Number.isSafeInteger(data.asOfMs) ||
+        data.asOfMs <= 0 ||
+        data.asOfMs > 8_640_000_000_000_000 ||
+        !Array.isArray(data.points) ||
+        data.points.length > 721 ||
+        data.points.some(
+          (point, index) =>
+            !Number.isSafeInteger(point?.atMs) ||
+            point.atMs <= data.asOfMs - 30 * 86_400_000 ||
+            point.atMs > data.asOfMs ||
+            (index > 0 && point.atMs <= data.points[index - 1].atMs) ||
+            (point.returnPercent !== null &&
+              !Number.isFinite(point.returnPercent)),
+        )
+      )
+        throw new Error(
+          "보유 수익률을 확인하지 못했습니다. 다시 시도해 주세요.",
+        );
+      return data;
+    })
+    .finally(() => {
+      if (entry.returnsRead === task) delete entry.returnsRead;
+    });
+  entry.returnsRead = task;
   return task;
 }

@@ -533,13 +533,6 @@
   color: var(--ws-text-muted, #6b7280);
   font-size: 12px;
 }
-.student-wispi-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 16px;
-}
 @media (max-width: 767px) {
   .student-wispi-balances {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -596,14 +589,18 @@
 }
 .student-wispi-account-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
 }
-.student-wispi-account-actions button {
+.student-wispi-account .student-wispi-account-actions button {
   min-height: 44px;
+  padding: 4px;
   background: transparent;
   border: 0;
-  color: #475569;
-  font-size: 0.8125rem;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -618,16 +615,37 @@
 .student-wispi-account { container-type: inline-size; }
 .student-wispi-wallet-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
   gap: 24px;
   align-items: start;
 }
 .student-wispi-wallet-funding,
 .student-wispi-wallet-investments { min-width: 0; }
 .student-wispi-wallet-funding .student-wispi-balances { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.student-wispi-wallet-funding .student-wispi-transfer form { gap: 8px; }
+.student-wispi-wallet-funding .student-wispi-transfer form label { flex: 1 1 128px; gap: 8px; }
+.student-wispi-wallet-funding .student-wispi-transfer input { padding-inline: 8px; }
 .student-wispi-wallet-investments { padding-left: 24px; border-left: 1px solid var(--ws-border, #e5e7eb); }
-.student-wispi-investment-heading { margin-bottom: 16px; }
+.student-wispi-investment-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; }
+.student-wispi-wallet-funding > h2 { display: flex; align-items: center; min-height: 44px; }
 .student-wispi-account .student-wispi-investment-heading h2 { margin: 0; }
+.student-wispi-wallet-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 8px 0 16px;
+}
+.student-wispi-account .student-wispi-wallet-filters button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ws-text-muted, #6b7280);
+}
+.student-wispi-account .student-wispi-wallet-filters button[aria-pressed="true"] {
+  background: var(--ws-primary-soft, #eff6ff);
+  color: var(--ws-primary, #2563eb);
+  font-weight: 700;
+}
 .student-wispi-investment-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -641,9 +659,56 @@
 .student-wispi-account .is-up { color: var(--ws-danger-text, #b91c1c); }
 .student-wispi-account .is-down { color: var(--ws-primary, #2563eb); }
 .student-wispi-account .is-flat { color: var(--ws-text-muted, #6b7280); }
-.student-wispi-holding-price { flex-shrink: 0; text-align: right; font-variant-numeric: tabular-nums; }
-.student-wispi-holding-price strong { white-space: nowrap; }
-@container (max-width: 879px) {
+.student-wispi-wallet-scroll {
+  max-height: min(480px, 56dvh);
+  overflow: auto;
+  overflow-anchor: none;
+  border-block: 1px solid var(--ws-border, #e5e7eb);
+}
+.student-wispi-wallet-scroll:focus-visible { outline: 2px solid var(--ws-ring, #3b82f6); outline-offset: 2px; }
+.student-wispi-wallet-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+.student-wispi-wallet-table :is(th, td) {
+  padding: 12px 8px;
+  text-align: right;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+  overflow-wrap: anywhere;
+}
+.student-wispi-wallet-table tr > :first-child { width: 38%; text-align: left; }
+.student-wispi-wallet-table thead th {
+  position: sticky;
+  top: 0;
+  padding-block: 8px;
+  background: var(--ws-bg, #f9fafb);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ws-text-muted, #6b7280);
+}
+.student-wispi-wallet-table tbody th { font-weight: 700; }
+.student-wispi-wallet-table td:last-child { font-weight: 600; }
+.student-wispi-wallet-table small {
+  display: block;
+  margin-top: 4px;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+  font-weight: 400;
+}
+.student-wispi-wallet-empty {
+  margin: 0;
+  padding: 24px 8px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--ws-text-muted, #6b7280);
+}
+@container (max-width: 679px) {
   .student-wispi-wallet-layout { grid-template-columns: minmax(0, 1fr); }
   .student-wispi-wallet-investments { padding: 24px 0 0; border-left: 0; border-top: 1px solid var(--ws-border, #e5e7eb); }
 }

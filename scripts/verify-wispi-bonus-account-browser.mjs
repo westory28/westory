@@ -24,6 +24,7 @@ export const useAuth=()=>({currentUser:{uid:qa.uid},config:{year:'2026',semester
 export const getYearSemester=config=>config;
 export const useStudentWisStockAccount=()=>({status:qa.status,data:qa.status==='ready'?qa.state:null,error:qa.error,retry:()=>{qa.calls.push({kind:'refresh'});qa.status='ready';qa.render()}});
 export const getStudentWisStockHistory=async()=>{qa.historyCalls++;return {semesterId:'2026-2',entries:[],nextCursor:'',hasMore:false}};
+export const getStudentWisStockReturns=async()=>{throw Error('Funding controls must not request the wallet chart')};
 export const getStudentWisStockBonus=async()=>{
  qa.bonusCalls++;const result=structuredClone(qa.bonus);
  if(qa.holdBonus){qa.holdBonus=false;await new Promise(resolve=>qa.releaseBonus=resolve)}
@@ -50,7 +51,7 @@ export const transferStudentWisStock=async(scope,direction,amount)=>{
 };
 `;
 const entry = `import React from 'react';import{createRoot}from'react-dom/client';import{qa}from'qa-fixture';import Account from ${JSON.stringify(path.join(root, 'src/pages/student/components/wispi/StudentWisStockAccountPanel.tsx'))};const root=createRoot(document.getElementById('root'));qa.render=()=>root.render(<main><Account active={qa.active} tradingEnabled={qa.tradingEnabled}/></main>);qa.render();`;
-const built = await build({ stdin: { contents: entry, loader: 'tsx', resolveDir: root }, bundle: true, format: 'esm', write: false, outfile: path.join(evidence, 'qa.js'), plugins: [{ name: 'account-fixture', setup(p) {
+const built = await build({ stdin: { contents: entry, loader: 'tsx', resolveDir: root }, bundle: true, format: 'esm', write: false, loader:{'.svg':'dataurl','.webp':'dataurl'}, outfile: path.join(evidence, 'qa.js'), plugins: [{ name: 'account-fixture', setup(p) {
   p.onResolve({ filter: /^(qa-fixture|.*\/(AuthContext|useStudentWisStocks|semesterScope|studentWisStockClient|AppToastProvider))$/ }, () => ({ path: 'fixture', namespace: 'fixture' }));
   p.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: fixture, loader: 'js' }));
 } }] });
@@ -95,9 +96,16 @@ try {
     assert.match(await balance(page, '매수 가능').innerText(), /700/);
     assert.match(await balance(page, '출금 가능').innerText(), /500/);
     const layout = await page.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth, columns: getComputedStyle(document.querySelector('.student-wispi-balances')).gridTemplateColumns.split(' ').length, background: getComputedStyle(document.querySelector('.student-wispi-balances')).backgroundColor, shadow: getComputedStyle(document.querySelector('.student-wispi-balances')).boxShadow, submitHeight: document.querySelector('button[type=submit]').getBoundingClientRect().height }));
-    assert(layout.scroll <= width, JSON.stringify(layout));assert.equal(layout.columns, width < 768 ? 2 : 4);assert.equal(layout.background, 'rgba(0, 0, 0, 0)');assert.equal(layout.shadow, 'none');assert(layout.submitHeight >= 44);
-    const row = await page.evaluate(() => { const selectors=['.student-wispi-segments','.student-wispi-transfer .ws-info-help','.student-wispi-transfer label','.student-wispi-transfer button[type=submit]'];return selectors.map(selector=>{const rect=document.querySelector(selector).getBoundingClientRect();return {top:rect.top,bottom:rect.bottom}}); });
-    if(width>=768)assert(Math.max(...row.map(item=>item.top))<Math.min(...row.map(item=>item.bottom)),JSON.stringify(row));
+    assert(layout.scroll <= width, JSON.stringify(layout));assert.equal(layout.columns, 2);assert.equal(layout.background, 'rgba(0, 0, 0, 0)');assert.equal(layout.shadow, 'none');assert(layout.submitHeight >= 44);
+    const controlsFit = await page.locator('.student-wispi-wallet-funding').evaluate(panel => {
+      const bounds = panel.getBoundingClientRect();
+      return [...panel.querySelectorAll('form input, form button')].every(el => {
+        const rect = el.getBoundingClientRect();
+        return rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1;
+      });
+    });
+    assert(controlsFit, 'all funding controls fit inside their column');
+    assert.equal(await page.evaluate(() => window.qa.historyCalls), 0);
     await page.close();checks.push(`${width}px: buy and withdrawal amounts differ; event principal over-limit blocked without command, reserved cash readable, keyboard help and responsive transparent summary pass.`);
   }
   const profit = await open();
@@ -122,8 +130,8 @@ try {
   await recovery.getByRole('alert').waitFor();assert.equal(await recovery.getByLabel('위스 금액', { exact: true }).inputValue(), '500');
   await recovery.getByRole('button', { name: '일반 위스로 출금', exact: true }).click();await recovery.getByText('500 위스를 출금했습니다.', { exact: true }).waitFor();
   assert.equal(await recovery.evaluate(() => window.qa.calls.filter(item => item.kind === 'transfer').length), 2);
-  await recovery.evaluate(() => { window.qa.status='error';window.qa.error='합성 계좌 조회 실패';window.qa.render(); });await recovery.getByRole('alert').waitFor();assert.equal(await recovery.locator('.student-wispi-balances').count(), 0);
-  await recovery.getByRole('button', { name: '다시 불러오기', exact: true }).click();await balance(recovery, '출금 가능').waitFor();
+  await recovery.evaluate(() => { window.qa.status='error';window.qa.error='합성 계좌 조회 실패';window.qa.render(); });await recovery.getByText('주식 지갑 연결을 다시 확인해 주세요.', { exact: true }).waitFor();assert.equal(await recovery.locator('.student-wispi-balances').count(), 0);
+  await recovery.getByRole('button', { name: '다시 연결', exact: true }).click();await balance(recovery, '출금 가능').waitFor();
   await recovery.evaluate(() => { window.qa.active=false;window.qa.render(); });await recovery.locator('.student-wispi-account').waitFor({ state: 'detached' });
   await recovery.close();checks.push('Failed transfer preserves input for retry; account errors clear balances; refresh recovers; inactive account panel is removed.');
 
