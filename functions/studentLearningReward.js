@@ -54,7 +54,7 @@ const createStudentLearningRewardHandler = ({ db, loadPolicy, assertSession = as
           transaction.get(db.doc(`${root}/think_cloud_sessions/${parts[1]}/responses/${parts[2]}`)),
         ]);
         const saved = response.data() || {}, topic = session.data() || {};
-        if (!session.exists || topic.deletedAt || topic.classId !== loaded.wallet.classId
+        if (!session.exists || topic.deletedAt || (topic.targetClassId ?? topic.classId) !== loaded.wallet.classId
           || saved.uid !== uid || saved.revision !== 1 || !parts[2].startsWith('thinkresp_') || !saved.textNormalized || !saved.createdAt) reject();
         reason = '생각모아 참여';
       }

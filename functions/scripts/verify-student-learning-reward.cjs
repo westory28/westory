@@ -46,7 +46,7 @@ async function seed() {
     [accountPath]:{schemaVersion:1,policyVersion:'w7-v1',accountId,studentUid:uid,semesterId,enrollmentId:'enrollment-one',classId:'class-one',status:'ACTIVE',revision:1,balance:500,earnedTotal:0,rankEarnedTotal:0,spentTotal:0,adjustedTotal:0,recentLedgerEntries:[]},
     [lessonPath]:{unitId:'unit-one',isVisibleToStudents:true,assignedClassIds:['class-one'],contentRevision:2},
     [progressPath]:{studentUid:uid,semesterId,completed:true,answerRevision:1,contentRevision:2},
-    [`${root}/think_cloud_sessions/topic-one`]:{classId:'class-one',status:'active'},
+    [`${root}/think_cloud_sessions/topic-one`]:{targetClassId:'class-one',status:'active'},
   };
   for(let n=1;n<=4;n++)docs[`${root}/think_cloud_sessions/topic-one/responses/${responseId(n)}`]={uid,revision:1,textNormalized:'검증 응답',createdAt:Timestamp.now()};
   const batch=db.batch();for(const [path,data] of Object.entries(docs))batch.set(db.doc(path),data);await batch.commit();
@@ -85,7 +85,13 @@ async function test(name,fn){await seed();await fn();groups++;console.log(`PASS 
     for(const fields of [{uid:'victim'},{revision:0},{textNormalized:''},{createdAt:null}]){
       const original=await get(path);await patch(path,fields);await assert.rejects(handler(request('think_cloud',thinkSource(1))));await db.doc(path).set(original);
     }
-    await patch(`${root}/think_cloud_sessions/topic-one`,{classId:'other-class'});await assert.rejects(handler(request('think_cloud',thinkSource(1))));await unchanged();
+    await patch(`${root}/think_cloud_sessions/topic-one`,{targetClassId:'other-class'});await assert.rejects(handler(request('think_cloud',thinkSource(1))));await unchanged();
+    await db.doc(`${root}/think_cloud_sessions/topic-one`).set({classId:'other-class',status:'active'});await assert.rejects(handler(request('think_cloud',thinkSource(1))));await unchanged();
+    await db.doc(`${root}/think_cloud_sessions/topic-one`).set({status:'active'});await assert.rejects(handler(request('think_cloud',thinkSource(1))));await unchanged();
+  });
+  await test('a session recorded with the older class field still pays its own class',async()=>{
+    await db.doc(`${root}/think_cloud_sessions/topic-one`).set({classId:'class-one',status:'active'});
+    assert.equal((await handler(request('think_cloud',thinkSource(1)))).awarded,true);assert.equal((await get(accountPath)).balance,510);
   });
   await test('parallel distinct think responses respect shared cooldown',async()=>{
     const results=await Promise.all([1,2,3,4].map(n=>handler(request('think_cloud',thinkSource(n)))));assert.equal(results.filter(r=>r.awarded).length,1);assert.equal((await get(accountPath)).balance,510);assert.equal((await get(statePath('think_cloud'))).claimCount,1);

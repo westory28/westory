@@ -1,5 +1,13 @@
 # 운영 배포 절차
 
+## 평가 마감 뒤 답안 변경·선지 단서 보호와 생각모아 참여 위스 (2026-11-24)
+
+제한 시간이 지난 뒤의 답안 변경을 화면과 서버에서 막고, 제출 전 응답에서 선지별 혼동 태그를 제외한다. [원인·검증 기록](../reviews/assessment-integrity-20261124.md)을 따른다. 문제 풀이·모의고사의 시간 초과 제출이 마감 5분 이후에 도착하면 마감 전에 저장된 답안으로 채점하고 화면이 학생에게 알린다. 그 이전 도착분, 학생의 직접 제출, 역사교실 제출은 기존과 같다. 마감이 가까우면 자동 저장을 마감 0.8초 전까지 앞당긴다. 제출이 5분 넘게 전달되지 못한 학생은 교사가 기존 응시 초기화로 구제한다.
+
+서울 `executeCommand`, `getAssessmentState` 두 함수만 배포한다. 두 함수의 운영 원본은 저장소와 다른 파일이 있으므로 `scripts/prepare-assessment-integrity-release.mjs prepare`로 각 운영 ZIP에 `productionGateway/assessmentLifecycle.js`의 검토한 치환만 적용하고, 배포본에서 운영 시점 검사와 추가 검사를 실행한다. `preflight` 뒤 함수별로 선택 배포하고 `verify`로 전체 파일 해시·자원 설정·호출 권한을 대조한다. `saveAssessmentProgress`, `getCommandStatus`, 규칙, 색인은 대상이 아니다. 화면 변경은 같은 main의 Vercel 운영 배포로 반영한다.
+
+생각모아 세션은 대상 학급을 `targetClassId`로 저장하는데 참여 위스 확인은 `classId`만 읽어 현재 방식의 세션에서는 지급이 항상 거부되었다. 서울 `claimStudentLearningReward`가 대상 학급 필드를 우선 확인하고 이전 형식도 인정한다. 지급액·횟수·간격·중복 방지와 다른 학급 차단은 그대로다. `scripts/prepare-learning-reward-release.mjs`의 `prepare`, `preflight`, `verify` 순서로 이 함수 하나만 배포한다. 운영 QA로 학생 응답이나 위스를 만들지 않는다.
+
 ## 교사 위스피 보유 수익률의 이전 상위권 (2026-11-24)
 
 투자 현황의 전체·선택 학급 그래프에는 해당 시점에 상위 5명에 든 학생의 기록을 남긴다. 순위 밖으로 나가면 선이 끊기고 재진입 시 새 선이 시작된다. 현재 보드에 없는 학생은 응답에서 제외한다. 개인 선택 그래프는 기존 계좌별 거래·시세 이력을 사용한다.
