@@ -208,6 +208,8 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
       const rooms = await Promise.all(active.slice(0, 100).map(async (room) => ({
         id: room.id, code: room.code, status: room.status, revision: room.revision, hostUid: room.hostUid,
         createdAtMs: room.createdAtMs, expiresAtMs: room.expiresAtMs, turnUid: room.turnUid,
+        // The same clock as `expired` above; a legacy room has none.
+        ...(Number.isFinite(room.hostActivityAtMs) ? { hostActivityAtMs: room.hostActivityAtMs } : {}),
         visibility: room.visibility || 'private', maxPlayers: room.maxPlayers || 4 - (room.blockedSeats || []).length,
         pieceCount: room.pieceCount || room.players[0]?.pieces.length || 1,
         throwSeconds: room.throwSeconds || 5, moveSeconds: room.moveSeconds || 25,

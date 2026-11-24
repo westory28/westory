@@ -106,6 +106,8 @@ export interface YutManagedRoom {
   revision: number;
   hostUid: string;
   createdAtMs: number;
+  /** Absent for rooms created before host activity was recorded. */
+  hostActivityAtMs?: number;
   expiresAtMs: number;
   turnUid: string | null;
   visibility?: "public" | "private";

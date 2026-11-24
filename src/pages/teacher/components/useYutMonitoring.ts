@@ -118,7 +118,12 @@ export default function useYutMonitoring(
         // Expiration also happens without a write, so schedule a fresh server read.
         const roomExpiry = (room: YutManagement["rooms"][number]) =>
           room.status === "waiting"
-            ? Math.min(room.expiresAtMs, room.createdAtMs + YUT_WAITING_MS)
+            ? // The server keeps a waiting room for ten minutes after its
+              // host last acted, not after it was created.
+              Math.min(
+                room.expiresAtMs,
+                (room.hostActivityAtMs ?? room.createdAtMs) + YUT_WAITING_MS,
+              )
             : room.expiresAtMs;
         // Include the request duration conservatively: a slow response must not
         // revive expired rooms. Monotonic time tolerates local clock changes.

@@ -161,7 +161,19 @@ try {
   await confirm(page,'room-b','waiting');
   assert.equal((await count(page)).intervals,0);
   assert.match(await page.locator('.yut-spectator-status').textContent(),/시작 대기/);
-  await page.evaluate(()=>{const room=window.qa.seed('room-b','waiting');room.createdAtMs=Date.now()-600000+120;window.qa.confirm(room)});
+  // The server keeps a waiting room for ten minutes after its host last acted.
+  await page.evaluate(()=>{const room=window.qa.seed('room-b','waiting');room.createdAtMs=Date.now()-1500000;room.hostActivityAtMs=Date.now()-60000;window.qa.confirm(room)});
+  await page.waitForTimeout(300);
+  assert.match(await page.locator('.yut-spectator-status').textContent(),/시작 대기/,'An active host keeps a waiting room older than ten minutes open');
+  assert.equal((await count(page)).active,1);
+  await page.evaluate(()=>{const room=window.qa.seed('room-b','waiting');room.createdAtMs=Date.now()-1500000;room.hostActivityAtMs=Date.now()-600000+120;window.qa.confirm(room)});
+  await page.getByText('방 이용 시간이 지났습니다.',{exact:true}).waitFor();
+  assert.equal((await count(page)).active,0,'Ten minutes without host activity release the listener');
+  await page.getByRole('button',{name:'다시 연결',exact:true}).click();
+  await page.waitForFunction(()=>window.qa.active()===1);
+  // A room written before host activity was recorded falls back to its creation time.
+  await page.evaluate(()=>{const room=window.qa.seed('room-b','waiting');delete room.hostActivityAtMs;room.createdAtMs=Date.now()-600000+120;window.qa.confirm(room)});
+  await page.waitForFunction(()=>window.qa.active()===0);
   await page.getByText('방 이용 시간이 지났습니다.',{exact:true}).waitFor();
   assert.equal((await count(page)).active,0,'Waiting-room ten-minute fence releases its listener');
   assert.equal(await page.locator('.yut-board').count(),0);

@@ -112,7 +112,11 @@ export default function YutSpectator({
             }
             const expiresAtMs =
               next.status === "waiting"
-                ? Math.min(next.expiresAtMs, next.createdAtMs + YUT_WAITING_MS)
+                ? Math.min(
+                    next.expiresAtMs,
+                    (next.hostActivityAtMs ?? next.createdAtMs) +
+                      YUT_WAITING_MS,
+                  )
                 : next.expiresAtMs;
             const remaining = expiresAtMs - (Date.now() + serverOffsetMs);
             if (remaining <= 0) {
