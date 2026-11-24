@@ -69,6 +69,26 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
       moveSeconds: Number.isInteger(data?.moveSeconds) && data.moveSeconds >= 15 && data.moveSeconds <= 60 ? data.moveSeconds : 25,
       ...(Number.isFinite(data?.updatedAtMs) && data.updatedAtMs >= 0 ? { updatedAtMs: data.updatedAtMs } : {}) };
   };
+  // gRPC CANCELLED, UNKNOWN, ABORTED, INTERNAL and UNAVAILABLE; never an
+  // HttpsError, whose code is a string.
+  const transient = (error) => [1, 2, 10, 13, 14].includes(error?.code);
+  // A view that writes nothing takes no document locks, so a teacher's monitor
+  // or a publication check never makes a player's move wait. Such transactions
+  // are attempted once by the client library; keep its retry of brief faults.
+  const readOnly = async (work) => {
+    for (let attempt = 0; ; attempt += 1) {
+      try { return await db.runTransaction(work, { readOnly: true }); }
+      catch (error) { if (attempt >= 2 || !transient(error)) throw error; }
+    }
+  };
+  // A read-only view has nothing to commit. Its reads run beside the session
+  // check and are answered only after that check has passed; its failure wins.
+  const viewBesideSession = async (request, view) => {
+    const session = Promise.resolve().then(() => assertSession(request)), result = view();
+    result.catch(() => {});
+    await session;
+    return result;
+  };
   const readClass = async (reader, scope, classId) => {
     if (!identifier(classId)) fail('permission-denied', '현재 학급 정보를 확인해 주세요.');
     const classroom = (await reader.get(db.doc(`semester_classes/${classId}`))).data();
@@ -148,15 +168,18 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     if (expired(room, now())) fail('not-found', '방을 찾을 수 없거나 이용 시간이 지났습니다.');
     if (room.participantUids.includes(actor.uid) && !matchesMembership(room, actor)) fail('permission-denied', '수강 정보가 변경되었습니다. 새 방에 참가해 주세요.');
   };
-  const getYutPublication = async (request) => {
-    await assertSession(request);
+  // Kept apart from the callable below: the command endpoint answers it too.
+  const readPublication = (request) => viewBesideSession(request, async () => {
     const scope = scopeFrom(request.data);
-    return db.runTransaction(async (transaction) => {
+    return readOnly(async (transaction) => {
       const actor = await authority(transaction, request, scope);
       // Publication checks must never load a player/room or synchronize names.
       // Keep the same account, semester and enrollment gates as admission.
       return { enabled: actor.settings.enabled, settings: actor.settings };
     });
+  });
+  const getYutPublication = async (request) => {
+    return readPublication(request);
   };
   const getYutLobby = async (request) => {
     await assertSession(request);
@@ -186,11 +209,10 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
         classId: actor.manager ? 'school' : '', serverNowMs: now() };
     });
   };
-  const getYutManagement = async (request) => {
-    await assertSession(request);
+  const getYutManagement = (request) => viewBesideSession(request, async () => {
     const scope = scopeFrom(request.data);
     const { getYutManagementProgress } = await import('./yutManagement.mjs');
-    return db.runTransaction(async (transaction) => {
+    return readOnly(async (transaction) => {
       const actor = await authority(transaction, request, scope);
       if (!actor.manager) fail('permission-denied', '게임 관리 권한이 필요합니다.');
       const serverNowMs = now();
@@ -235,7 +257,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
       })));
       return { settings: actor.settings, rooms, truncated: active.length > 100, serverNowMs };
     });
-  };
+  });
   const saveYutSettings = async (request) => {
     await assertSession(request);
     const scope = scopeFrom(request.data), data = request.data;
@@ -258,6 +280,11 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     });
   };
   const commandYutRoom = async (request) => {
+    // The two read-only views are answered here as well, by the handlers above
+    // with their own session and access checks. Opening the game then warms
+    // the very instance and connection that its commands are about to use.
+    if (request.data?.action === 'lobby') return getYutLobby(request);
+    if (request.data?.action === 'publication') return readPublication(request);
     const arrivedAt = now();
     await assertSession(request);
     if (!request.auth?.uid) fail('unauthenticated', '로그인 후 이용해 주세요.');
