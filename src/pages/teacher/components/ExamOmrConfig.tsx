@@ -150,7 +150,7 @@ const ExamOmrConfig: React.FC = () => {
         </div>
         <button
           onClick={handleSave}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 md:px-5 py-2 rounded-xl text-sm transition shadow-md whitespace-nowrap"
+          className="min-h-11 bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 md:px-5 py-2 rounded-lg text-sm transition shadow-md whitespace-nowrap"
         >
           <i className="fas fa-save mr-1"></i>저장
         </button>
