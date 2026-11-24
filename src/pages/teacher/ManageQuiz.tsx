@@ -187,8 +187,10 @@ const ManageQuiz: React.FC = () => {
       </TeacherSubNavigation>
       <main className="teacher-sub-content">
         <header className="quiz-workspace-header">
-          <h1 className="text-2xl font-extrabold text-gray-900">평가 관리</h1>
-          <nav className="ws-page-tabs mt-4" aria-label="평가 관리 보기">
+          <div className="ws-page-header">
+            <h1>평가 관리</h1>
+          </div>
+          <nav className="ws-page-tabs" aria-label="평가 관리 보기">
             {[
               ...(canWrite
                 ? [
