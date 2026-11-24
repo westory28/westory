@@ -39,6 +39,14 @@ const RoyalHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
   >({});
   const config = normalizeHallOfFameInterfaceConfig(hallOfFameConfig);
   const safeEntries = entries || [];
+  const slotCenter = (
+    key: HallOfFamePodiumSlotKey,
+    mode: "desktop" | "mobile",
+  ) =>
+    Math.min(
+      CENTERS[key] + 5,
+      Math.max(CENTERS[key] - 5, config.positions[mode][key].leftPercent),
+    );
   const groups = SLOTS.map(({ key, rank }) => {
     const members = safeEntries.filter(
       (entry) => (entry.podiumSlot || entry.rank) === rank,
@@ -72,10 +80,13 @@ const RoyalHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
           {action}
         </header>
       )}
-      <div className="royal-hall-podium__scene" data-hall-podium-stage>
+      <div className="royal-hall-podium__scene">
         <img
+          data-hall-podium-stage
           className="royal-hall-podium__art"
           src={DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL}
+          width={1586}
+          height={992}
           alt="청색 용보와 붉은 어좌가 있는 중앙 금색 1위 시상대, 왼쪽 은색 2위와 오른쪽 동색 3위 시상대"
         />
         {groups.map(({ key, rank, members, active, label }) => {
@@ -83,11 +94,21 @@ const RoyalHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
           const style: React.CSSProperties = {};
           for (const mode of ["desktop", "mobile"] as const) {
             const position = config.positions[mode][key];
+            const center = slotCenter(key, mode);
+            const nearestSlotDistance = Math.min(
+              ...SLOTS.filter((slot) => slot.key !== key).map((slot) =>
+                Math.abs(slotCenter(slot.key, mode) - center),
+              ),
+            );
+            const feet =
+              FEET[key] +
+              Math.min(6, Math.max(-6, position.topPercent - TOPS[mode][key]));
             Object.assign(style, {
-              [`--royal-${mode}-left`]: `${Math.min(CENTERS[key] + 5, Math.max(CENTERS[key] - 5, position.leftPercent))}%`,
-              [`--royal-${mode}-top`]: `${FEET[key] + Math.min(6, Math.max(-6, position.topPercent - TOPS[mode][key]))}%`,
+              [`--royal-${mode}-left`]: `${center}%`,
+              [`--royal-${mode}-feet`]: `${(feet * 992) / 1586}cqw`,
               [`--royal-${mode}-width`]: `${position.widthPercent}%`,
               [`--royal-${mode}-scale`]: position.widthPercent / 24,
+              [`--royal-${mode}-badge-width`]: `${Math.min(28, nearestSlotDistance - 2)}cqw`,
             });
           }
           return (
@@ -96,85 +117,87 @@ const RoyalHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
               className={`royal-hall-podium__avatar royal-hall-podium__avatar--${key}`}
               style={style}
             >
-              {control ? (
-                <button
-                  type="button"
-                  className="royal-hall-podium__place royal-hall-podium__handle"
-                  aria-label={control.dragLabel || `${rank}위 아바타 위치 이동`}
-                  onPointerDown={control.onPointerDown}
-                  onClick={control.onClick}
-                  disabled={control.disabled}
-                >
-                  {label}
-                </button>
-              ) : (
-                <span className="royal-hall-podium__place">{label}</span>
-              )}
+              <div className="royal-hall-podium__portrait">
+                {control ? (
+                  <button
+                    type="button"
+                    className="royal-hall-podium__place royal-hall-podium__handle"
+                    aria-label={
+                      control.dragLabel || `${rank}위 아바타 위치 이동`
+                    }
+                    onPointerDown={control.onPointerDown}
+                    onClick={control.onClick}
+                    disabled={control.disabled}
+                  >
+                    {label}
+                  </button>
+                ) : (
+                  <span className="royal-hall-podium__place">{label}</span>
+                )}
+                {active && (
+                  <WisHallOfFameAvatar
+                    entry={active}
+                    className="royal-hall-podium__figure"
+                  />
+                )}
+                {members.length > 1 && (
+                  <span className="royal-hall-podium__tie-count">
+                    {members.length}명
+                  </span>
+                )}
+              </div>
               {active && (
-                <WisHallOfFameAvatar
-                  entry={active}
-                  className="royal-hall-podium__figure"
-                />
-              )}
-              {members.length > 1 && (
-                <span className="royal-hall-podium__tie-count">
-                  {members.length}명
-                </span>
+                <section
+                  className={`royal-hall-podium__identity royal-hall-podium__identity--${key}`}
+                  aria-label={`${label} 학생`}
+                >
+                  <div className="royal-hall-podium__student">
+                    <span className="royal-hall-podium__school">
+                      <span>{active.grade}학년</span>
+                      <span>{active.class}반</span>
+                      {active.number && <span>{active.number}번</span>}
+                    </span>
+                    <strong className="royal-hall-podium__name">
+                      {active.displayName || active.studentName}
+                    </strong>
+                    <span className="royal-hall-podium__score">
+                      {formatWisAmount(active.cumulativeEarned)}
+                    </span>
+                  </div>
+                  {members.length > 1 &&
+                    members.map((entry) => (
+                      <button
+                        type="button"
+                        key={entry.uid}
+                        className="royal-hall-podium__select"
+                        aria-pressed={active?.uid === entry.uid}
+                        aria-label={`${label} ${entry.grade}학년 ${entry.class}반 ${entry.number ? `${entry.number}번 ` : ""}${entry.displayName || entry.studentName} 정보 강조`}
+                        onClick={() =>
+                          setSelected((previous) => ({
+                            ...previous,
+                            [key]: entry.uid,
+                          }))
+                        }
+                        onFocus={() =>
+                          setSelected((previous) => ({
+                            ...previous,
+                            [key]: entry.uid,
+                          }))
+                        }
+                      >
+                        <strong className="royal-hall-podium__name">
+                          {entry.displayName || entry.studentName}
+                        </strong>
+                      </button>
+                    ))}
+                </section>
               )}
             </div>
           );
         })}
       </div>
-      {safeEntries.length === 0 ? (
+      {safeEntries.length === 0 && (
         <p className="royal-hall-podium__empty">{emptyMessage}</p>
-      ) : (
-        <div className="royal-hall-podium__identities">
-          {groups.map(({ key, members, active, label }) => (
-            <section
-              key={key}
-              className={`royal-hall-podium__identity royal-hall-podium__identity--${key}`}
-              aria-label={`${label} 학생`}
-            >
-              <h3>{label}</h3>
-              {members.length === 0 ? (
-                <p className="royal-hall-podium__vacant">—</p>
-              ) : (
-                members.map((entry) => (
-                  <button
-                    type="button"
-                    key={entry.uid}
-                    className="royal-hall-podium__student"
-                    aria-pressed={active?.uid === entry.uid}
-                    aria-label={`${label} ${entry.grade}학년 ${entry.class}반 ${entry.number ? `${entry.number}번 ` : ""}${entry.displayName || entry.studentName} 정보 강조`}
-                    onClick={() =>
-                      setSelected((previous) => ({
-                        ...previous,
-                        [key]: entry.uid,
-                      }))
-                    }
-                    onFocus={() =>
-                      setSelected((previous) => ({
-                        ...previous,
-                        [key]: entry.uid,
-                      }))
-                    }
-                  >
-                    <span className="royal-hall-podium__school">
-                      {entry.grade}학년 {entry.class}반
-                      {entry.number && ` ${entry.number}번`}
-                    </span>
-                    <strong className="royal-hall-podium__name">
-                      {entry.displayName || entry.studentName}
-                    </strong>
-                    <span className="royal-hall-podium__score">
-                      {formatWisAmount(entry.cumulativeEarned)}
-                    </span>
-                  </button>
-                ))
-              )}
-            </section>
-          ))}
-        </div>
       )}
     </section>
   );
