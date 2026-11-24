@@ -195,10 +195,65 @@ async function call<T>(
   });
   return (await fn({ ...getYearSemester(config), ...data })).data;
 }
+// The command endpoint beside the database also answers the two read-only
+// views, with the same handlers and checks. Asking it is several times quicker
+// and prepares the instance and connection that the game's commands use next.
+// A deployment that predates this answers invalid-argument; the original Seoul
+// callables then serve the views for the rest of this page load.
+let commandEndpointViews: boolean | undefined;
+const failureCode = (error: unknown) =>
+  String((error as { code?: string })?.code || "").replace(/^functions\//, "");
+async function view<T>(
+  kind: "lobby" | "publication",
+  original: string,
+  config: WeplayConfig,
+): Promise<T> {
+  if (commandEndpointViews === false) return call<T>(original, config);
+  const known = commandEndpointViews === true;
+  const quick = call<T>("commandYutRoomFast", config, { action: kind });
+  quick.then(
+    () => {
+      commandEndpointViews = true;
+    },
+    (error) => {
+      // Any other failure says nothing about the deployment.
+      if (failureCode(error) === "invalid-argument")
+        commandEndpointViews = false;
+    },
+  );
+  if (known) {
+    try {
+      return await quick;
+    } catch (error) {
+      // A refusal is final. A lost or unanswered request is asked once more
+      // through the original callable, which enforces the same checks.
+      if (
+        [
+          "permission-denied",
+          "unauthenticated",
+          "failed-precondition",
+        ].includes(failureCode(error))
+      )
+        throw error;
+      return call<T>(original, config);
+    }
+  }
+  // Not known yet: ask both once and use the first answer. Until the endpoint
+  // has answered, only the original callable can refuse or fail the request.
+  const fallback = call<T>(original, config);
+  return new Promise<T>((resolve, reject) => {
+    quick.then(resolve, () => undefined);
+    fallback.then(resolve, reject);
+  });
+}
 export const getYutLobby = (config: WeplayConfig) =>
-  call<YutLobby>("getYutLobby", config);
+  view<YutLobby>("lobby", "getYutLobby", config);
 export const getYutPublication = (config: WeplayConfig) =>
-  call<Pick<YutLobby, "enabled" | "settings">>("getYutPublication", config);
+  view<Pick<YutLobby, "enabled" | "settings">>(
+    "publication",
+    "getYutPublication",
+    config,
+  );
 export const getYutManagement = (config: WeplayConfig) =>
   call<YutManagement>("getYutManagement", config).then((response) => ({
     ...response,

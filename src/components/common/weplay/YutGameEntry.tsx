@@ -7,6 +7,7 @@ import WeplayGameFrame from "./WeplayGameFrame";
 import WeplayGameLoading from "./WeplayGameLoading";
 import WeplayMusicButton from "./WeplayMusicButton";
 import useYutMusic from "./useYutMusic";
+import { preloadYutArtwork } from "./yut/yutArtwork";
 import "./weplay.css";
 import "./weplay-catalog.css";
 
@@ -38,6 +39,21 @@ export default function YutGameEntry({
     // Download the game while publication is checked and the opening plays.
     void loadYutGame().catch(() => {});
   }, [portal, access.scope]);
+  useEffect(() => {
+    if (!allowed) return;
+    let active = true;
+    // Once admitted, the opening's few seconds fetch what the menu paints.
+    // The game's own code goes first so artwork never delays it.
+    void loadYutGame().then(
+      () => {
+        if (active) preloadYutArtwork();
+      },
+      () => {},
+    );
+    return () => {
+      active = false;
+    };
+  }, [allowed]);
   const accessNotice = !allowed && (
     <>
       <p role={access.status === "error" ? "alert" : "status"}>
