@@ -375,7 +375,7 @@ function NavalWeplayManagement() {
       <main
         ref={mainRef}
         tabIndex={-1}
-        className={`${selectedGame && !previewView ? "" : "teacher-sub-content "}teacher-weplay-content${previewView ? " is-game-preview" : ""}`}
+        className={`${selectedGame && !previewView ? "" : "teacher-sub-content "}teacher-weplay-content${previewView ? " is-game-preview" : ""}${selectedGame ? "" : " is-catalog"}`}
       >
         {!selectedGame && (
           <WeplayGameCatalog portal="teacher" gameTitle={gameTitle} />

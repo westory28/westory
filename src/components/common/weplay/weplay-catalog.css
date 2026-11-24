@@ -3,12 +3,19 @@
   align-items: baseline;
   flex-wrap: wrap;
   gap: 8px 16px;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
+/* The game list is an ordinary portal page: shared title size and page frame. */
 .weplay-catalog-heading h1 {
   margin: 0;
-  font-size: 24px;
+  color: var(--ws-text-strong, #111827);
+  font-size: var(--ws-type-page-title, 1.75rem);
   font-weight: 800;
+  line-height: 1.25;
+}
+.weplay-page.weplay-page--catalog {
+  max-width: 1536px;
+  padding: 16px 24px 24px;
 }
 .weplay-catalog-heading > span,
 .weplay-game-card-kind {
@@ -67,7 +74,7 @@
     transition-duration: 180ms !important;
   }
 }
-.weplay-catalog-retry { min-height: 44px; padding: 8px 16px; margin-top: 8px; border: 1px solid var(--ws-border, #e5e7eb); border-radius: 8px; background: var(--ws-surface, #fff); color: var(--ws-primary, #2563eb); cursor: pointer; font: inherit; }
+.weplay-catalog-retry { min-height: 44px; padding: 8px 16px; margin-top: 8px; border: 1px solid var(--ws-border, #e5e7eb); border-radius: 8px; background: var(--ws-surface, #fff); color: var(--ws-primary, #2563eb); cursor: pointer; font: inherit; font-size: 14px; font-weight: 700; }
 .weplay-game-card:focus-visible,
 .weplay-catalog-back:focus-visible,
 .weplay-catalog-retry:focus-visible {
@@ -128,7 +135,7 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 16px;
   }
-  .weplay-catalog-heading h1 {
-    font-size: 20px;
+  .weplay-page.weplay-page--catalog {
+    padding-inline: 16px;
   }
 }

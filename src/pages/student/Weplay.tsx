@@ -364,7 +364,7 @@ function NavalWeplay({ groupTitle }: { groupTitle: string }) {
   );
   if (!selectedGame && !session) {
     return (
-      <main className="weplay-page">
+      <main className="weplay-page weplay-page--catalog">
         <WeplayGameCatalog
           gameTitle={gameTitle}
           groupTitle={groupTitle}

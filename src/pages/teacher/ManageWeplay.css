@@ -2,6 +2,9 @@
 .teacher-layout .teacher-weplay-workspace.teacher-sub-workspace { grid-template-columns: minmax(0, 1fr); }
 .teacher-weplay-workspace.teacher-sub-workspace--page > .teacher-weplay-content,
 .teacher-weplay-workspace > .teacher-sub-workspace-footer { grid-column: 1; }
+/* The game list uses the shared page frame; management and preview keep their own layout. */
+.teacher-weplay-workspace > .teacher-weplay-content.is-catalog { width: 100%; max-width: 1536px; margin-inline: auto; padding: 16px 24px 24px; }
+@media (max-width: 767px) { .teacher-weplay-workspace > .teacher-weplay-content.is-catalog { padding-inline: 16px; } }
 .teacher-weplay-navigation, .teacher-weplay-header-actions { display: flex; align-items: center; gap: 8px; }
 .teacher-weplay-header-actions { margin-left: auto; }
 .teacher-weplay-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
