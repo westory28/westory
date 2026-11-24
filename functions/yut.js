@@ -3,7 +3,6 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 const { assertStudentMenuVisible } = require('./studentMenuVisibility');
 const { prepareRankingUpdate, studentLabel } = require('./weplayRankingStore');
-const { catalog: avatarCatalog, restoreStoredLook, lookHash: avatarLookHash } = require('./studentAvatarCatalog');
 
 const ADMIN_EMAIL = 'westoria28@gmail.com';
 const alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -280,14 +279,19 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
       return { settings, serverNowMs };
     });
   };
-  // The look a student saved in the avatar studio, checked like the studio and
-  // the public projection check it. A document of another catalogue generation,
-  // a retired item, a look that was never saved: no avatar, so the animal piece.
+  // The look a student saved in the avatar studio, which validated it then.
+  // Only the record's owner, saved state and shape are checked here: the
+  // avatar catalogue is not part of every deployment that carries this file.
+  // The game screen draws a look only when its own drawing code knows every
+  // item of it, and keeps the animal piece otherwise.
   const savedAvatarLook = (stored, uid) => {
-    if (!stored || stored.studentUid !== uid || stored.schemaVersion !== 1 || stored.catalogVersion !== avatarCatalog.version
-      || !Number.isSafeInteger(stored.revision) || stored.revision < 1 || !stored.lastSavedAtMs || !stored.thumbnailPath) return null;
-    const look = restoreStoredLook(stored.look);
-    return look && stored.lookHash === avatarLookHash(stored.look) ? look : null;
+    if (!stored || stored.studentUid !== uid || stored.schemaVersion !== 1
+      || !Number.isSafeInteger(stored.revision) || stored.revision < 1 || !stored.lastSavedAtMs || !stored.thumbnailPath
+      || !stored.look || typeof stored.look !== 'object' || Array.isArray(stored.look)) return null;
+    const entries = Object.entries(stored.look);
+    return entries.length > 0 && entries.length <= 24
+      && entries.every(([slot, item]) => /^[A-Za-z]{1,24}$/.test(slot) && typeof item === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(item))
+      ? Object.fromEntries(entries) : null;
   };
   // Which pieces are drawn as avatars. Nothing about it is kept in the room:
   // each call reads the saved look and the piece choice of at most four

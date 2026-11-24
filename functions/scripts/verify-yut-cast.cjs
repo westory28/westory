@@ -97,14 +97,15 @@ test('cast answers only the valid saved looks of players who kept the avatar, an
   assert.deepEqual((await run('student-d', cast())).value, { cast: { 'student-a': { look: girl } } });
 });
 
-test('a stored avatar is shown only when the studio itself would accept it', async () => {
+test('a stored avatar is answered only from a saved record of that student with a well-formed look', async () => {
   const girlOnly = catalog.items.find((item) => item.slot === 'bottom' && item.characters.length === 1 && item.characters[0] === 'girl');
   const cases = {
-    'another catalogue generation': (doc) => ({ ...doc, catalogVersion: catalog.version - 1 }),
-    'a retired item': (doc) => { const look = { ...doc.look, top: 'mm-retired-item' }; return { ...doc, look, lookHash: lookHash(look) }; },
-    'an item of the other character': (doc) => { const look = { ...doc.look, character: 'boy', bottom: girlOnly.value }; return { ...doc, look, lookHash: lookHash(look) }; },
-    'a look that does not match its hash': (doc) => ({ ...doc, look: { ...doc.look, hairTone: 'mm-rose' } }),
-    'a missing slot': (doc) => { const { shoes, ...look } = doc.look; return { ...doc, look }; },
+    'a look that is not an object': (doc) => ({ ...doc, look: 'mm-smile' }),
+    'a look held in a list': (doc) => ({ ...doc, look: Object.values(doc.look) }),
+    'an empty look': (doc) => ({ ...doc, look: {} }),
+    'a nested value': (doc) => ({ ...doc, look: { ...doc.look, top: { id: 'mm-school-white' } } }),
+    'a value with other characters': (doc) => ({ ...doc, look: { ...doc.look, top: 'https://example.invalid/a.png' } }),
+    'an oversized look': (doc) => ({ ...doc, look: Object.fromEntries(Array.from({ length: 25 }, (_, index) => [`slot${String.fromCharCode(97 + index)}`, 'mm-none'])) }),
     'another owner': (doc) => ({ ...doc, studentUid: 'student-b' }),
     'no revision': (doc) => ({ ...doc, revision: 0 }),
     'a teacher avatar shape': (doc) => { const { studentUid, ...rest } = doc; return { ...rest, teacherUid: 'student-a' }; },
@@ -119,6 +120,17 @@ test('a stored avatar is shown only when the studio itself would accept it', asy
   const look = { ...girl, bottom: girlOnly.value };
   seed({ 'student_avatars/student-a': saved('student-a', look) });
   assert.deepEqual((await run('student-a', cast())).value.cast['student-a'], { look });
+  // This file carries no catalogue: a look from another catalogue generation
+  // or with an item the game cannot draw is answered as stored, and the game
+  // screen keeps the animal piece for it.
+  for (const stored of [
+    saved('student-a', girl, { catalogVersion: catalog.version - 1 }),
+    saved('student-a', { ...girl, top: 'mm-retired-item' }),
+  ]) {
+    const other = world();
+    other.seed({ 'student_avatars/student-a': stored });
+    assert.deepEqual((await other.run('student-a', cast())).value.cast['student-a'], { look: stored.look });
+  }
 });
 
 test('cast is open to the room\'s participants and to monitors only', async () => {
