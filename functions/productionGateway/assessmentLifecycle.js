@@ -26,6 +26,7 @@ const SUBMISSION_COLLECTION = "semester_assessment_submissions";
 const RESULT_COLLECTION = "semester_assessment_results";
 const LEGACY_ISSUE_COLLECTION = "assessment_legacy_issues";
 const MOCK_ATTEMPT_STATE_FIELDS = ["studentUid", "resetAt", "attemptNumber", "status", "submittedAtIso"];
+const QUIZ_TIMEOUT_SUBMIT_GRACE_MS = 300_000;
 const SAVE_ATTEMPT_FIELDS = [
   "attemptId", "studentUid", "semesterId", "assessmentKind", "definitionId", "sourceId", "category", "examRound",
   "status", "revision", "startedAtIso", "deadlineAtIso", "lastSavedAtIso", "lastSaveId", "lastSaveHash",
@@ -1604,7 +1605,11 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
         fail("deadline-exceeded", "The authoritative assessment deadline has passed.", "ASSESSMENT_DEADLINE_EXPIRED");
       }
       await assertAttemptAnswers(transaction, attempt, payload.answers);
-      const effectiveAnswers = payload.answers;
+      // A timed-out quiz normally arrives moments after its deadline. Beyond the
+      // delivery allowance, grade only what was saved before the deadline.
+      const lateQuizTimeout = attempt.assessmentKind === "QUIZ" && payload.submitReason === "TIMEOUT"
+        && nowDate.getTime() > Date.parse(attempt.deadlineAtIso) + QUIZ_TIMEOUT_SUBMIT_GRACE_MS;
+      const effectiveAnswers = lateQuizTimeout ? (attempt.answers || {}) : payload.answers;
       const analytics = attempt.assessmentKind === "QUIZ"
         ? learning.normalizeAnalytics(payload.analytics === undefined ? attempt.analytics : payload.analytics, attempt, nowDate.getTime(), effectiveAnswers) : null;
       const savedTypes = new Map((attempt.questionSnapshots || []).map(item => [String(item.id), item.type]));
@@ -1732,6 +1737,11 @@ const createAssessmentCommandAdapter = ({ now = () => new Date(), wisRewards = n
   },
 });
 
+// Option-level misconception labels mark which choices are distractors, so an
+// unsubmitted attempt never carries them to the student.
+const visibleLearningSnapshot = attempt => attempt.status === "SUBMITTED" ? (attempt.learningSnapshot || [])
+  : (attempt.learningSnapshot || []).map(({ misconceptionTags, ...item }) => item);
+
 const serializeAttempt = (attempt, resumed) => ({
   attemptId: attempt.attemptId,
   definitionId: attempt.definitionId,
@@ -1741,7 +1751,7 @@ const serializeAttempt = (attempt, resumed) => ({
   status: attempt.status,
   revision: attempt.revision,
   answers: attempt.answers || {},
-  ...(attempt.assessmentKind === "QUIZ" ? { analytics: attempt.analytics || null, learningSnapshot: attempt.learningSnapshot || [],
+  ...(attempt.assessmentKind === "QUIZ" ? { analytics: attempt.analytics || null, learningSnapshot: visibleLearningSnapshot(attempt),
     ...(attempt.paperHeader ? { paperHeader: attempt.paperHeader } : {}),
     ...(Array.isArray(attempt.questionSnapshots) ? { questionPresentation: learning.questionPresentation(attempt.questionSnapshots, attempt.category || String(attempt.definitionId || "").split(":")[3]), questionSnapshotOmittedIds: attempt.questionSnapshotOmittedIds || [] } : {}) } : {}),
   currentItemId: attempt.currentItemId || "",

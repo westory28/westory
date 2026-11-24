@@ -64,6 +64,7 @@ const names = [
   "buildOrderOptionMap",
   "restoreSubmissionState",
   "startQuiz",
+  "answerDeadlinePassed",
   "handleAnswer",
   "finalizeQuizAttempt",
 ];
@@ -299,6 +300,18 @@ for (const unitId of ["unit-a", "exam_prep"]) {
         answers,
         "Actual input handler keys each answer by displayed question ID",
       );
+      // Once the frozen deadline has passed, the input handler changes nothing.
+      const openDeadlineMs = context.quizDeadlineMs;
+      assert.ok(openDeadlineMs > 0, "The started attempt carries its deadline");
+      context.quizDeadlineMs = Date.now() + context.serverTimeOffsetMs - 1;
+      context.currentIndex = 0;
+      context.runner.handleAnswer("마감 뒤 입력");
+      assert.deepEqual(
+        plain(context.answers),
+        answers,
+        "Answers stay final after the deadline",
+      );
+      context.quizDeadlineMs = openDeadlineMs;
       const original = plain(
         identify(context.selectedQuestions, context.answers),
       );

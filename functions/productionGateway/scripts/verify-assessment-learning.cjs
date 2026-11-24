@@ -644,6 +644,14 @@ const runLifecycleCases = async () => {
       .learningSnapshot,
   );
   assert.deepEqual(startSnapshot[0].concepts, ["같은 개념"]);
+  // The frozen attempt keeps distractor labels for later review, while neither
+  // the start response nor an in-progress read carries them to the student.
+  assert.deepEqual(startSnapshot[0].misconceptionTags, { 오답: "혼동 가능성" });
+  assert.deepEqual(first.learningSnapshot[0].concepts, ["같은 개념"]);
+  assert.equal("misconceptionTags" in first.learningSnapshot[0], false);
+  const inProgressRead = (await query.getAssessmentState({ auth: student, data: { definitionId } })).attempt;
+  assert.equal(inProgressRead.attemptId, first.attemptId);
+  assert.equal("misconceptionTags" in inProgressRead.learningSnapshot[0], false);
   nowMs += 10000;
   const rawAnalytics = analytics({ [firstId]: completeItem() });
   const progress = {
@@ -712,6 +720,10 @@ const runLifecycleCases = async () => {
   changedBankQuestion.answer = "정답";
   assert.equal(result.analytics.questions[firstId].activeMs, 100);
   assert.deepEqual(result.learningSnapshot, startSnapshot);
+  assert.deepEqual(submitted.learningSnapshot, startSnapshot, "Review data after submission keeps the labels");
+  const submittedRead = (await query.getAssessmentState({ auth: student, data: { attemptId: first.attemptId } })).attempt;
+  assert.equal(submittedRead.status, "SUBMITTED");
+  assert.deepEqual(submittedRead.learningSnapshot, startSnapshot);
   assert.deepEqual(
     store.documents.get(`semester_assessment_submissions/${first.attemptId}`)
       .analytics,

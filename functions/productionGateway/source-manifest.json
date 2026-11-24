@@ -13,6 +13,7 @@
     "executeThinkCloudResponseFast"
   ],
   "notes": [
+    "2026-11-24: Assessment integrity only. A quiz TIMEOUT submission delivered more than 300 seconds after the frozen deadline is graded from the answers saved before that deadline; earlier deliveries, STUDENT submissions and History Classroom are unchanged. Unsubmitted attempt responses omit option-level misconceptionTags; stored attempts, results and submitted reads keep them. Deploy only Seoul executeCommand and getAssessmentState from each captured live archive plus these two assessmentLifecycle edits; preserve their existing SAVE implementation, other runtime files and resources.",
     "2026-11-21: Align displayed grades and profile/ avatar eligibility with canonical cumulative earnedTotal, including initial grants. Add explicit public earnedTotal without changing historical hall ordering, wallet totals or ledgers. Deploy the captured ranking/query closures before the frontend; preserve all unrelated source and runtime configuration.",
     "2026-11-15: Stock transfers have dedicated ledger types; cumulative Wis recognizes withdrawn profit only, never returned principal or internal trades. Update the read-only audit and explicit ledger rebuild through the captured executeCommand source; preserve all other live files and runtime resources. Fast transaction endpoint cannot execute rebuild and is not redeployed.",
     "2026-11-14: Total-earned Wis includes initial grants in dashboard, opt-in hall and teacher overview; grade eligibility remains rankEarnedTotal. Deploy only the four live ranking/query endpoints from captured archives with wisOverviewQuery.js. No ledger, balance, policy, trigger or account migration.",
@@ -70,8 +71,9 @@
       "sourceFile": "assessmentLifecycle.js",
       "file": "assessmentLifecycle.js",
       "originalSha256": "3f07ecf97f18aab592657d61fbf0cb993460232ae8ac4d2053a66763cc7a8c17",
-      "sha256": "1e5d2c1be0ec3ffe25f4b47c7387e76690258074bb0d601acc7c55b1591d5fa4",
+      "sha256": "6c7f2aa126bea6c0b83be2b63a529f6647e229ee1eb1c37b02ebc4aaffd6cee5",
       "changes": [
+        "2026-11-24: Grade a quiz timeout delivered past the 300-second allowance from its saved answers, and withhold option-level misconception labels until submission. Lifecycle and learning regressions passed.",
         "2026-11-11: Freeze an explicitly locked authored mock paper before any attempt; reuse its server-only source for all starts and preparation, retain question/learning revisions, preserve old-client schedules and expose serverNowIso in round overview. Independent review and lifecycle regression passed.",
         "Use lifetime attemptOrdinal for immutable IDs across teacher resets; retain reset-local attemptNumber.",
         "2026-11-03: Bound saved and submitted answers to assigned questions and their server-owned answer limits; retain long structured selections and revision-matched legacy attempts.",

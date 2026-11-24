@@ -88,6 +88,7 @@ import {
 } from "../../../lib/studentLessonReadCache";
 
 const QUIZ_PROGRESS_SAVE_DELAY_MS = 1500;
+const QUIZ_DEADLINE_SAVE_MARGIN_MS = 800;
 const OPERATION_LOADING_DELAY_MS = 600;
 
 interface Question {
@@ -810,6 +811,14 @@ const QuizRunner: React.FC = () => {
     // A different tab may already have submitted. Display the server's frozen
     // answers alongside its checks, never the stale tab's unsubmitted draft.
     const submittedAnswers = submitted.answers ?? answerMap;
+    // A timed-out submission delivered long after the deadline is graded from
+    // the answers saved before it. The student is told when that set differs.
+    const gradedFromSavedAnswers =
+      isTimeout &&
+      submitted.replayedSubmission !== true &&
+      Object.keys({ ...answerMap, ...submittedAnswers }).some(
+        (key) => (answerMap[key] ?? "") !== (submittedAnswers[key] ?? ""),
+      );
     setScore(submitted.percent);
     setPaperResult({
       questions: questionList.map(
@@ -861,6 +870,7 @@ const QuizRunner: React.FC = () => {
       finalScore: submitted.percent,
       reward: submitted.reward,
       replayedSubmission: submitted.replayedSubmission,
+      gradedFromSavedAnswers,
     };
   };
 
@@ -1162,10 +1172,26 @@ const QuizRunner: React.FC = () => {
     if (persistTimeoutRef.current) {
       window.clearTimeout(persistTimeoutRef.current);
     }
+    // Close to the deadline a full debounce would leave the last answers
+    // unsaved, so the save is brought forward to land before the deadline.
+    const untilDeadlineMs =
+      quizDeadlineMs === null
+        ? 0
+        : quizDeadlineMs - (Date.now() + serverTimeOffsetMs);
+    const delayMs =
+      untilDeadlineMs > 0
+        ? Math.max(
+            0,
+            Math.min(
+              QUIZ_PROGRESS_SAVE_DELAY_MS,
+              untilDeadlineMs - QUIZ_DEADLINE_SAVE_MARGIN_MS,
+            ),
+          )
+        : QUIZ_PROGRESS_SAVE_DELAY_MS;
     persistTimeoutRef.current = window.setTimeout(() => {
       persistTimeoutRef.current = null;
       void persistQuizProgress();
-    }, QUIZ_PROGRESS_SAVE_DELAY_MS);
+    }, delayMs);
   };
 
   useEffect(() => {
@@ -1735,9 +1761,16 @@ const QuizRunner: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, [entryPending, entryStage]);
 
+  // After the server deadline only the pending submission may be delivered;
+  // answers stay final even when that submission has to be retried.
+  const answerDeadlinePassed = () =>
+    quizDeadlineMs !== null &&
+    Date.now() + serverTimeOffsetMs >= quizDeadlineMs;
+
   const handleAnswer = (input: string) => {
     const question = selectedQuestions[currentIndex];
-    if (!question || finishSubmittingRef.current) return;
+    if (!question || finishSubmittingRef.current || answerDeadlinePassed())
+      return;
     const value =
       question.type === "short" || question.type === "word"
         ? limitShortAnswer(input)
@@ -1861,7 +1894,7 @@ const QuizRunner: React.FC = () => {
       return;
     }
 
-    void finishQuiz();
+    void finishQuiz(timeoutHandledRef.current);
   };
 
   const prevQuestion = () => {
@@ -1939,6 +1972,14 @@ const QuizRunner: React.FC = () => {
       setFinalizedResultId(finalized.resultId);
 
       applyQuizPointReward(finalized.reward, finalized.replayedSubmission);
+      if (finalized.gradedFromSavedAnswers) {
+        showToast({
+          tone: "warning",
+          title: "마감 전에 저장된 답안으로 채점했습니다.",
+          message:
+            "마감 뒤 제출이 늦어 저장되지 않은 답안은 반영되지 않았습니다.",
+        });
+      }
 
       setView("result");
     } catch (error) {
@@ -2024,6 +2065,7 @@ const QuizRunner: React.FC = () => {
         </div>
       );
     }
+    const answerLocked = quizDeadlineMs !== null && timeLeft <= 0;
 
     if (isMockExamAttempt) {
       return (
@@ -2048,6 +2090,7 @@ const QuizRunner: React.FC = () => {
               else void nextQuestion(true);
             }}
             submitting={finishSubmitting}
+            answerLocked={answerLocked}
             submitError={submitError}
             submitConflict={submitConflict}
             timeLeft={timeLeft}
@@ -2219,7 +2262,7 @@ const QuizRunner: React.FC = () => {
 
         <div className="student-quiz-shell">
           <fieldset
-            disabled={finishSubmitting}
+            disabled={finishSubmitting || answerLocked}
             className={`student-quiz-body-split min-h-0 flex-1 ${
               hasQuestionSupportPanel ? "student-quiz-body-has-support" : ""
             }`}

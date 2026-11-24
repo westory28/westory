@@ -737,6 +737,18 @@ const runKind = async (kind) => {
     }),
     (error) => error?.details?.reason === "ASSESSMENT_DEADLINE_EXPIRED",
   );
+  // A timed-out submission is still accepted after the deadline, but a quiz
+  // delivered past the allowance is graded from the answers saved before it.
+  const lateAnswers = Object.fromEntries(Object.keys(answerMap).map(id => [id, "오답"]));
+  nowMs = boundaryDeadlineMs + 300_001;
+  const lateTimeout = await execute(student, "submitAssessmentAttempt", {
+    attemptId: boundaryAttempt.result.attemptId, expectedRevision: 3, answers: lateAnswers, submitReason: "TIMEOUT",
+  });
+  assert.deepEqual(lateTimeout.result.answers, kind === "QUIZ" ? answerMap : lateAnswers,
+    "Only a late quiz timeout falls back to the answers saved before the deadline");
+  assert.equal(lateTimeout.result.percent, kind === "QUIZ" ? 50 : 0);
+  assert.deepEqual(store.snapshot(`semester_assessment_attempts/${boundaryAttempt.result.attemptId}`).data.answers,
+    lateTimeout.result.answers, "The submitted attempt holds the graded answers");
   nowMs = boundaryDeadlineMs - 600_000;
 
   const originalResult = clone(store.snapshot(`semester_assessment_results/${attemptId}`).data);
@@ -753,6 +765,14 @@ const runKind = async (kind) => {
     await execute(student, "submitAssessmentAttempt", { attemptId: fresh.result.attemptId, expectedRevision: 1, answers: answerMap, submitReason: "STUDENT" });
     assert.deepEqual(store.snapshot(`semester_assessment_results/${attemptId}`).data, originalResult, "Old result survives reset and restart");
   }
+
+  const graceAttempt = await execute(student, "startAssessmentAttempt", startPayload);
+  nowMs = Date.parse(graceAttempt.result.deadlineAtIso) + 300_000;
+  const withinAllowance = await execute(student, "submitAssessmentAttempt", {
+    attemptId: graceAttempt.result.attemptId, expectedRevision: 1, answers: lateAnswers, submitReason: "TIMEOUT",
+  });
+  assert.deepEqual(withinAllowance.result.answers, lateAnswers, "A timeout delivered within the allowance keeps its own answers");
+  nowMs = boundaryDeadlineMs - 600_000;
 
   await execute(admin, "transitionAssessmentDefinition", {
     definitionId: definition.definitionId,

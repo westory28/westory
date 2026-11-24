@@ -29,6 +29,7 @@ interface Props {
   onAnswer?: (value: string) => void;
   onSubmit?: () => void;
   submitting?: boolean;
+  answerLocked?: boolean;
   submitError?: string;
   submitConflict?: boolean;
   timeLeft?: number;
@@ -401,7 +402,7 @@ export default function MockExamWorkspace(props: Props) {
                   index={currentIndex}
                   choiceLayout="paper"
                   answer={answer}
-                  disabled={submitting}
+                  disabled={submitting || props.answerLocked}
                   onAnswer={(value) => onAnswer?.(value)}
                   orderOptions={orderOptions}
                 />

@@ -86,6 +86,8 @@ const built = await build({
   plugins: [{ name: "mock-assessment-boundary", setup(builder) {
     builder.onResolve({ filter: /\/(QuizLessonPopup|StudentHistoryDictionaryController|StudentRankPromotionController|TeacherPatchMemoController|NotificationBell)$/ }, () => ({ path: "popup-stub", namespace: "popup-fixture" }));
     builder.onLoad({ filter: /.*/, namespace: "popup-fixture" }, () => ({ contents: "export default function QuizLessonPopup(){return null}", loader: "js" }));
+    builder.onResolve({ filter: /hooks\/useStudentWisStocks$/ }, () => ({ path: "stock-status-stub", namespace: "stock-fixture" }));
+    builder.onLoad({ filter: /.*/, namespace: "stock-fixture" }, () => ({ contents: "const idle=()=>({});export const useStudentWisStockStatus=idle,useStudentWisStockMarket=idle,useStudentWisStockAccount=idle", loader: "js" }));
     builder.onResolve({ filter: /contexts\/AuthContext$|^firebase\/firestore$|lib\/(firebase|weplayPreload|pointRankPromotion|semesterScope|assessmentLifecycle|studentLessonReadCache|quizResultCorrections|quizScoreComparison|quizReviewNotes|myQuizHistory)$/ }, () => ({ path: "runner-stub", namespace: "fixture" }));
     builder.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({ contents: stubs, loader: "js", resolveDir: root }));
   } }],
@@ -220,8 +222,43 @@ const checkRunnerToggle = async (page, dialog, touch) => {
   assert.equal(await page.getByText('정답·해설 확인',{exact:true}).count(),0);
   assert(!/정답:|저장 당시 해설/.test(await dialog.innerText()),'No student correct-answer label or explanation leaks');
 };
+// After the frozen deadline the answers are final: a failed timed-out
+// submission can be retried, but it delivers what was held at the deadline.
+const verifyDeadlineLock = async () => {
+  const page = await open(1280, 1024, false, '?submit-error');
+  page.on('dialog', dialog => dialog.dismiss());
+  let dialog = await openQuestion(page, 1);
+  await dialog.getByRole('radio', { name: /조선/ }).locator('..').click();
+  await page.waitForFunction(() => window.mockRunnerQa.saves.length >= 1);
+  await page.evaluate(() => { const saved = window.mockRunnerQa.attempt; saved.startedAtIso = new Date(Date.now() - 35000).toISOString(); saved.lastSavedAtIso = saved.startedAtIso; saved.deadlineAtIso = new Date(Date.parse(saved.startedAtIso) + 60000).toISOString(); sessionStorage.setItem('mock-runner-attempt', JSON.stringify(saved)); });
+  await page.reload();
+  dialog = await openQuestion(page, 1);
+  const kept = dialog.getByRole('radio', { name: /조선/ }), other = dialog.getByRole('radio', { name: /고려/ });
+  assert.equal(await kept.isChecked(), true, 'The saved answer is restored before the deadline');
+  assert.equal(await other.isDisabled(), false, 'Answers stay editable until the deadline');
+  await page.waitForFunction(() => window.mockRunnerQa.submits.length === 1, null, { timeout: 60000 });
+  const retry = page.getByRole('button', { name: '다시 제출', exact: true });
+  await retry.waitFor();
+  assert.equal(await page.evaluate(() => window.mockRunnerQa.submits[0].submitReason), 'TIMEOUT');
+  assert.equal(await other.isDisabled(), true, 'Answer controls lock once the deadline has passed');
+  await other.evaluate(element => { element.disabled = false; element.click(); });
+  await page.waitForTimeout(300);
+  assert.equal(await kept.isChecked(), true, 'A control re-enabled outside the app cannot change a final answer');
+  assert.equal(await retry.isEnabled(), true, 'The timed-out submission can still be retried');
+  // The failure toast and the zoomed question can overlap the footer, so the
+  // retry control is activated directly; pointer access is covered below.
+  await retry.dispatchEvent('click');
+  await page.getByRole('button', { name: '저장된 답안·해설', exact: true }).waitFor();
+  const submits = await page.evaluate(() => window.mockRunnerQa.submits.map(item => ({ reason: item.submitReason, answers: item.answers })));
+  assert.equal(submits.length, 2);
+  assert.equal(submits[1].reason, 'TIMEOUT');
+  assert.deepEqual(submits[1].answers, submits[0].answers, 'The retry delivers the answers held at the deadline');
+  await page.close();
+};
 try {
-  if(process.argv.includes('--scroll-only')) {
+  if(process.argv.includes('--deadline-lock-only')) {
+    await verifyDeadlineLock();
+  } else if(process.argv.includes('--scroll-only')) {
     for(const width of [390,768,1280,1440]) {
       const page=await open(width,900,width<1000,'?real-portal');
       const fit=width<=900?'page':'width';
@@ -568,6 +605,7 @@ try {
   assert.equal(await expiredPage.evaluate(()=>window.mockRunnerQa.submits[0].submitReason),'TIMEOUT','Image failure cannot block submission of an already-expired attempt');
   assert.equal(await expiredPage.evaluate(()=>window.mockRunnerQa.reads.length),1,'Expired resume uses the initial state without another preparation request');
   await expiredPage.close();
+  await verifyDeadlineLock();
 
   for (const [width,height] of [[320,568],[360,800],[390,844],[768,1024],[820,1180],[1280,1024],[1440,1024]]) {
     const touch=width<=820;
@@ -729,7 +767,9 @@ try {
   }
   assert.deepEqual(pageErrors, []);
   await fs.writeFile(path.join(evidence,'viewport-report.json'),JSON.stringify(viewportReports,null,2));
-  console.log(process.argv.includes('--scroll-only')
+  console.log(process.argv.includes('--deadline-lock-only')
+    ? `Exam deadline lock passed: answers stay editable before the deadline, lock after it, and a failed timed-out submission retries with the same answers. Evidence: ${evidence}`
+    : process.argv.includes('--scroll-only')
     ? `Mock exam real-portal scroll regression passed: actual MainLayout/Header/Footer, internal paper scroll only, question width, answer preservation, full screen and route-exit restoration at 390/768/1280/1440px. Evidence: ${evidence}`
     : process.argv.includes('--asset-recovery-only')
     ? `Exam asset recovery passed: actual keyboard answers save before automatic update at 390/768/1280px, then resume the same attempt and deadline without submission. Evidence: ${evidence}`
