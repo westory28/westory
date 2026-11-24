@@ -4,6 +4,13 @@ import ExamOmrConfig from "./components/ExamOmrConfig";
 import PerformanceScoreManager from "./components/PerformanceScoreManager";
 import WrittenExamEssayScoreManager from "./components/WrittenExamEssayScoreManager";
 import { useSearchParams } from "react-router-dom";
+import { MENUS } from "../../constants/menus";
+
+// These two screens have no heading of their own; show the menu's own name.
+const getExamMenuName = (url: string, fallback: string) =>
+  MENUS.teacher
+    .flatMap((item) => item.children || [])
+    .find((child) => child.url === url)?.name || fallback;
 
 const ManageExam: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
@@ -32,6 +39,15 @@ const ManageExam: React.FC = () => {
             : `ws-page flex flex-1 flex-col ${activeTab === "performance" ? "ws-page--reading" : ""}`
         }
       >
+        {(activeTab === "preview" || activeTab === "omr") && (
+          <header className="ws-page-header">
+            <h1>
+              {activeTab === "preview"
+                ? getExamMenuName("/teacher/exam", "평가 반영 비율")
+                : getExamMenuName("/teacher/exam?tab=omr", "정기시험 답안")}
+            </h1>
+          </header>
+        )}
         <div
           className={
             activeTab === "preview"
