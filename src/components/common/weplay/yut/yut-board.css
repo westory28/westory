@@ -51,9 +51,15 @@
   height: 100%;
   transform: none;
 }
+.yut-board-pawns {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
 .yut-isometric-board .yut-isometric-piece {
   position: absolute;
-  z-index: 4;
+  pointer-events: auto;
   display: block;
   width: clamp(44px, 8.2%, 66px);
   height: auto;
@@ -90,9 +96,6 @@
   position: absolute;
   inset: 0;
   transform-origin: 50% 92%;
-}
-.yut-isometric-piece.is-moving {
-  z-index: 5;
 }
 .yut-pawn-expression {
   position: absolute;

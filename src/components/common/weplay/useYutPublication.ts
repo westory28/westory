@@ -44,16 +44,21 @@ export default function useYutPublication(
     }
     let active = true;
     let pending = false;
+    let retryOnReconnect = false;
+    let reconnectedWhilePending = false;
     let lobbyLoaded = false;
     let requestTimeout: number | undefined;
     setAccess({ scope, status: "checking" });
     const check = async () => {
-      if (!active || pending || document.hidden) return;
+      if (!active || pending || document.hidden || scopeRef.current !== scope)
+        return;
       if (!currentUser || !config?.year || !config?.semester) {
         setAccess({ scope, status: "closed" });
         return;
       }
       pending = true;
+      retryOnReconnect = false;
+      reconnectedWhilePending = false;
       try {
         const sentAtMs = Date.now();
         const { publication, lobby } = await Promise.race([
@@ -68,7 +73,12 @@ export default function useYutPublication(
               })),
           new Promise<never>((_resolve, reject) => {
             requestTimeout = window.setTimeout(
-              () => reject(new Error("게임 확인 시간이 초과되었습니다.")),
+              () =>
+                reject(
+                  Object.assign(new Error("게임 확인 시간이 초과되었습니다."), {
+                    code: "deadline-exceeded",
+                  }),
+                ),
               10000,
             );
           }),
@@ -96,15 +106,22 @@ export default function useYutPublication(
         }
       } catch (error) {
         if (active && scopeRef.current === scope) {
-          const denied = String(
-            (error as { code?: string })?.code || "",
-          ).includes("permission-denied");
+          const code = String((error as { code?: string })?.code || "");
+          const denied = code.includes("permission-denied");
+          // Firebase callable fetch failures with no HTTP response map to internal.
+          retryOnReconnect =
+            /(?:^|\/)(internal|unavailable|deadline-exceeded|network-request-failed)$/.test(
+              code,
+            ) ||
+            (error instanceof TypeError &&
+              /fetch|network/i.test(error.message));
           setAccess({ scope, status: denied ? "closed" : "error" });
         }
       } finally {
         window.clearTimeout(requestTimeout);
         requestTimeout = undefined;
         pending = false;
+        if (reconnectedWhilePending && retryOnReconnect) void check();
       }
     };
     void check();
@@ -112,11 +129,18 @@ export default function useYutPublication(
     const onVisible = () => {
       if (!document.hidden) void check();
     };
+    const onOnline = () => {
+      if (!active || document.hidden || scopeRef.current !== scope) return;
+      if (pending) reconnectedWhilePending = true;
+      else if (retryOnReconnect) void check();
+    };
+    if (includeInitialLobby) window.addEventListener("online", onOnline);
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       active = false;
       window.clearTimeout(requestTimeout);
       window.clearInterval(timer);
+      if (includeInitialLobby) window.removeEventListener("online", onOnline);
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [portal, scope, revision, includeInitialLobby, menuAllowed]);

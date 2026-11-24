@@ -216,6 +216,14 @@ assert.equal(low.pendingThrow.sticks.filter(Boolean).length, 2);
 assert.equal(high.pendingThrow.sticks.filter(Boolean).length, 2);
 assert.equal(low.players[0].lastThrow.power, 0.12);
 assert.equal(high.players[0].lastThrow.power, 1);
+for (const [boost, draw, ordinary] of [[4, .84, 3], [5, .95, 4]]) {
+  const command = { action: "throw", power: 1 };
+  const drawLocal = (data) => previewYutCommand(powerRoom, data, YUT_PREVIEW_UID, () => draw, powerRoom.phaseStartsAtMs);
+  assert.equal(drawLocal(command).pendingThrow.value, ordinary);
+  const boosted = drawLocal({ ...command, boost });
+  assert.equal(boosted.pendingThrow.value, boost);
+  assert.equal(boosted.players[0].boostsUsed, 1);
+}
 assert.equal(
   addYutEmote(preview, YUT_PREVIEW_UID, "angry", "local_angry_123456", 500020)
     .emotes[YUT_PREVIEW_UID].kind,

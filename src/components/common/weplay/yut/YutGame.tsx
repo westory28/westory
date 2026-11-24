@@ -23,12 +23,14 @@ import {
 } from "../../../../lib/yut";
 import {
   getLegalYutMoves,
+  YUT_BOOST_LIMIT,
   YUT_ROLES,
   YUT_MOVE_ANIMATION_MS,
   addYutEmote,
   YUT_EMOTE_COOLDOWN_MS,
   YUT_EMOTE_VISIBLE_MS,
   YUT_WAITING_MS,
+  type YutBoost,
   type YutEmoteKind,
 } from "../../../../../functions/yutCore.mjs";
 import {
@@ -92,6 +94,8 @@ const uncertainYutFailure = (failure: unknown) => {
   const code = String((failure as { code?: string })?.code || "");
   return !code || /deadline|unavailable|network|internal|unknown/.test(code);
 };
+const isTurnCommand = (action: YutCommand["action"]) =>
+  action === "throw" || action === "move" || action === "skip";
 
 export function YutVictory({
   room,
@@ -163,23 +167,31 @@ export function YutVictory({
   );
 }
 
+function yutChargePower(start: number) {
+  const cycle = ((performance.now() - start) / 1200) % 2;
+  return 0.12 + 0.88 * (1 - Math.abs(1 - cycle));
+}
+
 /** V2 strength changes probabilities; the server still draws and validates the result. */
 export function YutPowerThrow({
   disabled,
   onThrow,
   rulesVersion = 2,
+  boostsUsed = 0,
 }: {
   disabled: boolean;
-  onThrow: (power: number) => void;
+  onThrow: (power: number, boost?: YutBoost) => void;
   rulesVersion?: number;
+  boostsUsed?: number;
 }) {
+  const [boost, setBoost] = useState<YutBoost>();
+  const remaining = Math.max(0, YUT_BOOST_LIMIT - boostsUsed);
   const [charging, setCharging] = useState(false);
   const [power, setPower] = useState(0);
   const charge = useRef<{
     start: number;
     mode: "pointer" | "space" | "toggle";
   } | null>(null);
-  const value = useRef(0);
   const frame = useRef(0);
   const cancel = useCallback(() => {
     charge.current = null;
@@ -193,21 +205,17 @@ export function YutPowerThrow({
     setCharging(true);
     const tick = () => {
       if (!charge.current) return;
-      const progress = Math.min(
-        1,
-        (performance.now() - charge.current.start) / 1200,
-      );
-      value.current = 0.12 + 0.88 * progress;
-      setPower(value.current);
-      if (progress < 1) frame.current = requestAnimationFrame(tick);
+      setPower(yutChargePower(charge.current.start));
+      frame.current = requestAnimationFrame(tick);
     };
     tick();
   };
   const release = () => {
     if (!charge.current) return;
-    const chosen = value.current;
+    const chosen = yutChargePower(charge.current.start);
     cancel();
-    if (!disabled && !document.hidden) onThrow(chosen);
+    if (!disabled && !document.hidden)
+      onThrow(chosen, rulesVersion === 2 && remaining > 0 ? boost : undefined);
   };
   useEffect(() => {
     if (disabled) cancel();
@@ -227,6 +235,32 @@ export function YutPowerThrow({
   }, [cancel]);
   return (
     <div className={`yut-power-control ${charging ? "is-charging" : ""}`}>
+      {rulesVersion === 2 && (
+        <div
+          className="yut-boost-choices"
+          role="group"
+          aria-label="확률 올리기"
+        >
+          {([4, 5] as const).map((target) => {
+            const name = target === 4 ? "윷" : "모";
+            return (
+              <button
+                key={target}
+                type="button"
+                className={`yut-button ${boost === target ? "yut-button--primary" : ""}`}
+                aria-label={`${name} 확률 1.5배`}
+                aria-pressed={boost === target}
+                disabled={disabled || charging || remaining === 0}
+                onClick={() => setBoost(boost === target ? undefined : target)}
+              >
+                {boost === target && <span aria-hidden="true">✓</span>}
+                {name}
+              </button>
+            );
+          })}
+          <span className="yut-power-help">남은 {remaining}회</span>
+        </div>
+      )}
       <div
         className="yut-power-meter"
         role="meter"
@@ -389,7 +423,7 @@ function GameDialog({
             <li>
               {rulesVersion === 1
                 ? "윷가락 앞뒤가 나올 확률은 같습니다. 힘은 투척 연출에만 반영됩니다."
-                : "약하게 던지면 도·개, 세게 던지면 윷·모의 확률이 높아집니다. 힘을 맞춰도 결과가 확정되지는 않습니다."}
+                : "누르고 있으면 힘이 커졌다 작아집니다. 약하게 던지면 도·개, 세게 던지면 윷·모가 나올 확률이 높습니다. 한 사람당 한 판에 두 번, 윷이나 모 하나를 골라 그 확률을 1.5배로 올릴 수 있습니다."}
             </li>
             <li>
               윷은 {throwSeconds}초 안에 던져 주세요. 시간이 지나면 다음 차례로
@@ -691,7 +725,8 @@ export default function YutGame({
     null,
   );
   const clockSample = useRef({ latency: Infinity, atMs: 0 });
-  const pendingRef = useRef(false);
+  const pendingRef = useRef<YutCommand | null>(null);
+  const phaseReceivedAt = useRef(0);
   const mounted = useRef(true);
   const visualRoomId = useRef<string | null>(null);
   const loadedIdentity = useRef<string | null>(null);
@@ -749,7 +784,7 @@ export default function YutGame({
   useEffect(() => {
     if (!modeUnavailable) return;
     generation.current++;
-    pendingRef.current = false;
+    pendingRef.current = null;
     setPending("");
     setDisconnected(false);
     setNeedsSync(false);
@@ -857,6 +892,16 @@ export default function YutGame({
         (next.syncRevision ?? next.revision)
     )
       return;
+    const receivedAt = Date.now();
+    if (next?.lastEvent)
+      setServerOffset((offset) =>
+        Math.max(offset, next.lastEvent.atMs - receivedAt),
+      );
+    if (
+      next?.id !== previous?.id ||
+      next?.turnDeadlineMs !== previous?.turnDeadlineMs
+    )
+      phaseReceivedAt.current = receivedAt;
     roomRef.current = next;
     setRoom(next);
   }, []);
@@ -864,13 +909,15 @@ export default function YutGame({
     (serverNowMs: number, sentAtMs: number) => {
       const receivedAtMs = Date.now(),
         latency = Math.max(0, receivedAtMs - sentAtMs);
-      // A delayed response must not shift an already accurate turn clock back.
+      // The sample comes after server-side authorization, which can take most
+      // of a slow round trip. Advancing it by half that trip can unlock input
+      // before the server opens the phase or expire a player's turn early.
       if (
         latency <= clockSample.current.latency ||
         receivedAtMs - clockSample.current.atMs > 60000
       ) {
         clockSample.current = { latency, atMs: receivedAtMs };
-        setServerOffset(serverNowMs - (sentAtMs + receivedAtMs) / 2);
+        setServerOffset(serverNowMs - receivedAtMs);
       }
       setClock(receivedAtMs);
     },
@@ -1116,7 +1163,7 @@ export default function YutGame({
     if (recoveryCommand.current?.scope !== scope)
       recoveryCommand.current = null;
     if (!retainedRoom) clockSample.current = { latency: Infinity, atMs: 0 };
-    pendingRef.current = false;
+    pendingRef.current = null;
     setPending("");
     setMoving(false);
     setSelectedMove(null);
@@ -1165,9 +1212,19 @@ export default function YutGame({
         // Only the explicit recovery button replays the exact uncertain request.
         // The server receipt prevents a second throw/join even after a lost reply.
         try {
-          await withYutTimeout(commandYutRoom(config, recovery.data));
+          const sentAtMs = Date.now();
+          const result = await withYutTimeout(
+            commandYutRoom(config, recovery.data),
+          );
           if (recoveryCommand.current === recovery)
             recoveryCommand.current = null;
+          if (
+            isTurnCommand(recovery.data.action) &&
+            lobby &&
+            retainedRoom &&
+            result.room?.id === retainedRoom.id
+          )
+            return { data: { ...lobby, ...result }, sentAtMs };
         } catch (failure) {
           if (
             !uncertainYutFailure(failure) &&
@@ -1280,6 +1337,23 @@ export default function YutGame({
             acceptRoom(next);
             setDisconnected(false);
             membershipCheckRoom.current = null;
+            // This server-confirmed revision makes the old turn request
+            // impossible to apply again, even if its HTTP reply never arrives.
+            const request = recoveryCommand.current?.data;
+            if (
+              request?.roomId === id &&
+              isTurnCommand(request.action) &&
+              request.expectedRevision !== undefined &&
+              next.revision > request.expectedRevision
+            ) {
+              recoveryCommand.current = null;
+              if (pendingRef.current === request) {
+                pendingRef.current = null;
+                setPending("");
+              }
+              setNeedsSync(false);
+              setError("");
+            }
           } else {
             roomEpoch.current++;
             recoveryCommand.current = null;
@@ -1470,7 +1544,6 @@ export default function YutGame({
     const epoch = roomEpoch.current;
     const activeRoom = roomRef.current;
     const oldRoomId = activeRoom?.id;
-    pendingRef.current = true;
     setPending(action);
     const data: YutCommand = {
       action,
@@ -1481,12 +1554,14 @@ export default function YutGame({
       ...extra,
     };
     const recovery = { scope, data };
+    pendingRef.current = data;
     recoveryCommand.current = recovery;
     const sentAtMs = Date.now();
     try {
       const result = await withYutTimeout(commandYutRoom(config, data));
       if (
         !mounted.current ||
+        pendingRef.current !== data ||
         identityRef.current !== scope ||
         generation.current !== run ||
         roomEpoch.current !== epoch
@@ -1516,6 +1591,7 @@ export default function YutGame({
         }
       }
     } catch (failure) {
+      if (pendingRef.current !== data) return;
       if (!uncertainYutFailure(failure) && recoveryCommand.current === recovery)
         recoveryCommand.current = null;
       if (
@@ -1532,15 +1608,22 @@ export default function YutGame({
         roomEpoch.current === epoch
       ) {
         setError(yutErrorMessage(failure));
-        setNeedsSync(true);
+        const code = String((failure as { code?: string })?.code || "");
+        // A refused turn is safe to try again from the subscribed room.
+        // Permission failures and uncertain writes still require reconciliation.
+        setNeedsSync(
+          !isTurnCommand(action) ||
+            !/aborted|failed-precondition|resource-exhausted/.test(code),
+        );
       }
     } finally {
       if (
         mounted.current &&
+        pendingRef.current === data &&
         identityRef.current === scope &&
         generation.current === run
       ) {
-        pendingRef.current = false;
+        pendingRef.current = null;
         setPending("");
       }
     }
@@ -1560,19 +1643,34 @@ export default function YutGame({
     () => (room ? getLegalYutMoves(room, uid) : []),
     [room, uid],
   );
-  const seconds = room
-    ? Math.max(
-        0,
-        Math.ceil(
-          (room.turnDeadlineMs -
+  const serverClock = clock + (local ? 0 : serverOffset);
+  // Give a late room update some of its delivery window back as play time.
+  // Reserve the final second for the released input to reach the callable.
+  const inputDeadline =
+    room?.turnInputDeadlineMs &&
+    room.phaseStartsAtMs &&
+    room.turnInputDeadlineMs < room.turnDeadlineMs
+      ? Math.min(
+          room.turnDeadlineMs - 1000,
+          room.turnInputDeadlineMs +
             Math.max(
-              room.phaseStartsAtMs || 0,
-              clock + (local ? 0 : serverOffset),
-            )) /
-            1000,
-        ),
-      )
-    : 0;
+              0,
+              phaseReceivedAt.current + serverOffset - room.phaseStartsAtMs,
+            ),
+        )
+      : room?.turnDeadlineMs || 0;
+  const phaseDurationMs =
+    (room?.phase === "move"
+      ? (room.moveSeconds ?? 25)
+      : (room?.throwSeconds ?? 5)) * 1000;
+  const remainingMs = Math.max(
+    0,
+    Math.min(
+      phaseDurationMs,
+      inputDeadline - Math.max(room?.phaseStartsAtMs || 0, serverClock),
+    ),
+  );
+  const seconds = Math.ceil(remainingMs / 1000);
   const busy =
     Boolean(pending) ||
     disconnected ||
@@ -1580,7 +1678,6 @@ export default function YutGame({
     loading ||
     modeUnavailable ||
     suspended;
-  const serverClock = clock + (local ? 0 : serverOffset);
   const phaseWaiting = Boolean(
     room && serverClock < (room.phaseStartsAtMs || 0),
   );
@@ -1625,12 +1722,14 @@ export default function YutGame({
     const position = room.players.findIndex((person) => person.uid === uid);
     const fallbackDelay =
       local || room.turnUid === uid
-        ? 0
+        ? local
+          ? 0
+          : 250
         : room.hostUid === uid
-          ? 800
-          : 1400 + Math.max(0, position) * 300;
+          ? 1800
+          : 3000 + Math.max(0, position) * 750;
     if (serverClock < room.turnDeadlineMs + fallbackDelay) return;
-    const key = `${room.id}:${room.turnUid}:${room.turnDeadlineMs}`;
+    const key = `${room.id}:${room.turnUid}:${room.turnDeadlineMs}:${room.revision}`;
     if (autoSkipKey.current === key) return;
     autoSkipKey.current = key;
     void command("skip", {}, true);
@@ -1752,7 +1851,9 @@ export default function YutGame({
     room?.status === "finished"
       ? "again"
       : seconds === 0
-        ? "skip"
+        ? room && serverClock >= room.turnDeadlineMs
+          ? "skip"
+          : null
         : myTurn && room?.phase === "throw"
           ? "throw"
           : null;
@@ -2591,7 +2692,9 @@ export default function YutGame({
                     hidden={busy || settling || moving || phaseWaiting}
                   >
                     <YutPowerThrow
+                      key={`${room.id}:${uid}:${room.phaseStartsAtMs}`}
                       rulesVersion={rulesVersion}
+                      boostsUsed={player?.boostsUsed}
                       disabled={
                         busy ||
                         settling ||
@@ -2601,9 +2704,12 @@ export default function YutGame({
                         hidden ||
                         Boolean(dialog)
                       }
-                      onThrow={(power) => {
+                      onThrow={(power, boost) => {
                         setThrowPower(power);
-                        void command("throw", { power });
+                        void command(
+                          "throw",
+                          boost ? { power, boost } : { power },
+                        );
                       }}
                     />
                   </div>
@@ -2643,15 +2749,8 @@ export default function YutGame({
                     !phaseWaiting &&
                     !busy && (
                       <YutTurnGauge
-                        remainingMs={Math.max(
-                          0,
-                          room.turnDeadlineMs - serverClock,
-                        )}
-                        totalMs={
-                          (room.phase === "throw"
-                            ? room.throwSeconds || 5
-                            : room.moveSeconds || 25) * 1000
-                        }
+                        remainingMs={remainingMs}
+                        totalMs={phaseDurationMs}
                         phase={room.phase}
                       />
                     )}

@@ -11,6 +11,17 @@ const text = (value, max) => String(value || '').replace(/\s+/g, ' ').trim().sli
 const fail = (code, message) => { throw new HttpsError(code, message); };
 const identifier = (value) => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(value);
 const WAITING_MS = 10 * 60_000;
+const TURN_DELIVERY_GRACE_MS = 3_000;
+const updateTurnDeadlines = (previous, room) => {
+  if (room.status !== 'playing') delete room.turnInputDeadlineMs;
+  else if (previous.status !== room.status || previous.turnUid !== room.turnUid || previous.phase !== room.phase) {
+    // Older clients use the hard timeout. A participant change alone must
+    // never grant another window or retain the departing player's deadline.
+    room.turnInputDeadlineMs = room.turnDeadlineMs;
+    room.turnDeadlineMs += TURN_DELIVERY_GRACE_MS;
+  }
+  return room;
+};
 const expired = (room, atMs) => !room || room.expiresAtMs <= atMs
   || (room.status === 'waiting' && (room.hostActivityAtMs ?? room.createdAtMs) + WAITING_MS <= atMs);
 const isOpen = (room, now) => room && ['waiting', 'playing'].includes(room.status) && !expired(room, now);
@@ -245,6 +256,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     });
   };
   const commandYutRoom = async (request) => {
+    const arrivedAt = now();
     await assertSession(request);
     if (!request.auth?.uid) fail('unauthenticated', '로그인 후 이용해 주세요.');
     const scope = scopeFrom(request.data), data = request.data, action = data.action;
@@ -263,6 +275,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     if (action === 'seat' && (!Number.isInteger(data.seat) || data.seat < 0 || data.seat > 3 || typeof data.blocked !== 'boolean')) fail('invalid-argument', '변경할 자리를 확인해 주세요.');
     if (action === 'kick' && !identifier(data.targetUid)) fail('invalid-argument', '내보낼 참가자를 확인해 주세요.');
     if (action === 'throw' && data.power !== undefined && (!Number.isFinite(data.power) || data.power < 0 || data.power > 1)) fail('invalid-argument', '던지는 세기를 확인해 주세요.');
+    if (data.boost !== undefined && (action !== 'throw' || ![4, 5].includes(data.boost))) fail('invalid-argument', '윷 또는 모 중 하나를 선택해 주세요.');
     if (action === 'move' && (!['1', '2'].includes(data.pieceId) || !['outer', 'a', 'b'].includes(data.route) || (data.stack !== undefined && typeof data.stack !== 'boolean'))) fail('invalid-argument', '이동할 말과 길을 선택해 주세요.');
     if (action === 'claimReward' && Object.keys(data).some((field) => !['year', 'semester', '_session', 'action', 'requestKey', 'roomId', 'expectedRevision'].includes(field))) fail('invalid-argument', '우승 보상 요청을 확인해 주세요.');
     // Preserve existing command fingerprints across deployment, including a
@@ -272,6 +285,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     if (action === 'seat') fingerprintFields.push(data.seat, data.blocked);
     if (action === 'kick') fingerprintFields.push(data.targetUid);
     if (action === 'throw' && data.power !== undefined) fingerprintFields.push('power', data.power);
+    if (action === 'throw' && data.boost !== undefined) fingerprintFields.push('boost', data.boost);
     if (action === 'move' && data.stack !== undefined) fingerprintFields.push('stack', data.stack);
     if (['create', 'match'].includes(action) && (data.visibility !== undefined || data.maxPlayers !== undefined)) fingerprintFields.push(data.visibility ?? null, data.maxPlayers ?? null);
     const fingerprint = hash(JSON.stringify(fingerprintFields));
@@ -279,7 +293,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
     // Draw once before transaction retries; a transaction retry cannot reroll.
     const sticks = action === 'throw' ? Array.from({ length: 4 }, () => random(2) === 1) : null;
     const throwDraws = action === 'throw' ? Array.from({ length: 4 }, () => random(0x100000000) / 0x100000000) : null;
-    return db.runTransaction(async (transaction) => {
+    const currentRoom = await db.runTransaction(async (transaction) => {
       // Reuse only this transaction's document snapshots. Starting a four-player
       // room otherwise rereads the actor and shared classrooms several times.
       // Each transaction retry creates a fresh cache; no authority crosses requests.
@@ -310,7 +324,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
           persistNames(transaction, scope, old, refreshed);
           room = publicRoom(refreshed);
         }
-        return { room, serverNowMs: receivedAt };
+        return room;
       }
       if (action !== 'emote' && Number(player.lastCommandAtMs || 0) + 250 > receivedAt) fail('resource-exhausted', '잠시 후 다시 눌러 주세요.');
       let room, roomId, codeRef = null, transferredRoom = null, transferredCodeRef = null, matchQueue = null, removedPlayer = null;
@@ -318,7 +332,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
         if (identifier(player.roomId)) {
           const current = (await transaction.get(ref(scope, 'yut_rooms', player.roomId))).data();
           if (isOpen(current, receivedAt) && current.participantUids.includes(actor.uid)) {
-            if (!matchesMembership(current, actor) || !modeAllowed(actor, current)) transferredRoom = core.leaveYutRoom(current, actor.uid, receivedAt);
+            if (!matchesMembership(current, actor) || !modeAllowed(actor, current)) transferredRoom = updateTurnDeadlines(current, core.leaveYutRoom(current, actor.uid, receivedAt));
             else if ((action === 'join' && current.code === code) || (action === 'match' && current.visibility === 'public')) {
               if (!actor.manager && current.visibility !== 'public' && current.status === 'waiting' && privateUsed(player, koreaDay(receivedAt)) >= 5) fail('resource-exhausted', '오늘의 비밀 방 5판을 모두 이용했습니다.');
               // Record even a no-op reconnect: a delayed retry after leaving
@@ -334,7 +348,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
               } else persistNames(transaction, scope, current, refreshed);
               transaction.set(playerRef, { ...player, lastCommandAtMs: receivedAt,
                 commands: [...history, { key: data.requestKey, fingerprint, roomId: current.id }].slice(-32) });
-              return { room: publicRoom(refreshed), serverNowMs: receivedAt };
+              return publicRoom(refreshed);
             } else fail('failed-precondition', '참가 중인 방에서 먼저 나와 주세요.');
           }
         }
@@ -390,7 +404,8 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
         room = await refreshRoomNames(reader, scope, room, actor);
       } else {
         roomId = data.roomId;
-        room = roomSnapshot.data();
+        const previousRoom = roomSnapshot.data();
+        room = previousRoom;
         checkRoomAccess(actor, room);
         if (!['leave', 'close'].includes(action) && !modeAllowed(actor, room)) fail('permission-denied', '지금은 이 게임 모드가 열려 있지 않습니다.');
         const participant = room.participantUids.includes(actor.uid);
@@ -444,19 +459,20 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
           if (action === 'ready') room = core.readyYutPlayer(room, actor.uid, data.ready, receivedAt);
           if (action === 'seat') room = core.setYutSeat(room, actor.uid, data.seat, data.blocked, receivedAt);
           if (action === 'kick') room = core.kickYutPlayer(room, actor.uid, data.targetUid, receivedAt);
-          if (action === 'start') room = core.startYutGame(room, receivedAt);
+          if (action === 'start') room = core.startYutGame(room, now());
           if (action === 'start' && room.visibility !== 'public') room.privatePlayChargedAtMs = receivedAt;
           if (action === 'throw') {
             let drawIndex = 0;
-            const weightedSticks = core.sampleYutSticks(data.power, () => throwDraws[drawIndex++], room.players.find((member) => member.uid === actor.uid)?.lastThrow?.value);
-            room = core.throwYut(room, actor.uid, room.rulesVersion === 2 ? weightedSticks : sticks, receivedAt, data.power);
+            const weightedSticks = core.sampleYutSticks(data.power, () => throwDraws[drawIndex++], room.players.find((member) => member.uid === actor.uid)?.lastThrow?.value, data.boost);
+            room = core.throwYut(room, actor.uid, room.rulesVersion === 2 ? weightedSticks : sticks, receivedAt, data.power, data.boost, arrivedAt);
           }
-          if (action === 'move') room = core.moveYut(room, actor.uid, data.pieceId, data.route, receivedAt, data.stack);
+          if (action === 'move') room = core.moveYut(room, actor.uid, data.pieceId, data.route, receivedAt, data.stack, arrivedAt);
           if (action === 'skip') room = core.skipYutTurn(room, receivedAt);
           if (action === 'leave') room = core.leaveYutRoom(room, actor.uid, receivedAt);
           if (action === 'close') room = core.closeYutRoom(room, receivedAt);
           if (action === 'emote') room = core.addYutEmote(room, actor.uid, data.kind, data.requestKey, receivedAt);
         } catch (error) { fail('failed-precondition', error.message); }
+        updateTurnDeadlines(previousRoom, room);
       }
       room = core.touchYutHostActivity(room, actor.uid, receivedAt);
       // Keep a live waiting room's invite code on the same inactivity deadline.
@@ -516,8 +532,11 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
       transaction.set(playerRef, { ...player, roomId: pointerRoomId,
         ...(action === 'emote' ? { lastEmoteAtMs: receivedAt } : { lastCommandAtMs: receivedAt }),
         commands: [...history, { key: data.requestKey, fingerprint, roomId: returnedRoomId }].slice(-32) });
-      return { room: returnedRoomId ? publicRoom(room) : null, serverNowMs: receivedAt };
+      return returnedRoomId ? publicRoom(room) : null;
     });
+    // Clock synchronization samples the response after the commit, so time
+    // spent inside the transaction is never mistaken for network transit.
+    return { room: currentRoom, serverNowMs: now() };
   };
   const cleanupWaitingYutRooms = async () => {
     const atMs = now(), cutoff = atMs - WAITING_MS;

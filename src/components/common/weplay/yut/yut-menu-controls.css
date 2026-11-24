@@ -964,6 +964,28 @@
 .yut-throw-overlay[hidden] {
   display: none;
 }
+.yut-boost-choices {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.yut-game .yut-boost-choices .yut-button {
+  gap: 0;
+  min-height: 44px;
+  width: 44px;
+  padding: 4px;
+}
+.yut-throw-overlay .yut-boost-choices {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  width: 100%;
+  justify-content: flex-start;
+}
+.yut-throw-overlay .yut-boost-choices .yut-power-help {
+  margin-left: auto;
+}
 .yut-throw-overlay .yut-power-control {
   position: absolute;
   /* The start pad is at (360, 455) in the board's 720 × 560 viewBox. */

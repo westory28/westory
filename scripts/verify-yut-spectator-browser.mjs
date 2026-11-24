@@ -61,7 +61,7 @@ function App(){const[props,setProps]=useState({roomId:'room-a',config:{year:'202
 `;
 const bundle = await build({
   stdin: { contents: harness, loader: "tsx", resolveDir: root }, bundle: true, write: false, format: "esm", outfile: path.join(os.tmpdir(), "yut-spectator-qa.js"),
-  loader: { ".woff": "file", ".woff2": "file", ".svg": "dataurl" },
+  loader: { ".woff": "file", ".woff2": "file", ".svg": "dataurl", ".webp": "dataurl" },
   define: { "process.env.NODE_ENV": '"production"', "import.meta.env.BASE_URL": '"/"' },
   plugins: [{ name: "spectator-fixture", setup(plugin) {
     plugin.onResolve({ filter: /^\/assets\// }, (args) => ({path:args.path,external:true}));
@@ -106,6 +106,10 @@ try {
   assert.equal(await page.locator('.yut-spectator button:enabled').count(),0,'Board has no playable controls');
   assert.equal(await page.locator('.yut-isometric-destination').count(),0);
   assert.equal(await page.locator('.yut-isometric-piece').count(),4);
+  assert.ok(await page.locator('[data-pawn-node="center"]').evaluate(front => {
+    const rear = document.querySelector('[data-pawn-node="o10"]');
+    return +getComputedStyle(front).zIndex > +getComputedStyle(rear).zIndex;
+  }), 'Read-only spectator pawns use the same ground depth');
   assert.equal((await count(page)).intervals,1);
   assert.equal(await page.getByRole('timer').getAttribute('aria-label'),'말 이동 남은 시간');
   await page.evaluate(()=>window.qa.hide(true));

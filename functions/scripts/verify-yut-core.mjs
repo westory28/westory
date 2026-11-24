@@ -204,6 +204,35 @@ test('a previous yut or mo halves both bonus probabilities without biasing ordin
     for (const previous of [undefined, 0, 1, 2, 3]) assert.deepEqual(getYutThrowProbabilities(power, previous), base);
   }
 });
+test('either boost multiplies just the selected bonus probability by 1.5 after power and previous-roll adjustments', () => {
+  for (const power of [.12, .34, .56, .78, 1]) {
+    for (const previous of [1, 4, 5]) {
+      const base = getYutThrowProbabilities(power, previous);
+      for (const boost of [4, 5]) {
+        const adjusted = getYutThrowProbabilities(power, previous, boost);
+        const other = boost === 4 ? 4 : 3;
+        assert.equal(adjusted[boost - 1], base[boost - 1] * 1.5);
+        assert.equal(adjusted[other], base[other]);
+        assert.ok(Math.abs(adjusted.reduce((total, value) => total + value, 0) - 100) < 1e-10);
+      }
+    }
+  }
+});
+test('boosts share a two-throw limit per player and are optional after exhaustion', () => {
+  const initial = game(2, 2, 2);
+  let room = initial;
+  const sticks = [true, true, true, true];
+  for (const [index, boost] of [4, 5].entries()) {
+    room = throwYut(room, 'a', sticks, room.phaseStartsAtMs, 1, boost);
+    assert.equal(room.players[0].boostsUsed, index + 1);
+    room = moveYut(room, 'a', '1', 'outer', room.phaseStartsAtMs);
+  }
+  assert.throws(() => throwYut(room, 'a', sticks, room.phaseStartsAtMs, 1, 4), /모두 사용/);
+  assert.equal(throwYut(room, 'a', sticks, room.phaseStartsAtMs, 1).players[0].boostsUsed, 2);
+  assert.equal(room.players[1].boostsUsed ?? 0, 0);
+  assert.equal(initial.players[0].boostsUsed ?? 0, 0);
+  assert.throws(() => throwYut(initial, 'a', sticks, initial.phaseStartsAtMs, 1, [4, 5]), /하나/);
+});
 test('captures reserve 1900ms for movement and reaction, then preserve the full configured throw time', () => {
   for (const throwSeconds of [3, 5, 15]) {
     for (let value = 1; value <= 5; value += 1) {

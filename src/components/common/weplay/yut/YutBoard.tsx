@@ -43,6 +43,11 @@ const pointStyle = ([x, y]: [number, number]) => ({
   left: `${(x / WIDTH) * 100}%`,
   top: `${(y / HEIGHT) * 100}%`,
 });
+// Depth follows the feet on the board, including between pads during a hop.
+const pawnStyle = (point: [number, number], moving: boolean) => ({
+  ...pointStyle(point),
+  zIndex: Math.round(point[1]) * 2 + Number(moving),
+});
 const diamond = (x: number, y: number, rx: number, ry: number) =>
   `${x},${y - ry} ${x + rx},${y} ${x},${y + ry} ${x - rx},${y}`;
 // Use the board's coordinates for paint; touch targets may be larger than a pad.
@@ -460,31 +465,31 @@ function MovingPawn({
           animation = element.animate(
             [
               {
-                ...pointStyle(current),
+                ...pawnStyle(current, true),
                 offset: 0,
                 transform: "translate(-50%, -88%)",
                 marginLeft: `${startOffset}px`,
                 marginTop: `${startDrop}px`,
               },
               {
-                ...pointStyle([
-                  (current[0] + next[0]) / 2,
-                  (current[1] + next[1]) / 2,
-                ]),
+                ...pawnStyle(
+                  [(current[0] + next[0]) / 2, (current[1] + next[1]) / 2],
+                  true,
+                ),
                 offset: 0.4,
                 transform: `translate(-50%, -88%) translateY(-${reduced ? 12 : 32}px)`,
                 marginLeft: `${(startOffset + endOffset) / 2}px`,
                 marginTop: `${startDrop / 2}px`,
               },
               {
-                ...pointStyle(next),
+                ...pawnStyle(next, true),
                 offset: 0.78,
                 transform: "translate(-50%, -88%)",
                 marginLeft: `${endOffset}px`,
                 marginTop: "0px",
               },
               {
-                ...pointStyle(next),
+                ...pawnStyle(next, true),
                 offset: 1,
                 transform: "translate(-50%, -88%)",
                 marginLeft: `${endOffset}px`,
@@ -538,8 +543,9 @@ function MovingPawn({
       className={`yut-board-piece yut-isometric-piece${selected ? " is-selected" : ""}${motion ? ` is-moving is-${motion.kind}` : ""}`}
       style={
         {
-          ...pointStyle(
+          ...pawnStyle(
             nodePosition(motion?.kind === "caught" ? motion.origin : node),
+            Boolean(motion && motion.kind !== "caught"),
           ),
           "--piece-color": PROFESSIONS[role].color,
           "--reaction-delay": `${motion?.travelMs || 0}ms`,
@@ -944,59 +950,64 @@ export default function YutBoard({
           </svg>
         )}
         {children && <div className="yut-board-center-overlay">{children}</div>}
-        {pawns.map(({ player, ids, node, motion }) => {
-          const displayPosition = nodePosition(
-            motion?.kind === "caught" ? motion.origin : node,
-          ).join(",");
-          const peers = pawns.filter(
-            (pawn) =>
-              nodePosition(
-                pawn.motion?.kind === "caught" ? pawn.motion.origin : pawn.node,
-              ).join(",") === displayPosition &&
-              !pawn.motion?.boarding &&
-              pawn.motion?.kind !== "capture",
-          );
-          const peerIndex = peers.findIndex(
-            (pawn) => pawn.player.uid === player.uid && pawn.ids[0] === ids[0],
-          );
-          const offset =
-            motion?.kind === "win" ||
-            motion?.kind === "capture" ||
-            motion?.boarding
-              ? 0
-              : peers.some((pawn) => pawn.motion?.kind === "win")
-                ? (peerIndex % 2 === 0 ? -1 : 1) *
-                  (Math.floor(peerIndex / 2) + 1) *
-                  44
-                : (peerIndex - (peers.length - 1) / 2) * 44;
-          return (
-            <MovingPawn
-              key={`${player.uid}-${ids[0]}`}
-              role={player.role}
-              node={node}
-              name={player.name}
-              pieceIds={ids}
-              offset={offset}
-              landed={Boolean(motion && landedMotions.has(motion.id))}
-              defeated={
-                room.status === "finished" && player.uid !== room.winnerUid
-              }
-              showHome={player.uid === uid || room.status === "finished"}
-              selected={player.uid === uid && ids.includes(selectedPiece)}
-              selectable={
-                !disabled &&
-                revealMoves &&
-                player.uid === uid &&
-                moves.some((move) => ids.includes(move.pieceId))
-              }
-              motion={motion}
-              onSelect={() => onSelectPiece(ids[0])}
-              onMotionComplete={completeMotion}
-              onArrive={arrive}
-              onStep={onStep}
-            />
-          );
-        })}
+        <div className="yut-board-pawns">
+          {pawns.map(({ player, ids, node, motion }) => {
+            const displayPosition = nodePosition(
+              motion?.kind === "caught" ? motion.origin : node,
+            ).join(",");
+            const peers = pawns.filter(
+              (pawn) =>
+                nodePosition(
+                  pawn.motion?.kind === "caught"
+                    ? pawn.motion.origin
+                    : pawn.node,
+                ).join(",") === displayPosition &&
+                !pawn.motion?.boarding &&
+                pawn.motion?.kind !== "capture",
+            );
+            const peerIndex = peers.findIndex(
+              (pawn) =>
+                pawn.player.uid === player.uid && pawn.ids[0] === ids[0],
+            );
+            const offset =
+              motion?.kind === "win" ||
+              motion?.kind === "capture" ||
+              motion?.boarding
+                ? 0
+                : peers.some((pawn) => pawn.motion?.kind === "win")
+                  ? (peerIndex % 2 === 0 ? -1 : 1) *
+                    (Math.floor(peerIndex / 2) + 1) *
+                    44
+                  : (peerIndex - (peers.length - 1) / 2) * 44;
+            return (
+              <MovingPawn
+                key={`${player.uid}-${ids[0]}`}
+                role={player.role}
+                node={node}
+                name={player.name}
+                pieceIds={ids}
+                offset={offset}
+                landed={Boolean(motion && landedMotions.has(motion.id))}
+                defeated={
+                  room.status === "finished" && player.uid !== room.winnerUid
+                }
+                showHome={player.uid === uid || room.status === "finished"}
+                selected={player.uid === uid && ids.includes(selectedPiece)}
+                selectable={
+                  !disabled &&
+                  revealMoves &&
+                  player.uid === uid &&
+                  moves.some((move) => ids.includes(move.pieceId))
+                }
+                motion={motion}
+                onSelect={() => onSelectPiece(ids[0])}
+                onMotionComplete={completeMotion}
+                onArrive={arrive}
+                onStep={onStep}
+              />
+            );
+          })}
+        </div>
         {capture && (
           <YutCaptureReaction key={capture.id} players={capture.players} />
         )}

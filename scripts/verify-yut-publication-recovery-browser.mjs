@@ -31,7 +31,7 @@ const service = `
 import {useSyncExternalStore} from 'react';
 import * as core from ${modulePath("functions/yutCore.mjs")};
 const listeners=new Set(),subscriptions=new Set();
-const qa=window.yutStabilityQA={account:{config:{year:'2026',semester:'2'},currentUser:{uid:'qa-yut-host'}},failure:null,enabled:true,reads:0,commands:[],commits:0,freeze:false,drop:false,subscriptions:0,receipts:new Set()};
+const qa=window.yutStabilityQA={account:{config:{year:'2026',semester:'2'},menuConfig:{student:[],teacher:[]},currentUser:{uid:'qa-yut-host'}},failure:null,enabled:true,reads:0,commands:[],commits:0,freeze:false,drop:false,subscriptions:0,receipts:new Set()};
 qa.setAccount=uid=>{qa.account={...qa.account,currentUser:{uid}};listeners.forEach(fn=>fn());};
 export const useAuth=()=>useSyncExternalStore(fn=>{listeners.add(fn);return()=>listeners.delete(fn)},()=>qa.account);
 export const YUT_PRIVATE_DAILY_LIMIT=5;
@@ -50,6 +50,12 @@ export async function getYutLobby(){
  if(qa.failure)throw Object.assign(new Error('검증용 연결 실패'),{code:qa.failure});
  return {enabled:qa.enabled,settings:{...DEFAULT_YUT_SETTINGS,enabled:qa.enabled},room:qa.account.currentUser.uid==='qa-yut-host'?structuredClone(qa.room):null,classes:[],classId:'',playerName:'검증 첫째',serverNowMs:Date.now()};
 }
+export async function getYutPublication(){
+ qa.reads++;
+ if(qa.failure)throw Object.assign(new Error('검증용 연결 실패'),{code:qa.failure});
+ return {enabled:qa.enabled,settings:{...DEFAULT_YUT_SETTINGS,enabled:qa.enabled}};
+}
+export const getHistoryDictionaryCallable=async()=>{throw new Error('Unexpected non-game callable in recovery fixture');};
 export async function commandYutRoom(_config,data){
  qa.commands.push(structuredClone(data));
  if(!qa.receipts.has(data.requestKey)){
@@ -101,7 +107,7 @@ const bundled = await build({
           external: true,
         }));
         plugin.onResolve(
-          { filter: /(?:^|\/)contexts\/AuthContext$|(?:^|\/)lib\/yut$/ },
+          { filter: /(?:^|\/)contexts\/AuthContext$|(?:^|\/)lib\/yut$|(?:^|\/)historyDictionarySession$/ },
           () => ({ path: "service", namespace: "fixture" }),
         );
         plugin.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({
@@ -256,8 +262,9 @@ try {
       commandsBefore,
       "suspension does not submit commands",
     );
+    await page.context().setOffline(true);
     await page.evaluate(() => (window.yutStabilityQA.failure = null));
-    await page.getByRole("button", { name: "다시 확인", exact: true }).click();
+    await page.context().setOffline(false);
     await page.locator(".yut-game").waitFor({ state: "visible" });
     assert.equal(
       await page.evaluate(

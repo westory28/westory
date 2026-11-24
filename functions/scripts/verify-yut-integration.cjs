@@ -326,7 +326,9 @@ async function verifySpectatorRules(roomRef) {
     assert.equal((await deployed.getYutLobby.run(request('a'))).room.syncRevision, restored.syncRevision, 'unchanged names do not create repeated writes');
     assert.deepEqual(await readSignal(), afterRestoreSignal, 'unchanged lobby reads cannot cause a refresh loop');
     const identityReads = [], identityWrites = [];
+    let turnClock = Date.now;
     const countedHandlers = createTestYutHandlers({
+      now: () => turnClock(),
       db: {
         doc: db.doc.bind(db), collection: db.collection.bind(db),
         runTransaction: callback => db.runTransaction(transaction => callback(new Proxy(transaction, {
@@ -462,6 +464,60 @@ async function verifySpectatorRules(roomRef) {
     await denied(roomCommand('b', room, 'emote', { kind: 'nice' }), ['resource-exhausted']);
     room = emote;
     await db.doc(`${base}/yut_players/${uid('a')}`).update({ lastCommandAtMs: 0 });
+    {
+      const timingRef = db.doc(`${base}/yut_rooms/delivery-fixture`);
+      const playerRef = db.doc(`${base}/yut_players/${uid('a')}`);
+      const originalPlayer = (await playerRef.get()).data();
+      const nominalDeadline = Date.now();
+      const timingSource = (await monitorRoomRef.get()).data();
+      await timingRef.set({ ...timingSource, id: timingRef.id, phaseStartsAtMs: nominalDeadline - 5000,
+        turnInputDeadlineMs: nominalDeadline, turnDeadlineMs: nominalDeadline + 3000 });
+      const commandData = { roomId: timingRef.id, expectedRevision: timingSource.revision };
+      const throwRequest = request('a', { action: 'throw', ...commandData, requestKey: key() });
+      const budget = {};
+      const measure = async (label, work, writes) => {
+        identityReads.length = 0; identityWrites.length = 0;
+        const result = await work();
+        budget[label] = { reads: identityReads.length, writes: identityWrites.length };
+        assert.deepEqual(budget[label], { reads: 10, writes });
+        return result;
+      };
+      turnClock = () => nominalDeadline + 1000;
+      await measure('earlySkip', () => denied(countedHandlers.commandYutRoom(request('b', { action: 'skip', ...commandData, requestKey: key() })), ['failed-precondition']), 0);
+      let clockReads = 0;
+      turnClock = () => ++clockReads === 1 ? nominalDeadline + 1000 : nominalDeadline + 4500;
+      const result = await measure('delayedThrow', () => countedHandlers.commandYutRoom(throwRequest), 3);
+      assert.equal(result.room.revision, timingSource.revision + 1, 'an input received within grace survives slow authority checks');
+      assert.equal(result.room.lastEvent.atMs, nominalDeadline + 4500, 'the next phase starts from processing time');
+      const replay = await measure('replay', () => countedHandlers.commandYutRoom(throwRequest), 0);
+      assert.deepEqual(replay.room.pendingThrow, result.room.pendingThrow);
+      await measure('staleSkip', () => denied(countedHandlers.commandYutRoom(request('b', { action: 'skip', ...commandData, requestKey: key() })), ['aborted']), 0);
+      turnClock = Date.now;
+      for (const action of ['leave', 'create']) {
+        // Replaced enrollment on a create implicitly leaves the previous room.
+        // In both cases the other three players continue with a fresh clock.
+        const enrollmentIds = { ...timingSource.enrollmentIds };
+        if (action === 'create') enrollmentIds[uid('a')] = 'replaced-enrollment';
+        await timingRef.set({ ...timingSource, id: timingRef.id, enrollmentIds, turnUid: uid('a'),
+          turnInputDeadlineMs: nominalDeadline - 1000, turnDeadlineMs: nominalDeadline + 2000 });
+        await playerRef.set({ ...originalPlayer, roomId: timingRef.id, lastCommandAtMs: 0 });
+        const change = await deployed.commandYutRoom.run(request('a', {
+          action, requestKey: key(), ...(action === 'leave' ? commandData : { visibility: 'private' }),
+        }));
+        const remaining = (await timingRef.get()).data();
+        assert.equal(remaining.status, 'playing');
+        assert.equal(remaining.participantUids.length, 3);
+        assert.notEqual(remaining.turnUid, uid('a'));
+        assert.equal(remaining.turnInputDeadlineMs, remaining.phaseStartsAtMs + remaining.throwSeconds * 1000);
+        assert.equal(remaining.turnDeadlineMs - remaining.turnInputDeadlineMs, 3000);
+        if (change.room) {
+          await db.doc(`${base}/yut_rooms/${change.room.id}`).delete();
+          await db.doc(`${base}/yut_codes/${change.room.code}`).delete();
+        }
+      }
+      await timingRef.delete(); await playerRef.set(originalPlayer);
+      console.log('YUT_TURN_DOCUMENT_BUDGET excluding shared session guard: ' + JSON.stringify(budget));
+    }
     await denied(roomCommand('a', room, 'throw', { power: 1.1 }), ['invalid-argument']);
     const throwRequest = request('a', { action: 'throw', requestKey: key(), roomId: room.id, expectedRevision: room.revision, value: 5, power: .8 });
     const throws = await Promise.all([
@@ -651,7 +707,8 @@ async function verifySpectatorRules(roomRef) {
       privateRoom = (await roomCommand('qb', privateRoom, 'ready', { ready: true })).room;
       const startKey = key();
       privateRoom = (await roomCommand('qa', privateRoom, 'start', { requestKey: startKey })).room;
-      assert.equal(privateRoom.turnDeadlineMs - privateRoom.phaseStartsAtMs, 5000);
+      assert.equal(privateRoom.turnInputDeadlineMs - privateRoom.phaseStartsAtMs, 5000);
+      assert.equal(privateRoom.turnDeadlineMs - privateRoom.turnInputDeadlineMs, 3000);
       assert.equal(privateRoom.phaseStartsAtMs - privateRoom.lastEvent.atMs, 1200);
       const startRetry = await deployed.commandYutRoom.run(request('qa', { action: 'start', requestKey: startKey, roomId: privateRoom.id, expectedRevision: privateRoom.revision - 1 }));
       assert.equal(startRetry.room.id, privateRoom.id);
@@ -738,6 +795,24 @@ async function verifySpectatorRules(roomRef) {
       assert.equal(result.room.pendingThrow.value, previousValue === 1 ? 4 : 3, 'server applies its own prior outcome, ignoring a forged client previous value');
       const replay = await deterministic.commandYutRoom(probabilityRequest);
       assert.deepEqual(replay.room.pendingThrow, result.room.pendingThrow, 'a replay cannot reroll after the probability state changes');
+    }
+    for (const [boost, draw] of [[4, .84], [5, .95]]) {
+      const weighted = createYutHandlers({ db, random: maximum => Math.floor(maximum * draw) });
+      const players = probabilitySource.players.map(player => ({ ...player, boostsUsed: 1, lastThrow: { value: 1, label: '도', atMs: Date.now() - 1000 } }));
+      await probabilityRef.set({ ...probabilitySource, id: probabilityRef.id, status: 'playing', turnUid: uid('admin'), phase: 'throw', phaseStartsAtMs: 0, turnDeadlineMs: Date.now() + 60000, players });
+      await db.doc(`${base}/yut_players/${uid('admin')}`).update({ lastCommandAtMs: 0 });
+      const payload = { action: 'throw', roomId: probabilityRef.id, expectedRevision: probabilitySource.revision, requestKey: key(), power: 1, boost };
+      await denied(weighted.commandYutRoom(request('admin', { ...payload, boost: [4, 5] })), ['invalid-argument']);
+      const results = await Promise.all([1, 2].map(() => weighted.commandYutRoom(request('admin', payload))));
+      for (const result of results) {
+        assert.equal(result.room.pendingThrow.value, boost, 'server selects the boosted outcome for this draw');
+        assert.equal(result.room.players.find(player => player.uid === uid('admin')).boostsUsed, 2, 'a replay consumes only one use');
+      }
+      await denied(weighted.commandYutRoom(request('admin', { ...payload, boost: boost === 4 ? 5 : 4 })), ['already-exists']);
+      await probabilityRef.update({ phase: 'throw', phaseStartsAtMs: 0, turnDeadlineMs: Date.now() + 60000 });
+      await db.doc(`${base}/yut_players/${uid('admin')}`).update({ lastCommandAtMs: 0 });
+      await denied(weighted.commandYutRoom(request('admin', { ...payload, requestKey: key(), expectedRevision: results[0].room.revision, boostsUsed: 0 })), ['failed-precondition']);
+      assert.equal((await probabilityRef.get()).data().revision, results[0].room.revision, 'a third attempt leaves the room unchanged');
     }
     const sameTime = Date.now();
     const sameTimeHandlers = createYutHandlers({ db, now: () => sameTime });

@@ -122,7 +122,7 @@ createRoot(document.getElementById('root')).render(<Harness/>);`;
         assert.ok(['getYutLobby','commandYutRoom','commandYutRoomFast'].includes(name)); assert.ok(['a','b','c','d'].includes(label));
         let body='';for await(const chunk of req)body+=chunk;const data=JSON.parse(body||'{}');const recorded={name,label,data};calls.push(recorded);
         try{const result=await run(name,label,data);recorded.result={revision:result.room?.revision,syncRevision:result.room?.syncRevision};res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify(result));}
-        catch(error){recorded.error=error.code;res.writeHead(400,{'content-type':'application/json'});res.end(JSON.stringify({code:error.code,message:error.message}));}return;
+        catch(error){recorded.error=error.code;recorded.message=error.message;res.writeHead(400,{'content-type':'application/json'});res.end(JSON.stringify({code:error.code,message:error.message}));}return;
       }
       if(url.pathname==='/'){res.writeHead(200,{'content-type':'text/html'});res.end('<div id="root"></div><link rel="stylesheet" href="/yut-network.css"><script type="module" src="/yut-network.js"></script>');return;}
       const bundled=assets.get(url.pathname.slice(1));
@@ -142,7 +142,9 @@ async function closeRoom(room){return run('commandYutRoom','teacher',{action:'cl
 
 (async()=>{
   await fs.mkdir(evidence,{recursive:true});await seed();const origin=await createHarness();
-  browser=await playwright.chromium.launch({channel:process.env.PLAYWRIGHT_BROWSER_CHANNEL||'msedge',headless:true,args:['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+  // Use the game's supported fallback renderer so four software WebGL scenes
+  // cannot exhaust the turn timer on the machine running the emulator.
+  browser=await playwright.chromium.launch({channel:process.env.PLAYWRIGHT_BROWSER_CHANNEL||'msedge',headless:true,args:['--no-sandbox','--disable-webgl']});
   for(const label of ['a','b','c','d']){const context=await browser.newContext({viewport:{width:1280,height:900}});const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));await page.goto(origin+'/?uid='+label);await page.getByRole('button',{name:'여럿이서 시작',exact:true}).waitFor();pages.push(page);}
   const[a,b,c,d]=pages;
   // A lost create/join response must be retried with its original identity.
@@ -195,20 +197,36 @@ async function closeRoom(room){return run('commandYutRoom','teacher',{action:'cl
   for(const page of [c,d]){room=await getRoom(room.id);await awaitObservedRoom(pages,room);await page.getByRole('button',{name:'준비 완료',exact:true}).click();await page.getByRole('button',{name:'준비 취소',exact:true}).waitFor();}
   room=await getRoom(room.id);await awaitObservedRoom(pages,room);
   await a.getByRole('button',{name:'게임 시작',exact:true}).evaluate(button=>{button.click();button.click();});
-  await Promise.all(pages.map(page=>page.locator('.yut-board').waitFor()));
-  assert.equal(calls.filter(call=>call.data.action==='start').length,1,'synchronous double activation sends one command');
-  await until(async()=>{const states=await Promise.all(pages.map(browserRoom));return states.every(state=>state?.status==='playing'&&state.players.length===4);},'all four browser views did not converge');
-  room=await getRoom(room.id);
-  await a.evaluate(()=>{window.netQA.delayAction='throw';window.netQA.delayMs=2500;});
+  await a.locator('.yut-board').waitFor();
+  const beforeBoost = calls.length;
+  const boostYut = a.getByRole('button', { name: '윷 확률 1.5배' });
+  const boostMo = a.getByRole('button', { name: '모 확률 1.5배' });
+  await boostYut.click();
+  await boostMo.click();
+  assert.equal(await boostYut.getAttribute('aria-pressed'), 'false');
+  assert.equal(await boostMo.getAttribute('aria-pressed'), 'true');
+  assert.equal(calls.length, beforeBoost, 'selecting or switching boosts sends no callable');
+  await a.evaluate(()=>{window.netQA.hangAction='throw';});
   await a.getByRole('button',{name:'윷 던지기',exact:true}).click();
   await until(()=>calls.some(call=>call.label==='a'&&call.data.action==='throw'),'delayed throw command did not start');
+  await until(()=>calls.some(call=>call.data.action==='throw' && (call.result || call.error)), 'throw transaction did not finish');
+  const committedThrow = calls.find(call=>call.data.action==='throw');
+  assert.ok(committedThrow.result, committedThrow.message);
+  assert.equal(calls.filter(call=>call.data.action==='start').length,1,'synchronous double activation sends one command');
   assert.equal(await a.locator('.weplay-game-loading').count(),0,'gameplay command does not mount a loading overlay');
   assert.equal(await a.locator('.yut-board').isVisible(),true,'board remains visible during delayed gameplay response');
   assert.equal(await a.getByRole('button',{name:'게임 규칙 보기',exact:true}).isEnabled(),true,'non-gameplay controls remain available during a command');
   await a.screenshot({path:path.join(evidence,'delayed-throw-no-loader.png')});
-  await a.waitForTimeout(2700);
-  checks.push('A 2.5-second delayed gameplay acknowledgement keeps the board visible and game tools enabled with no loading overlay; actual client commands use commandYutRoomFast.');
+  const firstPiece = a.getByRole('button',{name:'1번 말 출발',exact:true});
+  await firstPiece.click({timeout:11000});
+  await a.locator('.yut-isometric-destination:enabled').first().waitFor({timeout:1000});
   room=await getRoom(room.id);
+  await until(async()=>{const states=await Promise.all(pages.map(browserRoom));return states.every(state=>state?.revision===room.revision && state.players.length===4);},'all four browser views did not converge');
+  assert.equal(room.players.find(player=>player.uid===uid('a')).boostsUsed,1);
+  const boostedThrows = calls.filter(call=>call.data.action==='throw' && call.label==='a');
+  assert.equal(boostedThrows.length,1);
+  assert.equal(boostedThrows[0].data.boost,5);
+  checks.push('All four clients receive the boosted throw. Its HTTP response is lost indefinitely, yet the server snapshot unlocks move selection before the 15-second timeout. Switching boost buttons sends zero commands and the throw consumes one use.');
   // Real SDK offline/online: cached snapshots cannot unlock stale actions.
   await c.evaluate(async()=>{window.netQA.setHidden(true);await window.netQA.offline();});
   const emote=await run('commandYutRoom','b',{action:'emote',kind:'hello',roomId:room.id,requestKey:randomUUID()});

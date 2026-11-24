@@ -70,7 +70,14 @@ export function previewYutCommand(
   room: YutRoom,
   data: Pick<
     YutCommand,
-    "action" | "pieceId" | "route" | "power" | "seat" | "blocked" | "stack"
+    | "action"
+    | "pieceId"
+    | "route"
+    | "power"
+    | "boost"
+    | "seat"
+    | "blocked"
+    | "stack"
   >,
   uid = YUT_PREVIEW_UID,
   random = Math.random,
@@ -86,10 +93,12 @@ export function previewYutCommand(
             data.power ?? 0.65,
             random,
             room.players.find((player) => player.uid === uid)?.lastThrow?.value,
+            data.boost,
           )
         : Array.from({ length: 4 }, () => random() < 0.5),
       nowMs,
       data.power ?? 0.65,
+      data.boost,
     );
   if (data.action === "move" && data.pieceId && data.route)
     return moveYut(room, uid, data.pieceId, data.route, nowMs, data.stack);

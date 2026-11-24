@@ -13,8 +13,9 @@ export const YUT_EMOTE_KINDS = ['hello', 'nice', 'oops', 'wow', 'thanks', 'gg', 
 export const YUT_EMOTE_COOLDOWN_MS = 5_000;
 export const YUT_EMOTE_VISIBLE_MS = 4_000;
 const labels = ['', '도', '개', '걸', '윷', '모'];
+export const YUT_BOOST_LIMIT = 2;
 const probabilityAnchors = [[33, 35, 24, 6, 2], [25, 34, 31, 7, 3], [20, 31, 35, 10, 4]];
-export function getYutThrowProbabilities(power = 0.65, previousValue = 0) {
+export function getYutThrowProbabilities(power = 0.65, previousValue = 0, boost) {
   const strength = Math.max(0, Math.min(1, Math.round(((Number.isFinite(power) ? power : 0.65) - 0.12) / 0.88 * 1e12) / 1e12));
   const segment = strength <= 0.5 ? 0 : 1, fraction = strength <= 0.5 ? strength * 2 : (strength - 0.5) * 2;
   const probabilities = probabilityAnchors[segment].map((value, index) => value + (probabilityAnchors[segment + 1][index] - value) * fraction);
@@ -24,10 +25,16 @@ export function getYutThrowProbabilities(power = 0.65, previousValue = 0) {
     probabilities[3] /= 2;
     probabilities[4] /= 2;
   }
+  if (boost === 4 || boost === 5) {
+    const extra = probabilities[boost - 1] * 0.5;
+    const ordinary = probabilities[0] + probabilities[1] + probabilities[2];
+    for (let index = 0; index < 3; index += 1) probabilities[index] *= (ordinary - extra) / ordinary;
+    probabilities[boost - 1] += extra;
+  }
   return probabilities;
 }
-export function sampleYutSticks(power = 0.65, random = Math.random, previousValue = 0) {
-  const probabilities = getYutThrowProbabilities(power, previousValue);
+export function sampleYutSticks(power = 0.65, random = Math.random, previousValue = 0, boost) {
+  const probabilities = getYutThrowProbabilities(power, previousValue, boost);
   const draw = random() * 100;
   let cumulative = 0, value = 5;
   for (let index = 0; index < probabilities.length; index += 1) {
@@ -160,16 +167,23 @@ const assertTurn = (room, uid, phase, nowMs) => {
   if (nowMs < (room.phaseStartsAtMs || 0)) fail('연출이 끝나면 진행해 주세요.');
   if (nowMs >= room.turnDeadlineMs) fail('차례 시간이 지났습니다. 다음 차례로 넘겨 주세요.');
 };
-export function throwYut(source, uid, sticks, nowMs, power) {
-  assertTurn(source, uid, 'throw', nowMs);
+export function throwYut(source, uid, sticks, nowMs, power, boost, arrivedAtMs = nowMs) {
+  assertTurn(source, uid, 'throw', arrivedAtMs);
   if (!Array.isArray(sticks) || sticks.length !== 4 || sticks.some((value) => typeof value !== 'boolean')) fail('윷 결과가 올바르지 않습니다.');
   if (power !== undefined && (!Number.isFinite(power) || power < 0 || power > 1)) fail('던지는 세기를 확인해 주세요.');
   const room = copy(source), count = sticks.filter(Boolean).length, value = count || 5;
+  const player = playerFor(room, uid);
+  if (boost !== undefined) {
+    if (room.rulesVersion !== 2 || ![4, 5].includes(boost)) fail('윷 또는 모 중 하나를 선택해 주세요.');
+    const used = player.boostsUsed ?? 0;
+    if (!Number.isSafeInteger(used) || used < 0 || used >= YUT_BOOST_LIMIT) fail('이번 판의 확률 올리기 기회를 모두 사용했습니다.');
+    player.boostsUsed = used + 1;
+  }
   room.pendingThrow = { value, label: labels[value], sticks: [...sticks] };
-  playerFor(room, uid).lastThrow = { value, label: labels[value], atMs: nowMs, ...(power === undefined ? {} : { power }) };
+  player.lastThrow = { value, label: labels[value], atMs: nowMs, ...(power === undefined ? {} : { power }) };
   beginPhase(room, 'move', nowMs, YUT_THROW_ANIMATION_MS);
   if (value >= 4) room.extraThrows += 1;
-  return event(room, 'throw', `${playerFor(room, uid).name} · ${labels[value]}`, nowMs);
+  return event(room, 'throw', `${player.name} · ${labels[value]}`, nowMs);
 }
 const routesFor = (piece) => {
   if (piece.node === 'o5') return ['outer', 'a'];
@@ -224,8 +238,8 @@ function nextTurn(room, nowMs, graceMs = YUT_MOVE_ANIMATION_MS) {
   room.pendingThrow = null; room.extraThrows = 0;
   beginPhase(room, 'throw', nowMs, graceMs);
 }
-export function moveYut(source, uid, pieceId, route, nowMs, stack = false) {
-  assertTurn(source, uid, 'move', nowMs);
+export function moveYut(source, uid, pieceId, route, nowMs, stack = false, arrivedAtMs = nowMs) {
+  assertTurn(source, uid, 'move', arrivedAtMs);
   const legal = getLegalYutMoves(source, uid).find((move) => move.pieceId === pieceId && move.route === route);
   if (!legal) fail('이동할 말과 길을 다시 선택해 주세요.');
   if (typeof stack !== 'boolean' || (source.rulesVersion === 2 && stack && !legal.canStack)) fail('업을 말을 다시 확인해 주세요.');

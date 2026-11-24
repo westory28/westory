@@ -19,6 +19,7 @@ window.clearInterval=id=>intervals.delete(id);
 qa.tick=()=>{for(const callback of intervals.values())callback()};
 Object.defineProperty(document,'hidden',{configurable:true,get:()=>qa.hidden});
 qa.visible=value=>{qa.hidden=!value;document.dispatchEvent(new Event('visibilitychange'))};
+qa.online=()=>window.dispatchEvent(new Event('online'));
 function Probe({portal,includeInitialLobby}){const access=usePublication(portal,includeInitialLobby);qa.access=access;return <p>{access.status}</p>}
 function Harness(){const[props,setProps]=useState({portal:'student',includeInitialLobby:new URLSearchParams(location.search).has('entry'),shown:true});
 qa.update=next=>setProps(previous=>({...previous,...next}));qa.changeAccount=uid=>{qa.auth={...qa.auth,currentUser:{uid}};setProps(previous=>({...previous}))};
@@ -29,7 +30,7 @@ const settings={enabled:true,version:1,allowSolo:true,allowMultiplayer:true,allo
 async function read(name,config){const qa=window.publicationQA;qa.calls.push({name,config:{...config},uid:qa.auth.currentUser?.uid});
 if(qa.failNext){const code=qa.failNext;qa.failNext='';throw Object.assign(new Error('Synthetic failure'),{code})}
 const response={enabled:true,settings:{...settings},...(name==='getYutLobby'?{room:null,classes:[],classId:'',serverNowMs:Date.now()}: {})};
-return qa.hold?new Promise(resolve=>qa.pending.push(value=>resolve(value||response))):response;}
+return qa.hold?new Promise((resolve,reject)=>qa.pending.push(value=>value instanceof Error?reject(value):resolve(value||response))):response;}
 export const getYutPublication=config=>read('getYutPublication',config);
 export const getYutLobby=config=>read('getYutLobby',config);`;
 const built = await build({
@@ -84,6 +85,9 @@ try {
   await tick(); await status("open");
   await page.evaluate(() => { window.publicationQA.failNext = "unavailable"; window.publicationQA.tick(); });
   await status("error");
+  const catalogReads = (await names()).length;
+  await page.evaluate(() => window.publicationQA.online());
+  assert.equal((await names()).length, catalogReads, "catalog does not add reconnect reads");
   await page.evaluate(() => { window.publicationQA.failNext = "permission-denied"; window.publicationQA.tick(); });
   await status("closed");
   const beforeTeacher = (await names()).length;
@@ -111,11 +115,11 @@ try {
   await page.waitForFunction(() => window.publicationQA.calls.length === 2);
   assert.deepEqual(await names(), ["getYutLobby", "getYutPublication"]);
   assert.deepEqual(await page.evaluate(() => window.publicationQA.access.lobby), initialLobby, "initial lobby remains available for admission reuse");
-  await page.evaluate(() => { window.publicationQA.hold = true; window.publicationQA.tick(); });
+  await page.evaluate(() => { window.publicationQA.hold = true; window.publicationQA.tick(); window.publicationQA.online(); });
   await page.evaluate(() => window.publicationQA.changeAccount("synthetic-student-b"));
   await status("checking");
   await page.waitForFunction(() => window.publicationQA.pending.length === 2);
-  await page.evaluate(() => window.publicationQA.pending.shift()({ enabled: false }));
+  await page.evaluate(() => window.publicationQA.pending.shift()(Object.assign(new Error('stale account'), { code: 'unavailable' })));
   await status("checking");
   await page.evaluate(() => { window.publicationQA.pending.shift()(); window.publicationQA.hold = false; });
   await status("open");
@@ -123,10 +127,30 @@ try {
   await tick();
   await page.waitForFunction(() => window.publicationQA.calls.length === 5);
   assert.deepEqual(await names(), ["getYutLobby", "getYutPublication", "getYutPublication", "getYutLobby", "getYutPublication"]);
+  await page.evaluate(() => window.publicationQA.online());
+  assert.equal((await names()).length, 5, "healthy admission does not read on reconnect");
+  await page.evaluate(() => { window.publicationQA.failNext = 'unavailable'; window.publicationQA.tick(); });
+  await status("error");
+  await page.evaluate(() => { const qa=window.publicationQA; qa.visible(false); qa.online(); });
+  assert.equal((await names()).length, 6, "hidden game ignores reconnect");
+  await page.evaluate(() => { const qa=window.publicationQA; qa.hidden=false; qa.hold=true; qa.online(); qa.online(); qa.tick(); });
+  assert.equal((await names()).length, 7, "reconnect and simultaneous checks share one request");
+  await page.evaluate(() => { const qa=window.publicationQA; qa.hold=false; qa.pending.shift()(); });
+  await status("open"); assert.equal((await names()).length, 7, "successful pending check consumes reconnect");
+  await page.evaluate(() => {
+    const qa=window.publicationQA; qa.hold=true; qa.tick(); qa.online(); qa.online(); qa.hold=false;
+    qa.pending.shift()(Object.assign(new Error('late fetch failure'), {code:'functions/internal'}));
+  });
+  await page.waitForFunction(() => window.publicationQA.calls.length === 9);
+  await status("open");
+  await page.evaluate(() => { const qa=window.publicationQA; qa.failNext='functions/permission-denied'; qa.tick(); });
+  await status("closed");
+  await page.evaluate(() => window.publicationQA.online());
+  assert.equal((await names()).length, 10, "online cannot reopen a denied admission");
   await page.evaluate(() => window.publicationQA.update({ shown: false }));
   await page.getByText("unmounted", { exact: true }).waitFor();
-  await tick();
-  assert.equal((await names()).length, 5, "unmount stops publication checks");
+  await tick(); await page.evaluate(() => window.publicationQA.online());
+  assert.equal((await names()).length, 10, "unmount stops publication checks");
   assert.deepEqual(errors, []);
   assert.deepEqual(external, []);
   console.log("PASS Yut publication: catalog-only query, one admission lobby, narrow polling, hidden/pending suppression, close/error denial, teacher preview, account isolation and unmount");

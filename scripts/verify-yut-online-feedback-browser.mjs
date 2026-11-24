@@ -41,6 +41,7 @@ async function request(endpoint,data){
   const lobby=endpoint==='lobby',lobbyDelay=lobby?qa.delayLobbyMs:0;
   if(lobby){qa.delayLobbyMs=0;qa.lobbyPending++;}
   const meta=data?{delay:qa.delayNextMs,replyDelay:qa.delayReplyMs,drop:qa.dropNextReply}:{};
+  const hold=data&&qa.holdNextReply; if(hold)qa.holdNextReply=false;
   qa.delayNextMs=0;qa.delayReplyMs=0;qa.dropNextReply=false;
   qa.calls.push({endpoint,data,at:Date.now()});
   try{
@@ -48,12 +49,14 @@ async function request(endpoint,data){
   const response=await fetch('/qa/'+endpoint+'?uid='+uid,{method:data?'POST':'GET',headers:{'Content-Type':'application/json'},body:data?JSON.stringify({data,meta}):undefined});
   const result=await response.json();
   if(!response.ok)throw Object.assign(new Error(result.error),{code:'aborted'});
+  if(hold)await new Promise(resolve=>qa.releaseReply=resolve);
   if(meta.drop)throw Object.assign(new Error('검증용 응답 유실'),{code:'unavailable'});
   return result;
   }finally{if(lobby)qa.lobbyPending--;}
 }
 export const getYutLobby=()=>request('lobby');
 export const commandYutRoom=(_config,data)=>request('command',data);
+export const getHistoryDictionaryCallable=async()=>{throw new Error('Unexpected non-game callable in feedback fixture');};
 export function subscribeYutRoom(_config,id,onRoom,onError,onConnectionChange){
   qa.subscriptions++;
   qa.subscriptionEvents.push({id,at:Date.now(),lobbyPending:qa.lobbyPending});
@@ -99,7 +102,10 @@ const bundled = await build({
           external: true,
         }));
         plugin.onResolve(
-          { filter: /(?:^|\/)contexts\/AuthContext$|(?:^|\/)lib\/yut$/ },
+          {
+            filter:
+              /(?:^|\/)contexts\/AuthContext$|(?:^|\/)lib\/yut$|(?:^|\/)historyDictionarySession$/,
+          },
           () => ({ path: "service", namespace: "fixture" }),
         );
         plugin.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({
@@ -400,8 +406,8 @@ async function throwYut(page) {
   await page.waitForTimeout(180);
   await page.mouse.up();
 }
-async function chooseMove(page) {
-  const piece = page.getByRole("button", { name: "1번 말 출발", exact: true });
+async function chooseMove(page, name = "1번 말 출발") {
+  const piece = page.getByRole("button", { name, exact: true });
   await piece.waitFor();
   if (await piece.isEnabled()) await piece.click();
   await page.locator(".yut-isometric-destination").first().click();
@@ -588,8 +594,10 @@ try {
   const throwsBeforeRecovery = commits.filter(
     (call) => call.action === "throw" && call.uid === guestUid,
   ).length;
+  const readsBeforeRecovery = await guest.evaluate(
+    () => window.yutQA.calls.filter((call) => call.endpoint === "lobby").length,
+  );
   await guest.evaluate(() => {
-    window.yutQA.freezeSnapshots = false;
     window.yutQA.delayNextMs = 3100;
   });
   await guest
@@ -605,11 +613,22 @@ try {
   await guest
     .getByRole("button", { name: "방 상태 다시 확인", exact: true })
     .waitFor({ state: "detached", timeout: 12000 });
+  await guest.evaluate(() => {
+    window.yutQA.freezeSnapshots = false;
+  });
   assert.equal(
     commits.filter((call) => call.action === "throw" && call.uid === guestUid)
       .length,
     throwsBeforeRecovery,
     "same receipt recovers without a second throw",
+  );
+  assert.equal(
+    await guest.evaluate(
+      () =>
+        window.yutQA.calls.filter((call) => call.endpoint === "lobby").length,
+    ),
+    readsBeforeRecovery,
+    "a confirmed turn receipt already contains the current room",
   );
   await chooseMove(guest);
   await guest.getByRole("button", { name: "결정", exact: true }).click();
@@ -619,18 +638,60 @@ try {
   );
   console.log("PASS lost reply recovery");
 
+  const recoveryReads = await host.evaluate(
+    () => window.yutQA.calls.filter((call) => call.endpoint === "lobby").length,
+  );
   await host.evaluate(() => {
+    window.yutQA.dropNextReply = true;
+    window.yutQA.holdNextReply = true;
+  });
+  await throwYut(host);
+  await host.waitForFunction(
+    () => typeof window.yutQA.releaseReply === "function",
+  );
+  // The room subscription has the committed throw while the HTTP request is
+  // still unresolved. Start a move and deliver the old failure during it.
+  await chooseMove(host, "1번 말 이동");
+  await host.evaluate(() => {
+    window.yutQA.delayNextMs = 2400;
+  });
+  await host.getByRole("button", { name: "결정", exact: true }).click();
+  await host.evaluate(() => window.yutQA.releaseReply());
+  await host.waitForTimeout(100);
+  assert.equal(
+    await host.getByRole("button", { name: "결정", exact: true }).isDisabled(),
+    true,
+  );
+  assert.equal(
+    await host
+      .getByRole("button", { name: "방 상태 다시 확인", exact: true })
+      .count(),
+    0,
+  );
+  await guest.getByRole("button", { name: "윷 던지기", exact: true }).waitFor();
+  assert.equal(
+    await host.evaluate(
+      () =>
+        window.yutQA.calls.filter((call) => call.endpoint === "lobby").length,
+    ),
+    recoveryReads,
+  );
+  checks.push(
+    "A server-confirmed throw unlocks the move while its reply is lost. Its late failure leaves the next command locked, without a replay or lobby read.",
+  );
+
+  await guest.evaluate(() => {
     window.yutQA.delayNextMs = 3100;
   });
   await fetch(base + "/qa/expire-turn");
-  await host.waitForFunction(() =>
+  await guest.waitForFunction(() =>
     window.yutQA.calls.some((call) => call.data?.action === "skip"),
   );
   await host.waitForTimeout(700);
   await unobstructed(host, "automatic skip");
   await host.waitForTimeout(2100);
   await unobstructed(host, "delayed automatic skip");
-  await guest.getByRole("button", { name: "윷 던지기", exact: true }).waitFor();
+  await host.getByRole("button", { name: "윷 던지기", exact: true }).waitFor();
   await host.screenshot({
     path: path.join(evidence, "playing-after-recovery.png"),
   });

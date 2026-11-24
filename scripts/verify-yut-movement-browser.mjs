@@ -73,6 +73,7 @@ function seed(kind){
   if(kind.startsWith('capture'))room.players[1].pieces[0].node='a5';
   if(kind==='two-home')own.forEach(piece=>piece.node='home');
   if(kind==='two-choice'){own[0].node='o1';own[1].node='o3';}
+  if(kind==='depth'){own[0].node='o10';own[1].node='center';room.players[1].pieces[0].node='b2';}
   if(kind==='two-group')own.forEach(piece=>Object.assign(piece,{node:'o3',stackId:'qa-stack'}));
   if(kind==='two-capture-many'){
     own.forEach(piece=>Object.assign(piece,{node:'o5',stackId:'qa-stack'}));
@@ -3258,7 +3259,48 @@ async function verifyBoardMenu(page, label, stress = false) {
   assert.ok(await emote.evaluate(node => document.activeElement === node), label + ": Escape returns focus to emote trigger");
   await verifyRuleControl(page, label);
 }
+async function verifyPawnDepth() {
+  for (const width of [390, 768, 1280]) {
+    const page = await open("board=1&scenario=depth", "no-preference", width, 840);
+    const observed = await page.evaluate(async () => {
+      const pawnAt = node => document.querySelector(`[data-pawn-node="${node}"]`);
+      const center = pawnAt("center");
+      const opponent = pawnAt("b2");
+      const topPawn = (a, b) => {
+        const first = a.getBoundingClientRect(), second = b.getBoundingClientRect();
+        const left = Math.max(first.left, second.left), right = Math.min(first.right, second.right);
+        const top = Math.max(first.top, second.top), bottom = Math.min(first.bottom, second.bottom);
+        if (bottom <= top || right <= left) return null;
+        return document.elementsFromPoint((left + right) / 2, (top + bottom) / 2)
+          .map(element => element.closest(".yut-isometric-piece"))
+          .find(pawn => pawn === a || pawn === b);
+      };
+      const idleCorrect = topPawn(center, opponent) === center;
+      const ground = pawn => parseFloat(getComputedStyle(pawn).top);
+      const seen = new Set(), errors = [];
+      window.qa.move("b");
+      const started = performance.now();
+      do {
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        const moving = document.querySelector('.yut-isometric-piece.is-moving');
+        if (!moving) continue;
+        const inFrontBy = ground(moving) - ground(opponent);
+        const upper = topPawn(moving, opponent);
+        if (!upper || Math.abs(inFrontBy) < 2) continue;
+        seen.add(inFrontBy > 0 ? "front" : "back");
+        if (upper !== (inFrontBy > 0 ? moving : opponent)) errors.push(inFrontBy);
+      } while (window.qa.motion.at(-1)?.value !== false && performance.now() - started < 4000);
+      return { idleCorrect, seen: [...seen].sort(), errors };
+    });
+    assert.equal(observed.idleCorrect, true, `${width}px: front pad paints above a later opponent`);
+    assert.deepEqual(observed.seen, ["back", "front"], `${width}px: saw both sides of the opponent during the hop`);
+    assert.deepEqual(observed.errors, [], `${width}px: paint order follows the moving pawn's ground position`);
+    await page.close();
+  }
+  report.checks.push("390/768/1280px: overlapping stationary and hopping pawns paint in board-depth order");
+}
 async function verifyBoardLayout() {
+  await verifyPawnDepth();
   for (const [width, height] of [[390, 844], [768, 1024], [568, 320], [740, 360], [844, 390], [1024, 600], [1280, 800], [1440, 900]].filter(([width, height]) => !process.env.YUT_LAYOUT_VIEWPORT || process.env.YUT_LAYOUT_VIEWPORT === `${width}x${height}`)) {
     for (const count of process.env.YUT_LAYOUT_PLAYERS ? [Number(process.env.YUT_LAYOUT_PLAYERS)] : [2, 3, 4]) {
       const label = `layout-${width}x${height}-${count}players`;

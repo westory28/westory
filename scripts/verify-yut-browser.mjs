@@ -30,13 +30,14 @@ const modulePath = (value) =>
 const service = `
 const params=new URLSearchParams(location.search);
 const uid=params.get('uid')||'qa-teacher';
-export const useAuth=()=>({config:{year:'2026',semester:'2'},currentUser:{uid,email:'qa@yongshin-ms.ms.kr'},userData:{uid,role:params.get('portal')==='student'?'student':'teacher',name:'검증 교사'}});
+export const useAuth=()=>({config:{year:'2026',semester:'2'},menuConfig:{student:[{url:'/student/weplay'}],teacher:[]},currentUser:{uid,email:'qa@yongshin-ms.ms.kr'},userData:{uid,role:params.get('portal')==='student'?'student':'teacher',name:'검증 교사'}});
 const qa=window.yutQA={calls:[],failNext:false,dropNextResponse:false};
 async function request(endpoint,data){qa.calls.push({endpoint,data});if(qa.failNext){qa.failNext=false;throw new Error('검증용 연결 오류: 다시 시도해 주세요.');}const response=await fetch('/qa/'+endpoint+'?uid='+uid,{method:data?'POST':'GET',headers:{'Content-Type':'application/json'},body:data?JSON.stringify(data):undefined});const result=await response.json();if(!response.ok)throw Object.assign(new Error(result.error),{code:'aborted'});if(qa.dropNextResponse){qa.dropNextResponse=false;throw new Error('응답 연결이 끊겼습니다.');}return result;}
 export const YUT_PRIVATE_DAILY_LIMIT=5;
 export const DEFAULT_YUT_SETTINGS={enabled:false,version:0,allowSolo:true,allowMultiplayer:true,allowPrivateRooms:true,defaultPlayerCount:4,throwSeconds:5,moveSeconds:25};
 export const normalizeYutSettings=value=>({...DEFAULT_YUT_SETTINGS,...(value||{})});
 export const getYutLobby=()=>request('lobby');
+export const getYutPublication=()=>request('publication');
 export const commandYutRoom=(_config,data)=>request('command',data);
 export function subscribeYutRoom(_config,roomId,onRoom,onError){let stopped=false,last=-1;const read=async()=>{try{const response=await fetch('/qa/state?uid='+uid);const value=await response.json();const revision=value.room?.syncRevision??value.room?.revision??-2;if(!stopped&&revision!==last){last=revision;onRoom(value.room);}}catch(error){if(!stopped)onError(error);}};read();const timer=setInterval(read,100);return()=>{stopped=true;clearInterval(timer);};}
 export const yutErrorMessage=error=>error?.message||'다시 시도해 주세요.';
@@ -52,7 +53,7 @@ import {YutPowerThrow} from ${modulePath("src/components/common/weplay/yut/YutGa
 import {AppDialogProvider} from ${modulePath("src/components/common/AppDialogProvider.tsx")};
 import ${modulePath("src/assets/index.css")};import ${modulePath("assets/css/style.css")};
 const params=new URLSearchParams(location.search),portal=params.get('portal')==='student'?'student':'teacher';
-function PowerFixture(){const[disabled,setDisabled]=useState(false);window.yutPowerDisable=setDisabled;window.yutPowerThrows??=[];return <section className="yut-game"><YutPowerThrow disabled={disabled} onThrow={value=>window.yutPowerThrows.push(value)}/></section>}
+function PowerFixture(){const[disabled,setDisabled]=useState(false);const[used,setUsed]=useState(0);window.yutPowerDisable=setDisabled;window.yutPowerThrows??=[];window.yutBoosts??=[];return <section className="yut-game"><YutPowerThrow key={used} disabled={disabled} boostsUsed={used} onThrow={(value,boost)=>{window.yutPowerThrows.push(value);window.yutBoosts.push(boost);if(boost)setUsed(used+1)}}/></section>}
 createRoot(document.getElementById('root')).render(params.has('power')?<PowerFixture/>:<><div style={{height:params.has("chrome")?96:0}}/><MemoryRouter initialEntries={['/'+portal+'/weplay?game=joseon-yut'+(params.has('preview')?'&view=preview':'')]}><AppDialogProvider><Entry portal={portal}/></AppDialogProvider></MemoryRouter></>);
 `;
 const bundled = await build({
@@ -110,6 +111,7 @@ const fontFiles = new Map(
 );
 let room = null;
 let enabled = true;
+let throwSeconds = 15;
 let modeSettings = {
   allowSolo: true,
   allowMultiplayer: true,
@@ -137,6 +139,7 @@ const server = http.createServer(async (request, response) => {
     if (url.pathname === "/qa/reset") {
       room = null;
       enabled = true;
+      throwSeconds = 15;
       modeSettings = {
         allowSolo: true,
         allowMultiplayer: true,
@@ -149,6 +152,7 @@ const server = http.createServer(async (request, response) => {
       return json({ ok: true });
     }
     if (url.pathname === "/qa/settings") {
+      if (url.searchParams.has("throwSeconds")) throwSeconds = Number(url.searchParams.get("throwSeconds"));
       for (const key of Object.keys(modeSettings))
         if (url.searchParams.has(key))
           modeSettings[key] = url.searchParams.get(key) === "true";
@@ -157,8 +161,8 @@ const server = http.createServer(async (request, response) => {
       return json(modeSettings);
     }
     if (url.pathname === "/qa/publication") {
-      enabled = url.searchParams.get("enabled") === "true";
-      return json({ enabled });
+      if (url.searchParams.has("enabled")) enabled = url.searchParams.get("enabled") === "true";
+      return json({ enabled, settings: { enabled, version: 1, ...modeSettings, throwSeconds } });
     }
     if (url.pathname === "/qa/lobby")
       return json({
@@ -168,7 +172,7 @@ const server = http.createServer(async (request, response) => {
           version: 1,
           ...modeSettings,
           defaultPlayerCount: 4,
-          throwSeconds: 5,
+          throwSeconds,
           moveSeconds: 25,
         },
         privatePlaysRemaining: Math.max(0, 5 - (privateUses.get(uid) || 0)),
@@ -207,6 +211,7 @@ const server = http.createServer(async (request, response) => {
           classLabel: "함께하는 윷판",
           host: { uid, name: "첫째 학생" },
           nowMs: now,
+          throwSeconds,
           visibility: data.action === "match" ? "public" : data.visibility,
           maxPlayers: data.maxPlayers || 4,
         });
@@ -235,6 +240,7 @@ const server = http.createServer(async (request, response) => {
           throws[throwIndex++ % throws.length],
           now,
           data.power,
+          data.boost,
         );
       } else if (data.action === "move")
         room = core.moveYut(room, uid, data.pieceId, data.route, now);
@@ -324,9 +330,11 @@ async function open(
   return page;
 }
 async function skip(page) {
-  const button = page.getByRole("button", { name: /건너뛰기/ });
-  await button.waitFor();
-  await button.click();
+  // The intro can finish by itself between discovery and pointer activation.
+  await Promise.race([
+    page.getByRole("button", { name: /건너뛰기/ }).press("Enter"),
+    page.locator(".yut-game").waitFor(),
+  ]);
 }
 async function capture(page, name) {
   await page.screenshot({
@@ -354,6 +362,23 @@ async function throwWithPower(page, duration = 420) {
   await page.waitForTimeout(duration);
   await page.mouse.up();
 }
+
+async function observeThrow(page) {
+  await page.evaluate(() => {
+    const seen = window.yutThrowPhases = { flight: false, result: "", prematureMove: false };
+    const board = document.querySelector(".yut-board");
+    const observer = new MutationObserver(() => {
+      const flying = Boolean(board.querySelector(".yut-throw-3d.is-rolling"));
+      const landing = board.querySelector(".yut-landing-result");
+      const canMove = Boolean(board.querySelector(".yut-isometric-destination:enabled"));
+      seen.flight ||= flying;
+      if (landing) seen.result = landing.textContent;
+      seen.prematureMove ||= canMove && (flying || Boolean(landing));
+      if (seen.result && canMove) observer.disconnect();
+    });
+    observer.observe(board, { subtree: true, childList: true, attributes: true });
+  });
+}
 // Acceptance steps below intentionally use user-visible controls, not internal component state.
 try {
   const loadingPage = await open(1280, "portal=student&uid=qa-loading");
@@ -380,31 +405,36 @@ try {
       exact: true,
     });
     await powerButton.waitFor();
+    const yutBoost = powerPage.getByRole("button", { name: "윷 확률 1.5배" });
+    const moBoost = powerPage.getByRole("button", { name: "모 확률 1.5배" });
+    await yutBoost.click();
+    await moBoost.click();
+    assert.equal(await yutBoost.getAttribute("aria-pressed"), "false");
+    assert.equal(await moBoost.getAttribute("aria-pressed"), "true");
+    await moBoost.click();
+    assert.equal(await moBoost.getAttribute("aria-pressed"), "false");
+    await yutBoost.click();
+    await powerPage.getByText("남은 2회", { exact: true }).waitFor();
+    const now = new Date();
+    await powerPage.clock.install({ time: now });
+    await powerPage.clock.pauseAt(new Date(now.getTime() + 1000));
     await powerButton.focus();
     await powerPage.keyboard.down("Space");
-    const samples = [];
-    for (let sample = 0; sample < 12; sample++) {
-      await powerPage.waitForTimeout(150);
-      samples.push(
-        Number(
-          await powerPage.getByRole("meter").getAttribute("aria-valuenow"),
-        ),
-      );
+    for (const [elapsed, expected] of [[1200, 100], [600, 56], [600, 12], [600, 56]]) {
+      await powerPage.clock.runFor(elapsed);
+      const value = Number(await powerPage.getByRole("meter").getAttribute("aria-valuenow"));
+      assert.ok(Math.abs(value - expected) <= 2, `held charge ${value}, expected ${expected}`);
     }
-    assert.ok(
-      samples.every(
-        (value, index) => index === 0 || value >= samples[index - 1],
-      ),
-      "held charge never falls",
-    );
-    assert.equal(samples.at(-1), 100);
-    assert.equal(samples.at(-3), 100, "full charge remains full");
     await powerPage.keyboard.up("Space");
-    assert.deepEqual(
-      await powerPage.evaluate(() => window.yutPowerThrows),
-      [1],
-    );
+    assert.ok(Math.abs(await powerPage.evaluate(() => window.yutPowerThrows[0]) - .56) < .01);
+    await powerPage.clock.resume();
+    await powerPage.getByText("남은 1회", { exact: true }).waitFor();
+    await moBoost.click();
     await throwWithPower(powerPage, 100);
+    await powerPage.getByText("남은 0회", { exact: true }).waitFor();
+    assert.equal(await yutBoost.isDisabled(), true);
+    assert.equal(await moBoost.isDisabled(), true);
+    assert.deepEqual(await powerPage.evaluate(() => window.yutBoosts), [4, 5]);
     const shortPower = await powerPage.evaluate(() =>
       window.yutPowerThrows.at(-1),
     );
@@ -450,8 +480,40 @@ try {
     );
     await powerPage.close();
     checks.push(
-      "Power rises monotonically for 1.2s and holds at 100%; short pointer, Space-release and Enter-toggle each throw once; Escape, blur and disabled state cancel safely.",
+      "Held power cycles up, down and up. Two exclusive boosts are consumed on release; pointer, Space and Enter throw once, while Escape, blur and disabled state cancel safely.",
     );
+    for (const [width, height] of [[390, 844], [768, 1024], [1280, 800]]) {
+      const game = await open(width, `portal=student&uid=qa-boost-${width}`, height);
+      await skip(game);
+      if (width < height) await game.getByRole("button", { name: "전체 화면으로 열기" }).click();
+      await game.getByRole("button", { name: "혼자서 시작" }).click();
+      await game.getByRole("button", { name: "2명", exact: true }).click();
+      await game.getByRole("button", { name: "싱글 시작" }).click();
+      const target = game.getByRole("button", { name: "윷 확률 1.5배" });
+      await target.click();
+      await game.getByText("남은 2회", { exact: true }).waitFor();
+      for (const button of [target, game.getByRole("button", { name: "모 확률 1.5배" }), game.getByRole("button", { name: "윷 던지기", exact: true })]) {
+        assert.equal(await button.evaluate(node => {
+          const box = node.getBoundingClientRect();
+          const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+          return box.width >= 44 && box.height >= 44 && node.contains(hit);
+        }), true, `visible button and hit area at ${width}px`);
+      }
+      await game.screenshot({ path: path.join(evidence, `boost-${width}.png`) });
+      await observeThrow(game);
+      await throwWithPower(game);
+      await game.waitForFunction(() => window.yutThrowPhases.flight);
+      assert.equal(await game.evaluate(() => window.yutQA.calls.filter(call => call.endpoint === "command").length), 0);
+      await game.close();
+    }
+    checks.push("Student solo boost controls are tappable at 390/768px rotated fullscreen and 1280px, with zero game commands.");
+    if (process.env.YUT_QA_ONLY_POWER === "1") {
+      assert.deepEqual(errors, []);
+      console.log(checks.join("\n"));
+      await browser.close();
+      await new Promise(resolve => server.close(resolve));
+      process.exit(0);
+    }
     const intro = await open(1280, "portal=student&uid=qa-intro");
     await intro.locator("section.weplay-studio-intro").waitFor();
     assert.ok(
@@ -459,8 +521,6 @@ try {
         window.yutQA.calls.every((call) => call.endpoint === "lobby"),
       ),
     );
-    await intro.waitForTimeout(1050);
-    await capture(intro, "studio-intro");
     await intro.getByRole("button", { name: /건너뛰기/ }).press("Escape");
     await intro
       .getByRole("button", { name: "새 판 만들기", exact: true })
@@ -480,7 +540,7 @@ try {
       await skip(page);
       if (width < 1024) {
         await page
-          .getByText("휴대폰을 가로로 돌려 주세요.", { exact: true })
+          .getByRole("button", { name: "전체 화면으로 열기", exact: true })
           .waitFor();
         assert.equal(
           await page
@@ -521,8 +581,8 @@ try {
         "duplicate match banner removed",
       );
       await page
-        .locator(".yut-topbar-title")
-        .getByText("마우저구 윷놀이", { exact: true })
+        .locator(".weplay-heading")
+        .getByRole("heading", { name: "마우저구 윷놀이", exact: true })
         .waitFor();
       assert.equal(
         await page
@@ -538,12 +598,7 @@ try {
           .count(),
         1,
       );
-      const topbarBounds = await page.locator(".yut-topbar").boundingBox();
-      const stageBounds = await page.locator(".yut-match-stage").boundingBox();
-      assert.ok(
-        stageBounds.y >= topbarBounds.y + topbarBounds.height - 1,
-        "topbar does not cover board stage",
-      );
+      await page.getByRole("group", { name: "게임 도구" }).waitFor();
       const buttonStyle = await page
         .getByRole("button", { name: "윷 던지기", exact: true })
         .evaluate((node) => ({
@@ -584,7 +639,7 @@ try {
                 ".weplay-heading",
                 ".weplay-game-frame",
                 ".yut-game",
-                ".yut-topbar",
+                ".yut-floating-controls",
                 ".yut-match",
                 ".yut-match-stage",
                 ".yut-board-area",
@@ -617,34 +672,21 @@ try {
           2,
         ),
       );
-      if (width === 1280)
-        assert.ok(
-          bounds.width >= 750,
-          "desktop board remains at least 750px wide at 720px height",
-        );
-      if (width === 390)
-        assert.ok(
-          bounds.width >= 450,
-          "landscape board fills available middle",
-        );
+      const area = await page.locator(".yut-board-area").boundingBox();
+      const dock = await page.locator(".yut-action-dock").boundingBox();
+      assert.ok(bounds.width >= 260 && Math.abs(bounds.width - area.width) <= 1);
+      assert.ok(bounds.y + bounds.height <= dock.y + 1, "board fits above the action dock");
       await page
         .getByRole("button", { name: "게임 규칙 보기", exact: true })
         .click();
       await page.getByRole("dialog", { name: "윷판의 약속" }).waitFor();
       await page.keyboard.press("Escape");
+      await observeThrow(page);
       await throwWithPower(page);
-      await page.locator(".yut-throw-3d.is-rolling").waitFor();
-      assert.equal(
-        await page.locator(".yut-isometric-destination").count(),
-        0,
-        "no move destinations before landing",
-      );
-      await page.waitForTimeout(850);
-      await capture(page, "yut-3d-flight-" + width);
-      await page.locator(".yut-landing-result").waitFor();
-      assert.equal(await page.locator(".yut-isometric-destination").count(), 0);
-      await capture(page, "yut-large-result-" + width);
       await page.locator(".yut-isometric-destination").first().waitFor();
+      const phases = await page.evaluate(() => window.yutThrowPhases);
+      assert.ok(phases.flight && phases.result);
+      assert.equal(phases.prematureMove, false, 'movement waits for the throw result');
       assert.ok(await page.locator(".yut-player-last").count());
       await capture(page, "yut-move-" + width);
       await page.locator(".yut-isometric-destination").first().click();
@@ -675,6 +717,8 @@ try {
     await full
       .getByRole("button", { name: "대기실부터 체험하기", exact: true })
       .click();
+    assert.equal(await full.evaluate(() => Boolean(document.fullscreenElement)), false);
+    await full.getByRole("button", { name: "게임 전체 화면", exact: true }).click();
     await full.waitForFunction(() =>
       document.fullscreenElement?.classList.contains("yut-game"),
     );
@@ -704,7 +748,7 @@ try {
     );
     assert.equal(
       await full
-        .locator(".yut-topbar")
+        .getByRole("group", { name: "게임 도구" })
         .getByRole("button", { name: /소리 (켜기|끄기)/ })
         .count(),
       1,
@@ -810,19 +854,12 @@ try {
         .count(),
       0,
     );
+    await observeThrow(host);
     await throwWithPower(host);
-    await host.locator(".yut-landing-result").waitFor();
-    assert.equal(
-      await host
-        .locator(".yut-landing-result")
-        .innerText()
-        .then((text) => text.includes("개!")),
-      true,
-    );
-    await capture(host, "yut-online-large-result");
     await host
-      .getByRole("button", { name: /바깥길, 바깥 2칸 경로 선택/ })
+      .getByRole("button", { name: /바깥길, 바깥 2칸 발판 선택/ })
       .click();
+    assert.match(await host.evaluate(() => window.yutThrowPhases.result), /개!/);
     assert.equal(
       room.players[0].pieces[0].node,
       "home",
@@ -842,7 +879,7 @@ try {
       .waitFor();
     await throwWithPower(guest);
     await guest
-      .getByRole("button", { name: /바깥길, 바깥 1칸 경로 선택/ })
+      .getByRole("button", { name: /바깥길, 바깥 1칸 발판 선택/ })
       .click();
     await guest.getByRole("button", { name: "결정", exact: true }).click();
     await host
@@ -899,7 +936,7 @@ try {
       .click();
     await recovery.getByRole("heading", { name: "한 판의 인연" }).waitFor();
     assert.equal(
-      commands.filter((command) => command.action === "create").length,
+      new Set(commands.filter((command) => command.action === "create").map(command => command.requestKey)).size,
       1,
     );
     await capture(recovery, "yut-response-recovery");
@@ -910,10 +947,11 @@ try {
     await fetch(base + "/qa/reset");
     const solo = await open(1280, "portal=student&uid=qa-solo", 800, "reduce");
     await skip(solo);
-    await solo.getByRole("button", { name: "2명", exact: true }).click();
     await solo
       .getByRole("button", { name: "혼자서 시작", exact: true })
       .click();
+    await solo.getByRole("button", { name: "2명", exact: true }).click();
+    await solo.getByRole("button", { name: "싱글 시작", exact: true }).click();
     await solo
       .getByRole("button", { name: "윷 던지기", exact: true })
       .waitFor();
@@ -948,7 +986,7 @@ try {
     await capture(solo, "yut-reduced-motion-flight");
     await solo.locator(".yut-isometric-destination").first().waitFor();
     assert.ok(
-      Date.now() - started >= 3500,
+      Date.now() - started >= core.YUT_THROW_ANIMATION_MS,
       "flight and result hold are not skipped under reduced motion",
     );
     await solo.locator(".yut-isometric-destination").first().click();
@@ -968,7 +1006,7 @@ try {
     assert.equal(commands.length, 0);
     await solo.setViewportSize({ width: 390, height: 844 });
     await solo
-      .getByText("휴대폰을 가로로 돌려 주세요.", { exact: true })
+      .getByRole("button", { name: "전체 화면으로 열기", exact: true })
       .waitFor();
     await solo.waitForTimeout(1500);
     await solo.setViewportSize({ width: 844, height: 390 });
@@ -981,6 +1019,9 @@ try {
     );
   }
   await fetch(base + "/qa/reset");
+  // This scenario exercises the configured five-second timeout. Other cases
+  // use a longer allowed turn while taking screenshots or reloading a player.
+  await fetch(base + "/qa/settings?throwSeconds=5");
   const fast = await open(1280, "portal=student&uid=qa-fast");
   await skip(fast);
   await fast
@@ -988,7 +1029,7 @@ try {
     .click();
   await fast.getByRole("heading", { name: "한 판의 인연" }).waitFor();
   assert.equal(room.visibility, "public");
-  assert.equal(room.players[0].pieces.length, 1);
+  assert.equal(room.players[0].pieces.length, 2);
   const fastGuest = await open(1280, "portal=student&uid=qa-fast-guest");
   await skip(fastGuest);
   await fastGuest
@@ -1032,6 +1073,7 @@ try {
   await liveSolo
     .getByRole("button", { name: "혼자서 시작", exact: true })
     .click();
+  await liveSolo.getByRole("button", { name: "싱글 시작", exact: true }).click();
   await liveSolo.locator(".yut-board").waitFor();
   await fetch(base + "/qa/settings?allowSolo=false");
   await liveSolo.evaluate(() =>
@@ -1113,9 +1155,13 @@ try {
   await quota.keyboard.press("Escape");
   await quota.close();
   checks.push(
-    "Public random matchmaking joins one room; new games use one pawn; five-second throw expiry advances automatically; live solo/multiplayer/private switches stop affected rooms while public mode remains available; exhausted private quota disables create/join.",
+    "Public matchmaking joins one room with two pawns per player. Expired turns advance once, live mode switches stop affected rooms, and exhausted private quota disables create/join.",
   );
   assert.deepEqual(errors, []);
+} catch (error) {
+  console.error("Last game requests", commands.slice(-8).map(({ uid, action, expectedRevision }) => ({ uid, action, expectedRevision })));
+  console.error("Final fixture turn", room && { turn: room.turnUid, phase: room.phase, result: room.pendingThrow?.value, revision: room.revision });
+  throw error;
 } finally {
   await fs.writeFile(
     path.join(
