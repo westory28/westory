@@ -1,6 +1,22 @@
 # 운영 배포 절차
 
+## 윷놀이 입장 속도·교사 모니터·아바타 말 (2026-11-25)
+
+윷놀이 서버 변경은 `functions/yut.js` 한 파일이다. 운영의 윷놀이 함수들은 서로 다른 시점의 `yut.js`를 싣고 있으므로 함수마다 운영 ZIP에서 준비한다(11월 25일 확인: `commandYutRoomFast`·`commandYutRoom`은 기준 커밋에서 `getYutPublication`만 빠진 판, `getYutManagement`·`cleanupWaitingYutRooms`는 10월 27일 판, `getYutPublication`·`getYutLobby`·`saveYutSettings`는 각각 다른 이전 판).
+
+- `node scripts/prepare-function-release.mjs prepare --name <함수> --region <리전> --file yut.js --baseline <기준 커밋> --out output/<폴더>`가 저장소의 변경 블록을 그 함수의 운영 파일에 적용하고, `preflight`·`verify`로 동시 배포와 배포 결과를 대조한다. 운영 파일이 기준과 달라 블록이 맞지 않으면 `--hunks 1,3,4,5`로 해당 함수에 필요한 블록만 적용하거나, 차이를 확인한 한 가지 운영 판에 한해 `--whole --live-sha <운영 파일 SHA-256 앞 12자리>`로 저장소 파일 전체를 싣는다. 준비 결과의 `addedToLive`·`removedFromLive`를 읽고 배포한다.
+- 미국 `commandYutRoomFast`는 `action: 'lobby' | 'publication'`(입장 확인과 공개 확인을 DB 옆에서 응답), `action: 'cast'`(방 참가자의 저장된 아바타 모습), `action: 'piece'`(학생 본인의 말 모양 선택)를 받는다. 화면은 이 응답이 없거나 실패하면 기존 서울 callable과 동물 말로 돌아간다. 서울 `getYutManagement`는 읽기 전용 트랜잭션으로 바뀌어 교사 모니터가 진행 중인 판의 문서를 잠그지 않고, 응답에 방장 활동 시각을 싣는다.
+- 아바타 보기는 아바타 카탈로그 모듈을 쓰지 않는다. 명령 함수의 운영 패키지에는 이전 세대 카탈로그가 들어 있어, 서버는 저장 기록의 소유자·저장 여부·형태만 확인하고 그릴 수 있는 모습인지는 화면의 그리기 코드가 판단한다.
+- 배포한 것: `commandYutRoomFast`(00009 조회 응답, 00010 아바타 보기), `getYutManagement`(00007). 서울 `commandYutRoom`·`getYutPublication`·`getYutLobby`는 동작이 같아 다시 배포하지 않았다. 되돌릴 원본은 각 준비 폴더의 `release/original.zip`이다.
+- 검사: `npm --prefix functions run check`, `npm --prefix functions run test:yut-integration`, `test:yut-reward`, `functions/scripts/verify-yut-expiration.cjs`(에뮬레이터), 윷 브라우저 검사와 `scripts/verify-yut-avatar-browser.mjs`. `test:yut-integration`은 PC 부하가 클 때 같은 방에 대한 동시 명령 구간에서 `Transaction is invalid or closed`로 간헐 실패한다(변경 전 코드에서도 재현). `functions/scripts/verify-yut-network.cjs`는 변경 전에도 실패한다.
+
+## Firestore 규칙 반영이 503으로 실패할 때 (2026-11-25)
+
+`firebase deploy --only firestore:rules`가 배포 전 검사를 통과한 뒤 규칙 서비스의 `503 The service is currently unavailable`로 반복 실패하면 `node scripts/release-firestore-rules.mjs release`를 쓴다. `firebase.json`의 배포 전 검사 세 가지를 먼저 실행하고, 커밋된 `firestore.rules`를 컴파일·등록·연결한 뒤 운영 규칙과 커밋본을 대조한다. 503에만 재시도하며 이전 규칙 세트 ID를 출력한다. `check`는 검사와 컴파일만 한다.
+
 ## 역사교실 학생용 과제 사본 (2026-11-25)
+
+11월 25일 반영 결과: 규칙 추가(세트 `9e64d65a`) → 서울 `executeCommand` 00052 → 2026-2학기 과제 17건의 사본 17개·배정 문서 37개, 2026-1학기 75건의 사본 75개·배정 문서 113개 생성(남은 쓰기 0) → 프론트엔드 → 과제 원본의 학생 읽기 차단(세트 `0b8ae18e`). 원본은 이제 교사·관리자만 읽는다. 원본을 서버 명령이 아닌 방법(복구 스크립트, 콘솔)으로 고쳤다면 사본 생성 스크립트를 다시 실행한다.
 
 학생 화면은 과제 원본 `history_classrooms/{id}` 대신 서버가 함께 쓰는 두 문서를 읽는다. `history_classroom_student_views/{id}`는 원본에서 대상 학생 명단·사유·재응시 표시·작성자 필드를 뺀 사본이고, `history_classroom_assignees/{id}_{uid}`는 학생 한 명의 배정 사유와 재응시 표시만 담는다. 배정 문서는 공개·삭제 여부와 무관하게 명단에 있는 동안 존재하며, 사본 읽기 규칙은 본인 배정 문서의 존재를 확인한다. 두 문서는 클라이언트에서 쓸 수 없다.
 
