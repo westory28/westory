@@ -3,7 +3,7 @@ import {
   SemesterArchiveHome,
 } from "./components/common/SemesterArchiveBoundary";
 import { isSemesterArchive } from "./lib/semesterArchive";
-import React, { Suspense } from "react";
+import React, { Suspense, useEffect } from "react";
 import {
   HashRouter as Router,
   Routes,
@@ -20,6 +20,12 @@ import { SensitiveOperationController } from "./components/common/SensitiveOpera
 import { lazyWithRetry } from "./lib/lazyWithRetry";
 import { loadStudentWeplay } from "./lib/weplayPreload";
 import { getDefaultTeacherRoute, isAdminUser } from "./lib/permissions";
+import { getFirebaseFunctions } from "./lib/firebase";
+import { readStorage } from "./lib/safeStorage";
+import {
+  preloadRouteCode,
+  resolveRouteCodeTarget,
+} from "./lib/routeCodePreload";
 
 const Login = lazyWithRetry(() => import("./pages/Login"), "login");
 const StudentWeplay = lazyWithRetry(loadStudentWeplay, "student-weplay");
@@ -203,6 +209,47 @@ const renderWithLayout = (children: React.ReactNode, _message?: string) => (
   </AppDialogProvider>
 );
 
+const ROLE_SESSION_KEY = "westoryPortalRole";
+
+// Downloads run beside the session, settings and visibility checks instead of
+// after them. Nothing here renders a page or reads its data.
+const RouteCodePreloader: React.FC = () => {
+  const location = useLocation();
+  const { authPhase, config, configReady, menuConfig, menuConfigReady } =
+    useAuth();
+
+  useEffect(() => {
+    if (isSemesterArchive) return;
+    // The session handshake needs this SDK before anything else can load.
+    void getFirebaseFunctions().catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (isSemesterArchive) return;
+    preloadRouteCode(
+      resolveRouteCodeTarget({
+        authPhase,
+        pathname: location.pathname,
+        search: location.search,
+        savedRole: readStorage(ROLE_SESSION_KEY),
+        settingsLoaded: configReady && menuConfigReady,
+        config,
+        menuConfig,
+      }),
+    );
+  }, [
+    authPhase,
+    config,
+    configReady,
+    location.pathname,
+    location.search,
+    menuConfig,
+    menuConfigReady,
+  ]);
+
+  return null;
+};
+
 const ArchiveRouteContent: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => (
@@ -224,6 +271,7 @@ const App: React.FC = () => {
     <AuthProvider>
       <AppToastProvider>
         <Router>
+          <RouteCodePreloader />
           <ArchiveRouteContent>
             <div className="bg-gray-50 min-h-screen text-gray-900 font-sans">
               <Routes>
