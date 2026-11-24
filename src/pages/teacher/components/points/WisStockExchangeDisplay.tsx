@@ -117,6 +117,8 @@ export default function WisStockExchangeDisplay({
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const panel = useRef<HTMLDivElement>(null);
+  const displayClose = useRef<HTMLButtonElement>(null);
+  const bulletinFocused = useRef(false);
   const close = useRef(onClose);
   close.current = onClose;
   const [retry, setRetry] = useState(0);
@@ -132,14 +134,27 @@ export default function WisStockExchangeDisplay({
     return () => query.removeEventListener("change", update);
   }, []);
   const initial = useMemo(() => initialQuotes(initialMarket), [initialMarket]);
-  const { state, flips, bulletin, tradeSession } = useWisStockExchangeDisplay(
-    year,
-    semester,
-    classKey,
-    retry,
-    initial,
+  const {
+    state,
+    flips,
+    bulletin,
+    tradeSession,
+    dismissBulletin: dismissRotation,
+  } = useWisStockExchangeDisplay(year, semester, classKey, retry, initial);
+  const audio = useWisStockBulletinAudio(
+    bulletin,
+    state.status === "ready" && !(state.market ?? initial).halted,
   );
-  const audio = useWisStockBulletinAudio(bulletin);
+  const dismissBulletin = () => {
+    audio.stop();
+    dismissRotation();
+  };
+  useLayoutEffect(() => {
+    if (!bulletin && bulletinFocused.current) {
+      bulletinFocused.current = false;
+      displayClose.current?.focus();
+    }
+  }, [bulletin]);
   useLayoutEffect(() => {
     const modal = dialog.current!;
     const frame = panel.current!;
@@ -190,10 +205,24 @@ export default function WisStockExchangeDisplay({
       aria-labelledby="wis-exchange-title"
       onCancel={(event) => {
         event.preventDefault();
-        onClose();
+        if (bulletin) dismissBulletin();
+        else onClose();
       }}
     >
-      <div ref={panel} className="wis-exchange">
+      <div
+        ref={panel}
+        className="wis-exchange"
+        onClickCapture={(event) => {
+          if (
+            bulletin &&
+            event.target instanceof Element &&
+            !event.target.closest(
+              ".wis-exchange__surge, .wis-exchange__actions",
+            )
+          )
+            dismissBulletin();
+        }}
+      >
         <div className="wis-exchange__bar">
           <h2 id="wis-exchange-title">위스피 전광판</h2>
           <span
@@ -235,6 +264,7 @@ export default function WisStockExchangeDisplay({
               음성 {audio.speech ? "켬" : "끔"}
             </button>
             <button
+              ref={displayClose}
               type="button"
               className="wis-exchange__close"
               onClick={onClose}
@@ -372,6 +402,20 @@ export default function WisStockExchangeDisplay({
         >
           {bulletin && (
             <div className="wis-exchange__surge">
+              <button
+                type="button"
+                className="wis-exchange__surge-close"
+                aria-label="속보 닫기"
+                onClick={dismissBulletin}
+                onFocus={() => {
+                  bulletinFocused.current = true;
+                }}
+                onBlur={() => {
+                  bulletinFocused.current = false;
+                }}
+              >
+                <span aria-hidden="true">×</span>
+              </button>
               <div className="wis-exchange__surge-heading">
                 <strong>{bulletinHeading(bulletin.stocks)}</strong>
                 <span>

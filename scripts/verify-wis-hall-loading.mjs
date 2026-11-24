@@ -25,7 +25,8 @@ const sameDeps = (a, b) => a && b && a.length === b.length && a.every((value, in
 const moduleDefault = value => ({ __esModule: true, default: value });
 
 const createPage = (audience, { tab = 'hall-of-fame', ready = true, archive = false } = {}) => {
-  const slots = [], listeners = new Set(), calls = [], logs = [];
+  const slots = [], listeners = new Set(), calls = [], logs = [], timers = new Map();
+  let timerId = 0;
   let cursor = 0, effects = [], dirty = true, tree;
   let params = new URLSearchParams(tab === 'overview' ? '' : `tab=${tab}`);
   const auth = { config: { year: '2026', semester: '2' }, configReady: ready, authGeneration: 1,
@@ -33,7 +34,8 @@ const createPage = (audience, { tab = 'hall-of-fame', ready = true, archive = fa
     userData: { uid: `${audience}-a`, role: audience, grade: '3', class: '1', staffPermissions: ['point_read', 'point_manage'] },
     interfaceConfig: {}, refreshInterfaceConfig: async () => {} };
   const React = {
-    createElement: (type, props, ...children) => ({ type, props: { ...props, children } }),
+    createElement: (type, props, ...children) => typeof type === 'function'
+      ? type({ ...props, children }) : ({ type, props: { ...props, children } }),
     useState(initial) {
       const index = cursor++;
       if (!slots[index]) slots[index] = { value: typeof initial === 'function' ? initial() : initial };
@@ -69,6 +71,8 @@ const createPage = (audience, { tab = 'hall-of-fame', ready = true, archive = fa
   const responseFor = call => {
     if (call.name === 'hall') return { snapshotKey: `${call.uid}:${call.scope.year}-${call.scope.semester}:${calls.indexOf(call)}` };
     if (call.name === 'wallet') return wallet(call.uid);
+    if (call.name === 'transactionPage') return { wallet: wallet(call.args[0] || call.uid), transactions: [], nextCursor: '' };
+    if (call.name === 'walletPage') return { wallets: [wallet(`student-for-${call.uid}-${call.scope.semester}`)], nextCursor: '', totalCount: 1 };
     if (call.name === 'wallets') return [wallet(`student-for-${call.uid}-${call.scope.semester}`)];
     if (call.name === 'policy') return structuredClone(policy);
     if (call.name === 'schoolOptions') return { grades: [{ value: '3', label: '3학년' }], classes: [{ value: '1', label: '1반' }] };
@@ -96,7 +100,8 @@ const createPage = (audience, { tab = 'hall-of-fame', ready = true, archive = fa
     getPointWalletCumulativeEarned: value => value.rankEarnedTotal,
   };
   const children = ['StudentPointHallOfFameTab', 'StudentPointOrdersTab', 'StudentPointShopTab', 'StudentPointSummaryTab',
-    'PointGrantTab', 'PointPolicyTab', 'PointRanksTab', 'PointProductsTab', 'PointRequestsTab', 'PointsOverviewTab', 'HallOfFameManagementTab'];
+    'PointGrantTab', 'PointPolicyTab', 'PointRanksTab', 'PointProductsTab', 'PointRequestsTab', 'PointsOverviewTab', 'HallOfFameManagementTab',
+    'StudentPointNavigation', 'StudentAvatarShopPage', 'TeacherWisStocks', 'TeacherAvatarShopPage', 'TeacherPointManagementLayout', 'PortalSubNavigation'];
   const require = name => {
     if (name === 'react') return { __esModule: true, default: React, ...React };
     if (name === 'react-router-dom') return { useSearchParams: () => [params, next => {
@@ -104,31 +109,40 @@ const createPage = (audience, { tab = 'hall-of-fame', ready = true, archive = fa
     }] };
     if (name.endsWith('/AuthContext')) return { useAuth: () => auth };
     if (name.endsWith('/pointLabels')) return actualLabels;
+    if (name.endsWith('/menus')) return { getStudentMenuLabel: (_config, _path, fallback) => fallback };
+    if (name.endsWith('/avatarRoutes')) return { isStudentAvatarShop: () => false, isTeacherAvatarShop: () => false };
+    if (name.endsWith('/wisEconomyClient')) return { latestWisWallet: (_previous, next) => next };
     if (name.endsWith('/points')) return points;
     if (name.endsWith('/studentWis')) return {
       getStudentPointWallet: request('wallet'), listStudentPointOrders: request('orders'),
       listStudentPointProducts: request('products'), listStudentPointTransactions: request('transactions'),
       getStudentPointHallOfFame: request('hall'),
+      getStudentPointTransactionPage: request('transactionPage'),
     };
     if (name.endsWith('/pointRanks')) return rankHelpers;
-    if (name.endsWith('/pointEconomyAdapter')) return { getPendingCanonicalPointAdjustment: () => null };
+    if (name.endsWith('/pointEconomyAdapter')) return { getPendingCanonicalPointAdjustment: () => null,
+      getCanonicalPointWalletPage: request('walletPage'), getCanonicalPointTransactionPage: request('transactionPage'), getCanonicalPointWallet: request('wallet') };
     if (name.endsWith('/wisHallOfFame')) return { findWisHallOfFameEntryByUid: () => null };
     if (name.endsWith('/permissions')) return { canReadPoints: data => data.staffPermissions?.includes('point_read'), canManagePoints: () => true };
     if (name.endsWith('/semesterArchive')) return { isSemesterArchive: archive };
     if (name.endsWith('/semesterScope')) return { getYearSemester: config => config };
     if (name.endsWith('/pointShopArchive')) return { readArchivedShopProducts: request('archiveProducts'), readArchivedShopOrders: request('archiveOrders') };
-    if (name.endsWith('/appEvents')) return { subscribePointsUpdated: callback => { listeners.add(callback); return () => listeners.delete(callback); } };
+    if (name.endsWith('/appEvents')) return { subscribePointsUpdated: callback => { listeners.add(callback); return () => listeners.delete(callback); },
+      subscribePointsForegroundRefresh: () => () => {} };
     if (name.endsWith('/AppToastProvider')) return { useAppToast: () => ({ showToast: () => {} }) };
     if (name.endsWith('/AppDialogProvider')) return { useAppDialog: () => ({ confirm: async () => false }) };
-    if (name.endsWith('/LoadingState')) return { InlineLoading: 'InlineLoading' };
+    if (name.endsWith('/LoadingState')) return { InlineLoading: 'InlineLoading', LoadingOverlay: 'LoadingOverlay' };
     const child = children.find(child => name.endsWith(`/${child}`));
     if (child) return moduleDefault(child);
-    if (name === 'firebase/storage' || ['/firebase', '/sensitiveOperation', '/pointProductImages'].some(suffix => name.endsWith(suffix))) return {};
+    if (name.endsWith('/firebase')) return { auth };
+    if (name === 'firebase/storage' || ['/sensitiveOperation', '/pointProductImages'].some(suffix => name.endsWith(suffix))) return {};
     throw new Error(`Unexpected page dependency: ${name}`);
   };
   const exports = {};
   vm.runInNewContext(compile(audience === 'student' ? 'src/pages/student/Points.tsx' : 'src/pages/teacher/ManagePoints.tsx'),
-    { exports, require, URLSearchParams, URL, performance, console: { warn: (...args) => logs.push(args), error: (...args) => logs.push(args) } });
+    { exports, require, URLSearchParams, URL, performance, window: {
+      setTimeout: callback => { timers.set(++timerId, callback); return timerId; }, clearTimeout: id => timers.delete(id) },
+      console: { warn: (...args) => logs.push(args), error: (...args) => logs.push(args) } });
   const Page = exports.default;
   const nodes = (type, node = tree) => {
     if (!node || typeof node !== 'object') return [];
@@ -149,6 +163,7 @@ const createPage = (audience, { tab = 'hall-of-fame', ready = true, archive = fa
   };
   flush();
   return { auth, calls, logs, nodes, texts, tick, flush, navigate, update, pending, resolveAll,
+    runTimers: () => { const scheduled = [...timers.values()]; timers.clear(); scheduled.forEach(callback => callback()); flush(); },
     event: () => { [...listeners].forEach(callback => callback()); flush(); },
     dispose: () => slots.forEach(slot => slot?.cleanup?.()),
   };
@@ -161,7 +176,7 @@ await check('student direct Hall waits only for its own scope and sends no walle
   const page = createPage('student', { ready: false });
   assert.equal(page.calls.length, 0);
   page.update(auth => { auth.configReady = true; });
-  assert.deepEqual(names(page), ['hall']); assert.equal(page.nodes('InlineLoading').length, 1);
+  assert.deepEqual(names(page), ['hall'], JSON.stringify(page.logs)); assert.equal(page.nodes('InlineLoading').length, 1);
   page.pending('hall')[0].resolve(); await page.tick();
   assert.equal(page.nodes('StudentPointHallOfFameTab').length, 1);
   assert.equal(page.nodes('InlineLoading').length, 0);
@@ -193,24 +208,24 @@ await check('student direct Hall uses canonical grade/class map keys without wal
 await check('student overview first visit loads core while Hall can render before that core settles', async () => {
   const page = createPage('student'); await page.resolveAll();
   page.navigate('overview');
-  assert.deepEqual(names(page), ['hall', 'wallet', 'transactions', 'policy']);
+  assert.deepEqual(names(page), ['hall', 'transactionPage', 'policy']);
   page.navigate('hall-of-fame'); assert.equal(page.pending('hall').length, 1);
   page.pending('hall')[0].resolve(); await page.tick();
-  assert.equal(page.pending().length, 3); assert.equal(page.nodes('StudentPointHallOfFameTab').length, 1);
+  assert.equal(page.pending().length, 2); assert.equal(page.nodes('StudentPointHallOfFameTab').length, 1);
   assert.equal(page.nodes('InlineLoading').length, 0);
   await page.resolveAll(); page.navigate('overview');
   assert.equal(page.nodes('StudentPointSummaryTab').length, 1); assert.equal(page.pending().length, 0);
   page.event();
-  assert.equal(page.pending('wallet').length, 1); assert.equal(page.pending('transactions').length, 0);
+  assert.equal(page.pending('transactionPage').length, 1); assert.equal(page.pending('transactions').length, 0);
   assert.equal(page.pending('policy').length, 1); assert.equal(page.pending('hall').length, 0);
-  page.pending('wallet')[0].resolve(); page.pending('policy')[0].resolve(); await page.tick();
-  assert.equal(page.pending('transactions').length, 1, 'History refresh is read once after core completion');
+  page.pending('transactionPage')[0].resolve(); page.pending('policy')[0].resolve(); await page.tick();
+  assert.equal(page.pending('transactionPage').length, 0, 'Wallet and history share one completed page request');
   await page.resolveAll(); page.dispose();
 });
 await check('student shop and orders retain first-visit reads after direct Hall entry', async () => {
   const page = createPage('student'); await page.resolveAll();
   page.navigate('shop');
-  assert.equal(page.pending('wallet').length, 1); assert.equal(page.pending('products').length, 1);
+  assert.equal(page.pending('transactionPage').length, 1); assert.equal(page.pending('products').length, 1);
   assert.equal(page.pending('orders').length, 0); await page.resolveAll();
   assert.equal(page.nodes('StudentPointShopTab').length, 1);
   page.navigate('orders'); assert.equal(page.pending('orders').length, 1);
@@ -221,6 +236,7 @@ await check('student Hall error ends loading, does not poll, and permits an expl
   const page = createPage('student'); page.pending('hall')[0].reject(); await page.tick();
   assert.equal(page.nodes('InlineLoading').length, 0); assert.match(page.texts(), /명예의 전당을 불러오지 못했습니다/);
   assert.equal(page.calls.length, 1);
+  page.runTimers(); await page.tick(); assert.equal(page.calls.length, 1, 'No timer-based Hall retry');
   const retry = page.nodes('button').find(node => page.texts(node).includes('다시 불러오기'));
   assert(retry); retry.props.onClick(); await page.tick();
   assert.deepEqual(names(page), ['hall', 'hall']); await page.resolveAll();
@@ -256,7 +272,7 @@ await check('student old core responses cannot populate the next account or supp
   page.update(auth => { auth.currentUser = { uid: 'student-b' }; auth.authGeneration++; });
   old.forEach(call => call.resolve()); await page.tick();
   page.navigate('overview');
-  assert.equal(page.pending('wallet').filter(call => call.uid === 'student-b').length, 1);
+  assert.equal(page.pending('transactionPage').filter(call => call.uid === 'student-b').length, 1);
   await page.resolveAll();
   assert.equal(page.nodes('StudentPointSummaryTab')[0].props.wallet.uid, 'student-b'); page.dispose();
 });
@@ -289,15 +305,15 @@ await check('teacher direct Hall mounts immediately with no parent collection re
 });
 await check('teacher other-tab first visits retain all existing data and Hall ignores a pending loadAll', async () => {
   const page = createPage('teacher'); page.navigate('overview');
-  assert.deepEqual(names(page), ['wallets', 'schoolOptions', 'policy', 'products', 'orders']);
+  assert.deepEqual(names(page), ['walletPage', 'schoolOptions', 'policy']);
   page.navigate('hall-of-fame');
   assert.equal(page.nodes('HallOfFameManagementTab').length, 1); assert.equal(page.nodes('InlineLoading').length, 0);
   await page.resolveAll();
-  assert.equal(page.calls.length, 5, 'Hall must not start selected-student transaction reads');
+  assert.equal(page.calls.length, 3, 'Hall must not start selected-student transaction reads');
   page.navigate('overview'); await page.resolveAll();
-  assert.equal(page.nodes('PointsOverviewTab').length, 1); assert.equal(page.calls.filter(call => call.name === 'wallets').length, 1);
-  page.navigate('products'); assert.equal(page.nodes('PointProductsTab').length, 1);
-  page.navigate('requests'); assert.equal(page.nodes('PointRequestsTab').length, 1); page.dispose();
+  assert.equal(page.nodes('PointsOverviewTab').length, 1); assert.equal(page.calls.filter(call => call.name === 'walletPage').length, 2);
+  page.navigate('products'); await page.resolveAll(); assert.equal(page.nodes('PointProductsTab').length, 1);
+  page.navigate('requests'); await page.resolveAll(); assert.equal(page.nodes('PointRequestsTab').length, 1); page.dispose();
 });
 await check('teacher scope and SDK identity changes remount Hall and reject old core results', async () => {
   const page = createPage('teacher', { tab: 'overview' }), old = [...page.pending()];
@@ -305,8 +321,8 @@ await check('teacher scope and SDK identity changes remount Hall and reject old 
   page.update(auth => { auth.currentUser = { uid: 'teacher-b' }; auth.authGeneration++; auth.config = { ...auth.config, semester: '1' }; });
   assert.notEqual(page.nodes('HallOfFameManagementTab')[0].props.key, previousKey);
   old.forEach(call => call.resolve()); await page.tick();
-  assert.equal(page.calls.length, 5); page.navigate('overview');
-  assert.equal(page.pending('wallets').filter(call => call.uid === 'teacher-b' && call.scope.semester === '1').length, 1);
+  assert.equal(page.calls.length, 3); page.navigate('overview');
+  assert.equal(page.pending('walletPage').filter(call => call.uid === 'teacher-b' && call.scope.semester === '1').length, 1);
   await page.resolveAll();
   assert.match(page.nodes('PointsOverviewTab')[0].props.wallets[0].uid, /teacher-b-1/);
   page.navigate('hall-of-fame'); const sdkKey = page.nodes('HallOfFameManagementTab')[0].props.key;
@@ -323,7 +339,7 @@ await check('teacher scope readiness and permissions protect direct Hall before 
 });
 await check('teacher unsupported prototype-like tab URLs retain the overview fallback', async () => {
   const page = createPage('teacher', { tab: 'toString' });
-  assert.equal(page.pending('wallets').length, 1); await page.resolveAll();
+  assert.equal(page.pending('walletPage').length, 1); await page.resolveAll();
   assert.equal(page.nodes('PointsOverviewTab').length, 1);
   assert.equal(page.nodes('HallOfFameManagementTab').length, 0); page.dispose();
 });
@@ -343,7 +359,7 @@ await check('teacher archive shop tab retains its explicit isolated adapter and 
   page.navigate('hall-of-fame'); assert.equal(page.calls.length, 2); assert.equal(page.nodes('HallOfFameManagementTab').length, 1); page.dispose();
 });
 for (const file of ['src/pages/student/Points.tsx', 'src/pages/teacher/ManagePoints.tsx']) {
-  assert.equal(/setInterval|setTimeout/.test(fs.readFileSync(path.join(root, file), 'utf8')), false, 'No polling or timer-based retry');
+  assert.equal(/setInterval/.test(fs.readFileSync(path.join(root, file), 'utf8')), false, 'No interval polling');
 }
 console.log(JSON.stringify({ status: 'PASS', network: 0, checks,
   scope: 'Actual parent page hooks/effects; deferred API boundaries and child component contracts. Child Hall rendering/browser layout is verified separately.' }, null, 2));

@@ -1,5 +1,9 @@
 # 운영 배포 절차
 
+## 명예의 전당·수신 알림·소리 복구 (2026-11-24)
+
+학생 명예의 전당 누적 조회의 `hall-index` 검증을 복구하고 교사 수신 토스트 기본 5초/설정 1~60초, 전광판 80%·3초·수동 닫기와 소리, 리듬게임 음소거 분리·시작 중 음량 반영을 제공한다. [검증 기록](../reviews/hall-notification-audio-20261124.md)을 따른다. `prepare-wis-hall-repair-release.mjs prepare/preflight`의 운영 원본 준비본에서 `getWisRankingPreview`만 배포하고 `verify`로 전체 파일·자원·IAM을 대조한다. 앱과 Functions 기본 검사를 통과한 같은 main의 Vercel Ready 배포를 운영 도메인에 승격한다. rules·게임 공개·학생 자산·알림 읽음 상태는 QA로 변경하지 않는다.
+
 ## 위스피 기획안·종료 일정·전광판 (2026-11-23 후속)
 
 등록 종목은 6주 보기에서도 운영 이력을 사용하고 미상장 모의 시세만 저장된 규칙으로 로컬 계산한다. 기획안 종료일은 별도 활성화 명령으로 연결하며 지난 5종목은 11월 24일 기존 시각으로 연장한다. 원본 catalogPlan v1을 보존하고 catalogExits를 별도로 저장해 기존 거래·정산 worker 호환을 유지한다. [구현·검증·비용 기록](../reviews/wispi-lifecycle-alerts-20261123.md)을 따른다. `prepare-wispi-lifecycle-release.mjs`로 운영 원본을 보존하고 기존 관리 6함수와 신규 activateWisStockCatalogExits만 선택 배포·대조한다. 동일 main의 Vercel 운영 반영 후 교사 화면에서 대상·시각을 확인해 종료 일정을 적용한다. 운영 QA로 학생 정산을 미리 실행하지 않는다.

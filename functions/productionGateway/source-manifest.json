@@ -519,7 +519,7 @@
       "sourceFile": "wisEconomy.js",
       "file": "wisEconomyQuery.js",
       "originalSha256": "560fd24282179aa9e4bd4ac9b7b99556cb533f7c4f67baac9339b22cb13b6f46",
-      "sha256": "6c6c6e3520141e70dc0ee35622f5434822f5512f344b75bb0b16d220450131cc",
+      "sha256": "48f230b4579f34f927433aee0ba6d7c90708ee1daf4ebde9a6507ada03d8ff30",
       "changes": [
         "Restore the live EXPLICIT teacher archive query independently of the command closure.",
         "Expose only requested full name, student number and selected-entry profile emoji; preserve pseudonymous public IDs, zero balances, tie caps and grade/class limits.",
@@ -540,7 +540,8 @@
         "2026-10-20: Start selected paged-hall account and safe index roster-hint reads together; keep canonical slot/enrollment/class authority, stale-hint fallback, account field masks and unselected-candidate bounds unchanged.",
         "2026-10-27: Page the complete immutable ledger with scope/owner-checked cursors, preserve game/learning activities, and allow direct lightweight account reads.",
         "2026-10-27: Project server-validated avatar summaries from existing permitted users profile batches into public ranking preview/full hall; preserve public IDs, profile read bounds, wallet arithmetic and all authorization.",
-        "2026-11-21: Project strict canonical earnedTotal for cumulative grade eligibility and profile icons while retaining legacy hall ranking and cursor semantics."
+        "2026-11-21: Project strict canonical earnedTotal for cumulative grade eligibility and profile icons while retaining legacy hall ranking and cursor semantics.",
+        "2026-11-24: Accept the cumulative metric after the read-only full-hall callable rewrites hall-of-fame to hall-index; preserve student grade/class scope, session checks and all unrelated metric restrictions. Deploy only getWisRankingPreview from its preserved production source."
       ]
     },
     {

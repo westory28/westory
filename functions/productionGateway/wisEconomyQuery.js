@@ -2562,7 +2562,7 @@ const normalizeQuery = (raw) => {
   const hallGradeKey = optionalText(value.hallGradeKey, "hallGradeKey", 80);
   const hallClassKey = optionalText(value.hallClassKey, "hallClassKey", 160);
   const rankingMetric = value.rankingMetric || "";
-  if (rankingMetric && (!["ranking-preview", "hall-view", "hall-of-fame"].includes(projection) ||
+  if (rankingMetric && (!["ranking-preview", "hall-view", "hall-of-fame", "hall-index"].includes(projection) ||
     !["cumulative", "current"].includes(rankingMetric) || (projection !== "ranking-preview" && rankingMetric !== "cumulative")))
     fail("invalid-argument", "rankingMetric is invalid.", "WIS_QUERY_INVALID");
   const rankingClassKey = optionalText(value.rankingClassKey, "rankingClassKey", 160);

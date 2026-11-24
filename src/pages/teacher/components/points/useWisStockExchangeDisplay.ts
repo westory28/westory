@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   watchWisStockExchange,
   type ExchangeMarket,
@@ -26,6 +26,13 @@ export function useWisStockExchangeDisplay(
   );
   const [bulletin, setBulletin] = useState<StockBulletin | null>(null);
   const [tradeSession, setTradeSession] = useState(0);
+  const activeRotation = useRef<ReturnType<
+    typeof createStockBulletinRotation
+  > | null>(null);
+  const dismissBulletin = useCallback(
+    () => activeRotation.current?.dismiss(),
+    [],
+  );
 
   useEffect(() => {
     let previous: BulletinMarket | null = null;
@@ -33,6 +40,7 @@ export function useWisStockExchangeDisplay(
     let rawMarket: ExchangeMarket | null = null;
     let activeFlips = new Map<string, QuotePriceTransition>();
     const rotation = createStockBulletinRotation(setBulletin);
+    activeRotation.current = rotation;
     const initialStocks = new Map(
       initial.stocks.map((stock) => [stock.id, stock]),
     );
@@ -148,7 +156,8 @@ export function useWisStockExchangeDisplay(
     return () => {
       stop();
       rotation.clear();
+      if (activeRotation.current === rotation) activeRotation.current = null;
     };
   }, [year, semester, classKey, retry, initial]);
-  return { state, flips, bulletin, tradeSession };
+  return { state, flips, bulletin, tradeSession, dismissBulletin };
 }

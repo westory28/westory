@@ -187,6 +187,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
 const browser = await playwright.chromium.launch({
   channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || "msedge",
   headless: true,
+  args: ["--autoplay-policy=document-user-activation-required"],
 });
 const checks = [],
   errors = [],
@@ -993,6 +994,64 @@ if (process.argv.includes('--settings-only')) {
   process.exit(0);
 }
 try {
+  // Real Web Audio output after touch/click, including an old shared mute and
+  // a browser/device interruption. Synthetic services never write student data.
+  for (const [width, height] of [[844, 390], [1280, 900]]) {
+    const soundPage = await pageFor(width, height);
+    await soundPage.addInitScript(() => localStorage.setItem("westory.weplay.musicMuted", "true"));
+    await soundPage.goto(`${base}/?open`);
+    await phase(soundPage, "ready");
+    assert.equal(await soundPage.getByRole("button", {name:"소리 끄기",exact:true}).count(), 1,
+      "Other games' saved mute must not silence a new rhythm session");
+    const activate = locator => width <= 844 ? locator.tap() : locator.click();
+    await activate(soundPage.getByRole("button", {name:"연주 시작",exact:false}));
+    await phase(soundPage, "playing");
+    const energy = () => soundPage.evaluate(async () => {
+      const player = window.rhythmQA.audio.at(-1);
+      const analyser = player.context.createAnalyser();
+      player.compressor.connect(analyser);
+      const values = new Float32Array(analyser.fftSize);
+      let maximum = 0;
+      const until = performance.now() + 1400;
+      while (performance.now() < until) {
+        analyser.getFloatTimeDomainData(values);
+        maximum = Math.max(maximum, ...values.map(Math.abs));
+        await new Promise(resolve => setTimeout(resolve, 30));
+      }
+      player.compressor.disconnect(analyser);
+      return {maximum, state:player.state, volume:player.master.gain.value};
+    });
+    const initial = await energy();
+    assert.equal(initial.state, "running");
+    assert(initial.maximum > 0.001 && initial.volume > 0, "Started song emits an audible signal");
+    const reads = await readCount(soundPage);
+    await soundPage.evaluate(() => window.rhythmQA.audio.at(-1).pause());
+    await phase(soundPage, "paused");
+    await activate(soundPage.getByRole("button", {name:"계속 연주",exact:true}));
+    await phase(soundPage, "playing");
+    const resumed = await energy();
+    assert.equal(resumed.state, "running");
+    assert(resumed.maximum > 0.001, "Continue restores actual audio output after interruption");
+    await activate(soundPage.getByRole("button", {name:"소리 끄기",exact:true}));
+    await soundPage.waitForFunction(() => window.rhythmQA.audio.at(-1).master.gain.value < 0.001);
+    await activate(soundPage.getByRole("button", {name:"소리 켜기",exact:true}));
+    const unmuted = await energy();
+    assert(unmuted.maximum > 0.001 && unmuted.volume > 0, "Unmute restores the output signal");
+    assert.equal(await readCount(soundPage), reads, "Audio controls make no additional server reads");
+    assert.equal(await soundPage.evaluate(() => localStorage.getItem("westory.weplay.musicMuted")), "true",
+      "Rhythm controls preserve other games' music preference");
+    checks.push({audioRecovery:{width,height,initial,resumed,unmuted},additionalReads:0});
+    await soundPage.close();
+  }
+  if (process.argv.includes("--audio-only")) {
+    assert.deepEqual(errors, []);
+    assert.deepEqual(external, []);
+    await fs.writeFile(path.join(evidence,"audio-recovery-report.json"),JSON.stringify({checks,errors,external},null,2));
+    console.log(JSON.stringify({audioRecoveryPassed:checks.length,errors,external}));
+    await browser.close();
+    await new Promise(resolve => server.close(resolve));
+    process.exit(0);
+  }
   const challengePage = await pageFor();
   await challengePage.goto(`${base}/?open`);
   await phase(challengePage, "ready");

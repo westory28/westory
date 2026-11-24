@@ -37,11 +37,13 @@ const market = stocks => ({ updatedAtMs: now, halted: false, index: null, stocks
 try {
   rotation.update(market([stock('비파메탈')]), new Set());
   assert.equal(current.stocks[0].percent, -60);
-  advance(8_000);
+  advance(2_999);
+  assert.equal(current.stocks[0].id, '비파메탈', 'each bulletin remains until its three-second deadline');
+  advance(1);
   assert.equal(current, null);
   rotation.update(market([stock('비파메탈')]), new Set(['previous:비파메탈']));
   assert.equal(current, null, 'unchanged event cannot replay on a trade/document update');
-  advance(592_000);
+  advance(597_000);
   assert.equal(events.length, 2);
   assert.equal(events[1].at, baseline + 600_000);
   advance(600_000);
@@ -63,10 +65,24 @@ try {
   now = baseline;
   rotation.update(market(Array.from({ length: 6 }, (_, i) => stock('종목' + i))), new Set());
   const reached = new Set(current.stocks.map(item => item.id));
-  for (let i = 0; i < 2; i++) { advance(14_000); current.stocks.forEach(item => reached.add(item.id)); }
+  for (let i = 0; i < 5; i++) { advance(3_000); current.stocks.forEach(item => reached.add(item.id)); }
   assert.equal(reached.size, 6, 'all current events fit into the current announcement round');
-  advance(14_000);
+  advance(3_000);
   assert.equal(current, null);
+  rotation.clear();
+  now = baseline;
+  const queued = market(Array.from({ length: 4 }, (_, i) => stock('닫기' + i)));
+  rotation.update(queued, new Set());
+  rotation.dismiss();
+  assert.equal(current, null, 'manual dismissal clears the visible bulletin');
+  rotation.update(queued, new Set(['previous:닫기1']));
+  advance(599_999);
+  assert.equal(current, null, 'dismissal suppresses every queued page and repeated snapshots in this round');
+  advance(1);
+  assert(current, 'the next ten-minute occurrence remains available');
+  rotation.dismiss();
+  rotation.update(market([stock('신규사건', now)]), new Set(['previous:신규사건']));
+  assert.equal(current.stocks[0].id, '신규사건', 'dismissal never suppresses a new event');
   rotation.update({ ...market([stock('halt')]), halted: true }, new Set());
   assert.equal(timers.size, 0);
   assert.equal(current, null);
@@ -76,7 +92,7 @@ try {
   rotation.clear();
   assert.equal(timers.size, 0);
   assert.equal(stockBulletinExpiresAt(baseline), baseline + 1_800_000);
-  console.log('PASS: 0/10/20 minute local cadence, strict half-hour expiry, duplicate/stale/legacy suppression, complete paging, halt/hidden/cleanup; no network calls.');
+  console.log('PASS: three-second individual bulletins, current-round dismissal/new-event recovery, 0/10/20 minute local cadence, strict half-hour expiry, duplicate/stale/legacy suppression, complete paging, halt/hidden/cleanup; no network calls.');
 } finally {
   rotation.clear();
   Date.now = originals.now;

@@ -24,6 +24,7 @@ export class RhythmAudio {
   private origin = 0;
   private generation = 0;
   private disposed = false;
+  private volume = 0.7;
 
   /** Audio seconds since start, including the three-second count-in. */
   get currentTime(): number {
@@ -44,6 +45,7 @@ export class RhythmAudio {
     if (this.disposed)
       throw new Error("종료된 연주입니다. 곡을 다시 선택해 주세요.");
     this.stop();
+    this.volume = clampVolume(volume);
     const generation = this.generation;
     const AudioContextConstructor =
       window.AudioContext ??
@@ -81,7 +83,7 @@ export class RhythmAudio {
           );
       }
       this.master = context.createGain();
-      this.master.gain.value = clampVolume(volume) * 0.68;
+      this.master.gain.value = this.volume * 0.68;
       this.compressor = context.createDynamicsCompressor();
       this.compressor.threshold.value = -12;
       this.compressor.knee.value = 12;
@@ -145,9 +147,12 @@ export class RhythmAudio {
   }
 
   setVolume(volume: number): void {
+    // Authorization/resume may still be pending and the graph may not exist.
+    // Apply the latest choice when it is connected, not the stale start value.
+    this.volume = clampVolume(volume);
     if (this.master && this.context)
       this.master.gain.setTargetAtTime(
-        clampVolume(volume) * 0.68,
+        this.volume * 0.68,
         this.context.currentTime,
         0.015,
       );

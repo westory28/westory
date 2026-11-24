@@ -16,6 +16,7 @@ interface ToastInput {
   message?: string;
   tone?: ToastTone;
   durationMs?: number;
+  durationMode?: "minimum" | "exact";
   persistent?: boolean;
 }
 interface ToastItem extends ToastInput {
@@ -71,6 +72,12 @@ export const inferToastFromAlertMessage = (
 };
 const getToastDuration = (toast: ToastItem) => {
   if (toast.persistent || toast.durationMs === 0) return 0;
+  if (
+    toast.durationMode === "exact" &&
+    Number.isFinite(toast.durationMs) &&
+    toast.durationMs! > 0
+  )
+    return toast.durationMs!;
   const minimum =
     toast.tone === "error" || toast.tone === "warning" ? 10000 : 6000;
   const requested = Number.isFinite(toast.durationMs) ? toast.durationMs! : 0;

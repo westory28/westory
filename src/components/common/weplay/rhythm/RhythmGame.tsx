@@ -44,11 +44,6 @@ import {
   type RhythmDifficulty,
   type RhythmJudgement,
 } from "./rhythmCore";
-import {
-  isWeplayAudioMuted,
-  onWeplayAudioMutedChange,
-  setWeplayAudioMuted,
-} from "../weplayAudioPreference";
 import "./rhythm.css";
 
 type Phase = "ready" | "starting" | "playing" | "paused" | "result";
@@ -150,7 +145,9 @@ export default function RhythmGame({
   const mascotRef = useRef<HTMLDivElement>(null);
   const [feedbackId, setFeedbackId] = useState(0);
   const [error, setError] = useState("");
-  const [muted, setMuted] = useState(isWeplayAudioMuted);
+  // Rhythm is played by listening to the chart. Another game's background
+  // music preference must not silently mute a new rhythm session.
+  const [muted, setMuted] = useState(false);
   const [offset, setOffset] = useState(0);
   const audio = useRef<RhythmAudio | null>(null);
   const judged = useRef(new Set<string>());
@@ -196,7 +193,6 @@ export default function RhythmGame({
     }
   };
 
-  useEffect(() => onWeplayAudioMutedChange(setMuted), []);
   useEffect(() => {
     const outside = (event: PointerEvent) => {
       const panel = calibrationRef.current;
@@ -861,7 +857,11 @@ export default function RhythmGame({
                 <button
                   type="button"
                   className="rhythm-tool rhythm-icon-button"
-                  onClick={() => setWeplayAudioMuted(!muted)}
+                  onClick={() => {
+                    const nextMuted = !muted;
+                    audio.current?.setVolume(nextMuted ? 0 : 0.65);
+                    setMuted(nextMuted);
+                  }}
                   aria-label={muted ? "소리 켜기" : "소리 끄기"}
                   aria-pressed={muted}
                 >

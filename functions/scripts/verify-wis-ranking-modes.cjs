@@ -1,4 +1,6 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
 const { setup, accountPath, previewPath, publicId } = require('./verify-wis-ranking-preview.cjs');
 const scope = '2026-2';
 const rows = state => Object.values(state.hallOfFame.gradeLeaderboardByGrade).flat();
@@ -26,7 +28,65 @@ const request = (ctx, metric = 'cumulative', classKey = '', extra = {}) => ctx.r
 const checks = [];
 const check = async (name, test) => { await test(); checks.push(name); };
 
+// Exercise the deployed callable adapter and real query validation together:
+// testing either side in isolation missed hall-of-fame -> hall-index rewriting.
+const callable = ctx => {
+  const exports = {};
+  vm.runInNewContext(fs.readFileSync(require.resolve('../wisRankingPreview'), 'utf8'), { exports, require: name => {
+    if (name === 'firebase-admin/firestore') return { getFirestore: () => ({}) };
+    if (name === './productionGateway/commandGateway') return { createFirestoreStore: () => ctx.store };
+    if (name === './productionGateway/wisEconomyQuery') return { createWisQueryCore: () => ctx.core };
+    if (name === './productionGateway/studentMaintenance') return { onCallWithStudentMaintenance: (_options, handler) => handler };
+    throw new Error(`Unexpected callable dependency: ${name}`);
+  } });
+  return (data = {}, uid = 'student-79') => exports.getWisRankingPreview({ auth: { uid }, data: {
+    audience: 'student', semesterId: scope, source: 'CURRENT', projection: 'hall-of-fame',
+    rankingMetric: 'cumulative', rankingClassKey: '', limit: 20, ...data,
+  } });
+};
+
 (async () => {
+  await check('actual full-hall callable accepts cumulative rankings with current student scope and bounded reads', async () => {
+    const ctx = prepare(); move(ctx, 'student-0', '2', '7'); move(ctx, 'student-1', '3', '2');
+    const call = callable(ctx); ctx.store.resetStats();
+    const result = await call();
+    assert.equal(result.status, 'CONTENT');
+    assert.deepEqual(Object.keys(result.hallOfFame.gradeLeaderboardByGrade), ['3']);
+    assert.deepEqual(Object.keys(result.hallOfFame.classLeaderboardByClassKey), ['3-1']);
+    assert.equal(result.account, null);
+    for (const key of ['accounts', 'ledger', 'products', 'inventory', 'orders', 'rankings']) assert.deepEqual(result[key], []);
+    assert.equal(JSON.stringify(result).includes('studentUid'), false);
+    const pages = ctx.store.queries.filter(query => query.collection === 'semester_wis_accounts');
+    assert.equal(pages.length, 2);
+    assert(pages.every(query => query.limit === 20 && query.filters.some(filter => filter.field === 'semesterId' && filter.value === scope)
+      && query.filters.some(filter => filter.field === 'grade' && filter.value === '3')));
+    assert.equal(pages.filter(query => query.filters.some(filter => filter.field === 'classNumber' && filter.value === '1')).length, 1);
+    assert(pages.every(query => query.fieldMask.includes('earnedTotal') && !query.fieldMask.includes('recentLedgerEntries')));
+    assert.equal(ctx.store.writes, 0);
+    const teacher = await call({ audience: 'teacher' }, 'teacher');
+    assert(teacher.hallOfFame.gradeLeaderboardByGrade['2']);
+    assert(teacher.hallOfFame.gradeLeaderboardByGrade['3']);
+    assert.equal(ctx.store.writes, 0);
+  });
+  await check('full-hall callable retains validation, session checks and explicit failure retry', async () => {
+    const ctx = prepare(); const call = callable(ctx);
+    await assert.rejects(call({ rankingMetric: 'current' }), error => error.code === 'invalid-argument');
+    await assert.rejects(call({ rankingMetric: 'balance' }), error => error.code === 'invalid-argument');
+    assert.equal(ctx.store.queries.length, 0);
+    const originalQuery = ctx.store.query.bind(ctx.store); let failNext = true;
+    ctx.store.query = (collection, query) => {
+      if (collection === 'semester_wis_accounts' && failNext) { failNext = false; throw new Error('synthetic full-hall failure'); }
+      return originalQuery(collection, query);
+    };
+    await assert.rejects(call(), /synthetic full-hall failure/);
+    assert.equal((await call()).status, 'CONTENT');
+    ctx.store.patch('users/teacher', { staffPermissions: [] });
+    await assert.rejects(call({ audience: 'teacher' }, 'teacher'), error => error.code === 'permission-denied');
+    ctx.denySession(); ctx.store.resetStats();
+    await assert.rejects(call(), /session revoked/);
+    assert.deepEqual(ctx.store.reads, ['users/student-79']);
+    assert.equal(ctx.store.queries.length, 0); assert.equal(ctx.store.writes, 0);
+  });
   await check('game spend changes current ranking without lowering earned ranking', async () => {
     const ctx = prepare(); update(ctx, 'student-0', { balance: 1 });
     const cumulative = await request(ctx), current = await request(ctx, 'current');
@@ -66,6 +126,7 @@ const check = async (name, test) => { await test(); checks.push(name); };
       { projection: 'ranking-preview', rankingMetric: 'current' },
       { projection: 'ranking-preview', rankingMetric: 'cumulative' },
       { projection: 'hall-of-fame', rankingMetric: 'cumulative' },
+      { projection: 'hall-index', rankingMetric: 'cumulative' },
       { projection: 'hall-view', rankingMetric: 'cumulative', hallView: 'grade' },
       { projection: 'hall-view', rankingMetric: 'cumulative', hallView: 'class', hallClassKey: '2-7' },
       { projection: 'ranking-preview' },

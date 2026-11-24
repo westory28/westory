@@ -12,6 +12,10 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { db } from "../../lib/firebase";
 import {
+  DEFAULT_TEACHER_TOAST_SECONDS,
+  subscribeTeacherToastDuration,
+} from "../../lib/notificationToastSettings";
+import {
   clearNotifications,
   loadNotifications,
   markNotificationsRead,
@@ -245,6 +249,18 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   } | null>(null);
 
   const includeBroadcasts = String(userData?.role || "").trim() === "student";
+  const teacherToastSecondsRef = useRef(DEFAULT_TEACHER_TOAST_SECONDS);
+  useEffect(() => {
+    teacherToastSecondsRef.current = DEFAULT_TEACHER_TOAST_SECONDS;
+    if (!currentUser?.uid || !config || !userData?.role || includeBroadcasts)
+      return;
+    return subscribeTeacherToastDuration(
+      `${notificationScopeKey}:${userData.role}`,
+      (seconds) => {
+        teacherToastSecondsRef.current = seconds;
+      },
+    );
+  }, [notificationScopeKey, includeBroadcasts, userData?.role]);
   const notificationSourcesReady =
     inboxReady && (!includeBroadcasts || broadcastReady);
 
@@ -435,8 +451,9 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
             ? notification.priority === "high"
               ? 5600
               : 4200
-            : undefined,
-          persistent: includeBroadcasts ? false : true,
+            : teacherToastSecondsRef.current * 1000,
+          durationMode: includeBroadcasts ? "minimum" : "exact",
+          persistent: false,
         });
       } catch (error) {
         console.error("Failed to show realtime notification toast:", error);

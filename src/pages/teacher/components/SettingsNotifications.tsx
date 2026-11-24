@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { InlineLoading } from "../../../components/common/LoadingState";
@@ -6,6 +6,13 @@ import BrandLogo from "../../../components/common/BrandLogo";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
 import { invalidateSiteSettingDocCache } from "../../../lib/siteSettings";
+import {
+  DEFAULT_TEACHER_TOAST_SECONDS,
+  MAX_TEACHER_TOAST_SECONDS,
+  MIN_TEACHER_TOAST_SECONDS,
+  isValidTeacherToastSeconds,
+  normalizeTeacherToastSeconds,
+} from "../../../lib/notificationToastSettings";
 
 type NotificationPriority = "normal" | "high";
 type NotificationAudience = "students" | "teachers";
@@ -47,6 +54,7 @@ type NotificationConfigState = {
   enabled: boolean;
   studentNotificationsEnabled: boolean;
   teacherNotificationsEnabled: boolean;
+  teacherToastDurationSeconds: number;
   eventPolicies: Record<string, NotificationEventPolicy>;
 };
 
@@ -589,6 +597,7 @@ const createDefaultConfig = (): NotificationConfigState => ({
   enabled: true,
   studentNotificationsEnabled: true,
   teacherNotificationsEnabled: true,
+  teacherToastDurationSeconds: DEFAULT_TEACHER_TOAST_SECONDS,
   eventPolicies: buildDefaultEventPolicies(),
 });
 
@@ -641,6 +650,9 @@ const normalizeConfig = (raw: unknown): NotificationConfigState => {
       typeof source.teacherNotificationsEnabled === "boolean"
         ? source.teacherNotificationsEnabled
         : defaults.teacherNotificationsEnabled,
+    teacherToastDurationSeconds: normalizeTeacherToastSeconds(
+      source.teacherToastDurationSeconds,
+    ),
     eventPolicies: NOTIFICATION_EVENTS.reduce<
       Record<string, NotificationEventPolicy>
     >((acc, event) => {
@@ -691,39 +703,50 @@ const TAB_ITEMS: Array<{ key: NotificationTab; label: string }> = [
 ];
 
 const SettingsNotifications: React.FC = () => {
-  const { currentUser, config: semesterConfig } = useAuth();
+  const { currentUser } = useAuth();
   const { showToast } = useAppToast();
   const [config, setConfig] = useState<NotificationConfigState>(() =>
     createDefaultConfig(),
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [savedConfig, setSavedConfig] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [activeTab, setActiveTab] = useState<NotificationTab>("overview");
   const [openEventKey, setOpenEventKey] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     const loadConfig = async () => {
       setLoading(true);
+      setLoadFailed(false);
+      setSavedConfig(null);
       try {
         const snapshot = await getDoc(
           doc(db, "site_settings", "notification_config"),
         );
-        setConfig(normalizeConfig(snapshot.exists() ? snapshot.data() : null));
+        if (cancelled) return;
+        const loaded = normalizeConfig(
+          snapshot.exists() ? snapshot.data() : null,
+        );
+        setConfig(loaded);
+        setSavedConfig(JSON.stringify(loaded));
       } catch (error) {
+        if (cancelled) return;
         console.error("Failed to load notification config:", error);
-        showToast({
-          tone: "error",
-          title: "알림 설정을 불러오지 못했습니다.",
-          message: "잠시 후 다시 시도해 주세요.",
-        });
-        setConfig(createDefaultConfig());
+        setLoadFailed(true);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     void loadConfig();
-  }, [showToast]);
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.uid, loadAttempt]);
 
   const connectedCount = useMemo(
     () =>
@@ -743,7 +766,10 @@ const SettingsNotifications: React.FC = () => {
   );
 
   const updateRootField = (
-    field: keyof Omit<NotificationConfigState, "eventPolicies">,
+    field:
+      | "enabled"
+      | "studentNotificationsEnabled"
+      | "teacherNotificationsEnabled",
     value: boolean,
   ) => {
     setConfig((prev) => ({
@@ -786,9 +812,24 @@ const SettingsNotifications: React.FC = () => {
   const enabledCount = NOTIFICATION_EVENTS.filter(
     (event) => !getEventDisabled(event) && getPolicy(event).enabled,
   ).length;
+  const validDuration = isValidTeacherToastSeconds(
+    config.teacherToastDurationSeconds,
+  );
+  const hasChanges =
+    savedConfig !== null && JSON.stringify(config) !== savedConfig;
 
   const saveConfig = async () => {
+    if (
+      !currentUser?.uid ||
+      savingRef.current ||
+      !hasChanges ||
+      !validDuration ||
+      loadFailed
+    )
+      return;
+    savingRef.current = true;
     setSaving(true);
+    const submittedConfig = config;
     try {
       await setDoc(
         doc(db, "site_settings", "notification_config"),
@@ -796,6 +837,7 @@ const SettingsNotifications: React.FC = () => {
           enabled: config.enabled,
           studentNotificationsEnabled: config.studentNotificationsEnabled,
           teacherNotificationsEnabled: config.teacherNotificationsEnabled,
+          teacherToastDurationSeconds: config.teacherToastDurationSeconds,
           eventPolicies: config.eventPolicies,
           updatedAt: serverTimestamp(),
           updatedBy: currentUser?.email || currentUser?.uid || "",
@@ -803,6 +845,7 @@ const SettingsNotifications: React.FC = () => {
         { merge: true },
       );
       invalidateSiteSettingDocCache("notification_config");
+      setSavedConfig(JSON.stringify(submittedConfig));
       showToast({
         tone: "success",
         title: "알림 관리 설정이 저장되었습니다.",
@@ -816,6 +859,7 @@ const SettingsNotifications: React.FC = () => {
         message: error.message || "잠시 후 다시 시도해 주세요.",
       });
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -1168,6 +1212,23 @@ const SettingsNotifications: React.FC = () => {
       <InlineLoading message="알림 설정을 불러오는 중입니다." showWarning />
     );
 
+  if (loadFailed)
+    return (
+      <div
+        role="alert"
+        className="flex flex-wrap items-center gap-3 text-sm text-red-700"
+      >
+        알림 설정을 불러오지 못했습니다.
+        <button
+          type="button"
+          onClick={() => setLoadAttempt((value) => value + 1)}
+          className="min-h-[44px] underline"
+        >
+          다시 불러오기
+        </button>
+      </div>
+    );
+
   return (
     <div className="space-y-5">
       <div className="rounded-xl border border-gray-200 bg-white px-5 shadow-sm">
@@ -1187,7 +1248,7 @@ const SettingsNotifications: React.FC = () => {
             <button
               type="button"
               onClick={() => void saveConfig()}
-              disabled={saving}
+              disabled={saving || !hasChanges || !validDuration}
               className="inline-flex min-h-[48px] items-center justify-center rounded-xl bg-blue-600 px-6 font-extrabold text-white shadow-lg transition hover:bg-blue-700 disabled:bg-blue-300"
             >
               <i className="fas fa-save mr-2" aria-hidden="true"></i>
@@ -1205,7 +1266,7 @@ const SettingsNotifications: React.FC = () => {
                 전체 및 대상별 알림 사용 여부를 설정합니다.
               </p>
             </div>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:min-w-[660px]">
+            <div className="flex flex-wrap items-center gap-3">
               {[
                 {
                   title: "전체 알림",
@@ -1252,8 +1313,44 @@ const SettingsNotifications: React.FC = () => {
                   )}
                 </div>
               ))}
+              <label className="inline-flex min-h-[44px] flex-wrap items-center gap-2 text-sm font-bold text-gray-700">
+                교사 수신 알림 표시 시간
+                <input
+                  type="number"
+                  min={MIN_TEACHER_TOAST_SECONDS}
+                  max={MAX_TEACHER_TOAST_SECONDS}
+                  step={1}
+                  value={
+                    Number.isNaN(config.teacherToastDurationSeconds)
+                      ? ""
+                      : config.teacherToastDurationSeconds
+                  }
+                  onChange={(event) =>
+                    setConfig((previous) => ({
+                      ...previous,
+                      teacherToastDurationSeconds: event.target.valueAsNumber,
+                    }))
+                  }
+                  aria-label="교사 수신 알림 표시 시간(초)"
+                  aria-invalid={!validDuration}
+                  aria-describedby={
+                    !validDuration ? "teacher-toast-duration-error" : undefined
+                  }
+                  className="min-h-[44px] w-20 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                초
+              </label>
             </div>
           </div>
+          {!validDuration && (
+            <p
+              id="teacher-toast-duration-error"
+              role="alert"
+              className="mt-2 text-sm text-red-700"
+            >
+              표시 시간은 1~60초 정수로 입력해 주세요.
+            </p>
+          )}
         </div>
       </div>
 

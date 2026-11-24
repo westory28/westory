@@ -88,6 +88,9 @@ const fixture = () => {
       if (name.endsWith('/pointFormatters')) return { formatPointDateShortTime: () => '합성 시각' };
       if (name.endsWith('/siteSettings')) return { invalidateSiteSettingDocCache() {} };
       if (name.endsWith('/NumericInput')) return defaultModule('NumericInput');
+      if (name.endsWith('/RefreshButton')) return defaultModule('RefreshButton');
+      if (name.endsWith('/LoadingState')) return { LoadingOverlay: 'LoadingOverlay' };
+      if (name.endsWith('/brandWatermark')) return {};
       if (name.endsWith('/WisHallOfFameStudentPreview')) return defaultModule('WisHallOfFameStudentPreview');
       if (name.endsWith('/WisHallOfFamePositionEditor')) return defaultModule('WisHallOfFamePositionEditor');
       if (name === 'firebase/storage' || name.endsWith('/firebase') || name.endsWith('/sensitiveOperation')) return {};
@@ -110,7 +113,8 @@ const fixture = () => {
   };
   const text = node => typeof node === 'string' ? node : !node || typeof node !== 'object' ? ''
     : (Array.isArray(node) ? node : node.props?.children || []).map(text).join(' ');
-  const button = label => { const result = nodes('button').find(node => text(node).trim() === label); assert(result, label); return result; };
+  const button = label => { const result = nodes('button').find(node => text(node).trim() === label)
+    || nodes('RefreshButton').find(node => node.props.label === label); assert(result, label); return result; };
   const select = (id, value) => { const node = nodes('select').find(node => node.props.id === id); assert(node, id);
     node.props.onChange({ target: { value } }); flush(); };
   const click = label => { button(label).props.onClick(); flush(); };
@@ -187,7 +191,7 @@ await check('refreshKey and manual refresh reload only the selected group while 
   const before = page.calls.length; page.update((_auth, props) => { props.refreshKey++; });
   assert.equal(page.calls.length, before + 1); assert.equal(page.calls.at(-1).selection.classKey, '1-2'); await page.settle();
   assert.equal(page.nodes('NumericInput')[0].props.value, 7);
-  page.click('새로고침'); assert.equal(page.calls.length, before + 2); assert.equal(page.calls.at(-1).selection.view, 'class'); await page.settle();
+  page.click('위스 현황 새로고침'); assert.equal(page.calls.length, before + 2); assert.equal(page.calls.at(-1).selection.view, 'class'); await page.settle();
   assert.equal(page.nodes('NumericInput')[0].props.value, 7); assert.equal(page.pending().length, 0); page.dispose();
 });
 await check('save reload uses the latest selected group after a concurrent view change', async () => {
@@ -209,7 +213,7 @@ await check('account, auth generation and semester changes reject stale response
 });
 await check('read errors stop loading without polling and explicit refresh retries only the current scope', async () => {
   const page = fixture(); page.pending()[0].reject(); await page.tick();
-  assert.equal(page.calls.length, 1); page.click('새로고침'); assert.equal(page.calls.length, 2);
+  assert.equal(page.calls.length, 1); page.click('위스 현황 새로고침'); assert.equal(page.calls.length, 2);
   await page.settle(); assert.equal(page.calls.length, 2); assert(page.preview()); page.dispose();
 });
 assert.equal(/getWisHallOfFameSnapshot|setInterval|setTimeout/.test(fs.readFileSync(path.join(root, sourceFile), 'utf8')), false);

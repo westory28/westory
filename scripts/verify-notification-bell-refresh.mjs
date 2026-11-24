@@ -17,6 +17,19 @@ const source = ts.transpileModule(
   },
 ).outputText;
 const targetModule = { exports: {} };
+const durationModule = { exports: {} };
+vm.runInNewContext(
+  ts.transpileModule(
+    readFileSync("src/lib/notificationToastSettings.ts", "utf8"),
+    {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+      },
+    },
+  ).outputText,
+  { exports: durationModule.exports, require: () => ({}) },
+);
 vm.runInNewContext(
   ts.transpileModule(readFileSync("src/lib/notificationTargetUrl.ts", "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -69,7 +82,15 @@ const fixture = async (role = "teacher") => {
     config: { year: "2026", semester: "2" },
     userData: { role },
   };
-  const calls = { loads: [], reads: [], toasts: [], routes: [], errors: [] };
+  const calls = {
+    loads: [],
+    reads: [],
+    toasts: [],
+    routes: [],
+    errors: [],
+    durations: [],
+  };
+  let durationCallback;
   let deferredLoads = false;
   let deferredReads = false;
   let activeReads = 0;
@@ -222,6 +243,18 @@ const fixture = async (role = "teacher") => {
       } };
       if (name.endsWith("/AuthContext")) return { useAuth: () => auth };
       if (name.endsWith("/notifications")) return service;
+      if (name.endsWith("/notificationToastSettings"))
+        return {
+          DEFAULT_TEACHER_TOAST_SECONDS: 5,
+          subscribeTeacherToastDuration(scopeKey, callback) {
+            calls.durations.push(scopeKey);
+            durationCallback = callback;
+            callback(5);
+            return () => {
+              if (durationCallback === callback) durationCallback = undefined;
+            };
+          },
+        };
       if (name.endsWith("/AppToastProvider"))
         return { useAppToast: () => ({ showToast }) };
       if (name.endsWith("/AppDialogProvider"))
@@ -254,6 +287,7 @@ const fixture = async (role = "teacher") => {
     calls,
     auth,
     render,
+    duration: (seconds) => durationCallback?.(seconds),
     text: () => text(tree),
     rows: () => rows,
     maxActiveReads: () => maxActiveReads,
@@ -333,7 +367,9 @@ const fixture = async (role = "teacher") => {
   await f.emit({ unreadCount: 1 });
   assert.equal(f.calls.toasts.length, 1, "Closed center immediately announces signup");
   assert.equal(f.calls.toasts[0].title, "학생 가입 신청");
-  assert.equal(f.calls.toasts[0].persistent, true);
+  assert.equal(f.calls.toasts[0].persistent, false);
+  assert.equal(f.calls.toasts[0].durationMs, 5000);
+  assert.equal(f.calls.toasts[0].durationMode, "exact");
   assert.equal(f.calls.reads.length, 0, "Toast alone must not mark signup read");
   await f.toggle();
   assert.match(f.text(), /학생 가입 신청/);
@@ -353,7 +389,7 @@ const fixture = async (role = "teacher") => {
   await f.emit({ unreadCount: 1 });
   assert.match(f.text(), /역사교실 new-pass/);
   assert.equal(f.calls.toasts.length, 1);
-  assert.equal(f.calls.toasts[0].persistent, true);
+  assert.equal(f.calls.toasts[0].persistent, false);
   assert.equal(f.calls.reads.length, 1);
   assert.deepEqual(f.calls.reads[0].input.itemIds, ["new-pass"]);
   const settledLoads = f.calls.loads.length;
@@ -507,6 +543,12 @@ const fixture = async (role = "teacher") => {
   assert.match(f.text(), /역사교실 broadcast/);
   assert.equal(f.calls.toasts.length, 1);
   assert.equal(f.calls.toasts[0].persistent, false);
+  assert.equal(f.calls.toasts[0].durationMode, "minimum");
+  assert.equal(
+    f.calls.durations.length,
+    0,
+    "Student does not subscribe to teacher settings",
+  );
   assert.equal(f.calls.reads.length, 1);
   assert.deepEqual(f.calls.reads[0].input.itemIds, []);
   assert.equal(f.calls.reads[0].input.broadcastReadThroughMs, 1000);
@@ -542,6 +584,34 @@ const fixture = async (role = "teacher") => {
   assert.match(f.text(), /공개된 원래 과제 이름 과제가 새로 열렸습니다\./);
   f.button(/legacy-fail/).props.onClick();
   assert.equal(f.calls.routes.at(-1), "/teacher/quiz/history-classroom");
+}
+
+{
+  const f = await fixture();
+  f.duration(17);
+  f.setRows([notification("configured-duration", { priority: "high" })]);
+  await f.emit({ unreadCount: 1 });
+  assert.equal(f.calls.toasts[0].durationMs, 17000);
+  assert.equal(
+    f.calls.reads.length,
+    0,
+    "Toast timeout does not mark notifications read",
+  );
+  assert.equal(f.calls.loads.length, 1);
+  assert.equal(f.calls.durations.length, 1);
+  f.duration(3);
+  assert.equal(
+    f.calls.loads.length,
+    1,
+    "Duration update adds no notification request",
+  );
+  f.setRows([
+    notification("next-duration"),
+    notification("configured-duration"),
+  ]);
+  await f.emit({ unreadCount: 2 });
+  assert.equal(f.calls.toasts[1].durationMs, 3000);
+  assert.equal(f.calls.toasts.length, 2);
 }
 
 {
@@ -606,7 +676,14 @@ const fixture = async (role = "teacher") => {
         },
       },
     ).outputText,
-    { exports: module.exports, module, require: () => ({}) },
+    {
+      exports: module.exports,
+      module,
+      require: (name) =>
+        name.endsWith("/notificationToastSettings")
+          ? durationModule.exports
+          : {},
+    },
   );
   const event = module.exports.NOTIFICATION_EVENTS.find(
     (item) => item.key === "history_classroom_locked",

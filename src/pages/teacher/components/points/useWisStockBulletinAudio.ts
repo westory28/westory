@@ -3,14 +3,13 @@ import type {
   StockBulletin,
   StockBulletinItem,
 } from "./wisStockDisplayBulletins";
+import { stockBulletinExpiresAt } from "./wisStockDisplayBulletins";
 
 export function stockBulletinSpeech(items: StockBulletinItem[]) {
   return items
     .map((item) => {
-      if (item.kind === "listing")
-        return `${item.name} 종목이 신규 상장했습니다. ${item.hasListingPrice ? "상장가" : "현재가"}는 ${item.price} 위스입니다.`;
-      const percent = Number(Math.abs(item.percent).toFixed(2));
-      return `${item.name} 주가가 ${percent} 퍼센트 ${item.percent > 0 ? "급등" : "급락"}했습니다.`;
+      if (item.kind === "listing") return `${item.name}, 신규 상장.`;
+      return `${item.name}, ${item.percent > 0 ? "급등" : "급락"}.`;
     })
     .join(" ");
 }
@@ -29,12 +28,18 @@ export function selectKoreanBulletinVoice(voices: SpeechSynthesisVoice[]) {
     .sort((a, b) => quality(b) - quality(a))[0];
 }
 
-export function useWisStockBulletinAudio(bulletin: StockBulletin | null) {
-  const [sound, setSound] = useState(false);
-  const [speech, setSpeech] = useState(false);
+export function useWisStockBulletinAudio(
+  bulletin: StockBulletin | null,
+  enabled: boolean,
+) {
+  const [sound, setSound] = useState(true);
+  const [speech, setSpeech] = useState(true);
+  const [soundReady, setSoundReady] = useState(false);
+  const [voicesReady, setVoicesReady] = useState(false);
   const [message, setMessage] = useState("");
   const context = useRef<AudioContext | null>(null);
   const speechTimer = useRef<ReturnType<typeof setTimeout>>();
+  const speechDeadline = useRef<ReturnType<typeof setTimeout>>();
   const oscillators = useRef<OscillatorNode[]>([]);
   const played = useRef({ sound: "", speech: "" });
   const speechAvailable =
@@ -55,6 +60,7 @@ export function useWisStockBulletinAudio(bulletin: StockBulletin | null) {
   };
   const stopSpeech = () => {
     clearTimeout(speechTimer.current);
+    clearTimeout(speechDeadline.current);
     if (speechAvailable) window.speechSynthesis.cancel();
   };
   const stop = () => {
@@ -63,13 +69,68 @@ export function useWisStockBulletinAudio(bulletin: StockBulletin | null) {
   };
 
   useEffect(() => {
+    let active = true;
+    let blockedTimer: ReturnType<typeof setTimeout> | undefined;
+    const updateVoices = () => {
+      if (speechAvailable && window.speechSynthesis.getVoices().length > 0)
+        setVoicesReady(true);
+    };
+    if (speechAvailable) {
+      updateVoices();
+      window.speechSynthesis.addEventListener("voiceschanged", updateVoices);
+    }
+    // Some engines only expose their default voice. Do not wait indefinitely.
+    const voiceTimer = setTimeout(() => setVoicesReady(true), 750);
+    if (soundAvailable) {
+      try {
+        // The display is mounted by its Open button. Resume immediately while
+        // that user activation is still available instead of waiting for a tick.
+        const audio = new AudioContext();
+        context.current = audio;
+        audio.onstatechange = () => {
+          if (active) setSoundReady(audio.state === "running");
+        };
+        setSoundReady(audio.state === "running");
+        void audio
+          .resume()
+          .then(() => {
+            if (active) setSoundReady(audio.state === "running");
+          })
+          .catch(() => {
+            if (active) {
+              setSound(false);
+              setMessage("알림음을 켜서 브라우저의 소리 재생을 시작해 주세요.");
+            }
+          });
+        blockedTimer = setTimeout(() => {
+          if (active && audio.state !== "running") {
+            setSound(false);
+            setMessage("알림음을 켜서 브라우저의 소리 재생을 시작해 주세요.");
+          }
+        }, 750);
+      } catch {
+        setSound(false);
+        setMessage(
+          "알림음을 재생하지 못했습니다. 브라우저의 소리 설정을 확인해 주세요.",
+        );
+      }
+    }
     const hidden = () => {
       if (document.hidden) stop();
     };
     document.addEventListener("visibilitychange", hidden);
     return () => {
+      active = false;
+      clearTimeout(voiceTimer);
+      clearTimeout(blockedTimer);
+      if (speechAvailable)
+        window.speechSynthesis.removeEventListener(
+          "voiceschanged",
+          updateVoices,
+        );
       document.removeEventListener("visibilitychange", hidden);
       stop();
+      if (context.current) context.current.onstatechange = null;
       void context.current?.close().catch(() => {});
       context.current = null;
     };
@@ -78,8 +139,14 @@ export function useWisStockBulletinAudio(bulletin: StockBulletin | null) {
   useEffect(() => {
     if (!sound) stopSound();
     if (!speech) stopSpeech();
-    if (!bulletin || document.hidden) {
+    if (!enabled || document.hidden) {
       stop();
+      return;
+    }
+    if (!bulletin) {
+      // The visual page lasts three seconds. Let the last spoken headline finish
+      // after that automatic hide; explicit dismissal calls stop() immediately.
+      stopSound();
       return;
     }
     // Rotation counters restart on reconnect; include the actual event identity
@@ -117,9 +184,26 @@ export function useWisStockBulletinAudio(bulletin: StockBulletin | null) {
         oscillators.current.push(oscillator);
       }
     }
-    if (speech && speechAvailable && played.current.speech !== eventKey) {
+    if (
+      speech &&
+      speechAvailable &&
+      voicesReady &&
+      played.current.speech !== eventKey
+    ) {
       stopSpeech();
       played.current.speech = eventKey;
+      speechDeadline.current = setTimeout(
+        stopSpeech,
+        Math.max(
+          0,
+          Math.min(
+            8_000,
+            ...bulletin.stocks.map(
+              (item) => stockBulletinExpiresAt(item.atMs) - Date.now(),
+            ),
+          ),
+        ),
+      );
       speechTimer.current = setTimeout(
         () => {
           if (document.hidden) return;
@@ -130,23 +214,28 @@ export function useWisStockBulletinAudio(bulletin: StockBulletin | null) {
           utterance.lang = "ko-KR";
           utterance.voice =
             selectKoreanBulletinVoice(synthesis.getVoices()) ?? null;
-          utterance.rate = 1;
+          utterance.rate = 1.15;
           utterance.pitch = 1;
           utterance.volume = 0.85;
+          const deadline = speechDeadline.current;
+          utterance.onend = () => clearTimeout(deadline);
           utterance.onerror = (event) => {
             if (!["canceled", "interrupted"].includes(event.error)) {
               setSpeech(false);
               setMessage(
-                "음성을 재생하지 못했습니다. 기기의 한국어 음성을 확인한 뒤 다시 켜 주세요.",
+                event.error === "not-allowed"
+                  ? "음성을 켜서 브라우저의 음성 재생을 시작해 주세요."
+                  : "음성을 재생하지 못했습니다. 기기의 한국어 음성을 확인한 뒤 다시 켜 주세요.",
               );
             }
           };
+          synthesis.resume();
           synthesis.speak(utterance);
         },
-        sound ? 420 : 0,
+        sound && soundReady ? 300 : 0,
       );
     }
-  }, [bulletin, sound, speech]);
+  }, [bulletin, enabled, sound, speech, soundReady, voicesReady]);
 
   const toggleSound = async () => {
     setMessage("");
@@ -161,8 +250,10 @@ export function useWisStockBulletinAudio(bulletin: StockBulletin | null) {
       if (context.current !== audio) return;
       if (audio.state !== "running") throw new Error("Audio suspended");
       played.current.sound = "";
+      setSoundReady(true);
       setSound(true);
     } catch {
+      setSound(false);
       setMessage(
         "알림음을 재생하지 못했습니다. 브라우저의 소리 설정을 확인해 주세요.",
       );
@@ -185,5 +276,6 @@ export function useWisStockBulletinAudio(bulletin: StockBulletin | null) {
     message,
     toggleSound,
     toggleSpeech,
+    stop,
   };
 }

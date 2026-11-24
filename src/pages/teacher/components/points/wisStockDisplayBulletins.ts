@@ -108,11 +108,11 @@ export function createStockBulletinRotation(
       const before = page.filter(
         (item) => now < stockBulletinExpiresAt(item.atMs),
       );
-      page = available.filter((item) => item.kind === lead.kind).slice(0, 2);
+      page = [lead];
       for (const item of page) shown.set(key(item), occurrence(item, now));
       publish({ id: ++sequence, before, stocks: page });
       const deadline = Math.min(
-        now + (page.length > 1 ? 14_000 : 8_000),
+        now + 3_000,
         ...page.map((item) => stockBulletinExpiresAt(item.atMs)),
       );
       timer = setTimeout(() => show(priority), Math.max(0, deadline - now));
@@ -136,6 +136,16 @@ export function createStockBulletinRotation(
   }
   return {
     clear,
+    dismiss() {
+      if (!market || page.length === 0) return;
+      const now = Date.now();
+      // Dismiss the whole current round, including its queued pages. The next
+      // ten-minute occurrence and genuinely new market events remain eligible.
+      for (const item of eligibleItems(market, now))
+        shown.set(key(item), occurrence(item, now));
+      page = [];
+      show();
+    },
     update(next: BulletinMarket, priority: Set<string>) {
       market = next;
       if (next.halted) {

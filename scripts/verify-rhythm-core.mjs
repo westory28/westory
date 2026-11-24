@@ -750,6 +750,19 @@ await guardedStart;
 assert(waitingContext.sources.length > 200);
 assert.equal(guardedAudio.currentTime, 0);
 guardedAudio.stop();
+for (const [initialVolume, chosenVolume] of [[0, 0.65], [0.65, 0]]) {
+  const confirmation = pendingAuthorization();
+  const pendingStart = guardedAudio.start(songs[0], initialVolume, () => confirmation.promise);
+  await new Promise(setImmediate);
+  const context = contexts.at(-1);
+  guardedAudio.setVolume(chosenVolume);
+  assert.equal(context.sources.length, 0, "Volume selection cannot start unauthorized music");
+  confirmation.resolve(true);
+  await pendingStart;
+  assert.equal(context.gains[0].gain.value, chosenVolume * 0.68,
+    "Latest mute/unmute while starting is applied when the authorized song begins");
+  guardedAudio.stop();
+}
 await assert.rejects(
   () => guardedAudio.start(songs[0], 0.7, async () => false),
   /이용할 수/,
