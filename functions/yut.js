@@ -3,6 +3,7 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const { assertScoreWorkflowSession } = require('./scoreWorkflowGuard');
 const { assertStudentMenuVisible } = require('./studentMenuVisibility');
 const { prepareRankingUpdate, studentLabel } = require('./weplayRankingStore');
+const { catalog: avatarCatalog, restoreStoredLook, lookHash: avatarLookHash } = require('./studentAvatarCatalog');
 
 const ADMIN_EMAIL = 'westoria28@gmail.com';
 const alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -279,12 +280,80 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
       return { settings, serverNowMs };
     });
   };
+  // The look a student saved in the avatar studio, checked like the studio and
+  // the public projection check it. A document of another catalogue generation,
+  // a retired item, a look that was never saved: no avatar, so the animal piece.
+  const savedAvatarLook = (stored, uid) => {
+    if (!stored || stored.studentUid !== uid || stored.schemaVersion !== 1 || stored.catalogVersion !== avatarCatalog.version
+      || !Number.isSafeInteger(stored.revision) || stored.revision < 1 || !stored.lastSavedAtMs || !stored.thumbnailPath) return null;
+    const look = restoreStoredLook(stored.look);
+    return look && stored.lookHash === avatarLookHash(stored.look) ? look : null;
+  };
+  // Which pieces are drawn as avatars. Nothing about it is kept in the room:
+  // each call reads the saved look and the piece choice of at most four
+  // students, and answers the look alone, never an image address or a profile.
+  // Without a room it answers the caller's own piece only.
+  const readCast = (request) => viewBesideSession(request, async () => {
+    const scope = scopeFrom(request.data), data = request.data;
+    if (Object.keys(data).some((field) => !['year', 'semester', '_session', 'action', 'roomId'].includes(field))
+      || (data.roomId !== undefined && !identifier(data.roomId))) fail('invalid-argument', '방 정보를 새로 불러와 주세요.');
+    return readOnly(async (transaction) => {
+      const [actor, roomSnapshot] = await Promise.all([
+        authority(transaction, request, scope),
+        data.roomId === undefined ? Promise.resolve(null) : transaction.get(ref(scope, 'yut_rooms', data.roomId)),
+      ]);
+      let uids = actor.manager ? [] : [actor.uid];
+      if (roomSnapshot) {
+        const room = roomSnapshot.data();
+        // The gates of a command on this room; a monitor may watch any room.
+        checkRoomAccess(actor, room);
+        if (room.status === 'closed') fail('not-found', '방을 찾을 수 없거나 이용 시간이 지났습니다.');
+        if (!actor.manager && (!room.participantUids.includes(actor.uid) || !modeAllowed(actor, room))) fail('permission-denied', '참가 중인 방에서만 이용할 수 있습니다.');
+        // Only students have an enrollment in the room; a teacher keeps the animal piece.
+        uids = room.players.filter((player) => player.active && room.participantUids.includes(player.uid)
+          && identifier(room.enrollmentIds?.[player.uid])).map((player) => player.uid).slice(0, 4);
+      }
+      const stored = await Promise.all(uids.map((uid) => Promise.all([
+        transaction.get(db.doc(`student_avatars/${uid}`)), transaction.get(ref(scope, 'yut_players', uid)),
+      ])));
+      const cast = {};
+      let piece;
+      uids.forEach((uid, index) => {
+        const look = savedAvatarLook(stored[index][0].data(), uid);
+        if (!look) return;
+        const classic = stored[index][1].data()?.pieceStyle === 'classic';
+        if (uid === actor.uid) piece = classic ? 'classic' : 'avatar';
+        if (!classic) cast[uid] = { look };
+      });
+      return { cast, ...(piece ? { piece } : {}) };
+    });
+  });
+  // A student's own choice between the avatar and the animal piece, kept on the
+  // record this file already writes for that student. Absent means the avatar.
+  const savePiece = async (request) => {
+    await assertSession(request);
+    if (!request.auth?.uid) fail('unauthenticated', '로그인 후 이용해 주세요.');
+    const scope = scopeFrom(request.data), data = request.data;
+    if (!['avatar', 'classic'].includes(data.piece)
+      || Object.keys(data).some((field) => !['year', 'semester', '_session', 'action', 'piece'].includes(field))) fail('invalid-argument', '말 모양을 다시 선택해 주세요.');
+    return db.runTransaction(async (transaction) => {
+      const playerRef = ref(scope, 'yut_players', request.auth.uid);
+      const [actor, playerSnapshot] = await Promise.all([authority(transaction, request, scope), transaction.get(playerRef)]);
+      if (actor.manager) fail('permission-denied', '학생 계정에서 이용할 수 있습니다.');
+      const { pieceStyle, ...player } = playerSnapshot.data() || {};
+      // An unchanged choice writes nothing.
+      if ((pieceStyle === 'classic') !== (data.piece === 'classic')) transaction.set(playerRef, data.piece === 'classic' ? { ...player, pieceStyle: 'classic' } : player);
+      return { piece: data.piece };
+    });
+  };
   const commandYutRoom = async (request) => {
-    // The two read-only views are answered here as well, by the handlers above
-    // with their own session and access checks. Opening the game then warms
-    // the very instance and connection that its commands are about to use.
+    // The read-only views and the piece choice are answered here as well, by
+    // the handlers above with their own session and access checks. Opening the
+    // game then warms the very instance and connection its commands will use.
     if (request.data?.action === 'lobby') return getYutLobby(request);
     if (request.data?.action === 'publication') return readPublication(request);
+    if (request.data?.action === 'cast') return readCast(request);
+    if (request.data?.action === 'piece') return savePiece(request);
     const arrivedAt = now();
     await assertSession(request);
     if (!request.auth?.uid) fail('unauthenticated', '로그인 후 이용해 주세요.');
