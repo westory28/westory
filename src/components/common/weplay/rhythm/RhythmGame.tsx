@@ -16,7 +16,7 @@ import {
   MASCOT_FRAMES,
   SPARK_COUNTS,
   SPARK_PATHS,
-  playCompactFlight,
+  createCompactFlight,
   replayStroke,
   type CollectedNote,
 } from "./rhythmHitEffects";
@@ -126,7 +126,9 @@ export default function RhythmGame({
   const [compactEffects, setCompactEffects] = useState(false);
   const pulseRef = useRef<HTMLDivElement>(null);
   const compactFlightRef = useRef<HTMLDivElement>(null);
-  const compactFlightMotion = useRef<Animation | null>(null);
+  const compactFlight = useRef<ReturnType<typeof createCompactFlight> | null>(
+    null,
+  );
   const mallets = useRef<Partial<Record<DrumHand, HTMLImageElement | null>>>(
     {},
   );
@@ -149,19 +151,20 @@ export default function RhythmGame({
   } | null>(null);
   useEffect(() => {
     if (!compactEffects || phase !== "playing") return;
-    const motion = compactFlightRef.current?.getAnimations()[0];
-    if (!motion) return;
-    compactFlightMotion.current = motion;
-    motion.onfinish = () =>
+    const element = compactFlightRef.current;
+    if (!element) return;
+    const flight = createCompactFlight(element, () =>
       replayStroke(
         scoreTargetRef.current,
         "score-arrival",
         ARRIVAL_FRAMES,
         240,
-      );
+      ),
+    );
+    compactFlight.current = flight;
     return () => {
-      motion.onfinish = null;
-      compactFlightMotion.current = null;
+      flight.dispose();
+      compactFlight.current = null;
     };
   }, [compactEffects, phase]);
   const [effects, setEffects] = useState<
@@ -752,11 +755,7 @@ export default function RhythmGame({
           points: earnedPoints,
         };
         if (compactEffects) {
-          playCompactFlight(
-            compactFlightRef.current,
-            compactFlightMotion.current,
-            flight,
-          );
+          compactFlight.current?.play(flight);
         } else {
           setCollected((items) => [...items.slice(-11), flight]);
         }

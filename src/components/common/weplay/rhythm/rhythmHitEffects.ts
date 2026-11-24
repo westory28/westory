@@ -14,25 +14,55 @@ export type CollectedNote = {
 
 // At high load, finish the current flight before reusing its image and labels.
 // Judgement and points still update immediately for every input.
-export function playCompactFlight(
-  element: HTMLElement | null,
-  motion: Animation | null,
-  note: CollectedNote,
+export function createCompactFlight(
+  element: HTMLElement,
+  onArrival: () => void,
 ) {
-  if (!element || !motion || motion.playState === "running") return;
-  element.style.left = `${note.x}px`;
-  element.style.top = `${note.y}px`;
-  element.style.setProperty("--collect-x", `${note.dx}px`);
-  element.style.setProperty("--collect-y", `${note.dy}px`);
-  element.dataset.kind = note.kind;
-  element.dataset.grade = note.grade;
   const hand = element.querySelector("b")?.firstChild;
   const points = element.querySelector("strong")?.firstChild;
-  if (hand) hand.nodeValue = note.hand === "left" ? "왼" : "오";
-  if (points) points.nodeValue = `+${note.points.toLocaleString()}`;
-  element.style.visibility = "visible";
-  motion.currentTime = 0;
-  motion.play();
+  const effect = new KeyframeEffect(element, [], {
+    duration: 600,
+    easing: "cubic-bezier(.2,.6,.35,1)",
+  });
+  const motion = new Animation(effect, document.timeline);
+  let busy = false;
+  let frame = 0;
+  motion.onfinish = () => {
+    busy = false;
+    onArrival();
+  };
+  return {
+    play(note: CollectedNote) {
+      if (busy) return;
+      busy = true;
+      frame = requestAnimationFrame(() => {
+        element.dataset.kind = note.kind;
+        element.dataset.grade = note.grade;
+        if (hand) hand.nodeValue = note.hand === "left" ? "왼" : "오";
+        if (points) points.nodeValue = `+${note.points.toLocaleString()}`;
+        element.style.visibility = "visible";
+        // The 48px sprite keeps a fixed layout origin; its entire flight is
+        // expressed as absolute compositor transforms in stage coordinates.
+        const transform = (dx: number, dy: number, scale: number) =>
+          `translate3d(${note.x - 24 + dx}px,${note.y - 24 + dy}px,0) scale(${scale})`;
+        effect.setKeyframes([
+          { transform: transform(0, 0, 1), opacity: 1 },
+          {
+            transform: transform(note.dx * 0.4, note.dy * 0.7 - 32, 1.12),
+            offset: 0.45,
+          },
+          { opacity: 1, offset: 0.86 },
+          { transform: transform(note.dx, note.dy, 0.25), opacity: 0 },
+        ]);
+        motion.play();
+      });
+    },
+    dispose() {
+      cancelAnimationFrame(frame);
+      motion.onfinish = null;
+      motion.cancel();
+    },
+  };
 }
 
 // Reuse the animated surfaces for the full run, including repeated hits by one hand.

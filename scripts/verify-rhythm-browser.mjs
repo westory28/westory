@@ -1289,8 +1289,11 @@ try {
       const values = new Float32Array(analyser.fftSize);
       const startTime = player.context.currentTime;
       let maximum = 0;
-      const until = performance.now() + 1400;
-      while (performance.now() < until) {
+      // The device can start its audio clock after the UI is already playing.
+      // Sample through a real count-in beat, with a wall-clock bound for failure.
+      const audioDeadline = Math.max(player.origin, startTime) + 1.4;
+      const wallDeadline = performance.now() + 10000;
+      while (maximum <= 0.001 && player.context.currentTime < audioDeadline && performance.now() < wallDeadline) {
         analyser.getFloatTimeDomainData(values);
         maximum = Math.max(maximum, ...values.map(Math.abs));
         await new Promise(resolve => setTimeout(resolve, 30));

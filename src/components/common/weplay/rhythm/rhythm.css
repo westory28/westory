@@ -1695,8 +1695,12 @@
   height: 100%;
 }
 .rhythm-collected-note--compact {
+  left: 0;
+  top: 0;
+  opacity: 0;
   visibility: hidden;
-  animation-play-state: paused;
+  animation: none;
+  will-change: transform, opacity;
 }
 .rhythm-collected-note--compact[data-kind="rim"] img:first-child,
 .rhythm-collected-note--compact:not([data-kind="rim"]) img:nth-child(2) {
