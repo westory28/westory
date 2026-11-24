@@ -1524,7 +1524,7 @@ const DeveloperLog: React.FC = () => {
                     value={searchText}
                     onChange={(event) => setSearchText(event.target.value)}
                     placeholder="제목, 내용을 검색하세요"
-                    className="h-12 w-full rounded-xl border border-gray-200 pl-11 pr-4 text-sm font-semibold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                    className="h-11 w-full rounded-lg border border-gray-200 pl-11 pr-4 text-sm font-semibold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                   />
                 </label>
                 <select
@@ -1532,7 +1532,7 @@ const DeveloperLog: React.FC = () => {
                   onChange={(event) =>
                     setSortMode(event.target.value as SortMode)
                   }
-                  className="h-12 rounded-xl border border-gray-200 bg-white px-4 text-sm font-black text-slate-700 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                  className="h-11 rounded-lg border border-gray-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
                   aria-label="정렬 방식"
                 >
                   <option value="latest">최신순</option>
