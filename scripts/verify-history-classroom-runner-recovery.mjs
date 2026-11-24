@@ -85,6 +85,12 @@ const assignment = {
 const mock = `const scope='years/2026/semesters/2';
 const stored=JSON.parse(localStorage.getItem('runnerFixtureBackend')||'null');
 const params=new URLSearchParams(location.search);
+// With HISTORY_CLASSROOM_STUDENT_COPY=1 the student reads the roster-free copy and their own
+// assignment document, and the teacher document is closed to them.
+const copyMode=${JSON.stringify(process.env.HISTORY_CLASSROOM_STUDENT_COPY === "1")};
+const rosterFields=['targetStudentUid','targetStudentUids','targetStudentAccessMap','targetStudentName','targetStudentNames','targetStudentNumber','targetStudentReasons','retryResetByStudentUid','createdBy','updatedBy','updateReason','deletedByUid'];
+const isAssigneePath=path=>path.endsWith('/history_classroom_assignees/assignment-1_student-1');
+const isViewPath=path=>path.endsWith('/history_classroom_student_views/assignment-1');
 export const fixture=window.__fixture=stored||{assignment:${JSON.stringify(assignment)},results:{},calls:[],directWrites:[],notifications:[],points:[],failures:[],loseNextResponse:false,forceZero:false};
 if(params.get('resultCase')==='long'&&!stored){
  fixture.assignment.passThresholdPercent=90;
@@ -120,10 +126,16 @@ export const query=(ref,...constraints)=>({...ref,constraints});
 export const serverTimestamp=()=>({seconds:Date.now()/1000});
 const snap=(id,value)=>({id,exists:()=>value!==undefined,data:()=>structuredClone(value)});
 const assignmentSnapshot=(ref)=>snap('assignment-1',fixture.legacyAssignment&&ref.path.startsWith(scope)?undefined:fixture.assignment);
-export const getDoc=async(ref)=>{if(ref.path.endsWith('/history_classrooms/assignment-1')||ref.path==='history_classrooms/assignment-1'){if(fixture.denyAssignmentRead){const error=new Error('assignment access denied');error.code='permission-denied';throw error;}return assignmentSnapshot(ref);}return snap(ref.id,fixture.results[ref.id]);};
+const copyAvailable=()=>copyMode&&!fixture.legacyAssignment;
+const denied=()=>{const error=new Error('assignment access denied');error.code='permission-denied';return error;};
+const assigneeSnapshot=()=>snap('assignment-1_student-1',copyAvailable()?{assignmentId:'assignment-1',uid:'student-1',reason:'',retryResetAt:fixture.assignment.retryResetByStudentUid?.['student-1']??null}:undefined);
+const viewSnapshot=()=>snap('assignment-1',copyAvailable()?Object.fromEntries(Object.entries(fixture.assignment).filter(([key])=>!rosterFields.includes(key))):undefined);
+export const getDoc=async(ref)=>{if(isAssigneePath(ref.path)||isViewPath(ref.path)){fixture.copyReads=(fixture.copyReads||0)+1;if(fixture.denyAssignmentRead)throw denied();return isAssigneePath(ref.path)?assigneeSnapshot():viewSnapshot();}if(ref.path.endsWith('/history_classrooms/assignment-1')||ref.path==='history_classrooms/assignment-1'){fixture.teacherDocumentReads=(fixture.teacherDocumentReads||0)+1;if(copyAvailable())throw denied();if(fixture.denyAssignmentRead){const error=new Error('assignment access denied');error.code='permission-denied';throw error;}return assignmentSnapshot(ref);}return snap(ref.id,fixture.results[ref.id]);};
 const listeners=new Set();
-export const onSnapshot=(ref,next,error)=>{const listener=()=>fixture.denyAssignmentRead?error?.(new Error('denied')):next(assignmentSnapshot(ref));listeners.add(listener);queueMicrotask(listener);return()=>listeners.delete(listener);};
+export const onSnapshot=(ref,next,error)=>{const listener=()=>fixture.denyAssignmentRead?error?.(new Error('denied')):next(isAssigneePath(ref.path)?assigneeSnapshot():assignmentSnapshot(ref));listeners.add(listener);queueMicrotask(listener);return()=>listeners.delete(listener);};
 window.__emitAssignment=()=>{persist();for(const listener of listeners)listener();};
+export const getDocFromServer=(ref)=>getDoc(ref);
+export const getDocsFromServer=(ref)=>getDocs(ref);
 export const getDocs=async(ref)=>{const docs=ref.path===scope+'/history_classroom_results'?Object.entries(fixture.results).map(([id,value])=>snap(id,value)):[];return {docs,empty:!docs.length};};
 export const setDoc=async(ref,data)=>{fixture.directWrites.push({path:ref.path,data});persist();};
 export const getHttpsCallable=async()=>async(input)=>{
@@ -1289,7 +1301,7 @@ try {
     JSON.stringify(reports, null, 2),
   );
   console.log(
-    `History classroom runner: ${reports.length} browser scenarios passed.`,
+    `History classroom runner (${process.env.HISTORY_CLASSROOM_STUDENT_COPY === "1" ? "student copy" : "teacher document"}): ${reports.length} browser scenarios passed.`,
   );
 } finally {
   await browser.close();

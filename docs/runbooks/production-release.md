@@ -1,5 +1,15 @@
 # 운영 배포 절차
 
+## 역사교실 학생용 과제 사본 (2026-11-25)
+
+학생 화면은 과제 원본 `history_classrooms/{id}` 대신 서버가 함께 쓰는 두 문서를 읽는다. `history_classroom_student_views/{id}`는 원본에서 대상 학생 명단·사유·재응시 표시·작성자 필드를 뺀 사본이고, `history_classroom_assignees/{id}_{uid}`는 학생 한 명의 배정 사유와 재응시 표시만 담는다. 배정 문서는 공개·삭제 여부와 무관하게 명단에 있는 동안 존재하며, 사본 읽기 규칙은 본인 배정 문서의 존재를 확인한다. 두 문서는 클라이언트에서 쓸 수 없다.
+
+- 서울 `executeCommand`의 과제 저장·삭제·학급/개별 재응시 초기화가 같은 트랜잭션에서 사본과 배정 문서를 다시 쓰고, 명단에서 빠진 학생의 배정 문서를 지운다. 교사 화면과 원본 문서의 내용은 바뀌지 않는다.
+- 학생 목록·풀이·결과 화면은 본인 배정 문서가 있으면 사본을 읽고, 없으면 이전 경로를 그대로 쓴다.
+- 운영 원본이 저장소와 다르므로 `node scripts/prepare-history-copy-release.mjs prepare`로 운영 ZIP에 `productionGateway/assessmentLifecycle.js`의 변경 블록만 적용한다. 스크립트는 변경 전후의 다른 줄이 그대로인지 비교하고, `preflight`로 동시 배포를 확인하며, 배포 뒤 `verify`로 파일별 해시를 대조한다.
+- 순서: Firestore 규칙 → `executeCommand` → 기존 과제 사본 생성 → 프론트엔드. 기존 과제는 `node functions/scripts/sync-history-classroom-student-copies.cjs --semester-id <학기>`로 건수와 지문을 확인한 뒤 `--apply --expect <지문>`으로 만든다. 원본은 읽기만 하며, 다시 실행하면 남은 쓰기가 0이어야 한다.
+- 검사: `functions/productionGateway/scripts/verify-assessment-lifecycle.cjs`, `npm --prefix functions run test:history-classroom`, `scripts/verify-history-classroom-student-copy-rules.mjs`(에뮬레이터), `functions/scripts/verify-history-classroom-student-copy-sync.cjs`(에뮬레이터), 학생 목록·풀이 브라우저 검사의 `HISTORY_CLASSROOM_STUDENT_COPY=1` 실행.
+
 ## 평가 마감 뒤 답안 변경·선지 단서 보호와 생각모아 참여 위스 (2026-11-24)
 
 제한 시간이 지난 뒤의 답안 변경을 화면과 서버에서 막고, 제출 전 응답에서 선지별 혼동 태그를 제외한다. [원인·검증 기록](../reviews/assessment-integrity-20261124.md)을 따른다. 문제 풀이·모의고사의 시간 초과 제출이 마감 5분 이후에 도착하면 마감 전에 저장된 답안으로 채점하고 화면이 학생에게 알린다. 그 이전 도착분, 학생의 직접 제출, 역사교실 제출은 기존과 같다. 마감이 가까우면 자동 저장을 마감 0.8초 전까지 앞당긴다. 제출이 5분 넘게 전달되지 못한 학생은 교사가 기존 응시 초기화로 구제한다.

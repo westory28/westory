@@ -22,6 +22,7 @@ import {
   summarizeHistoryClassroomAnswers,
   type HistoryClassroomAssignment,
 } from "./historyClassroom";
+import { loadHistoryClassroomStudentViewData } from "./historyClassroomStudentAccess";
 
 type ConfigLike = Parameters<typeof getYearSemester>[0];
 type Result = {
@@ -193,11 +194,21 @@ export const readCanonicalHistoryResults = async (
         : "";
       let source = sources.get(result.definitionId);
       if (!source && !assignments && sourceId && !sourceId.includes("/")) {
-        const snap = await getDoc(
-          doc(db, getSemesterDocPath(config, "history_classrooms", sourceId)),
-        ).catch(() => null);
-        if (snap?.exists())
-          source = normalizeHistoryClassroomAssignment(snap.id, snap.data());
+        // The roster-free copy is enough to show a result. The teacher
+        // document is read only when no copy exists for this assignment.
+        const view = await loadHistoryClassroomStudentViewData(
+          config,
+          sourceId,
+        );
+        if (view) {
+          source = normalizeHistoryClassroomAssignment(sourceId, view);
+        } else {
+          const snap = await getDoc(
+            doc(db, getSemesterDocPath(config, "history_classrooms", sourceId)),
+          ).catch(() => null);
+          if (snap?.exists())
+            source = normalizeHistoryClassroomAssignment(snap.id, snap.data());
+        }
       }
       const threshold =
         typeof result.passThresholdPercent === "number" &&

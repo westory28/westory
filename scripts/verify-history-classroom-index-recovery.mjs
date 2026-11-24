@@ -41,9 +41,17 @@ export const readCanonicalHistoryResults=async()=>window.__data.canonicalResults
 export const executeStudentAssessmentCommand=async(commandType,input)=>{window.__exemptionCalls=(window.__exemptionCalls||[]).concat([{name:commandType,input}]);return {};};
 export const executeAssessmentManagementCommand=executeStudentAssessmentCommand;
 export const lockHistoryClassroomAttempt=async(input)=>{window.__lockCalls=(window.__lockCalls||[]).concat([input]);if(window.__holdLockOnce){window.__holdLockOnce=false;await new Promise(resolve=>{window.__resolveLock=resolve;});}return {attemptId:input.attemptId,status:window.__lockStatus||'LOCKED',revision:2};};
-const rows=path=>path==='history_classrooms'?(window.__data.legacyAssignments||[]):path.endsWith('/history_classrooms')?window.__data.assignments:path.endsWith('/history_classroom_results')?window.__data.results:path.endsWith('/history_classroom_exemptions')?(window.__data.exemptions||[]):path.endsWith('/history_classroom_exemption_requests')?(window.__data.requests||[]):[];
-export const getDocs=async(ref)=>{(window.__readCalls||=[]).push(ref.path);if(window.__holdReads)await new Promise(resolve=>(window.__readResolvers||=[]).push(resolve));if(window.__data.readError&&ref.path.endsWith('/history_classrooms'))throw {code:'unavailable'};const docs=rows(ref.path).map(value=>({id:value.id,data:()=>value}));return{docs,empty:!docs.length};};
+const copyMode=${JSON.stringify(process.env.HISTORY_CLASSROOM_STUDENT_COPY === "1")};
+const rosterFields=['targetStudentUid','targetStudentUids','targetStudentAccessMap','targetStudentName','targetStudentNames','targetStudentNumber','targetStudentReasons','retryResetByStudentUid','createdBy','updatedBy','updateReason','deletedByUid'];
+const assignedToStudent=item=>item.targetStudentUid==='student-1'||(item.targetStudentUids||[]).includes('student-1')||item.targetStudentAccessMap?.['student-1']===true;
+const ownAssignees=()=>copyMode?(window.__data.assignments||[]).filter(assignedToStudent).map(item=>({id:item.id+'_student-1',assignmentId:item.id,uid:'student-1',reason:item.targetStudentReasons?.['student-1']||'',retryResetAt:item.retryResetByStudentUid?.['student-1']??null})):[];
+const studentViews=()=>copyMode?(window.__data.assignments||[]).map(item=>Object.fromEntries(Object.entries(item).filter(([key])=>!rosterFields.includes(key)))):[];
+const teacherDocumentPath=path=>path==='history_classrooms'||path.endsWith('/history_classrooms');
+const rows=path=>path.endsWith('/history_classroom_assignees')?ownAssignees():path.endsWith('/history_classroom_student_views')?studentViews():path==='history_classrooms'?(window.__data.legacyAssignments||[]):path.endsWith('/history_classrooms')?window.__data.assignments:path.endsWith('/history_classroom_results')?window.__data.results:path.endsWith('/history_classroom_exemptions')?(window.__data.exemptions||[]):path.endsWith('/history_classroom_exemption_requests')?(window.__data.requests||[]):[];
+export const getDocs=async(ref)=>{if(!copyMode&&ref.path.endsWith('/history_classroom_assignees'))return{docs:[],empty:true};if(copyMode&&teacherDocumentPath(ref.path)){(window.__deniedTeacherReads||=[]).push(ref.path);throw {code:'permission-denied'};}(window.__readCalls||=[]).push(ref.path);if(window.__holdReads)await new Promise(resolve=>(window.__readResolvers||=[]).push(resolve));if(window.__data.readError&&ref.path.endsWith('/history_classrooms'))throw {code:'unavailable'};const docs=rows(ref.path).map(value=>({id:value.id,data:()=>value}));return{docs,empty:!docs.length};};
 export const getDocsFromServer=async(ref)=>{(window.__serverReads||=[]).push(ref.path);return getDocs(ref);};
+export const getDoc=async(ref)=>{(window.__docReads||=[]).push(ref.path);const index=ref.path.lastIndexOf('/');const value=rows(ref.path.slice(0,index)).find(item=>item.id===ref.path.slice(index+1));return snapshot(ref.path,value);};
+export const getDocFromServer=async(ref)=>{(window.__serverReads||=[]).push(ref.path);return getDoc(ref);};
 const listeners=new Map();window.__listeners=listeners;
 const snapshot=(path,value)=>({id:path.split('/').at(-1),exists:()=>!!value,data:()=>value});
 window.__emit=(path,value)=>listeners.get(path)?.next(snapshot(path,value));window.__deny=path=>listeners.get(path)?.error({code:'permission-denied'});
@@ -165,6 +173,95 @@ const ownResult = {
   createdAt: { seconds: now / 1000 },
 };
 const reports = [];
+// With HISTORY_CLASSROOM_STUDENT_COPY=1 the list is checked against the
+// roster-free copy and the student's own assignment document only.
+const copyScenariosDone = new Error("student copy scenarios finished");
+const runStudentCopyScenarios = async () => {
+  const semester = "years/2026/semesters/2";
+  const viewPath = (id) => `${semester}/history_classroom_student_views/${id}`;
+  const assigneesPath = `${semester}/history_classroom_assignees`;
+  const shared = {
+    ...assignment,
+    title: "사본으로 보는 과제",
+    dueAt: null,
+    targetStudentUid: "student-1",
+    targetStudentUids: ["student-1", "student-2"],
+    targetStudentAccessMap: { "student-1": true, "student-2": true },
+    targetStudentNames: ["검증 학생", "다른 학생"],
+    targetStudentName: "검증 학생, 다른 학생",
+    targetStudentNumber: "1, 2",
+    targetStudentReasons: { "student-1": "본인 배정 사유", "student-2": "다른 학생 사유" },
+  };
+  const othersOnly = { ...shared, id: "assignment-2", title: "다른 학생만의 과제", targetStudentUid: "student-2",
+    targetStudentUids: ["student-2"], targetStudentAccessMap: { "student-2": true } };
+  const unpublished = { ...shared, id: "assignment-3", title: "아직 공개 전 과제", isPublished: false };
+  const open = async (assignments) => {
+    const page = await browser.newPage({ viewport: { width: 768, height: 1024 }, hasTouch: true });
+    const errors = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.addInitScript((assignments) => {
+      window.__data = { assignments, legacyAssignments: [], results: [] };
+    }, assignments);
+    await page.goto(`http://127.0.0.1:${server.address().port}`);
+    return { page, errors };
+  };
+
+  // 1. Own assignment, own reason, nothing about anyone else.
+  const { page, errors } = await open([shared, othersOnly, unpublished]);
+  await page.getByRole("heading", { name: shared.title, exact: true }).waitFor();
+  const bodyText = await page.locator("body").innerText();
+  assert.ok(bodyText.includes("본인 배정 사유"), "the student sees their own reason");
+  for (const hidden of ["다른 학생 사유", "다른 학생만의 과제", "아직 공개 전 과제", "다른 학생"])
+    assert.equal(bodyText.includes(hidden), false, `the list does not show: ${hidden}`);
+  const reads = await page.evaluate(() => ({
+    queries: window.__readCalls || [], documents: window.__docReads || [],
+    deniedTeacherReads: window.__deniedTeacherReads || [], listeners: [...window.__listeners.keys()],
+  }));
+  assert.equal(reads.queries.filter((path) => path === assigneesPath).length, 1, "one query for the student's own assignment documents");
+  assert.deepEqual([...reads.documents].sort(), [viewPath("assignment-1"), viewPath("assignment-3")], "one copy read per own assignment");
+  assert.deepEqual(reads.deniedTeacherReads, [], "the teacher documents are never requested");
+  assert.equal(reads.queries.some((path) => path.endsWith("/history_classrooms")), false);
+  assert.equal(reads.listeners.some((path) => path.includes("/history_classrooms/")), false, "no listener on a teacher document");
+  assert.ok(reads.listeners.includes(viewPath("assignment-1")) && reads.listeners.includes(assigneesPath));
+  reports.push({ name: "copy: own assignment and reason only", passed: true });
+
+  // 2. A change to the copy appears without a reload.
+  await page.evaluate(({ path, value }) => window.__emit(path, value),
+    { path: viewPath("assignment-1"), value: { ...shared, title: "제목이 바뀐 과제", targetStudentReasons: undefined, targetStudentNames: undefined } });
+  await page.getByRole("heading", { name: "제목이 바뀐 과제", exact: true }).waitFor();
+  assert.ok((await page.locator("body").innerText()).includes("본인 배정 사유"), "the reason comes from the student's own document");
+  reports.push({ name: "copy: live content update", passed: true });
+
+  // 3. A new assignment document reloads the list.
+  await page.evaluate(({ extra, path }) => {
+    window.__data.assignments.push(extra);
+    window.__emit(path, undefined);
+  }, { extra: { ...shared, id: "assignment-4", title: "새로 배정된 과제", targetStudentReasons: { "student-1": "추가 배정 사유" } }, path: assigneesPath });
+  await page.getByRole("heading", { name: "새로 배정된 과제", exact: true }).waitFor();
+  assert.ok((await page.locator("body").innerText()).includes("추가 배정 사유"));
+  reports.push({ name: "copy: new assignment arrives live", passed: true });
+
+  // 4. Losing access removes the entry instead of failing the list.
+  await page.evaluate((path) => window.__deny(path), viewPath("assignment-4"));
+  await page.getByRole("heading", { name: "새로 배정된 과제", exact: true }).waitFor({ state: "detached" });
+  await page.getByRole("heading", { name: shared.title, exact: true }).waitFor();
+  assert.deepEqual(errors, []);
+  await page.close();
+  reports.push({ name: "copy: access removal", passed: true });
+
+  // 5. A student with nothing assigned sees the empty state, not an error,
+  //    even though the teacher documents are closed.
+  const empty = await open([othersOnly]);
+  await empty.page.getByText("공개된 역사교실 과제가 없습니다.", { exact: false }).waitFor();
+  assert.equal(await empty.page.getByText("역사교실 정보를 불러오지 못했습니다", { exact: false }).count(), 0);
+  assert.ok((await empty.page.evaluate(() => (window.__deniedTeacherReads || []).length)) > 0, "the closed teacher documents were tried and tolerated");
+  assert.deepEqual(empty.errors, []);
+  await empty.page.close();
+  reports.push({ name: "copy: empty list with closed teacher documents", passed: true });
+
+  console.log(`History classroom index (student copy): ${reports.length} cases passed.`);
+};
+
 const assertBlocked = async (page, message) => {
   assert.equal(
     await page.locator("article").count(),
@@ -280,6 +377,10 @@ const scenarios = [
   },
 ];
 try {
+  if (process.env.HISTORY_CLASSROOM_STUDENT_COPY === "1") {
+    await runStudentCopyScenarios();
+    throw copyScenariosDone;
+  }
   for (const scenario of scenarios) {
     const widths =
       scenario.name === "closed-pending" ? [390, 768, 1280] : [768];
@@ -1229,6 +1330,8 @@ try {
   console.log(
     `History classroom index recovery: ${reports.length} cases passed.`,
   );
+} catch (error) {
+  if (error !== copyScenariosDone) throw error;
 } finally {
   await fs.writeFile(
     path.join(evidence, "student-index-recovery-report.json"),

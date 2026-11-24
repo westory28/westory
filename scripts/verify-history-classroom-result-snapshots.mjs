@@ -4,6 +4,8 @@ import vm from "node:vm";
 import ts from "typescript";
 
 let result;
+let studentView = null;
+let teacherDocumentReads = 0;
 const scope = { year: "2026", semester: "2" };
 const exports = {};
 vm.runInNewContext(
@@ -36,6 +38,10 @@ vm.runInNewContext(
             };
           },
           getDoc: async (path) => {
+            if (path.includes("/history_classrooms/")) {
+              teacherDocumentReads += 1;
+              return { exists: () => false };
+            }
             assert.equal(
               path,
               `semester_assessment_submissions/${result.attemptId}`,
@@ -59,13 +65,21 @@ vm.runInNewContext(
           buildAssessmentDefinitionId: (semester, _kind, id) =>
             `history_classroom:${semester}:${id}`,
         };
-      if (name === "./semesterScope") return { getYearSemester: () => scope };
+      if (name === "./semesterScope")
+        return {
+          getYearSemester: () => scope,
+          getSemesterDocPath: (_config, name, id) =>
+            `years/2026/semesters/2/${name}/${id}`,
+        };
       if (name === "./mockExamRounds") return {};
       if (name === "./historyClassroom")
         return {
           summarizeHistoryClassroomAnswers: () => ({ checks: [] }),
           normalizeHistoryClassroomResult: (id, data) => ({ id, ...data }),
+          normalizeHistoryClassroomAssignment: (id, data) => ({ id, ...data }),
         };
+      if (name === "./historyClassroomStudentAccess")
+        return { loadHistoryClassroomStudentViewData: async () => studentView };
       throw new Error(`Unexpected dependency: ${name}`);
     },
     console,
@@ -134,10 +148,24 @@ for (const scenario of [
     assert.equal(actual.exemptionId, "ticket-1");
   }
 }
+// Without a preloaded assignment the roster-free copy supplies the threshold
+// and the teacher document is not read at all.
+result = { ...base };
+studentView = { title: "역사교실", passThresholdPercent: 70 };
+const [fromCopy] = await exports.readCanonicalHistoryResults(scope, "student-1");
+assert.equal(fromCopy.passed, true, "copy threshold applies");
+assert.equal(teacherDocumentReads, 0, "the teacher document stays unread");
+studentView = null;
+const [withoutCopy] = await exports.readCanonicalHistoryResults(
+  scope,
+  "student-1",
+);
+assert.equal(withoutCopy.passed, false, "no source means no threshold");
+assert.equal(teacherDocumentReads, 1, "the earlier document is the fallback");
 result = { ...base, studentUid: "other-student" };
 await assert.rejects(() =>
   exports.readCanonicalHistoryResults(scope, "student-1", [assignment]),
 );
 result = { ...base, completionSource: "exemption", passed: true, percent: 100 };
 await assert.rejects(() => exports.readCanonicalHistoryResults(scope, "student-1", [assignment]));
-console.log("History classroom result snapshots: 6 cases passed.");
+console.log("History classroom result snapshots: 8 cases passed.");

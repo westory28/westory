@@ -499,6 +499,72 @@ const runManagementContentCommands = async () => {
   store.documents.set(`semester_manifests/${semesterId}`, originalManifest);
 };
 
+// Students never read the roster: the server keeps a roster-free copy of the
+// assignment and one document per assigned student with their own details.
+const runHistoryStudentCopy = async () => {
+  const root = "years/2026/semesters/2";
+  const sourcePath = `${root}/history_classrooms/history-copy`;
+  const viewPath = `${root}/history_classroom_student_views/history-copy`;
+  const assignee = (uid) => `${root}/history_classroom_assignees/history-copy_${uid}`;
+  const own = (uid) => { const { updatedAt, ...rest } = store.snapshot(assignee(uid)).data; return rest; };
+  const source = {
+    title: "학생용 사본 검증", sourceType: "lesson", lessonUnitId: "unit-one", lessonTitle: "수업자료", lessonUnitPath: ["대단원", "중단원"],
+    description: "", mapResourceId: "", mapTitle: "", pdfPageImages: [], pdfRegions: [],
+    blanks: [{ id: "blank-1", answer: "정답" }], answerOptions: ["정답"], timeLimitMinutes: 10, cooldownMinutes: 0,
+    passThresholdPercent: 80, dueWindowDays: 7, targetGrade: "3", targetClass: "1",
+    targetStudentUid: "student-uid", targetStudentUids: ["student-uid", "other-uid"],
+    targetStudentAccessMap: { "student-uid": true, "other-uid": true }, targetStudentName: "합성 학생, 다른 학생",
+    targetStudentNames: ["합성 학생", "다른 학생"], targetStudentReasons: { "student-uid": "사유 가", "other-uid": "사유 나" },
+    targetStudentNumber: "1, 2", isPublished: true, publishedAt: "2026-08-11T00:00:00.000Z", dueAt: "2026-08-18T00:00:00.000Z",
+    retryResetByStudentUid: {},
+  };
+  await execute(admin, "saveHistoryClassroomAssignment", { semesterId, sourceId: "history-copy", source, expectedRevision: 0, reason: "학생용 사본 생성" });
+  const view = store.snapshot(viewPath).data;
+  for (const field of ["targetStudentUid", "targetStudentUids", "targetStudentAccessMap", "targetStudentName", "targetStudentNames",
+    "targetStudentNumber", "targetStudentReasons", "retryResetByStudentUid", "createdBy", "updatedBy", "updateReason", "deletedByUid"])
+    assert.equal(field in view, false, `The student copy omits ${field}`);
+  const serializedView = JSON.stringify(view);
+  for (const secret of ["다른 학생", "합성 학생", "사유 가", "사유 나", "other-uid", "student-uid", "admin-uid"])
+    assert.equal(serializedView.includes(secret), false, "The student copy carries no roster detail");
+  assert.deepEqual(view.blanks, source.blanks);
+  assert.deepEqual(view.answerOptions, source.answerOptions);
+  assert.equal(view.title, source.title);
+  assert.equal(view.isPublished, true);
+  assert.equal(view.contentRevision, 1);
+  assert.equal(view.assignmentId, "history-copy");
+  assert.deepEqual(own("student-uid"), { assignmentId: "history-copy", semesterId, uid: "student-uid", reason: "사유 가", retryResetAt: null });
+  assert.deepEqual(own("other-uid"), { assignmentId: "history-copy", semesterId, uid: "other-uid", reason: "사유 나", retryResetAt: null });
+  assert.equal(store.snapshot(sourcePath).data.targetStudentReasons["other-uid"], "사유 나", "The teacher document is unchanged");
+
+  // A roster change removes only the leaving student's own document.
+  await execute(admin, "saveHistoryClassroomAssignment", { semesterId, sourceId: "history-copy", expectedRevision: 1, reason: "명단 변경",
+    source: { ...source, targetStudentUids: ["student-uid"], targetStudentAccessMap: { "student-uid": true }, targetStudentName: "합성 학생",
+      targetStudentNames: ["합성 학생"], targetStudentReasons: { "student-uid": "사유 다" }, targetStudentNumber: "1" } });
+  assert.equal(store.snapshot(assignee("other-uid")).exists, false);
+  assert.equal(own("student-uid").reason, "사유 다");
+  assert.equal(store.snapshot(viewPath).data.contentRevision, 2);
+
+  // A teacher reset reaches the student's own document with the same marker.
+  await execute(admin, "resetAssessmentAttempt", { definitionId: "history_classroom:2026-2:history-copy", studentUid: "student-uid", reason: "사본 해제 검증" });
+  const marker = store.snapshot(sourcePath).data.retryResetByStudentUid["student-uid"];
+  assert.ok(marker, "The teacher document keeps the reset marker");
+  assert.deepEqual(own("student-uid").retryResetAt, marker);
+  assert.equal(store.snapshot(assignee("other-uid")).exists, false, "A reset never restores a removed student");
+  // An unassigned student's reset leaves no document of their own behind.
+  await execute(admin, "resetAssessmentAttempt", { definitionId: "history_classroom:2026-2:history-copy", studentUid: "other-uid", reason: "미배정 학생 해제" });
+  assert.equal(store.snapshot(assignee("other-uid")).exists, false);
+
+  // Unpublishing or deleting hides the copy through its own flags; the
+  // assigned student keeps the same read access the teacher document gave.
+  await execute(admin, "deleteHistoryClassroomSource", { semesterId, sourceId: "history-copy", expectedRevision: 2, reason: "사본 삭제 검증" });
+  const deletedView = store.snapshot(viewPath).data;
+  assert.equal(deletedView.isPublished, false);
+  assert.ok(deletedView.deletedAt);
+  assert.equal(deletedView.contentRevision, 3);
+  assert.equal("deletedByUid" in deletedView, false);
+  assert.equal(store.snapshot(assignee("student-uid")).exists, true);
+};
+
 const runKind = async (kind) => {
   const definition = definitionPayload(kind);
   const create = await execute(admin, "createAssessmentDefinition", definition);
@@ -1897,6 +1963,7 @@ const runLegacyReceiptHints = async () => {
   await runScheduledLockedPaper();
   await runClassVisibilityCommands();
   await runManagementContentCommands();
+  await runHistoryStudentCopy();
   await runKind("QUIZ");
   await runKind("HISTORY_CLASSROOM");
 

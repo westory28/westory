@@ -44,6 +44,12 @@ import {
 } from "../../../lib/semesterScope";
 import { readHistoryClassroomPendingSubmission } from "../../../lib/historyClassroomAttemptRecovery";
 import { readCanonicalHistoryResults } from "../../../lib/studentAssessmentResults";
+import {
+  loadOwnHistoryClassroomAssignees,
+  loadStudentHistoryClassroomAssignment,
+  subscribeOwnHistoryClassroomAssignees,
+  subscribeStudentHistoryClassroomAssignment,
+} from "../../../lib/historyClassroomStudentAccess";
 import { lockHistoryClassroomAttempt } from "../../../lib/assessmentLifecycle";
 
 const HISTORY_CLASSROOM_LOCK_PREFIX = "westoryHistoryClassroomLock";
@@ -356,9 +362,8 @@ const HistoryClassroomIndex: React.FC = () => {
       setLoading(
         loadedScope.current !== requestScope || explicitRefresh.current,
       );
-      const readDocuments = explicitRefresh.current
-        ? getDocsFromServer
-        : getDocs;
+      const fromServer = explicitRefresh.current;
+      const readDocuments = fromServer ? getDocsFromServer : getDocs;
       explicitRefresh.current = false;
       setLoadError("");
       try {
@@ -408,71 +413,138 @@ const HistoryClassroomIndex: React.FC = () => {
                 left.title.localeCompare(right.title, "ko"),
             );
 
-        let assignmentCollectionPath = getSemesterCollectionPath(
+        const sortAssignments = (items: HistoryClassroomAssignment[]) =>
+          items.sort(
+            (left, right) =>
+              getAssignmentDateMs(right) - getAssignmentDateMs(left) ||
+              left.title.localeCompare(right.title, "ko"),
+          );
+        const isVisibleAssignment = (
+          assignment: HistoryClassroomAssignment | null,
+        ): assignment is HistoryClassroomAssignment =>
+          !!assignment &&
+          !isHistoryClassroomDeleted(assignment) &&
+          assignment.isPublished &&
+          isHistoryClassroomAssignedToStudent(assignment, studentUid);
+        const applyAssignmentUpdate = (
+          assignmentId: string,
+          updated: HistoryClassroomAssignment | null,
+        ) =>
+          setAssignments((previous) => {
+            const remaining = previous.filter(
+              (item) => item.id !== assignmentId,
+            );
+            return sortAssignments(
+              isVisibleAssignment(updated)
+                ? [...remaining, updated]
+                : remaining,
+            );
+          });
+        const dropAssignmentOnDenied = (
+          assignmentId: string,
+          error: { code?: string },
+        ) => {
+          if (cancelled) return;
+          if (error.code === "permission-denied") {
+            setAssignments((previous) =>
+              previous.filter((item) => item.id !== assignmentId),
+            );
+          }
+          console.warn("Failed to refresh assigned history classroom", error);
+        };
+        const deniedAsNone = (error: { code?: string }) => {
+          if (error?.code === "permission-denied") return [];
+          throw error;
+        };
+
+        // Assigned students read a roster-free copy and their own assignment
+        // document. The earlier assignment documents are the source only
+        // while this student has no such document.
+        const ownAssignees = await loadOwnHistoryClassroomAssignees(
           config,
-          "history_classrooms",
+          studentUid,
+          fromServer,
         );
-        let loadedAssignments = normalizeVisibleAssignments(
-          await loadAssignedSnapshots(assignmentCollectionPath),
-        );
-        if (!loadedAssignments.length) {
-          assignmentCollectionPath = "history_classrooms";
+        let loadedAssignments: HistoryClassroomAssignment[];
+        if (ownAssignees.length) {
+          loadedAssignments = sortAssignments(
+            (
+              await Promise.all(
+                ownAssignees.map((assignee) =>
+                  loadStudentHistoryClassroomAssignment(
+                    config,
+                    assignee,
+                    fromServer,
+                  ),
+                ),
+              )
+            ).filter(isVisibleAssignment),
+          );
+          if (cancelled) return;
+          setAssignments(loadedAssignments);
+          ownAssignees.forEach((assignee) => {
+            unsubscribeAssignments.push(
+              subscribeStudentHistoryClassroomAssignment(
+                config,
+                assignee,
+                (updated) => {
+                  if (!cancelled)
+                    applyAssignmentUpdate(assignee.assignmentId, updated);
+                },
+                (error) => dropAssignmentOnDenied(assignee.assignmentId, error),
+              ),
+            );
+          });
+        } else {
+          let assignmentCollectionPath = getSemesterCollectionPath(
+            config,
+            "history_classrooms",
+          );
           loadedAssignments = normalizeVisibleAssignments(
             await loadAssignedSnapshots(assignmentCollectionPath).catch(
-              (error) => {
-                if (error?.code === "permission-denied") return [];
-                throw error;
-              },
+              deniedAsNone,
             ),
           );
+          if (!loadedAssignments.length) {
+            assignmentCollectionPath = "history_classrooms";
+            loadedAssignments = normalizeVisibleAssignments(
+              await loadAssignedSnapshots(assignmentCollectionPath).catch(
+                deniedAsNone,
+              ),
+            );
+          }
+          if (cancelled) return;
+          setAssignments(loadedAssignments);
+          // Observe only already assigned documents at the source actually read.
+          // Teacher retry resets must unlock an open list without a page reload.
+          loadedAssignments.forEach((assignment) => {
+            unsubscribeAssignments.push(
+              onSnapshot(
+                doc(db, assignmentCollectionPath, assignment.id),
+                (snapshot) => {
+                  if (cancelled) return;
+                  applyAssignmentUpdate(
+                    assignment.id,
+                    snapshot.exists()
+                      ? normalizeHistoryClassroomAssignment(
+                          snapshot.id,
+                          snapshot.data(),
+                        )
+                      : null,
+                  );
+                },
+                (error) => dropAssignmentOnDenied(assignment.id, error),
+              ),
+            );
+          });
         }
-        if (cancelled) return;
-        setAssignments(loadedAssignments);
-        // Observe only already assigned documents at the source actually read.
-        // Teacher retry resets must unlock an open list without a page reload.
-        loadedAssignments.forEach((assignment) => {
-          unsubscribeAssignments.push(
-            onSnapshot(
-              doc(db, assignmentCollectionPath, assignment.id),
-              (snapshot) => {
-                if (cancelled) return;
-                const updated = snapshot.exists()
-                  ? normalizeHistoryClassroomAssignment(
-                      snapshot.id,
-                      snapshot.data(),
-                    )
-                  : null;
-                const visible =
-                  updated &&
-                  !isHistoryClassroomDeleted(updated) &&
-                  updated.isPublished &&
-                  isHistoryClassroomAssignedToStudent(updated, studentUid);
-                setAssignments((previous) => {
-                  const remaining = previous.filter(
-                    (item) => item.id !== assignment.id,
-                  );
-                  return (visible ? [...remaining, updated] : remaining).sort(
-                    (left, right) =>
-                      getAssignmentDateMs(right) - getAssignmentDateMs(left) ||
-                      left.title.localeCompare(right.title, "ko"),
-                  );
-                });
-              },
-              (error) => {
-                if (cancelled) return;
-                if (error.code === "permission-denied") {
-                  setAssignments((previous) =>
-                    previous.filter((item) => item.id !== assignment.id),
-                  );
-                }
-                console.warn(
-                  "Failed to refresh assigned history classroom",
-                  error,
-                );
-              },
-            ),
-          );
-        });
+        // A new assignment, a removal, a changed reason or a teacher's retry
+        // reset reloads the list without a page reload.
+        unsubscribeAssignments.push(
+          subscribeOwnHistoryClassroomAssignees(config, studentUid, () => {
+            if (!cancelled) setRefreshVersion((value) => value + 1);
+          }),
+        );
 
         const assignmentIds = loadedAssignments.map((item) => item.id);
         const readResultDocs = async (path: string) => {

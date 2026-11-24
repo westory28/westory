@@ -1727,6 +1727,22 @@ service cloud.firestore {
         allow write: if canWriteHistoryClassroomResource();
       }
 
+      // Students read a roster-free copy of an assignment and one document of
+      // their own. Only server commands write either of them.
+      match /history_classroom_student_views/{assignmentId} {
+        allow get: if isAdmin() || isTeacherRole()
+          || (canUseWestory()
+            && exists(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/history_classroom_assignees/$(assignmentId + '_' + request.auth.uid)));
+        allow list: if isAdmin() || isTeacherRole();
+        allow write: if false;
+      }
+
+      match /history_classroom_assignees/{assigneeId} {
+        allow read: if isAdmin() || isTeacherRole()
+          || (canUseWestory() && resource.data.uid == request.auth.uid);
+        allow write: if false;
+      }
+
       match /history_classroom_results/{docId} {
         allow read: if canReadHistoryClassroomResult(resource.data);
         allow create: if false;

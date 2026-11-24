@@ -35,6 +35,7 @@ import {
   getHistoryClassroomAssignedStudentUids,
   getHistoryClassroomRemainingMs,
   getHistoryClassroomStudentRetryResetMs,
+  getHistoryClassroomTimestampMs,
   isHistoryClassroomDeleted,
   isHistoryClassroomPastDue,
   normalizeHistoryClassroomAssignment,
@@ -42,6 +43,11 @@ import {
   type HistoryClassroomAnswerCheck,
   type HistoryClassroomAssignment,
 } from "../../../lib/historyClassroom";
+import {
+  getHistoryClassroomAssigneeDocPath,
+  loadOwnHistoryClassroomAssignee,
+  loadStudentHistoryClassroomAssignment,
+} from "../../../lib/historyClassroomStudentAccess";
 import { acquirePageScrollLock } from "../../../lib/pageScrollLock";
 
 import {
@@ -266,6 +272,7 @@ const HistoryClassroomRunner: React.FC = () => {
   const [error, setError] = useState("");
   const [assignmentReloadRevision, setAssignmentReloadRevision] = useState(0);
   const assignmentReadPathRef = useRef("");
+  const resetMarkerFromOwnAssigneeRef = useRef(false);
   const loadedRetryResetAtRef = useRef(0);
   const [resultText, setResultText] = useState("");
   const [resultSummary, setResultSummary] =
@@ -394,18 +401,37 @@ const HistoryClassroomRunner: React.FC = () => {
               : "현재 응시할 수 없는 역사교실입니다.",
           );
         }
-        assignmentReadPathRef.current = getSemesterDocPath(
+        // Assigned students read a roster-free copy and their own assignment
+        // document. The earlier assignment document is the source only while
+        // this student has no such document.
+        const ownAssignee = await loadOwnHistoryClassroomAssignee(
           config,
-          "history_classrooms",
           assignmentId,
+          userData.uid,
         );
-        const snap = await getDoc(doc(db, assignmentReadPathRef.current));
-        if (!snap.exists())
-          throw new Error("역사교실 자료를 찾을 수 없습니다.");
-        const loaded = normalizeHistoryClassroomAssignment(
-          snap.id,
-          snap.data(),
-        );
+        const copy = ownAssignee
+          ? await loadStudentHistoryClassroomAssignment(config, ownAssignee)
+          : null;
+        resetMarkerFromOwnAssigneeRef.current = !!copy;
+        let loaded: HistoryClassroomAssignment;
+        if (copy) {
+          assignmentReadPathRef.current = getHistoryClassroomAssigneeDocPath(
+            config,
+            assignmentId,
+            userData.uid,
+          );
+          loaded = copy;
+        } else {
+          assignmentReadPathRef.current = getSemesterDocPath(
+            config,
+            "history_classrooms",
+            assignmentId,
+          );
+          const snap = await getDoc(doc(db, assignmentReadPathRef.current));
+          if (!snap.exists())
+            throw new Error("역사교실 자료를 찾을 수 없습니다.");
+          loaded = normalizeHistoryClassroomAssignment(snap.id, snap.data());
+        }
         if (isHistoryClassroomDeleted(loaded) || !loaded.isPublished)
           throw new Error("현재 공개된 과제가 아닙니다.");
         if (
@@ -653,10 +679,15 @@ const HistoryClassroomRunner: React.FC = () => {
       (snapshot) => {
         if (!snapshot.exists()) return;
         const resetAtMs =
-          getHistoryClassroomStudentRetryResetMs(
-            normalizeHistoryClassroomAssignment(snapshot.id, snapshot.data()),
-            userData.uid,
-          ) || 0;
+          (resetMarkerFromOwnAssigneeRef.current
+            ? getHistoryClassroomTimestampMs(snapshot.data().retryResetAt)
+            : getHistoryClassroomStudentRetryResetMs(
+                normalizeHistoryClassroomAssignment(
+                  snapshot.id,
+                  snapshot.data(),
+                ),
+                userData.uid,
+              )) || 0;
         if (resetAtMs <= loadedRetryResetAtRef.current) return;
         loadedRetryResetAtRef.current = resetAtMs;
         setAssignmentReloadRevision((revision) => revision + 1);
