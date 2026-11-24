@@ -44,8 +44,10 @@ const mocks = {
   AuthContext:
     "export const useAuth=()=>({currentUser:{uid:'fixture'},config:{year:'2026',semester:'2'}});",
   AppToastProvider: "export const useAppToast=()=>({showToast:()=>{}});",
+  gongsinmoongo:
+    "export const useGongsinAvailability=()=>({loaded:true,error:false,enabled:false,avatarEventEnabled:false});export const getGongsinmoongo=()=>{throw Error('No live calls')},manageGongsinmoongo=getGongsinmoongo,newGongsinRequestId=()=>'fixture';",
   service:
-    "export const avatarErrorMessage=e=>e.message,avatarPricingFromError=()=>null,makeAvatarThumbnail=async x=>x;export const getAvatarStudioState=()=>{throw Error('No live calls')},purchaseAvatarItem=getAvatarStudioState,saveStudentAvatar=getAvatarStudioState;",
+    "export const avatarErrorMessage=e=>e.message,avatarPricingFromError=()=>null,avatarPurchaseTiersFromError=()=>null,makeAvatarThumbnail=async x=>x;export const getAvatarStudioState=()=>{throw Error('No live calls')},purchaseAvatarItem=getAvatarStudioState,saveStudentAvatar=getAvatarStudioState;",
 };
 const bundle = await build({
   stdin: { contents: entry, loader: "tsx", resolveDir: root },
@@ -64,7 +66,7 @@ const bundle = await build({
       name: "local-avatar-services",
       setup(plugin) {
         plugin.onResolve(
-          { filter: /\/(AuthContext|AppToastProvider|service)$/ },
+          { filter: /\/(AuthContext|AppToastProvider|gongsinmoongo|service)$/ },
           (args) => ({
             path: args.path.split("/").at(-1),
             namespace: "fixture",
