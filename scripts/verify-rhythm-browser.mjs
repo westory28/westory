@@ -237,9 +237,14 @@ const pageFor = async (
       };
       const animate = Element.prototype.animate;
       Element.prototype.animate = function (...args) {
+        // A stroke shares the strike's 600 ms span; the keyframe before the
+        // closing hold marks where its visible motion ends.
         window.rhythmAnimations.push({
           target: this.className,
           duration: args[1]?.duration,
+          motion: Array.isArray(args[0])
+            ? Math.round((args[0].at(-2)?.offset ?? 1) * args[1]?.duration)
+            : undefined,
         });
         return animate.apply(this, args);
       };
@@ -1440,8 +1445,15 @@ try {
   await phase(challengePage, 'playing');
   calls = await challengePage.evaluate(() => window.rhythmQA.rankingCalls);
   assert.equal(calls.filter(call => call.name === 'startRhythmRankingGame').at(-1).data.paid, true);
+  // A hidden tab does not stop the challenge clock: the run still ends and is saved.
+  const finishedBefore = calls.filter(call => call.name === 'finishRhythmRankingGame').length;
+  await challengePage.evaluate(() => window.rhythmQA.visibility(false));
   await time(challengePage, feverNotes[29].time + .17);
   await phase(challengePage, 'result');
+  await challengePage.waitForFunction(count => window.rhythmQA.rankingCalls.filter(call => call.name === 'finishRhythmRankingGame').length === count + 1, finishedBefore);
+  const hiddenFinish = await challengePage.evaluate(() => window.rhythmQA.rankingCalls.filter(call => call.name === 'finishRhythmRankingGame').at(-1).data);
+  assert(hiddenFinish.endTime > feverNotes[29].time + .159 && hiddenFinish.endTime < feverNotes[29].time + .17, `a hidden challenge ends at its limit note: ${hiddenFinish.endTime}`);
+  await challengePage.evaluate(() => window.rhythmQA.visibility(true));
   await shot(challengePage, 'challenge-limit');
   checks.push({ name: 'fever and challenge', fever: [10, 20, 50, 100], score: expectedFeverScore, practiceRequests: 0, challengeStateRequests: 2, challengeStarts: 2, limit: 30, retrySameRequest: true, paidExplicit: true });
   await challengePage.close();
@@ -1990,13 +2002,18 @@ try {
     );
     assert(
       effects.wa.some(
-        (item) => item.target === "rhythm-drum-visual" && item.duration === 220,
+        (item) =>
+          item.target === "rhythm-drum-visual" &&
+          item.motion === 220 &&
+          item.duration === 600,
       ),
     );
     assert(
       effects.wa.some(
         (item) =>
-          item.target === "rhythm-stage-mascot" && item.duration === 320,
+          item.target === "rhythm-stage-mascot" &&
+          item.motion === 320 &&
+          item.duration === 600,
       ),
     );
     await shot(page, `${label}-play`);

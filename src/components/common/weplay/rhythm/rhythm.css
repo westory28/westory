@@ -1764,9 +1764,12 @@
 .rhythm-collected-note--ok {
   color: var(--rh-blue);
 }
+/* The 240ms reaction sits at the start of a long animation. The next arrival
+   replaces the element first, so the browser has no ending to service after
+   every note. */
 .rhythm-score-arrival {
   position: relative;
-  animation: rhythm-score-arrival 240ms ease-out;
+  animation: rhythm-score-arrival 4800ms ease-out;
 }
 /* The red tint fades over the same digits, so the reaction needs no repaint. */
 .rhythm-score-arrival::after {
@@ -1777,7 +1780,7 @@
   white-space: nowrap;
   color: var(--rh-red);
   opacity: 0;
-  animation: rhythm-score-flash 240ms ease-out;
+  animation: rhythm-score-flash 4800ms ease-out;
 }
 @keyframes rhythm-collect {
   0% {
@@ -1805,18 +1808,18 @@
   }
 }
 @keyframes rhythm-score-arrival {
-  0%, 100% {
+  0%, 5%, 100% {
     transform: scale(1);
   }
-  40% {
+  2% {
     transform: scale(1.14);
   }
 }
 @keyframes rhythm-score-flash {
-  0%, 100% {
+  0%, 5%, 100% {
     opacity: 0;
   }
-  40% {
+  2% {
     opacity: 1;
   }
 }

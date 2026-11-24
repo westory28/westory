@@ -159,12 +159,7 @@ export default function RhythmGame({
     const element = compactFlightRef.current;
     if (!element) return;
     const flight = createCompactFlight(element, () =>
-      replayStroke(
-        scoreTargetRef.current,
-        "score-arrival",
-        ARRIVAL_FRAMES,
-        240,
-      ),
+      replayStroke(scoreTargetRef.current, "score-arrival", ARRIVAL_FRAMES),
     );
     compactFlight.current = flight;
     return () => {
@@ -539,39 +534,25 @@ export default function RhythmGame({
     },
     [setGamePhase, saveRanking],
   );
-  // Frames are sampled only right after a strike. Two strikes in a row whose
-  // following frames stall switch to compact effects for the rest of this run;
-  // a single late frame can be startup or rotation.
+  // Only the frame that draws a strike is timed, against the frame after it.
+  // Three strikes in a row whose frame takes 40ms or longer switch to compact
+  // effects for the rest of this run; one late frame can be startup or rotation.
   const sampleFrames = useCallback(() => {
     const probe = frameProbe.current;
     if (probe.active) return;
     probe.active = true;
-    let last = 0;
-    let left = 3;
-    let slow = 0;
-    const frame = (timestamp: number) => {
-      if (phaseRef.current !== "playing") {
+    probe.frame = requestAnimationFrame((drawn) => {
+      probe.frame = requestAnimationFrame((next) => {
         probe.active = false;
-        return;
-      }
-      if (last) {
-        left--;
-        if (timestamp - last >= 40) slow++;
-      }
-      last = timestamp;
-      if (left > 0) {
-        probe.frame = requestAnimationFrame(frame);
-        return;
-      }
-      probe.active = false;
-      probe.stalled = slow >= 2 ? probe.stalled + 1 : 0;
-      if (probe.stalled < 2) return;
-      setCompactEffects(true);
-      setCollected([]);
-      setEffects([]);
-      setLastStrike(null);
-    };
-    probe.frame = requestAnimationFrame(frame);
+        if (phaseRef.current !== "playing") return;
+        probe.stalled = next - drawn >= 40 ? probe.stalled + 1 : 0;
+        if (probe.stalled < 3) return;
+        setCompactEffects(true);
+        setCollected([]);
+        setEffects([]);
+        setLastStrike(null);
+      });
+    });
   }, []);
   useEffect(() => () => cancelAnimationFrame(frameProbe.current.frame), []);
   useEffect(() => {
@@ -790,11 +771,10 @@ export default function RhythmGame({
           mallet,
           `rhythm-mallet-${kind}`,
           MALLET_FRAMES[hand][kind],
-          220,
         );
       }
-      replayStroke(drumArtRef.current, "drum", DRUM_FRAMES, 220);
-      replayStroke(mascotRef.current, kind, MASCOT_FRAMES[kind], 320);
+      replayStroke(drumArtRef.current, "drum", DRUM_FRAMES);
+      replayStroke(mascotRef.current, kind, MASCOT_FRAMES[kind]);
       const input = judgeInput(
         chart,
         judged.current,
@@ -816,7 +796,7 @@ export default function RhythmGame({
           pulse.style.left = `${x * 100}%`;
           pulse.style.top = `${y * 100}%`;
           pulse.dataset.grade = grade;
-          replayStroke(pulse, "pulse", PULSE_FRAMES, 200);
+          replayStroke(pulse, "pulse", PULSE_FRAMES);
         }
       } else {
         sampleFrames();

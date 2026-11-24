@@ -65,13 +65,66 @@ export function createCompactFlight(
   };
 }
 
+// Every stroke lasts as long as the strike's other effects, so the browser ends
+// them all in one main-thread pass. Its visible motion keeps its own length: the
+// ease-out curve over that length is cut exactly at each keyframe.
+const STROKE_SPAN = 600;
+const EASE_OUT = { x: [0, 0, 0.58, 1], y: [0, 0, 1, 1] };
+// Polar form of a cubic curve: three equal arguments give a point on it, mixed
+// arguments give the control points of the piece between them.
+const blossom = (c: number[], r: number, s: number, t: number) =>
+  c[0] * (1 - r) * (1 - s) * (1 - t) +
+  c[1] *
+    (r * (1 - s) * (1 - t) + (1 - r) * s * (1 - t) + (1 - r) * (1 - s) * t) +
+  c[2] * (r * s * (1 - t) + r * (1 - s) * t + (1 - r) * s * t) +
+  c[3] * r * s * t;
+function stroke(frames: Keyframe[], duration: number): Keyframe[] {
+  // Curve parameter at which the eased progress reaches each keyframe.
+  const reached = frames.map((frame, index) => {
+    const offset = frame.offset ?? index / (frames.length - 1);
+    // The first and last keyframes stay exactly on the motion's own ends.
+    if (offset <= 0 || offset >= 1) return offset <= 0 ? 0 : 1;
+    let low = 0;
+    let high = 1;
+    for (let step = 0; step < 40; step++) {
+      const middle = (low + high) / 2;
+      if (blossom(EASE_OUT.y, middle, middle, middle) < offset) low = middle;
+      else high = middle;
+    }
+    return (low + high) / 2;
+  });
+  const piece = (c: number[], from: number, to: number) => {
+    const start = blossom(c, from, from, from);
+    const span = blossom(c, to, to, to) - start;
+    return [blossom(c, from, from, to), blossom(c, from, to, to)].map((value) =>
+      Math.min(1, Math.max(0, (value - start) / span)).toFixed(5),
+    );
+  };
+  const timed = frames.map((frame, index): Keyframe => {
+    const from = reached[index];
+    const to = reached[index + 1];
+    return {
+      ...frame,
+      offset: (blossom(EASE_OUT.x, from, from, from) * duration) / STROKE_SPAN,
+      ...(to !== undefined && {
+        easing: `cubic-bezier(${[0, 1]
+          .flatMap((point) => [
+            piece(EASE_OUT.x, from, to)[point],
+            piece(EASE_OUT.y, from, to)[point],
+          ])
+          .join(",")})`,
+      }),
+    };
+  });
+  return [...timed, { ...frames[frames.length - 1], offset: 1 }];
+}
+
 // Reuse the animated surfaces for the full run, including repeated hits by one hand.
 const strokes = new WeakMap<HTMLElement, Animation>();
 export function replayStroke(
   node: HTMLElement | null,
   name: string,
   frames: Keyframe[],
-  duration: number,
 ) {
   if (!node) return;
   const active = strokes.get(node);
@@ -84,33 +137,45 @@ export function replayStroke(
     active.play();
     return;
   }
-  const animation = node.animate(frames, { duration, easing: "ease-out" });
+  const animation = node.animate(frames, { duration: STROKE_SPAN });
   animation.id = name;
   strokes.set(node, animation);
 }
 
-export const DRUM_FRAMES = [
-  { transform: "scale(1)" },
-  { transform: "scale(1.035, .95)", offset: 0.25 },
-  { transform: "scale(.99, 1.025)", offset: 0.62 },
-  { transform: "scale(1)" },
-];
-export const PULSE_FRAMES = [
-  { transform: "scale(.5)", opacity: 1 },
-  { transform: "scale(1.6)", opacity: 0 },
-];
-export const ARRIVAL_FRAMES = [
-  { transform: "scale(1)" },
-  { transform: "scale(1.14)", offset: 0.4 },
-  { transform: "scale(1)" },
-];
+export const DRUM_FRAMES = stroke(
+  [
+    { transform: "scale(1)" },
+    { transform: "scale(1.035, .95)", offset: 0.25 },
+    { transform: "scale(.99, 1.025)", offset: 0.62 },
+    { transform: "scale(1)" },
+  ],
+  220,
+);
+export const PULSE_FRAMES = stroke(
+  [
+    { transform: "scale(.5)", opacity: 1 },
+    { transform: "scale(1.6)", opacity: 0 },
+  ],
+  200,
+);
+export const ARRIVAL_FRAMES = stroke(
+  [
+    { transform: "scale(1)" },
+    { transform: "scale(1.14)", offset: 0.4 },
+    { transform: "scale(1)" },
+  ],
+  240,
+);
 
 function mascotFrames(angle: number) {
-  return [
-    { transform: "translateY(0) rotate(0)" },
-    { transform: `translateY(-14px) rotate(${angle}deg)`, offset: 0.35 },
-    { transform: "translateY(0) rotate(0)" },
-  ];
+  return stroke(
+    [
+      { transform: "translateY(0) rotate(0)" },
+      { transform: `translateY(-14px) rotate(${angle}deg)`, offset: 0.35 },
+      { transform: "translateY(0) rotate(0)" },
+    ],
+    320,
+  );
 }
 export const MASCOT_FRAMES = { center: mascotFrames(-8), rim: mascotFrames(8) };
 
@@ -119,20 +184,26 @@ function malletFrames(hand: DrumHand) {
   const aim = hand === "left" ? -22 : 22;
   const rest = { transform: "rotate(0deg) translateY(0)" };
   return {
-    center: [
-      rest,
-      { transform: `rotate(${turn}deg) translateY(-8%)`, offset: 0.22 },
-      { transform: "rotate(0deg) translateY(13%)", offset: 0.48 },
-      { transform: `rotate(${turn}deg) translateY(-4%)`, offset: 0.7 },
-      rest,
-    ],
-    rim: [
-      rest,
-      { transform: `translateY(-36%) rotate(${aim}deg)`, offset: 0.22 },
-      { transform: `translateY(-28%) rotate(${aim}deg)`, offset: 0.48 },
-      { transform: `translateY(-32%) rotate(${aim}deg)`, offset: 0.7 },
-      rest,
-    ],
+    center: stroke(
+      [
+        rest,
+        { transform: `rotate(${turn}deg) translateY(-8%)`, offset: 0.22 },
+        { transform: "rotate(0deg) translateY(13%)", offset: 0.48 },
+        { transform: `rotate(${turn}deg) translateY(-4%)`, offset: 0.7 },
+        rest,
+      ],
+      220,
+    ),
+    rim: stroke(
+      [
+        rest,
+        { transform: `translateY(-36%) rotate(${aim}deg)`, offset: 0.22 },
+        { transform: `translateY(-28%) rotate(${aim}deg)`, offset: 0.48 },
+        { transform: `translateY(-32%) rotate(${aim}deg)`, offset: 0.7 },
+        rest,
+      ],
+      220,
+    ),
   };
 }
 export const MALLET_FRAMES = {
