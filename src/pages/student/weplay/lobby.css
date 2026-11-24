@@ -17,10 +17,10 @@
   gap: 8px;
   min-height: 44px;
   padding: 8px 12px;
-  border: 1px solid var(--launch-gold);
+  border: 1px solid var(--ws-border, #e5e7eb);
   border-radius: 999px;
-  color: var(--launch-ink);
-  background: var(--launch-parchment);
+  color: var(--ws-text, #1f2937);
+  background: var(--ws-surface, #ffffff);
   font-size: 14px;
   white-space: nowrap;
 }
@@ -35,10 +35,10 @@
   width: 24px;
   height: 24px;
   flex-shrink: 0;
-  border: 1px solid var(--launch-gold);
+  border: 1px solid var(--ws-accent, #f59e0b);
   border-radius: 50%;
-  color: var(--launch-parchment);
-  background: var(--launch-sea);
+  color: var(--ws-accent-text, #92400e);
+  background: var(--ws-accent-soft, #fffbeb);
   font-size: 12px;
   font-weight: 800;
 }
