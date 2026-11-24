@@ -9,11 +9,12 @@
     "functions/avatarCatalog.json": "3ddf0e44ef6aba09f62d6cced521cacfefb1b483acf6bbb4eb105c00131aed05",
     "src/features/avatar/catalog.ts": "161cbf230aae0f7e5eb16585a166071f4438c30c4e5560082e473094ce2e2994",
     "src/features/avatar/minimi/bowlHair.ts": "d94aa59ddeb07cee0a6ece2cde6e28192edfae4aab4fd37fbb1f328580a6c9ad",
-    "src/features/avatar/minimi/details.ts": "c22afd163a170ad1a8be4f05fb680bb10505a3f9cb0f190573fca490aba6bc39",
-    "src/features/avatar/minimi/draw.ts": "cc7b17a445f8a694948bd8fea5220fcac8284ff4e5ac0f09d4e81cdfcb8789f4",
+    "src/features/avatar/minimi/details.ts": "d5a82fae39c455e458b782f363ee33b1a550cde4b9d7548cddcd265699b96728",
+    "src/features/avatar/minimi/draw.ts": "100a81b2efea4a409b0f8f7de91187ca82e9153edf46f02cc7a4abac3709818e",
     "src/features/avatar/minimi/engine.ts": "9967b104d4ae495018c0dfa8a6b8e88d6af9cc7c5f70d005aff5e694c3d3aff1",
-    "src/features/avatar/minimi/hanbok.ts": "ee0619ad602478da8d07d351376212f1352d95c871bd8f4ed2ffa93a3c538662",
-    "src/features/avatar/minimi/joseon.ts": "c8c389402d4023872f0e682145641f2a8befc02074280cca6430d4098bbe0267",
+    "src/features/avatar/minimi/hanbok.ts": "935d7670acd43688f977929b2d71457d8eca34544824e863481a024f7d2224b2",
+    "src/features/avatar/minimi/joseon.ts": "3db6306b44bbb086b568c14297d862383bdbcce5f609d994091dbca36504e117",
+    "src/features/avatar/minimi/rig.ts": "f2160f24440cd8a4bf12b09229f0d609c234087287bc52ae4feef4c3c09b2ae4",
     "src/features/avatar/minimi/royalHair.ts": "24414082fbfd9af614fa8000beccfd2141a75b14c2c1ab6e3ccc105e658d60e6",
     "src/features/avatar/minimi/softHair.ts": "d6367cc25fcd0e14b2365a6ce31e88df095f483451bdf4349ef4f8b11f0bf382",
     "src/features/avatar/minimi/wardrobe.ts": "32275d1244e2349f6c0ae6a1e1ed6a8fa5e6c0e066505a12f6be9dff933f19a5"
@@ -171,14 +172,14 @@
       "character": "girl",
       "file": "girl/pose-mm-wave.webp",
       "bytes": 1126,
-      "sha256": "dd22c42273fe742e0086c71d6a4a9ad43162ce08e7242068ff2dcb2d3e6ec4a1"
+      "sha256": "55d1db45fed2ccb00413d461175811def97455f6e4b25068bbd9d793234069d0"
     },
     {
       "id": "minimi-pose-cheer",
       "character": "girl",
       "file": "girl/pose-mm-cheer.webp",
-      "bytes": 1130,
-      "sha256": "028bb53861f3ceca5f05ef7a5aa2993857467bd93bcf611b832e8b28d209b180"
+      "bytes": 1132,
+      "sha256": "64a8bdb0cf93890b01bb47add4fd3168d5bb19bb6df408f6810e1983ad983059"
     },
     {
       "id": "minimi-top-school-white",
@@ -1136,15 +1137,15 @@
       "id": "minimi-pose-wave",
       "character": "boy",
       "file": "boy/pose-mm-wave.webp",
-      "bytes": 1116,
-      "sha256": "76b0daa6207ca5bf3ffa988aabc858944bbe6042a8453fd3b9f147f5262f028b"
+      "bytes": 1118,
+      "sha256": "905aa3773b00800b20b17a5f4d21c892b2a7e4d646e18b534bfc8d94dd5c903c"
     },
     {
       "id": "minimi-pose-cheer",
       "character": "boy",
       "file": "boy/pose-mm-cheer.webp",
-      "bytes": 1118,
-      "sha256": "033cb7e3149a1adeebea4a8dc1a83fb98324f4e104bc07cbfedfa96c3a90b5d0"
+      "bytes": 1122,
+      "sha256": "0777fbd67887823f956a34851e8e7eca85cb528e8e7293e20b62c76cb158944d"
     },
     {
       "id": "minimi-top-school-white",

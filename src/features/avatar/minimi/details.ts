@@ -2,6 +2,7 @@ import type { PixelPalette, TopCut } from "./wardrobe";
 import { drawBowlHair } from "./bowlHair";
 import { drawSoftHair } from "./softHair";
 import { drawRoyalHair } from "./royalHair";
+import { upperArmPoint, type MinimiArm } from "./rig";
 type Point = readonly [number, number];
 export type PixelPen = {
   rect: (
@@ -355,7 +356,12 @@ export function drawHairDetails(
   }
 }
 
-export function drawTopDetails(p: PixelPen, cut: TopCut, fabric: PixelPalette) {
+export function drawTopDetails(
+  p: PixelPen,
+  cut: TopCut,
+  fabric: PixelPalette,
+  arms: readonly [MinimiArm, MinimiArm],
+) {
   const { rect, line, poly } = p;
   const light = "#fff3d8",
     dark = fabric[3],
@@ -464,24 +470,32 @@ export function drawTopDetails(p: PixelPen, cut: TopCut, fabric: PixelPalette) {
       rect(45, 58, 3, 3, gold);
     }
   } else if (cut === "cape") {
+    // Each wing rests on an upper arm, so its corners are measured from it:
+    // (share of the way to the elbow, pixels outward). On a hanging right arm
+    // these give the drawn corners (51,57), (53,66) and (51,63).
+    const [left, right] = arms.map((arm) => ({
+      top: upperArmPoint(arm, 0.264, 0.78),
+      hem: upperArmPoint(arm, 1.1225, -1.848),
+      trim: upperArmPoint(arm, 0.7735, -2.137),
+    }));
     poly(
       [
         [33, 51],
-        [29, 57],
-        [27, 66],
+        left.top,
+        left.hem,
         [34, 64],
         [40, 59],
         [46, 64],
-        [53, 66],
-        [51, 57],
+        right.hem,
+        right.top,
         [47, 51],
         [40, 55],
       ],
       fabric[1],
       dark,
     );
-    line([29, 63], [39, 57], gold);
-    line([41, 57], [51, 63], gold);
+    line(left.trim, [39, 57], gold);
+    line([41, 57], right.trim, gold);
     rect(39, 55, 3, 3, gold);
     rect(42, 67, 3, 3, light);
     rect(44, 66, 2, 3, fabric[1]);

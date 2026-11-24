@@ -10,20 +10,19 @@ import {
   drawHanbokBottom,
   drawHanbokAccessory,
 } from "./hanbok";
+import {
+  armStripe,
+  kneeRow,
+  limbFrame,
+  resolveMinimiRig,
+  shiftPoint,
+  type MinimiMotion,
+} from "./rig";
 
+export { MINIMI_ANCHORS } from "./rig";
+export type { MinimiMotion } from "./rig";
 export const MINIMI_WIDTH = 80;
 export const MINIMI_HEIGHT = 112;
-
-/** One pixel grid is shared by every body, hair, garment, pose and thumbnail. */
-export const MINIMI_ANCHORS = Object.freeze({
-  head: [40, 31],
-  neck: [40, 49],
-  shoulderLeft: [31, 55],
-  shoulderRight: [49, 55],
-  waist: [40, 73],
-  ankleLeft: [35, 97],
-  ankleRight: [46, 97],
-} as const);
 
 export const MINIMI_VALUES = Object.freeze({
   character: ["girl", "boy"],
@@ -114,12 +113,22 @@ const HAIR: Record<string, Palette> = {
   "mm-mint": ["#e2fff4", "#a6d9d3", "#70aaa9", "#456e80"],
 };
 
+type PixelRect = (
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  color: string,
+) => void;
 /** Raster primitives never use antialiased paths, fractional scaling or strokes. */
 function pixelPen(ctx: CanvasRenderingContext2D) {
-  const rect = (x: number, y: number, w: number, h: number, color: string) => {
+  return penOver((x, y, w, h, color) => {
     ctx.fillStyle = color;
     ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
-  };
+  });
+}
+/** Lines and polygons are built from the given rectangle, whatever it maps to. */
+function penOver(rect: PixelRect) {
   const line = (a: Point, b: Point, color: string, width = 1) => {
     let x = Math.round(a[0]),
       y = Math.round(a[1]);
@@ -179,7 +188,12 @@ function pixelPen(ctx: CanvasRenderingContext2D) {
   return { rect, line, poly };
 }
 
-export type MinimiDrawOptions = { blink?: boolean; itemOnly?: AvatarSlot };
+export type MinimiDrawOptions = {
+  blink?: boolean;
+  itemOnly?: AvatarSlot;
+  /** Movement on top of the pose; garments follow the part they cover. */
+  motion?: MinimiMotion;
+};
 
 /** Draws original Westory pixel art. No bitmap assets, network calls or image AI. */
 export function drawMinimi(
@@ -192,6 +206,24 @@ export function drawMinimi(
   ctx.clearRect(0, 0, MINIMI_WIDTH, MINIMI_HEIGHT);
   const pen = pixelPen(ctx);
   const { rect, line, poly } = pen;
+  const rig = resolveMinimiRig(look.pose, options.motion);
+  // Each layer is attached to the body part it covers before it is painted.
+  let attached: Point = [0, 0];
+  const attach = (offset: Point) => {
+    if (offset[0] !== attached[0] || offset[1] !== attached[1])
+      ctx.translate(offset[0] - attached[0], offset[1] - attached[1]);
+    attached = offset;
+  };
+  // A leg pen folds rows at the knee for the skin and any garment leg over it.
+  const legPens = rig.lift.map((lift) =>
+    rig.sink || lift
+      ? penOver((x, y, w, h, color) => {
+          const top = Math.round(y);
+          for (let row = top; row < top + Math.round(h); row++)
+            rect(x, kneeRow(row, rig.sink, lift), w, 1, color);
+        })
+      : pen,
+  );
   const only = options.itemOnly;
   const bodyVisible = !only || only === "character" || only === "pose";
   const headVisible =
@@ -218,8 +250,9 @@ export function drawMinimi(
   const clipHair = () => {
     ctx.save();
     if (hatLine) {
+      // Wider than the sprite so the hat line stays level when the head moves.
       ctx.beginPath();
-      ctx.rect(0, hatLine, MINIMI_WIDTH, MINIMI_HEIGHT - hatLine);
+      ctx.rect(-MINIMI_WIDTH, hatLine, MINIMI_WIDTH * 3, MINIMI_HEIGHT);
       ctx.clip();
     }
   };
@@ -252,6 +285,7 @@ export function drawMinimi(
 
   // Hair behind the head/body has the same top silhouette as its front fringe.
   if (headVisible) {
+    attach(rig.head);
     clipHair();
     drawHairDetails(pen, renderedHairStyle, hair, false);
     if (style === "mm-long" || style === "mm-wave") {
@@ -362,10 +396,12 @@ export function drawMinimi(
     ctx.restore();
   }
 
-  // Legs and shoes are a single fixed family of anchors, independent of pose.
+  // Legs and shoes share one family of anchors; each knee folds its own rows.
   if (bodyVisible) {
-    for (const x of [32, 43]) {
-      poly(
+    attach([0, 0]);
+    for (const [side, x] of [32, 43].entries()) {
+      const leg = legPens[side];
+      leg.poly(
         [
           [x, 78],
           [x + 6, 78],
@@ -375,9 +411,9 @@ export function drawMinimi(
         skin[1],
         INK,
       );
-      rect(x + 1, 82, 2, 13, skin[0]);
-      rect(x + 1, 93, 4, 5, "#fffdf4");
-      rect(x + 1, 94, 4, 1, "#b4bdc7");
+      leg.rect(x + 1, 82, 2, 13, skin[0]);
+      leg.rect(x + 1, 93, 4, 5, "#fffdf4");
+      leg.rect(x + 1, 94, 4, 1, "#b4bdc7");
     }
   }
   if (bottomVisible) {
@@ -391,114 +427,137 @@ export function drawMinimi(
     const bottomShade =
       customBottom?.palette[2] ||
       (trouser ? (denim ? "#365776" : "#8e98a5") : "#26364c");
-    if (
-      customBottom &&
-      drawHanbokBottom(
-        pen,
-        customBottom.cut,
-        customBottom.detail,
-        customBottom.palette,
-      )
-    ) {
-      // Dedicated full-length silhouettes cover the same fixed leg anchors.
-    } else if (
+    // A skirt hangs from the hips in one piece; garment legs fold at each knee.
+    const draped =
       look.bottom === "mm-skirt-navy" ||
-      customBottom?.cut === "skirt"
-    ) {
-      poly(
-        [
-          [31, 70],
-          [49, 70],
-          [54, 84],
-          [49, 86],
-          [30, 86],
-          [26, 83],
-        ],
-        bottomColor,
-        INK,
-      );
-      for (const x of [31, 37, 44, 49])
-        line([x, 74], [x - (x < 40 ? 2 : -2), 84], bottomShade);
-      line([29, 83], [51, 83], customBottom?.palette[0] || "#697d93");
-      if (customBottom?.detail === "check") {
-        for (const y of [76, 80, 84])
-          line([29, y], [51, y], customBottom.palette[0]);
-        for (const x of [32, 40, 48])
-          line([x, 73], [x, 84], customBottom.palette[3]);
+      ["skirt", "chima"].includes(customBottom?.cut || "");
+    const folded = !draped && legPens.some((leg) => leg !== pen);
+    attach(folded ? [0, 0] : rig.hips);
+    for (const side of folded ? [0, 1] : [-1]) {
+      const part = side < 0 ? pen : legPens[side];
+      const { rect, line, poly } = part;
+      ctx.save();
+      if (side >= 0) {
+        ctx.beginPath();
+        ctx.rect(
+          side ? 41 : -MINIMI_WIDTH,
+          -MINIMI_HEIGHT,
+          MINIMI_WIDTH + 41,
+          MINIMI_HEIGHT * 3,
+        );
+        ctx.clip();
       }
-      if (customBottom?.detail === "tulle") {
-        for (const y of [77, 81, 85])
-          for (const x of [29, 34, 39, 44, 49])
-            rect(x, y, 3, 1, customBottom.palette[0]);
-      }
-      if (customBottom?.detail === "star") {
-        for (const [x, y] of [
-          [33, 78],
-          [44, 81],
-          [39, 75],
-        ]) {
-          line([x - 1, y], [x + 1, y], "#ffe6a1");
-          line([x, y - 1], [x, y + 1], "#ffe6a1");
+      if (
+        customBottom &&
+        drawHanbokBottom(
+          part,
+          customBottom.cut,
+          customBottom.detail,
+          customBottom.palette,
+        )
+      ) {
+        // Dedicated full-length silhouettes cover the same fixed leg anchors.
+      } else if (
+        look.bottom === "mm-skirt-navy" ||
+        customBottom?.cut === "skirt"
+      ) {
+        poly(
+          [
+            [31, 70],
+            [49, 70],
+            [54, 84],
+            [49, 86],
+            [30, 86],
+            [26, 83],
+          ],
+          bottomColor,
+          INK,
+        );
+        for (const x of [31, 37, 44, 49])
+          line([x, 74], [x - (x < 40 ? 2 : -2), 84], bottomShade);
+        line([29, 83], [51, 83], customBottom?.palette[0] || "#697d93");
+        if (customBottom?.detail === "check") {
+          for (const y of [76, 80, 84])
+            line([29, y], [51, y], customBottom.palette[0]);
+          for (const x of [32, 40, 48])
+            line([x, 73], [x, 84], customBottom.palette[3]);
         }
-      }
-    } else {
-      const hem = trouser ? 96 : customBottom?.cut === "culottes" ? 89 : 84;
-      poly(
-        [
-          [30, 70],
-          [50, 70],
-          [51, hem - 2],
-          [48, hem],
-          [43, hem],
-          [41, 79],
-          [39, 79],
-          [38, hem],
-          [31, hem],
-          [29, hem - 2],
-        ],
-        bottomColor,
-        INK,
-      );
-      line(
-        [31, 77],
-        [32, hem - 2],
-        customBottom?.palette[0] || (trouser && !denim ? "#dce1e5" : "#6d8aa5"),
-      );
-      line([49, 77], [49, hem - 2], bottomShade, 2);
-      line([40, 74], [40, 78], bottomShade);
-      if (trouser && !denim && !customBottom) {
-        for (const offset of [0, 2, 4]) {
-          line(
-            [30 + offset, 75],
-            [31 + offset, 91],
-            offset === 2 ? mintLight : mint,
-          );
-          line(
-            [46 + offset, 75],
-            [46 + offset, 91],
-            offset === 2 ? mintLight : mint,
-          );
+        if (customBottom?.detail === "tulle") {
+          for (const y of [77, 81, 85])
+            for (const x of [29, 34, 39, 44, 49])
+              rect(x, y, 3, 1, customBottom.palette[0]);
         }
-        rect(31, 93, 7, 3, bottomShade);
-        rect(43, 93, 6, 3, bottomShade);
+        if (customBottom?.detail === "star") {
+          for (const [x, y] of [
+            [33, 78],
+            [44, 81],
+            [39, 75],
+          ]) {
+            line([x - 1, y], [x + 1, y], "#ffe6a1");
+            line([x, y - 1], [x, y + 1], "#ffe6a1");
+          }
+        }
       } else {
-        line([32, 75], [34, 79], bottomShade);
-        line([48, 75], [46, 79], bottomShade);
-        if (!trouser) {
-          rect(31, hem - 2, 7, 2, customBottom?.palette[2] || "#24354a");
-          rect(43, hem - 2, 6, 2, customBottom?.palette[2] || "#24354a");
+        const hem = trouser ? 96 : customBottom?.cut === "culottes" ? 89 : 84;
+        poly(
+          [
+            [30, 70],
+            [50, 70],
+            [51, hem - 2],
+            [48, hem],
+            [43, hem],
+            [41, 79],
+            [39, 79],
+            [38, hem],
+            [31, hem],
+            [29, hem - 2],
+          ],
+          bottomColor,
+          INK,
+        );
+        line(
+          [31, 77],
+          [32, hem - 2],
+          customBottom?.palette[0] ||
+            (trouser && !denim ? "#dce1e5" : "#6d8aa5"),
+        );
+        line([49, 77], [49, hem - 2], bottomShade, 2);
+        line([40, 74], [40, 78], bottomShade);
+        if (trouser && !denim && !customBottom) {
+          for (const offset of [0, 2, 4]) {
+            line(
+              [30 + offset, 75],
+              [31 + offset, 91],
+              offset === 2 ? mintLight : mint,
+            );
+            line(
+              [46 + offset, 75],
+              [46 + offset, 91],
+              offset === 2 ? mintLight : mint,
+            );
+          }
+          rect(31, 93, 7, 3, bottomShade);
+          rect(43, 93, 6, 3, bottomShade);
+        } else {
+          line([32, 75], [34, 79], bottomShade);
+          line([48, 75], [46, 79], bottomShade);
+          if (!trouser) {
+            rect(31, hem - 2, 7, 2, customBottom?.palette[2] || "#24354a");
+            rect(43, hem - 2, 6, 2, customBottom?.palette[2] || "#24354a");
+          }
         }
       }
-    }
-    if (customBottom && !["chima", "baji"].includes(customBottom.cut)) {
-      line([31, 72], [49, 72], customBottom.palette[3]);
-      rect(39, 72, 3, 2, "#e7cc92");
-      if (customBottom.detail === "cargo")
-        for (const x of [30, 45]) {
-          rect(x, 82, 5, 7, customBottom.palette[2]);
-          line([x, 82], [x + 4, 82], customBottom.palette[0]);
-          rect(x + 2, 84, 1, 1, customBottom.palette[3]);
-        }
+      if (customBottom && !["chima", "baji"].includes(customBottom.cut)) {
+        line([31, 72], [49, 72], customBottom.palette[3]);
+        rect(39, 72, 3, 2, "#e7cc92");
+        if (customBottom.detail === "cargo")
+          for (const x of [30, 45]) {
+            rect(x, 82, 5, 7, customBottom.palette[2]);
+            line([x, 82], [x + 4, 82], customBottom.palette[0]);
+            rect(x + 2, 84, 1, 1, customBottom.palette[3]);
+          }
+      }
+      ctx.restore();
     }
   }
   if (shoesVisible) {
@@ -506,6 +565,7 @@ export function drawMinimi(
       [28, 0],
       [43, 1],
     ]) {
+      attach([0, 0 - rig.lift[right]]);
       const shoe =
         customShoe?.palette[1] ||
         (look.shoes === "mm-loafers"
@@ -604,66 +664,63 @@ export function drawMinimi(
     }
   }
 
-  type Arm = { shoulder: Point; elbow: Point; wrist: Point; raised: boolean };
-  const cheer = look.pose === "mm-cheer",
-    wave = look.pose === "mm-wave";
-  const arms: Arm[] = [
-    {
-      shoulder: MINIMI_ANCHORS.shoulderLeft,
-      elbow: cheer ? [21, 50] : [26, 64],
-      wrist: cheer ? [18, 41] : [25, 74],
-      raised: cheer,
-    },
-    {
-      shoulder: MINIMI_ANCHORS.shoulderRight,
-      elbow: cheer || wave ? [60, 51] : [54, 64],
-      wrist: cheer || wave ? [64, 40] : [55, 74],
-      raised: cheer || wave,
-    },
-  ];
-  // Sleeve and arm share exact segments. No separate skin layer crosses clothes.
+  const cheer = look.pose === "mm-cheer";
+  const { arms } = rig;
+  // Sleeve and arm share exact segments, and each trim sits in the frame of
+  // its own segment. No separate skin layer crosses clothes.
   if (topVisible) {
+    attach(rig.body);
     for (const arm of arms) {
       const { shoulder: s, elbow: e, wrist: w } = arm;
+      const upper = limbFrame(s, e),
+        lower = limbFrame(e, w);
       const cuff: Point = longSleeve
         ? w
         : [Math.round((s[0] + e[0]) / 2), Math.round((s[1] + e[1]) / 2)];
+      const sleeveEnd = longSleeve ? e : cuff;
       if (bodyVisible) {
         line(s, e, INK, 7);
         line(e, w, INK, 6);
         line(s, e, skin[1], 5);
         line(e, w, skin[1], 4);
-        line([e[0] - 1, e[1]], [w[0] - 1, w[1]], skin[0], 1);
+        line(
+          shiftPoint(e, lower.across, -1),
+          shiftPoint(w, lower.across, -1),
+          skin[0],
+          1,
+        );
       }
-      line(s, longSleeve ? e : cuff, INK, 9);
+      line(s, sleeveEnd, INK, 9);
       if (longSleeve) line(e, cuff, INK, 8);
-      line(s, longSleeve ? e : cuff, fabric[1], 7);
+      line(s, sleeveEnd, fabric[1], 7);
       if (longSleeve) line(e, cuff, fabric[1], 6);
       line(
-        [s[0] - 2, s[1]],
-        [longSleeve ? e[0] - 2 : cuff[0] - 2, longSleeve ? e[1] : cuff[1]],
+        shiftPoint(s, upper.across, -2),
+        shiftPoint(sleeveEnd, upper.across, -2),
         fabric[0],
         2,
       );
       if (customTop) drawHanbokSleeve(pen, customTop.cut, s, e, w, fabric);
       if (winter) {
         for (const offset of [-2, 0, 2]) {
-          line(
-            [s[0] + offset, s[1]],
-            [e[0] + offset, e[1]],
-            offset === 0 ? mintLight : mint,
-          );
-          line(
-            [e[0] + offset, e[1]],
-            [w[0] + offset, w[1]],
-            offset === 0 ? mintLight : mint,
-          );
+          const [start, bend, end] = armStripe(arm, offset);
+          line(start, bend, offset === 0 ? mintLight : mint);
+          line(bend, end, offset === 0 ? mintLight : mint);
         }
-        rect(w[0] - 3, w[1] - 1, 7, 3, fabric[2]);
+        // The ribbed cuff is a band across the wrist, seven wide and three deep.
+        const [wide, tall] = lower.across;
+        rect(
+          w[0] - 1 - wide * 2,
+          w[1] - 1 - tall * 2,
+          3 + wide * 4,
+          3 + tall * 4,
+          fabric[2],
+        );
       } else if (!longSleeve && !customTop) {
+        const edge = shiftPoint(cuff, upper.along, 1);
         line(
-          [cuff[0] - 3, cuff[1] + 1],
-          [cuff[0] + 3, cuff[1] + 1],
+          shiftPoint(edge, upper.across, -3),
+          shiftPoint(edge, upper.across, 3),
           navy ? "#e5e4d8" : trim,
         );
       }
@@ -735,7 +792,7 @@ export function drawMinimi(
     line([32, 73], [46, 73], fabric[0]);
     if (customTop) {
       if (!drawHanbokTop(pen, customTop.cut, fabric))
-        drawTopDetails(pen, customTop.cut, fabric);
+        drawTopDetails(pen, customTop.cut, fabric, arms);
     } else if (winter) {
       line([31, 72], [49, 72], fabric[3]);
       if (look.top === "mm-school-hoodie") {
@@ -874,6 +931,7 @@ export function drawMinimi(
 
   // Rounded head and ears occupy one invariant silhouette for every hair style.
   if (headVisible) {
+    attach(rig.head);
     poly(
       [
         [25, 31],
@@ -1408,6 +1466,7 @@ export function drawMinimi(
   }
 
   if (bodyVisible || only === "accessory") {
+    attach(rig.head);
     if (drawHanbokAccessory(pen, look.accessory)) {
       // Traditional headwear shares the exact head anchors of all hairstyles.
     } else if (look.accessory === "mm-glasses") {
@@ -1513,6 +1572,7 @@ export function drawMinimi(
 
   // Hands finish the arm segment and stay in front only where the pose requires.
   if (bodyVisible) {
+    attach(rig.body);
     for (const {
       wrist: [x, y],
       raised,

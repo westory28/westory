@@ -1,6 +1,7 @@
 /** Original pixel drawings after museum garments; see docs/reviews/avatar-ranks-20261117.md. */
 import type { PixelPen } from "./details";
 import type { PixelPalette, TopCut } from "./wardrobe";
+import { limbFrame, shiftPoint } from "./rig";
 type Point = readonly [number, number];
 const INK = "#262331",
   BLACK = "#30323b",
@@ -32,12 +33,14 @@ export function drawJoseonSleeve(
 ) {
   if (!isJoseonCut(cut)) return;
   const wide = cut === "joseon-gonryongpo" || cut === "joseon-hakchangui";
+  const upper = limbFrame(s, e).across,
+    lower = limbFrame(e, w).across;
   p.line(s, e, INK, wide ? 12 : 10);
   p.line(e, w, INK, wide ? 12 : 9);
   p.line(s, e, f[1], wide ? 10 : 8);
   p.line(e, w, f[1], wide ? 10 : 7);
-  p.line([s[0] - 2, s[1]], [e[0] - 2, e[1]], f[0], 2);
-  p.line([e[0] - 2, e[1]], [w[0] - 2, w[1]], f[0], 2);
+  p.line(shiftPoint(s, upper, -2), shiftPoint(e, upper, -2), f[0], 2);
+  p.line(shiftPoint(e, lower, -2), shiftPoint(w, lower, -2), f[0], 2);
   const cuff: Point = [
     w[0] + (e[0] - w[0]) * 0.18,
     w[1] + (e[1] - w[1]) * 0.18,

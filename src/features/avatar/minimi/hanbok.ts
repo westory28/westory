@@ -7,6 +7,7 @@ import {
   drawJoseonTop,
   drawJoseonAccessory,
 } from "./joseon";
+import { limbFrame, shiftPoint } from "./rig";
 type Point = readonly [number, number];
 const INK = "#262331";
 const GOLD = "#e8c47c";
@@ -67,12 +68,14 @@ export function drawHanbokSleeve(
   const { line } = p;
   const wide = ["durumagi", "dopo", "scholar", "royal-hanbok"].includes(cut);
   if (wide) {
+    const upper = limbFrame(s, e).across,
+      lower = limbFrame(e, w).across;
     line(s, e, INK, 11);
     line(e, w, INK, 10);
     line(s, e, fabric[1], 9);
     line(e, w, fabric[1], 8);
-    line([s[0] - 2, s[1]], [e[0] - 2, e[1]], fabric[0], 2);
-    line([e[0] - 2, e[1]], [w[0] - 2, w[1]], fabric[0], 2);
+    line(shiftPoint(s, upper, -2), shiftPoint(e, upper, -2), fabric[0], 2);
+    line(shiftPoint(e, lower, -2), shiftPoint(w, lower, -2), fabric[0], 2);
   }
   if (cut === "saekdong") {
     const colors = ["#b25966", "#d5b85c", "#739a80", "#6684ae", "#b382ab"];
