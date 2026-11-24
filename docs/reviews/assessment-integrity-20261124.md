@@ -39,3 +39,18 @@
 - 서울 `executeCommand`, `getAssessmentState`: 두 함수의 운영 원본은 저장소와 다른 파일이 있으므로 `scripts/prepare-assessment-integrity-release.mjs prepare`로 각 운영 ZIP에 `productionGateway/assessmentLifecycle.js`의 검토한 치환만 적용한다. 스크립트는 운영 파일의 나머지 줄이 그대로임을 확인한다. `preflight` 통과 후 함수별로 선택 배포하고 `verify`로 전체 파일 해시·자원 설정·호출 권한을 대조한다.
 - 서울 `claimStudentLearningReward`: `scripts/prepare-learning-reward-release.mjs`의 같은 순서로 이 함수 하나만 배포한다.
 - `saveAssessmentProgress`, `getCommandStatus`, 규칙, 색인은 배포하지 않는다. 화면 변경은 같은 main의 Vercel 운영 배포로 반영한다.
+
+## 운영 반영 (2026-11-24 밤, 한국 시각)
+
+| 함수 | 이전 revision | 반영 revision |
+| --- | --- | --- |
+| `getAssessmentState` | `getassessmentstate-00017-hez` | `getassessmentstate-00018-mir` |
+| `executeCommand` | `executecommand-00050-lad` | `executecommand-00051-sih` |
+| `claimStudentLearningReward` | `claimstudentlearningreward-00002-kis` | `claimstudentlearningreward-00003-leg` |
+
+- 세 함수 모두 `verify`에서 배포된 전체 파일 해시가 준비본과 같고 자원 설정·호출 권한이 배포 전과 같았다. 두 평가 함수의 운영 원본은 수정 전에 저장소 기준과 18줄(자동 저장 projection)이 달랐고, 배포 후에도 그 차이만 남는다.
+- 배포 전후 함수 목록 비교에서 194개 모두 ACTIVE이고 위 세 함수의 소스 해시만 바뀌었다.
+- 비로그인 호출은 세 함수 모두 `SESSION_AUTH_REQUIRED`(HTTP 401)로 거부되어 새 revision의 기동을 확인했다. 배포 후 오류 로그는 없다.
+- 화면: `fbd18d48`의 Vercel 배포 `dpl_6uce3Gf9midiDta6Kmv1ru3Fin89`는 Ready였지만 운영 도메인은 이전 배포에 남아 있었다. `vercel promote`로 승격한 뒤 `www.westory.kr`의 새 빌드와, 시험 화면 청크에 답안 잠금·안내 문구가 들어 있음을 확인했다.
+- 운영 QA로 학생 응시·답안·위스를 만들거나 바꾸지 않았다. 로그인한 학생 화면에서의 실제 응시 확인은 수행하지 않았다.
+- 되돌릴 때는 각 준비 폴더의 `original.zip`(배포 전 운영 원본)으로 같은 함수만 다시 배포한다.
