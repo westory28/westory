@@ -206,7 +206,43 @@ try {
     getDoc(doc(client("student", { auth_time: authTime - 5 }), views, "shared")),
   );
 
+  // The teacher's document, which holds the roster, is closed to students.
+  const sources = `${prefix}/history_classrooms`;
+  await deny("an assigned student's read of the teacher document", () =>
+    getDoc(doc(student, sources, "shared")),
+  );
+  await deny("an assigned student's query by own access", () =>
+    getDocs(
+      query(
+        collection(student, sources),
+        where("targetStudentAccessMap.student", "==", true),
+      ),
+    ),
+  );
+  await deny("an assigned student's query by the roster list", () =>
+    getDocs(
+      query(
+        collection(student, sources),
+        where("targetStudentUids", "array-contains", "student"),
+      ),
+    ),
+  );
+  await deny("a student's read of the earlier root collection", () =>
+    getDocs(
+      query(
+        collection(student, "history_classrooms"),
+        where("targetStudentAccessMap.student", "==", true),
+      ),
+    ),
+  );
+
   const teacher = client("teacher");
+  await allow("teacher reads the teacher document", () =>
+    getDoc(doc(teacher, sources, "shared")),
+  );
+  await allow("teacher lists the teacher documents", () =>
+    getDocs(collection(teacher, sources)),
+  );
   await allow("teacher reads a copy", () => getDoc(doc(teacher, views, "shared")));
   await allow("teacher lists copies", () => getDocs(collection(teacher, views)));
   await allow("teacher lists assignment documents", () =>

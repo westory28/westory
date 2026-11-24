@@ -470,8 +470,10 @@ service cloud.firestore {
         );
     }
 
+    // The teacher's assignment document holds the roster. Students read the
+    // roster-free copy and their own assignment document instead.
     function canReadHistoryClassroomResource(data) {
-      return isAdmin() || isTeacherRole() || isAssignedHistoryClassroomStudent(data);
+      return isAdmin() || isTeacherRole();
     }
 
     function canWriteHistoryClassroomResource() {
