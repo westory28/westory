@@ -2164,7 +2164,7 @@ const ManagePoints: React.FC = () => {
     return (
       <div className="flex min-h-screen flex-col bg-gray-50">
         <main className="ws-page flex-1">
-          <div className="rounded-2xl border border-red-200 bg-red-50 px-6 py-5 text-sm font-bold text-red-700">
+          <div className="rounded-lg border border-red-200 bg-red-50 px-6 py-5 text-sm font-bold text-red-700">
             위스 관리 화면을 볼 권한이 없습니다.
           </div>
         </main>
@@ -2218,7 +2218,7 @@ const ManagePoints: React.FC = () => {
             pendingAdjustment && (
               <div
                 role="status"
-                className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900"
+                className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900"
               >
                 <span>
                   {adjustmentFeedback || "완료되지 않은 위스 조정이 있습니다."}
