@@ -220,12 +220,8 @@
   padding-left: 24px;
   border-left: 1px solid var(--ws-border, #e5e7eb);
 }
-.student-wispi-chart-panel,
-.student-wispi-trade-panel {
+.student-wispi-chart-panel {
   min-width: 0;
-}
-.student-wispi-list-pending {
-  display: none;
 }
 .student-wispi button.student-wispi-back {
   display: none;
@@ -297,6 +293,19 @@
   line-height: 1.7;
   overflow-wrap: anywhere;
 }
+.student-wispi-price > div { flex: 1 1 148px; min-width: 0; }
+.student-wispi-price { flex-wrap: wrap; }
+.student-wispi-market-trade { flex: none; }
+.student-wispi-market-pending { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.student-wispi-wallet-ticket { margin-bottom: 24px; }
+.student-wispi-ticket-quote { font-size: 16px; }
+.student-wispi-ticket-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.student-wispi-ticket-heading h2 { min-width: 0; overflow-wrap: anywhere; }
+.student-wispi-wallet-ticket { max-width: 640px; }
+.student-wispi-wallet-ticket .student-wispi-close-ticket { margin-left: auto; flex-shrink: 0; font-size: 14px; font-weight: 500; }
+.student-wispi-tradable-holding { cursor: pointer; }
+.student-wispi-tradable-holding:is(:hover,:focus-within) { background: var(--ws-primary-soft, #eff6ff); }
+.student-wispi-account button.student-wispi-holding-link { padding: 0; min-height: 44px; border: 0; color: var(--ws-primary, #2563eb); background: transparent; text-align: left; font-weight: 700; }
 .student-wispi-order {
   display: grid;
   gap: 12px;
@@ -332,7 +341,7 @@
   word-break: keep-all;
   overflow-wrap: anywhere;
 }
-.student-wispi h2.student-wispi-order-title {
+.student-wispi-account h2.student-wispi-order-title {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -349,13 +358,6 @@
 .student-wispi-rule-help dd {
   margin: 0;
   font-weight: 700;
-}
-.student-wispi button.student-wispi-wallet-link {
-  border: 0;
-  background: transparent;
-  color: var(--ws-primary, #2563eb);
-  text-decoration: underline;
-  text-underline-offset: 4px;
 }
 .student-wispi-submitting {
   display: flex;
@@ -551,22 +553,8 @@
   .student-wispi-market {
     grid-template-columns: 320px minmax(0, 1fr);
   }
-  .student-wispi-detail {
-    grid-template-columns: minmax(0, 1fr) 280px;
-  }
-  .student-wispi-trade-panel {
-    padding-left: 24px;
-    border-left: 1px solid var(--ws-border, #e5e7eb);
-  }
-  .student-wispi-order {
-    border-top: 0;
-    padding-top: 0;
-  }
 }
 @container (max-width: 760px) {
-  .student-wispi-list-pending:not(.is-detail) {
-    display: block;
-  }
   .student-wispi-market {
     grid-template-columns: minmax(0, 1fr);
   }

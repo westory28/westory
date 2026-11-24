@@ -1159,6 +1159,7 @@ const MyPage: React.FC = () => {
             {menu === "wispi" && (
               <React.Suspense fallback={<InlineLoading />}>
                 <StudentWisStockAccountPanel
+                  tradingEpoch={stockStatus.data?.tradingEpoch}
                   tradingEnabled={
                     stockStatus.data?.studentOpen === true &&
                     stockStatus.data?.halted === false

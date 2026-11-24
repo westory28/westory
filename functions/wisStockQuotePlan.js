@@ -87,4 +87,4 @@ function createForecastReader(advanceSlot) {
   };
 }
 
-module.exports = { createForecastReader, specialSessions, specialPrice, planWindow };
+module.exports = { createForecastReader, projectMarket, specialSessions, specialPrice, planWindow };

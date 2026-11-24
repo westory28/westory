@@ -23,6 +23,9 @@ qa.state={semesterId:'2026-2',serverNowMs:Date.now(),mainCash:1000,stocks:[],acc
 export const useAuth=()=>({currentUser:{uid:qa.uid},config:{year:'2026',semester:qa.semester},authGeneration:qa.generation});
 export const getYearSemester=config=>config;
 export const useStudentWisStockAccount=()=>({status:qa.status,data:qa.status==='ready'?qa.state:null,error:qa.error,retry:()=>{qa.calls.push({kind:'refresh'});qa.status='ready';qa.render()}});
+export const useStudentWisStockMarket=enabled=>{if(enabled)throw Error('Funding controls opened a price subscription');return {status:'idle',data:null,error:'',retry(){}}};
+export const placeStudentWisStockOrder=async()=>{throw Error('Funding controls submitted an order')};
+export const cancelStudentWisStockOrder=async()=>{throw Error('Funding controls cancelled an order')};
 export const getStudentWisStockHistory=async()=>{qa.historyCalls++;return {semesterId:'2026-2',entries:[],nextCursor:'',hasMore:false}};
 export const getStudentWisStockReturns=async()=>{throw Error('Funding controls must not request the wallet chart')};
 export const getStudentWisStockBonus=async()=>{

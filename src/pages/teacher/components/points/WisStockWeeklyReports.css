@@ -1,0 +1,151 @@
+.wis-report {
+  min-width: 0;
+  display: grid;
+  gap: 20px;
+  margin-top: 24px;
+}
+.wis-report p {
+  margin: 6px 0;
+}
+.wis-report__toolbar,
+.wis-report__label,
+.wis-report__filename,
+.wis-report__data,
+.wis-report__upload {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.wis-report__toolbar > label,
+.wis-report__upload label,
+.wis-report__title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-weight: 600;
+}
+.wis-report__toolbar input,
+.wis-report__title input {
+  min-height: 44px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-border, #d1d5db);
+  border-radius: 8px;
+}
+.wis-report__title input {
+  flex: 1 1 200px;
+}
+.wis-report__label {
+  gap: 6px;
+}
+.wis-report__label > span,
+.wis-report__upload label > span,
+.wis-report__data p {
+  color: var(--ws-text-muted, #4b5563);
+  font-size: 14px;
+}
+.wis-report__data,
+.wis-report__filename {
+  justify-content: space-between;
+}
+.wis-report__data,
+.wis-report__edition {
+  padding-block: 16px;
+  border-top: 1px solid var(--ws-border, #d1d5db);
+}
+.wis-report__edition {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.wis-report__edition h4 {
+  margin: 0;
+  font-size: 18px;
+}
+.wis-report__upload {
+  padding-top: 12px;
+  border-top: 1px solid var(--ws-border, #d1d5db);
+}
+.wis-report__upload input[type="file"] {
+  width: 100%;
+  max-width: 100%;
+  font: inherit;
+  font-size: 14px;
+}
+.wis-report__upload input::file-selector-button {
+  min-height: 44px;
+  margin-right: 8px;
+  padding-inline: 12px;
+  cursor: pointer;
+}
+.wis-stocks button.wis-report__publish {
+  background: var(--ws-primary, #2563eb);
+  color: white;
+}
+.wis-report__document {
+  min-width: 0;
+}
+.wis-report__filename {
+  padding-bottom: 8px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.wis-report__text {
+  margin: 0;
+  padding-block: 12px;
+  max-height: min(68vh, 800px);
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+  font-family: inherit;
+}
+.wis-report__text > div + div {
+  margin-top: 12px;
+}
+.wis-report__text p:empty {
+  display: none;
+}
+.wis-report__text ul {
+  padding-inline-start: 24px;
+  list-style: disc;
+}
+.wis-report__table {
+  overflow-x: auto;
+}
+.wis-report__table td,
+.wis-report__table th {
+  padding: 6px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--ws-border, #d1d5db);
+}
+.wis-report__pdf {
+  min-width: 0;
+}
+.wis-report__pdf nav {
+  margin-bottom: 8px;
+}
+.wis-report__pdf canvas {
+  max-width: 100%;
+  height: auto !important;
+}
+.wis-report__archive {
+  max-width: 100%;
+}
+.wis-report__archive > div {
+  padding-block: 8px;
+}
+.wis-stocks button.wis-report__archive-row {
+  display: flex;
+  flex-wrap: wrap;
+  width: 100%;
+  gap: 8px;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  text-align: left;
+}
+.wis-report [role="alert"] {
+  color: var(--ws-danger, #b91c1c);
+}

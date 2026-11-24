@@ -44,6 +44,10 @@ import {
 import "./TeacherWisStocks.css";
 import "./WisStockEmergencyControl.css";
 
+const WisStockWeeklyReports = React.lazy(
+  () => import("./WisStockWeeklyReports"),
+);
+
 const emptySettings = (): WisStockSettings => ({
   name: "",
   description: "",
@@ -557,6 +561,7 @@ export default function TeacherWisStocks({
             rules: "시장 규칙",
             preview: "주식 차트 관리",
             investments: "학생 투자 현황",
+            reports: "주식 보고서",
           }[tab] || "종목 관리"
         }
         variant="tabs"
@@ -583,6 +588,9 @@ export default function TeacherWisStocks({
           { key: "rules", label: "시장 규칙" },
           { key: "preview", label: "주식 차트 관리" },
           { key: "investments", label: "학생 투자 현황" },
+          ...(userData?.role === "teacher"
+            ? [{ key: "reports", label: "주식 보고서" }]
+            : []),
         ].map((item) => (
           <button
             key={item.key}
@@ -1305,6 +1313,15 @@ export default function TeacherWisStocks({
             }
           }}
         />
+      )}
+      {tab === "reports" && userData?.role === "teacher" && (
+        <React.Suspense fallback={<p role="status">보고서를 여는 중입니다.</p>}>
+          <WisStockWeeklyReports
+            key={ownerKey}
+            year={year}
+            semester={semester}
+          />
+        </React.Suspense>
       )}
       {market && tab === "investments" && (
         <WisStockInvestmentBoard

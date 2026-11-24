@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "wis_stock_history",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "kind", "order": "ASCENDING"},
+        {"fieldPath": "atMs", "order": "ASCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "entries",
       "queryScope": "COLLECTION",
       "fields": [

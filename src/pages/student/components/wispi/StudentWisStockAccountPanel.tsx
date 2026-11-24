@@ -11,6 +11,9 @@ import {
 import InfoHelp from "../../../../components/common/InfoHelp";
 import StudentWisStockBonusClaim from "./StudentWisStockBonusClaim";
 import StudentWisStockReadStatus from "./StudentWisStockReadStatus";
+import StudentWisStockWalletOrders, {
+  type WalletOrderTarget,
+} from "./StudentWisStockWalletOrders";
 import StudentWisStockWalletDetails from "./StudentWisStockWalletDetails";
 import "./studentWisStocks.css";
 
@@ -24,9 +27,15 @@ const date = new Intl.DateTimeFormat("ko-KR", {
 });
 export default function StudentWisStockAccountPanel({
   tradingEnabled = false,
+  tradingEpoch,
+  initialBuyId,
+  initialHoldingId,
   active = true,
 }: {
   tradingEnabled?: boolean;
+  tradingEpoch?: number;
+  initialBuyId?: string;
+  initialHoldingId?: string;
   active?: boolean;
 }) {
   const { currentUser, config, authGeneration } = useAuth();
@@ -34,6 +43,23 @@ export default function StudentWisStockAccountPanel({
   const scope = getYearSemester(config);
   const account = useStudentWisStockAccount(active);
   const identity = `${currentUser?.uid}:${authGeneration}:${scope.year}:${scope.semester}`;
+  const ownerKey = `${currentUser?.uid}:${scope.year}:${scope.semester}`;
+  const [ticket, setTicket] = useState<{
+    ownerKey: string;
+    target: WalletOrderTarget;
+  } | null>(() =>
+    initialBuyId
+      ? { ownerKey, target: { stockId: initialBuyId, entry: "first" } }
+      : null,
+  );
+  const [focusHolding, setFocusHolding] = useState(initialHoldingId);
+  useEffect(() => {
+    if (ticket && ticket.ownerKey !== ownerKey) {
+      setTicket(null);
+      setFocusHolding(undefined);
+    }
+  }, [ticket, ownerKey]);
+  const mayTrade = tradingEnabled && tradingEpoch !== undefined;
   const checkedEntry = useRef("");
   useEffect(() => {
     if (!active) {
@@ -114,16 +140,39 @@ export default function StudentWisStockAccountPanel({
       if (mounted.current && identityRef.current === key) setBusy(false);
     }
   };
-  if (!active) return null;
+
+  if (!active && !ticket) return null;
   return (
-    <section className="student-wispi-account" aria-label="주식 지갑">
+    <section
+      hidden={!active}
+      className="student-wispi-account"
+      aria-label="주식 지갑"
+    >
       <StudentWisStockReadStatus
         loading={account.status === "loading"}
         error={account.error}
         label="주식 지갑"
         retry={account.retry}
       />
-      {state && (
+      <StudentWisStockWalletOrders
+        key={ownerKey}
+        scope={scope}
+        account={account}
+        tradingEnabled={active && mayTrade}
+        tradingEpoch={tradingEpoch}
+        target={ticket?.ownerKey === ownerKey ? ticket.target : null}
+        onClose={() => {
+          if (
+            ticket?.ownerKey === ownerKey &&
+            state?.account.positions.some(
+              (p) => p.stockId === ticket.target.stockId && p.quantity > 0,
+            )
+          )
+            setFocusHolding(ticket.target.stockId);
+          setTicket(null);
+        }}
+      />
+      {active && state && (
         <div className="student-wispi-wallet-layout">
           <section
             className="student-wispi-wallet-funding"
@@ -277,6 +326,17 @@ export default function StudentWisStockAccountPanel({
             scope={scope}
             state={state}
             graphAvailable={tradingEnabled}
+            onTrade={
+              mayTrade
+                ? (stockId) =>
+                    setTicket({
+                      ownerKey,
+                      target: { stockId, entry: "holding" },
+                    })
+                : undefined
+            }
+            focusHolding={focusHolding}
+            onFocused={() => setFocusHolding(undefined)}
             refreshToken={
               refreshFrom.current === state
                 ? refreshVersion - 1
@@ -290,6 +350,33 @@ export default function StudentWisStockAccountPanel({
             }}
           />
         </div>
+      )}
+      {active && !!state?.account.recentOrders.length && (
+        <section className="student-wispi-section" aria-label="최근 주문 결과">
+          <h2>최근 주문</h2>
+          <ul className="student-wispi-list">
+            {state.account.recentOrders.map((order) => (
+              <li key={order.id}>
+                <div>
+                  <strong>
+                    {state.stocks.find((stock) => stock.id === order.stockId)
+                      ?.settings.name || "주식"}{" "}
+                    · {order.side === "BUY" ? "매수" : "매도"}{" "}
+                    {money(order.quantity)}주
+                  </strong>
+                  <small>접수 가격 {money(order.unitPrice)} 위스</small>
+                </div>
+                <strong>
+                  {order.status === "FILLED"
+                    ? "체결 완료"
+                    : order.status === "CANCELLED"
+                      ? "취소"
+                      : "처리 완료"}
+                </strong>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </section>
   );

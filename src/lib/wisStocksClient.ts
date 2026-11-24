@@ -113,6 +113,7 @@ async function service<T>(
     throw changedOwner();
   return result.data;
 }
+export { service as callWisStockService };
 export function getWisStockManagement(
   config: WisStockConfig,
 ): Promise<WisStockManagement>;

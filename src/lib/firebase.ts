@@ -231,6 +231,8 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
       "executeWisCommandFast",
       "getWisCommandStatusFast",
       "getWisStockManagement",
+      "manageWisStockWeeklyReport",
+      "exportWisStockWeeklyReportData",
       "saveWisStock",
       "saveWisStockMarketRules",
       "setWisStockMarketHalted",
@@ -278,7 +280,15 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
       : getFirebaseFunctions(),
     import("firebase/functions"),
   ]);
-  return httpsCallable<RequestData, ResponseData>(functions, name, options);
+  const callableOptions =
+    name === "exportWisStockWeeklyReportData"
+      ? { timeout: 300_000, ...options }
+      : options;
+  return httpsCallable<RequestData, ResponseData>(
+    functions,
+    name,
+    callableOptions,
+  );
 };
 
 const getFirebaseStorage = () => {

@@ -659,4 +659,4 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
 }
 module.exports = { createWisStockHandlers, MAX_STOCKS, HISTORY_LIMIT, MAX_PRICE, marketPath, receiptPath,
   publicStockPath, publicStockStatus, publicStockMarket, publicStockSettings, readMarket,
-  MAX_MARKET_BYTES, reservedMarketBytes, normalizeSettings, nextPrice, advanceMarket, blankMarket };
+  MAX_MARKET_BYTES, reservedMarketBytes, normalizeSettings, nextPrice, advanceMarket, advanceScheduledSlot, blankMarket };

@@ -40,16 +40,25 @@ const date = new Intl.DateTimeFormat("ko-KR", {
 const tone = (n: number | null) =>
   n === null || n === 0 ? "is-flat" : n > 0 ? "is-up" : "is-down";
 
+type HoldingActions = {
+  onTrade?: (stockId: string) => void;
+  focusHolding?: string;
+  onFocused: () => void;
+};
+
 // The parent keys this component by account, semester, revision and explicit refresh.
 function WalletTable({
   view,
   state,
   scope,
+  onTrade,
+  focusHolding,
+  onFocused,
 }: {
   view: WalletView;
   state: StudentWisStockState;
   scope: WisStockScope;
-}) {
+} & HoldingActions) {
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [history, setHistory] = useState<StudentWisStockHistoryPage | null>(
     null,
@@ -99,7 +108,6 @@ function WalletTable({
   useEffect(() => {
     if (view === "history" && !started.current) void load("");
   }, [view, load]);
-  if (view === "graph") return null;
 
   const stocks = new Map(state.stocks.map((stock) => [stock.id, stock]));
   const holdings = state.account.positions
@@ -114,6 +122,20 @@ function WalletTable({
         (right.value ?? -1) - (left.value ?? -1) ||
         left.stockId.localeCompare(right.stockId),
     );
+  const targetRow = useRef<HTMLButtonElement>(null);
+  const targetIndex = focusHolding
+    ? holdings.findIndex((row) => row.stockId === focusHolding)
+    : -1;
+  useEffect(() => {
+    if (view !== "investments" || targetIndex < 0) return;
+    if (targetIndex >= visible) {
+      setVisible(PAGE_SIZE * Math.ceil((targetIndex + 1) / PAGE_SIZE));
+    } else if (targetRow.current) {
+      targetRow.current.focus();
+      onFocused();
+    }
+  }, [view, targetIndex, visible, onFocused]);
+  if (view === "graph") return null;
   const cost = holdings.reduce((sum, position) => sum + position.costBasis, 0);
   const value = holdings.reduce<number | null>(
     (sum, position) =>
@@ -180,9 +202,36 @@ function WalletTable({
           <tbody>
             {investing
               ? holdings.slice(0, visible).map((position) => (
-                  <tr key={position.stockId}>
+                  <tr
+                    key={position.stockId}
+                    className={
+                      onTrade && position.stock
+                        ? "student-wispi-tradable-holding"
+                        : undefined
+                    }
+                    onClick={
+                      onTrade && position.stock
+                        ? () => onTrade(position.stockId)
+                        : undefined
+                    }
+                  >
                     <th scope="row">
-                      {position.stock?.settings.name || "이전 종목"}
+                      {onTrade && position.stock ? (
+                        <button
+                          type="button"
+                          className="student-wispi-holding-link"
+                          ref={
+                            focusHolding === position.stockId
+                              ? targetRow
+                              : undefined
+                          }
+                          aria-label={`${position.stock.settings.name} 거래`}
+                        >
+                          {position.stock.settings.name}
+                        </button>
+                      ) : (
+                        position.stock?.settings.name || "이전 종목"
+                      )}
                       <small>
                         {money(position.quantity)}주
                         {position.reservedSellQuantity > 0 &&
@@ -277,6 +326,9 @@ export default function StudentWisStockWalletDetails({
   refreshToken,
   refreshDisabled,
   onRefresh,
+  onTrade,
+  focusHolding,
+  onFocused,
 }: {
   scope: WisStockScope;
   state: StudentWisStockState;
@@ -284,7 +336,7 @@ export default function StudentWisStockWalletDetails({
   refreshToken: number;
   refreshDisabled: boolean;
   onRefresh: () => void;
-}) {
+} & HoldingActions) {
   const [selected, setSelected] = useState<WalletView>("investments");
   const view =
     selected === "graph" && !graphAvailable ? "investments" : selected;
@@ -328,7 +380,15 @@ export default function StudentWisStockWalletDetails({
             </button>
           ))}
       </div>
-      <WalletTable key={version} view={view} scope={scope} state={state} />
+      <WalletTable
+        key={version}
+        view={view}
+        scope={scope}
+        state={state}
+        onTrade={onTrade}
+        focusHolding={focusHolding}
+        onFocused={onFocused}
+      />
       {graphAvailable && (
         <StudentWisStockWalletChart
           key={`${version}:${state.marketRevision}`}

@@ -8257,6 +8257,19 @@ exports.executeWisCommandFast = require('./productionGateway/productionSource').
 exports.getWisCommandStatusFast = require('./productionGateway/productionSource').getWisCommandStatusFast;
 exports.getWisRankingPreview = require('./wisRankingPreview').getWisRankingPreview;
 const wisStockHandlers = require('./wisStocks').createWisStockHandlers({ db });
+const weeklyStockExport = require('./wisStockWeeklyExport').createWisStockWeeklyExport({ db });
+exports.exportWisStockWeeklyReportData = onCall(
+  { region: 'us-central1', memory: '512MiB', timeoutSeconds: 300, maxInstances: 4, concurrency: 1 },
+  weeklyStockExport.exportWisStockWeeklyReportData,
+);
+exports.archiveWisStockReportPrices = onSchedule({
+  region: 'us-central1', memory: '256MiB', maxInstances: 1, timeoutSeconds: 120,
+  schedule: '3 0,12 * * *', timeZone: 'Asia/Seoul', retryCount: 3, minBackoffSeconds: 30, maxBackoffSeconds: 300,
+}, weeklyStockExport.archiveWisStockReportPrices);
+exports.manageWisStockWeeklyReport = onCall(
+  { region: 'us-central1', memory: '256MiB', maxInstances: 4, concurrency: 4 },
+  require('./wisStockWeeklyReport').createWisStockWeeklyReport({ db }),
+);
 Object.assign(exports, require('./wisStockTradingExports').createWisStockTradingExports({ db }));
 const stockDailyRanking = require('./wisStockDailyRanking').createWisStockDailyRanking({ db });
 exports.getStudentWisStockRanking = onCall(
