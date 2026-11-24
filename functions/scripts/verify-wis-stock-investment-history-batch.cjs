@@ -68,6 +68,12 @@ function fixture(patches = {}, accountRecords = accounts, fillRecords = fills) {
 }
 const request = data => ({ auth: { uid: 'teacher', token: { auth_time: 9, email: 'fixture@example.invalid' } }, data: { year: '2026', semester: '2', _session: { revision: sessionRevision }, ...data } });
 async function main() {
+  const trace = {view:'rank-trace',through:5,fromMs:0,sinceMs:0};
+  for (const override of [{studentKeys:keys},{through:-1},{fromMs:-1},{sinceMs:null},{after:{id:'wrong'}}]) {
+    const invalid = fixture();
+    await assert.rejects(invalid.call(request({...trace,...override})), error => error.code === 'invalid-argument');
+    assert.equal(invalid.reads.length,0);
+  }
   const all = fixture();
   const result = await all.call(request({ studentKeys: keys.slice(0, 5) }));
   assert.equal(result.histories.length, 5); assert.deepEqual(result.histories.map(row => row.studentKey), keys.slice(0, 5));
@@ -116,8 +122,9 @@ async function main() {
     ['site_settings/semester_active', { semesterId: '2027-1', revision: 1 }, 'failed-precondition'],
     ['application_sessions/teacher/sessions/9', { ...baseDocuments['application_sessions/teacher/sessions/9'], sessionRevision: 'b'.repeat(64) }, 'unauthenticated']]) {
     const denied = fixture({ [path]: value }); await assert.rejects(denied.call(request({ studentKeys: [keys[0]] })), error => error.code === code); assert.equal(denied.queries.length, 0);
+    await assert.rejects(denied.call(request(trace)), error => error.code === code); assert.equal(denied.queries.length,0);
   }
-  console.log(JSON.stringify({ passed: 20, fiveStudentDocumentReads: all.reads.length, fiveStudentQueries: all.queries.length,
+  console.log(JSON.stringify({ passed: 29, fiveStudentDocumentReads: all.reads.length, fiveStudentQueries: all.queries.length,
     sharedDocumentReads: 8, marketDecodesForBatch: 1, writes: 0, productionReads: 0,
     checks: 'bounded batch, legacy single input, current named holdings, multiple/zero/sell-reserved/removed/liquidated positions, no owner/account identifiers, unchanged read budget, account-scoped complete ledger projections, real reconstruction, immutable read-only transaction, role/session/semester/membership denial' }));
 }
