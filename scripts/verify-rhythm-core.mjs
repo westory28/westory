@@ -35,7 +35,7 @@ assert.equal(songs.length, 4);
 assert.equal(new Set(songs.map((s) => s.id)).size, 4);
 assert.deepEqual(
   Array.from(songs, (s) => s.title),
-  ["아리랑", "얼쑤, 달려라", "풍년 마당", "우리의 산하"],
+  ["아리랑", "얼쑤, 달려라", "풍년 마당", "우리의 강산"],
 );
 for (const song of songs) {
   assert(song.duration >= 40 && song.duration <= 65, song.id);

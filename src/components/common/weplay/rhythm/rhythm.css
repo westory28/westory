@@ -544,13 +544,19 @@
   fill: #e5b51e22;
   stroke-dasharray: 3 4;
 }
+.rhythm-note-track {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
 .rhythm-note {
   position: absolute;
+  left: 0;
   top: 50%;
   width: clamp(72px, 8cqw, 106px);
   height: clamp(72px, 8cqw, 106px);
   transform: translate(-50%, -50%);
-  will-change: left;
+  will-change: transform;
 }
 .rhythm-note img {
   width: 100%;

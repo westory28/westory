@@ -1,10 +1,12 @@
 import {
+  memo,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
+  type MutableRefObject,
 } from "react";
 import RhythmHelp from "./RhythmHelp";
 import { useAuth } from "../../../../contexts/AuthContext";
@@ -43,6 +45,7 @@ import {
   type DrumHand,
   type RhythmDifficulty,
   type RhythmJudgement,
+  type RhythmNote,
 } from "./rhythmCore";
 import "./rhythm.css";
 
@@ -75,6 +78,110 @@ type CollectedNote = {
   dy: number;
   points: number;
 };
+
+/** Only note membership uses React; the audio clock moves the visible notes. */
+const RhythmLaneNotes = memo(function RhythmLaneNotes({
+  chart,
+  audio,
+  judged,
+  phase,
+  offset,
+  travelSeconds,
+}: {
+  chart: RhythmNote[];
+  audio: MutableRefObject<RhythmAudio | null>;
+  judged: MutableRefObject<Set<string>>;
+  phase: Phase;
+  offset: number;
+  travelSeconds: number;
+}) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const nodes = useRef(new Map<string, HTMLDivElement>());
+  const width = useRef(0);
+  const time = useRef(0);
+  const visible = useRef<RhythmNote[]>([]);
+  const [notes, setNotes] = useState<RhythmNote[]>([]);
+  const position = (node: HTMLDivElement, note: RhythmNote) => {
+    const x =
+      width.current *
+      (0.14 + ((note.time - time.current) / travelSeconds) * 0.78);
+    node.style.transform = `translate3d(${x}px, -50%, 0) translateX(-50%)`;
+  };
+
+  useEffect(() => {
+    let frame = 0;
+    let first = 0;
+    let previousTime = -Infinity;
+    const draw = () => {
+      time.current = (audio.current?.currentTime ?? 0) - offset / 1000;
+      if (time.current < previousTime) first = 0;
+      previousTime = time.current;
+      while (
+        first < chart.length &&
+        chart[first].time < time.current - HIT_WINDOW_SECONDS
+      )
+        first++;
+      const upcoming: RhythmNote[] = [];
+      for (let index = first; index < chart.length; index++) {
+        const note = chart[index];
+        if (note.time > time.current + travelSeconds) break;
+        if (judged.current.has(note.id)) continue;
+        upcoming.push(note);
+        const node = nodes.current.get(note.id);
+        if (node) position(node, note);
+      }
+      if (
+        upcoming.length !== visible.current.length ||
+        upcoming.some((note, index) => note !== visible.current[index])
+      ) {
+        visible.current = upcoming;
+        setNotes(upcoming);
+      }
+      if (phase === "playing") frame = requestAnimationFrame(draw);
+    };
+    const track = trackRef.current!;
+    width.current = track.clientWidth;
+    const observer = new ResizeObserver(([entry]) => {
+      width.current = entry.contentRect.width;
+      for (const note of visible.current) {
+        const node = nodes.current.get(note.id);
+        if (node) position(node, note);
+      }
+    });
+    observer.observe(track);
+    draw();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [chart, audio, judged, phase, offset, travelSeconds]);
+
+  return (
+    <div className="rhythm-note-track" ref={trackRef}>
+      {notes.map((note) => (
+        <div
+          key={note.id}
+          ref={(node) => {
+            if (node) {
+              nodes.current.set(note.id, node);
+              position(node, note);
+            } else nodes.current.delete(note.id);
+          }}
+          data-kind={note.kind}
+          data-hand={note.hand}
+          data-note-id={note.id}
+          className={`rhythm-note rhythm-note--${note.kind}`}
+        >
+          <RhythmNoteArt kind={note.kind} />
+          <b className="rhythm-note-hand">
+            {note.hand === "left" ? "왼" : "오"}
+          </b>
+          <span>{note.kind === "center" ? "쿵" : "덕"}</span>
+        </div>
+      ))}
+    </div>
+  );
+});
 
 export default function RhythmGame({
   preview = false,
@@ -125,6 +232,7 @@ export default function RhythmGame({
     Partial<Record<DrumHand, { id: number; kind: DrumKind }>>
   >({});
   const canvasRef = useRef<HTMLDivElement>(null);
+  const [canvasWidth, setCanvasWidth] = useState(0);
   const scoreTargetRef = useRef<HTMLElement>(null);
   const [lastStrike, setLastStrike] = useState<{
     kind: DrumKind;
@@ -227,6 +335,14 @@ export default function RhythmGame({
   useEffect(() => {
     if (phase === "result") resultRef.current?.focus();
   }, [phase]);
+  useEffect(() => {
+    const canvas = canvasRef.current!;
+    const observer = new ResizeObserver(() => {
+      setCanvasWidth(canvas.clientWidth);
+    });
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, []);
 
   const pause = useCallback(() => {
     if (phaseRef.current !== "playing") return;
@@ -454,6 +570,7 @@ export default function RhythmGame({
   useEffect(() => {
     if (phase !== "playing") return;
     let raf = 0;
+    let lastDisplayTime = -Infinity;
     const tick = () => {
       if (phaseRef.current !== "playing" || !audio.current) return;
       if (audio.current.state !== "running" || !playableRef.current) {
@@ -476,7 +593,10 @@ export default function RhythmGame({
         scoreRef.current = next;
         setScore(next);
       }
-      setElapsed(time);
+      if (time - lastDisplayTime >= 0.1 || time < lastDisplayTime) {
+        lastDisplayTime = time;
+        setElapsed(time);
+      }
       if (advanced.terminated) {
         finish(advanced.endedAt, true);
         return;
@@ -682,8 +802,6 @@ export default function RhythmGame({
   };
   const active =
     phase === "playing" || phase === "paused" || phase === "starting";
-  const chartTime = elapsed - offset / 1000;
-  const canvasWidth = canvasRef.current?.clientWidth || stage.width;
   const noteWidth = Math.min(106, Math.max(72, canvasWidth * 0.08));
   const closestNoteGap = useMemo(
     () =>
@@ -701,12 +819,6 @@ export default function RhythmGame({
       0.55,
       ((canvasWidth - 64) * 0.78 * closestNoteGap) / (noteWidth + 8),
     ),
-  );
-  const upcoming = chart.filter(
-    (note) =>
-      !judged.current.has(note.id) &&
-      note.time - chartTime >= -HIT_WINDOW_SECONDS &&
-      note.time - chartTime <= laneTravelSeconds,
   );
   const accuracyTotal = Math.max(
     chart.length,
@@ -1148,24 +1260,14 @@ export default function RhythmGame({
                           <circle cx="50" cy="50" r="20" />
                         </svg>
                       </div>
-                      {upcoming.map((note) => (
-                        <div
-                          key={note.id}
-                          data-kind={note.kind}
-                          data-hand={note.hand}
-                          data-note-id={note.id}
-                          className={`rhythm-note rhythm-note--${note.kind}`}
-                          style={{
-                            left: `${14 + ((note.time - chartTime) / laneTravelSeconds) * 78}%`,
-                          }}
-                        >
-                          <RhythmNoteArt kind={note.kind} />
-                          <b className="rhythm-note-hand">
-                            {note.hand === "left" ? "왼" : "오"}
-                          </b>
-                          <span>{note.kind === "center" ? "쿵" : "덕"}</span>
-                        </div>
-                      ))}
+                      <RhythmLaneNotes
+                        chart={chart}
+                        audio={audio}
+                        judged={judged}
+                        phase={phase}
+                        offset={offset}
+                        travelSeconds={laneTravelSeconds}
+                      />
                       {lastStrike && (
                         <div
                           key={lastStrike.id}
@@ -1233,31 +1335,31 @@ export default function RhythmGame({
                               event.button !== 0
                             )
                               return;
+                            const hitButton = (
+                              event.target as Element
+                            ).closest<HTMLButtonElement>("[data-hit-kind]");
+                            if (hitButton) {
+                              event.preventDefault();
+                              strike(
+                                hitButton.dataset.hitKind as DrumKind,
+                                hitButton.dataset.hand as DrumHand,
+                              );
+                              return;
+                            }
                             const point = rhythmPointerPosition(
                               event.currentTarget.getBoundingClientRect(),
                               event.clientX,
                               event.clientY,
                               stage.rotated,
                             );
-                            const hitButton = (
-                              event.target as Element
-                            ).closest<HTMLButtonElement>("[data-hit-kind]");
-                            const kind = hitButton
-                              ? (hitButton.dataset.hitKind as DrumKind)
-                              : classifyDrumHit(point.x, point.y);
+                            const kind = classifyDrumHit(point.x, point.y);
                             if (kind) {
                               event.preventDefault();
-                              if (hitButton) {
-                                strike(
-                                  hitButton.dataset.hitKind as DrumKind,
-                                  hitButton.dataset.hand as DrumHand,
-                                );
-                              } else
-                                strike(
-                                  kind,
-                                  point.x < 0.5 ? "left" : "right",
-                                  point,
-                                );
+                              strike(
+                                kind,
+                                point.x < 0.5 ? "left" : "right",
+                                point,
+                              );
                             }
                           }}
                         >

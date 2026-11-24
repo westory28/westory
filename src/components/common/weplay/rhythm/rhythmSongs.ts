@@ -474,7 +474,7 @@ export const RHYTHM_SONGS: readonly RhythmSong[] = [
   makeSong(
     {
       id: "our-landscape",
-      title: "우리의 산하",
+      title: "우리의 강산",
       subtitle: "창작곡 · 웅장한 행진",
       bpm: 84,
       beatsPerBar: 4,

@@ -993,6 +993,83 @@ if (process.argv.includes('--settings-only')) {
   }
   process.exit(0);
 }
+if (process.argv.includes("--performance-only")) {
+  try {
+    const page = await pageFor();
+    await page.goto(`${base}/?open`);
+    await phase(page, "ready");
+    await page.locator(".rhythm-song").nth(1).click();
+    await page.locator(".rhythm-difficulty button").nth(2).click();
+    await start(page);
+    const session = await page.context().newCDPSession(page);
+    await session.send("Performance.enable");
+    const before = await session.send("Performance.getMetrics");
+    const result = await page.evaluate(async () => {
+      const qa = window.rhythmQA;
+      const notes = qa.chart(1, "hard").slice(0, 120);
+      const intervals = [], inputTimes = [];
+      let previousFrame = performance.now();
+      const frame = () => new Promise(resolve => requestAnimationFrame(now => {
+        intervals.push(now - previousFrame);
+        previousFrame = now;
+        resolve();
+      }));
+      let expectedScore = 0;
+      let chartTime = notes[0].time - 0.25;
+      for (const [index, note] of notes.entries()) {
+        // Advance every frame so the benchmark includes moving notes between
+        // hits, as a real AudioContext does. Frozen timestamps hide rerenders.
+        const from = chartTime;
+        const steps = Math.max(1, Math.ceil((note.time - from) * 60));
+        for (let step = 1; step <= steps; step++) {
+          chartTime = from + ((note.time - from) * step) / steps;
+          qa.time = chartTime;
+          await frame();
+        }
+        const code = note.kind === "center"
+          ? note.hand === "left" ? "ArrowLeft" : "ArrowRight"
+          : note.hand === "left" ? "KeyZ" : "KeyX";
+        const started = performance.now();
+        window.dispatchEvent(new KeyboardEvent("keydown", {
+          code, key: code, bubbles: true, cancelable: true,
+        }));
+        window.dispatchEvent(new KeyboardEvent("keyup", {
+          code, key: code, bubbles: true,
+        }));
+        inputTimes.push(performance.now() - started);
+        const hit = index + 1;
+        expectedScore += hit >= 100 ? 1500 : hit >= 50 ? 1250 : hit >= 20 ? 1100 : hit >= 10 ? 1050 : 1000;
+        await frame();
+      }
+      const percentile = values => [...values].sort((a,b) => a-b)[Math.floor(values.length * .95)];
+      return {
+        hits: notes.length, expectedScore,
+        inputP95Ms: percentile(inputTimes), frameP95Ms: percentile(intervals.slice(2)),
+        frames: intervals.length,
+        minChartGapSeconds: Math.min(...notes.slice(1).map((note,index) => note.time-notes[index].time)),
+        rankingCalls: qa.rankingCalls.length, saves: qa.saves.length,
+      };
+    });
+    const after = await session.send("Performance.getMetrics");
+    const metric = (values,name) => values.metrics.find(item => item.name === name)?.value ?? 0;
+    for (const name of ["LayoutCount", "RecalcStyleCount", "LayoutDuration", "RecalcStyleDuration", "ScriptDuration", "TaskDuration"])
+      result[name] = metric(after,name)-metric(before,name);
+    assert(result.LayoutCount < result.frames * 0.75,
+      `Moving notes must avoid per-frame layout: ${result.LayoutCount} layouts / ${result.frames} frames`);
+    assert.equal(await score(page), result.expectedScore, "Dense valid inputs preserve every fever-adjusted point");
+    assert.equal(await combo(page), result.hits, "Dense valid inputs preserve the full combo");
+    assert.equal(result.rankingCalls, 0, "Dense practice inputs send no ranking requests");
+    assert.equal(result.saves, 0, "Dense practice inputs write no publication state");
+    assert.deepEqual(errors, []);
+    assert.deepEqual(external, []);
+    await fs.writeFile(path.join(evidence, "performance-report.json"), JSON.stringify(result,null,2));
+    console.log(JSON.stringify(result,null,2));
+  } finally {
+    await browser.close();
+    await new Promise(resolve => server.close(resolve));
+  }
+  process.exit(0);
+}
 try {
   // Real Web Audio output after touch/click, including an old shared mute and
   // a browser/device interruption. Synthetic services never write student data.
@@ -1011,6 +1088,7 @@ try {
       const analyser = player.context.createAnalyser();
       player.compressor.connect(analyser);
       const values = new Float32Array(analyser.fftSize);
+      const startTime = player.context.currentTime;
       let maximum = 0;
       const until = performance.now() + 1400;
       while (performance.now() < until) {
@@ -1019,11 +1097,11 @@ try {
         await new Promise(resolve => setTimeout(resolve, 30));
       }
       player.compressor.disconnect(analyser);
-      return {maximum, state:player.state, volume:player.master.gain.value};
+      return {maximum, state:player.state, volume:player.master.gain.value, startTime, endTime:player.context.currentTime, origin:player.origin, sources:player.sources.size};
     });
     const initial = await energy();
     assert.equal(initial.state, "running");
-    assert(initial.maximum > 0.001 && initial.volume > 0, "Started song emits an audible signal");
+    assert(initial.maximum > 0.001 && initial.volume > 0, `Started song emits an audible signal: ${JSON.stringify(initial)}`);
     const reads = await readCount(soundPage);
     await soundPage.evaluate(() => window.rhythmQA.audio.at(-1).pause());
     await phase(soundPage, "paused");
@@ -1193,7 +1271,7 @@ try {
       "아리랑",
       "얼쑤, 달려라",
       "풍년 마당",
-      "우리의 산하",
+      "우리의 강산",
     ]);
     assert.deepEqual(
       await page.locator(".rhythm-difficulty button").allTextContents(),
