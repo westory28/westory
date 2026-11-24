@@ -40,35 +40,47 @@ const server = http.createServer((req, res) => {
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
-const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || 'msedge', headless: true });
+const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_BROWSER_CHANNEL || 'msedge', headless: true, args: ['--autoplay-policy=document-user-activation-required'] });
 const failures = [];
 try {
   for (const width of [320, 390, 768, 1280, 1366, 1440, 1920]) {
-    const page = await browser.newPage({ viewport: { width, height: width === 1366 ? 768 : width < 600 ? 740 : 1000 } });
+    const page = await browser.newPage({ viewport: { width, height: width === 1366 ? 768 : width < 600 ? 740 : 1000 }, isMobile: width < 1000, hasTouch: width < 1000 });
     page.on('pageerror', error => failures.push(error.message));
     await page.route('**/*', route => route.request().url().startsWith(origin) ? route.continue() : route.abort());
     await page.addInitScript(() => {
-      window.qa = { starts: 0, stops: 0, spoken: [], canceled: 0, tones: 0, closed: 0, voiceListeners: [] };
+      window.qa = { starts: 0, stops: 0, spoken: [], attempts: [], utterances: [], envelopes: [], frequencies: [], canceled: 0, tones: 0, closed: 0, voiceListeners: [] };
       Object.defineProperty(Element.prototype, 'requestFullscreen', { configurable: true, value: undefined });
       class AudioContextMock {
         state = 'suspended'; currentTime = 0; destination = {};
         resume() { if(window.qa.audioBlocked) {this.state = 'suspended';return Promise.reject(new Error('Blocked'));} this.state = 'running';return Promise.resolve(); }
         close() { this.state = 'closed';window.qa.closed++;return Promise.resolve(); }
-        createOscillator() { return { frequency: {}, connect(){}, disconnect(){}, start(){window.qa.tones++;}, stop(){} }; }
-        createGain() { return { gain: { setValueAtTime(){}, linearRampToValueAtTime(){}, exponentialRampToValueAtTime(){} }, connect(){}, disconnect(){} }; }
+        createOscillator() { return { frequency: {}, connect(){}, disconnect(){}, start(){window.qa.tones++;window.qa.frequencies.push(this.frequency.value);}, stop(){} }; }
+        createGain() { return { gain: { setValueAtTime(){}, linearRampToValueAtTime(value,time){window.qa.envelopes.push({value,time});}, exponentialRampToValueAtTime(){} }, connect(){}, disconnect(){} }; }
       }
       Object.defineProperty(window, 'AudioContext', { configurable: true, value: AudioContextMock });
       Object.defineProperty(window, 'SpeechSynthesisUtterance', { configurable: true, value: class { constructor(text) { this.text = text; } } });
       Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: {
         getVoices: () => window.qa.voices ?? [{ name: 'English Natural', lang: 'en-US', localService: true }, { name: '한국어 원격 Natural', lang: 'ko-KR', localService: false }, { name: '한국어 Natural', lang: 'ko-KR', localService: true }],
-        speak: utterance => { if(window.qa.speechBlocked) utterance.onerror?.({error:'not-allowed'});else window.qa.spoken.push({ text: utterance.text, voice: utterance.voice?.name, lang: utterance.lang }); },
+        speak: utterance => {
+          window.qa.attempts.push({ text: utterance.text, voice: utterance.voice?.name ?? null, lang: utterance.lang });
+          window.qa.utterances.push(utterance);
+          const error = window.qa.speechBlocked ? 'not-allowed' : window.qa.speechFailures?.shift();
+          if (error === 'silent-end') utterance.onend?.();
+          else if (error) utterance.onerror?.({error});
+          else if (!window.qa.silentEngine) {
+            window.qa.spoken.push({ text: utterance.text, voice: utterance.voice?.name, lang: utterance.lang });
+            utterance.onstart?.();
+          }
+        },
         resume: () => {},
         cancel: () => window.qa.canceled++,
         addEventListener: (event, listener) => { if(event === 'voiceschanged') window.qa.voiceListeners.push(listener); },
         removeEventListener: (event, listener) => { window.qa.voiceListeners = window.qa.voiceListeners.filter(item => item !== listener); },
       } });
     });
-    await page.clock.install({ time: new Date('2026-11-23T16:30:00+09:00') });
+    // Leave headroom between install and pause: a loaded workstation may process
+    // those browser commands seconds apart, but the fixture still starts at 16:30.
+    await page.clock.install({ time: new Date('2026-11-23T16:29:00+09:00') });
     await page.clock.pauseAt(new Date('2026-11-23T16:30:00+09:00'));
     await page.goto(origin);
     if (width === 320 || width === 390) await page.evaluate(width => {
@@ -102,7 +114,9 @@ try {
     await page.clock.fastForward(500);
     const audible = await page.evaluate(() => window.qa);
     assert.equal(audible.tones, 2);
-    assert.deepEqual(audible.spoken, [{ text: '비파메탈, 급락.', voice: width === 320 ? '한국어 원격 Neural' : width === 390 ? 'Google 한국의' : '한국어 Natural', lang: 'ko-KR' }], 'opening the display plays sound and the best available Korean voice without another toggle');
+    assert.deepEqual(audible.spoken, [{ text: '비파메탈, 급락.', voice: width === 320 || width === 390 ? '한국어 기본' : '한국어 Natural', lang: 'ko-KR' }], 'opening the display prefers installed Korean speech over remote voices');
+    assert.deepEqual(audible.frequencies, [392, 523.25], 'rounded low-register chime');
+    assert.deepEqual(audible.envelopes, [{value:.045,time:.08},{value:.045,time:.28}], 'lower peak and gradual attack');
     const geometry = await display.locator('.wis-exchange__actions').evaluate(node => {
       const buttons = [...node.querySelectorAll('button')].map(button => { const r = button.getBoundingClientRect();return { left: r.left, right: r.right, width: r.width, height: r.height }; });
       return { buttons, viewport: innerWidth, scroll: document.querySelector('.wis-exchange').scrollWidth };
@@ -199,7 +213,78 @@ try {
       await page.evaluate(() => window.qa.fail());
       assert.equal(await popup.isVisible(), false);
       assert(await page.evaluate(before => window.qa.canceled > before, beforeDisconnect), 'connection failure immediately stops speech');
+
+      await page.clock.fastForward(1000);await page.evaluate(() => window.qa.tick());
+      await popup.waitFor();
+      if (await speech.getAttribute('aria-pressed') === 'true') await speech.click();
+      await page.evaluate(() => {
+        window.qa.voices = [
+          {name:'설치된 기본 한국어',lang:'ko_KR',localService:true,default:true},
+          {name:'설치된 한국어',lang:'ko-KR',localService:true},
+          {name:'원격 Natural',lang:'ko-KR',localService:false},
+        ];
+        window.qa.speechFailures = ['silent-end','voice-unavailable'];
+      });
+      const beforeFallback = await page.evaluate(() => window.qa.attempts.length);
+      await speech.click();
+      assert.equal(await page.evaluate(() => window.qa.attempts.length), beforeFallback + 1, 'manual enable speaks synchronously inside the click, before a timer');
+      await page.clock.runFor(400);
+      assert.deepEqual(await page.evaluate(before => window.qa.attempts.slice(before).map(item => item.voice), beforeFallback), ['설치된 기본 한국어','원격 Natural',null], 'immediate silent end and failed named voices try another Korean engine then device default within three attempts');
+      await page.evaluate(before => {
+        window.qa.utterances[before].onerror?.({error:'not-allowed'});
+        window.qa.utterances[before].onend?.();
+      }, beforeFallback);
+      assert.equal(await speech.getAttribute('aria-pressed'), 'true', 'stale errors cannot turn off a recovered request');
+
+      await speech.click();
+      await page.evaluate(() => { window.qa.speechFailures = ['network']; });
+      const beforeCancelRetry = await page.evaluate(() => window.qa.attempts.length);
+      await speech.click();await speech.click();await page.clock.runFor(200);
+      assert.equal(await speech.getAttribute('aria-pressed'), 'false');
+      assert.equal(await page.evaluate(() => window.qa.attempts.length), beforeCancelRetry + 1, 'manual off cancels a queued engine fallback');
+      await speech.click();
+
+      await speech.click();
+      await page.evaluate(() => { window.qa.speechBlocked = true; });
+      const beforeBlocked = await page.evaluate(() => window.qa.attempts.length);
+      await speech.click();await page.clock.runFor(500);
+      assert.equal(await speech.getAttribute('aria-pressed'), 'false');
+      assert.equal(await page.evaluate(() => window.qa.attempts.length), beforeBlocked + 1, 'permission denial never retries automatically');
+      await page.evaluate(() => { window.qa.speechBlocked = false; });
+      await speech.click();
+      assert.equal(await speech.getAttribute('aria-pressed'), 'true', 'explicit tap recovers permission denial');
+
+      await page.clock.runFor(3000);
+      assert.equal(await popup.isVisible(), false);
+      await speech.click();
+      const beforeConfirmation = await page.evaluate(() => window.qa.attempts.length);
+      await speech.click();
+      assert.deepEqual(await page.evaluate(before => window.qa.attempts.slice(before).map(item => item.text), beforeConfirmation), ['음성 안내를 켰습니다.'], 'enabling without a visible bulletin checks the engine immediately');
+      await speech.click();
+      await page.evaluate(() => { window.qa.silentEngine = true; });
+      const beforeSilent = await page.evaluate(() => window.qa.attempts.length);
+      await speech.click();await page.clock.runFor(8000);
+      assert.equal(await speech.getAttribute('aria-pressed'), 'false', 'missing start events report a recoverable engine failure');
+      assert.equal(await page.evaluate(() => window.qa.attempts.length), beforeSilent + 3, 'silent engines have a bounded fallback count and total deadline');
+      await page.evaluate(() => { window.qa.silentEngine = false; });
+      await speech.click();
+      const beforeDisabled = await page.evaluate(() => window.qa.attempts.length);
+      await page.evaluate(() => window.qa.fail());
+      await speech.click();await speech.click();
+      assert.equal(await page.evaluate(() => window.qa.attempts.length), beforeDisabled, 'disconnected display does not speak confirmation');
+      await page.evaluate(() => window.qa.emit());
+      await page.evaluate(() => {
+        Object.defineProperty(document, 'hidden', {configurable:true,value:true});
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      await speech.click();
+      assert.equal(await page.evaluate(() => window.qa.attempts.length), beforeDisabled, 'hidden display does not speak confirmation');
+      await page.evaluate(() => {
+        Object.defineProperty(document, 'hidden', {configurable:true,value:false});
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
     }
+    if (await popup.isVisible()) await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
     assert.equal(await page.evaluate(() => window.qa.stops), 1);
     assert.equal(await page.evaluate(() => window.qa.closed), 1);
@@ -248,7 +333,13 @@ try {
   });
   await nativePage.goto(origin);
   await nativePage.getByRole('button', { name: '전광판 열기', exact: true }).click();
-  await nativePage.waitForFunction(() => window.qa.peak > .001);
+  try {
+    await nativePage.waitForFunction(() => window.qa.peak > .001);
+  } catch (error) {
+    const state = await nativePage.evaluate(() => ({states:window.qa.states,peak:window.qa.peak,speechRequests:window.qa.speechRequests,speechErrors:window.qa.speechErrors,display:document.querySelector('.wis-exchange')?.textContent}));
+    await fs.writeFile(path.join(output, 'native-audio-failure.json'), JSON.stringify(state, null, 2) + '\n');
+    throw new Error('Native audio output did not start: ' + JSON.stringify(state), {cause:error});
+  }
   await nativePage.waitForFunction(() => window.qa.speechRequests > 0);
   await nativePage.locator('.wis-exchange__surge').waitFor({ state: 'hidden', timeout: 5000 });
   await nativePage.waitForFunction(() => window.qa.speechEnds.length > 0 || window.qa.speechErrors.length > 0, { timeout: 8000 });
@@ -266,5 +357,5 @@ try {
   await fs.writeFile(path.join(output, 'native-audio.json'), JSON.stringify(nativeAudio, null, 2) + '\n');
   await nativePage.close();
   assert.deepEqual(failures, []);
-  console.log(JSON.stringify({ passed: true, nativeAudio, widths: [320,390,768,1280,1366,1440,1920], checks: ['80% popup size', 'three-second expiry', 'button/outside/Escape dismissal', 'half-hour expiry', 'ten-minute cadence', 'zero new subscriptions', 'sound and speech on opening', 'delayed voice availability', 'independent sound and speech', 'high-quality Korean voice selection with local tie-break', 'keyboard toggles', '44px non-overlapping controls', 'audio and subscription cleanup'], output }));
+  console.log(JSON.stringify({ passed: true, nativeAudio, widths: [320,390,768,1280,1366,1440,1920], checks: ['80% popup size', 'three-second expiry', 'button/outside/Escape dismissal', 'half-hour expiry', 'ten-minute cadence', 'zero new subscriptions', 'sound and speech on opening', 'delayed voice availability', 'independent sound and speech', 'installed default Korean voice priority', 'bounded named-voice/device fallback', 'immediate user-gesture speech and no-bulletin confirmation', 'not-allowed requires explicit recovery', 'silent-engine watchdog and stale-event isolation', 'disabled/hidden confirmation guard', 'softer lower-register chime envelope', 'keyboard toggles', '44px non-overlapping controls', 'audio and subscription cleanup'], output }));
 } finally { await browser.close();await new Promise(resolve => server.close(resolve)); }
