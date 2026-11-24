@@ -163,7 +163,7 @@ const ExamOmrConfig: React.FC = () => {
             <h2 className="font-bold text-lg text-gray-700">객관식 문항</h2>
             <button
               onClick={addObjective}
-              className="text-xs bg-green-50 text-green-700 px-3 py-1.5 rounded font-bold hover:bg-green-100 border border-green-200"
+              className="min-h-10 text-sm bg-green-50 text-green-700 px-3 py-1.5 rounded-lg font-bold hover:bg-green-100 border border-green-200"
             >
               + 문항 추가
             </button>
@@ -219,7 +219,7 @@ const ExamOmrConfig: React.FC = () => {
             <h2 className="font-bold text-lg text-gray-700">서술형 문항</h2>
             <button
               onClick={addSubjectiveParent}
-              className="text-xs bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded font-bold hover:bg-indigo-100 border border-indigo-200"
+              className="min-h-10 text-sm bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-100 border border-indigo-200"
             >
               + 큰 문항 추가
             </button>
