@@ -34,6 +34,14 @@ import {
 
 const ROLE_SESSION_KEY = "westoryPortalRole";
 const VISIBILITY_SETTINGS_FRESH_MS = 5000;
+// Pages whose query only switches a tab they already render in place. A tab
+// change inside one of them keeps the verified page mounted during the server
+// re-check; every other page and every path change keeps the full gate.
+const IN_PLACE_QUERY_STUDENT_PATHS = new Set([
+  "/student/points",
+  "/student/mypage",
+  "/student/lesson/maps",
+]);
 const WEPLAY_COMPACT_NAVIGATION = "(max-width: 1279px), (any-pointer: coarse)";
 
 const StudentHistoryDictionaryController = lazyWithRetry(
@@ -171,13 +179,35 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const studentVisibilityRouteVerified =
     !isVisibilityControlledStudentRoute ||
     studentVisibilityCheckedRouteKey === studentVisibilityRouteKey;
+  const studentSettingsLoaded =
+    configReady && menuConfigReady && interfaceConfigReady;
+  // What the previous commit showed for this account: the student shell, and
+  // the student page for one exact path.
+  const shownStudentShellRef = React.useRef("");
+  const shownStudentPageRef = React.useRef("");
+  const studentShellOwner = currentUser?.uid || "";
+  const studentPageIdentity = `${studentShellOwner}|${location.pathname}`;
+  // Only a tab change inside the page that is verified and still mounted, and
+  // only while the server-confirmed settings already held allow the new tab.
+  // The same server re-check still runs and closes the page if it says so.
+  const keepStudentPageDuringRecheck =
+    profileReady &&
+    isStudentRoute &&
+    isVisibilityControlledStudentRoute &&
+    studentSettingsLoaded &&
+    !studentVisibilityRouteVerified &&
+    IN_PLACE_QUERY_STUDENT_PATHS.has(location.pathname) &&
+    shownStudentPageRef.current === studentPageIdentity &&
+    getStudentRouteAccess(
+      { pathname: location.pathname, search: location.search },
+      config,
+      menuConfig,
+    ).allowed;
   const studentAccessReady =
     !isStudentRoute ||
-    (configReady &&
-      menuConfigReady &&
-      interfaceConfigReady &&
-      studentVisibilityRouteVerified &&
-      !studentVisibilityRefreshing);
+    (studentSettingsLoaded &&
+      ((studentVisibilityRouteVerified && !studentVisibilityRefreshing) ||
+        keepStudentPageDuringRecheck));
   const studentRouteAccess = React.useMemo(
     () =>
       studentAccessReady
@@ -199,6 +229,9 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     ],
   );
 
+  const settingsLoadedAtRef = React.useRef(settingsLoadedAt);
+  settingsLoadedAtRef.current = settingsLoadedAt;
+
   useEffect(() => {
     if (
       !portalAllowed ||
@@ -212,11 +245,9 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
     const routeKey = studentVisibilityRouteKey;
     let cancelled = false;
+    const loadedAt = settingsLoadedAtRef.current;
 
-    if (
-      settingsLoadedAt > 0 &&
-      Date.now() - settingsLoadedAt <= VISIBILITY_SETTINGS_FRESH_MS
-    ) {
+    if (loadedAt > 0 && Date.now() - loadedAt <= VISIBILITY_SETTINGS_FRESH_MS) {
       setStudentVisibilityCheckedRouteKey(routeKey);
       setStudentVisibilityRefreshing(false);
       return undefined;
@@ -233,7 +264,12 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
     return () => {
       cancelled = true;
+      // The page that asked for this check is gone. Leaving the flag set would
+      // keep a later page that needs no check behind the loader.
+      setStudentVisibilityRefreshing(false);
     };
+    // One check per page visit: the two settings finish at different moments,
+    // and reacting to each timestamp would read both documents a second time.
   }, [
     configReady,
     currentUser,
@@ -246,7 +282,6 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     portalAllowed,
     refreshConfig,
     refreshMenuConfig,
-    settingsLoadedAt,
     studentVisibilityRouteKey,
   ]);
 
@@ -306,23 +341,54 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     studentRouteAccess.allowed,
   ]);
 
+  const studentSettingsFailed =
+    isStudentRoute &&
+    studentSettingsLoaded &&
+    (!config || !menuConfig || !interfaceConfig);
+  const studentRouteOpen =
+    portalAllowed &&
+    isStudentRoute &&
+    !studentSettingsFailed &&
+    studentAccessReady &&
+    studentRouteAccess.allowed;
+  // While another student page waits for its server re-check, keep the shell
+  // this account already sees and gate only the page area. The first entry,
+  // a failed or pending settings load and a denied page still replace it all.
+  const keepStudentShell =
+    portalAllowed &&
+    isStudentRoute &&
+    studentSettingsLoaded &&
+    !studentSettingsFailed &&
+    !studentAccessReady &&
+    studentShellOwner !== "" &&
+    shownStudentShellRef.current === studentShellOwner;
+  const showsStudentShell = studentRouteOpen || keepStudentShell;
+  // The rank promotion check runs when its controller mounts, and students
+  // used to get a new one for every page they opened. Keep that: the key
+  // changes once a page is open, not while it is still being checked.
+  const openedStudentVisitRef = React.useRef("");
+  const studentVisitKey = studentRouteOpen
+    ? studentVisibilityRouteKey
+    : openedStudentVisitRef.current;
+
+  useEffect(() => {
+    shownStudentShellRef.current = showsStudentShell ? studentShellOwner : "";
+    shownStudentPageRef.current = studentRouteOpen ? studentPageIdentity : "";
+    if (studentRouteOpen)
+      openedStudentVisitRef.current = studentVisibilityRouteKey;
+  }, [
+    showsStudentShell,
+    studentPageIdentity,
+    studentRouteOpen,
+    studentShellOwner,
+    studentVisibilityRouteKey,
+  ]);
+
   useEffect(() => {
     setStudentEnhancementsReady(false);
-    if (
-      !portalAllowed ||
-      !isStudentRoute ||
-      !studentAccessReady ||
-      !studentRouteAccess.allowed
-    )
-      return undefined;
+    if (!showsStudentShell) return undefined;
     return runAfterNextPaint(() => setStudentEnhancementsReady(true));
-  }, [
-    currentUser?.uid,
-    isStudentRoute,
-    portalAllowed,
-    studentAccessReady,
-    studentRouteAccess.allowed,
-  ]);
+  }, [currentUser?.uid, showsStudentShell]);
 
   useEffect(() => {
     setTeacherEnhancementsReady(false);
@@ -360,13 +426,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   if (!profileReady) return <Navigate to="/" replace />;
   if (permissionRedirect) return <Navigate to={permissionRedirect} replace />;
 
-  if (
-    isStudentRoute &&
-    configReady &&
-    menuConfigReady &&
-    interfaceConfigReady &&
-    (!config || !menuConfig || !interfaceConfig)
-  ) {
+  if (studentSettingsFailed) {
     return (
       <div className="ws-page" role="alert">
         <p>화면 설정을 확인하지 못했습니다.</p>
@@ -387,7 +447,12 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     );
   }
 
-  if (currentUser && isStudentRoute && !studentAccessReady) {
+  if (
+    currentUser &&
+    isStudentRoute &&
+    !studentAccessReady &&
+    !keepStudentShell
+  ) {
     return (
       <PageLoading
         scope="screen"
@@ -424,7 +489,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <SemesterArchiveBanner />
         {studentEnhancementsReady && (
           <React.Suspense fallback={null}>
-            <StudentRankPromotionController />
+            <StudentRankPromotionController key={studentVisitKey} />
             <StudentHistoryDictionaryController />
           </React.Suspense>
         )}
@@ -438,7 +503,12 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             isStudentQuizRunRoute ? "flex flex-col" : ""
           }`}
         >
-          {isArchiveUnavailableRoute(location.pathname) ? (
+          {keepStudentShell ? (
+            <PageLoading
+              scope="screen"
+              message="학생 공개 설정을 확인하는 중입니다."
+            />
+          ) : isArchiveUnavailableRoute(location.pathname) ? (
             <SemesterArchiveUnavailable />
           ) : (
             children

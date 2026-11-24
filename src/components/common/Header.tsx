@@ -168,6 +168,7 @@ const Header: React.FC<{
   const refreshStudentRank = useCallback(() => {
     setStudentRankRefresh((previous) => previous + 1);
   }, []);
+  const handledStudentRankRefreshRef = useRef(0);
   const [profileFallbackIcon, setProfileFallbackIcon] = useState(
     getDefaultProfileEmojiValue(),
   );
@@ -901,6 +902,12 @@ const Header: React.FC<{
     };
   }, [currentUser, authGeneration]);
 
+  // Students used to get a new header, and with it this read, for every page
+  // they opened. The header now stays mounted, so ask again per page.
+  const studentRankVisitKey = isTeacherPortal
+    ? ""
+    : `${location.pathname}${location.search}`;
+
   useEffect(() => {
     let cancelled = false;
     const key = `${config?.year}:${config?.semester}:${currentUser?.uid}`;
@@ -915,8 +922,16 @@ const Header: React.FC<{
         return;
       }
 
+      // An explicit request (the student or a points event) replaces what is
+      // shown. A page change only asks again through the snapshot cache and
+      // keeps the current rank and balance visible until the answer arrives.
+      const requested =
+        handledStudentRankRefreshRef.current !== studentRankRefresh;
+      const revalidating =
+        !requested && studentWis.key === key && studentWis.status === "ready";
       if (studentWis.key !== key) setStudentRank(null);
-      setStudentWis({ key, balance: null, status: "loading" });
+      if (!revalidating)
+        setStudentWis({ key, balance: null, status: "loading" });
       try {
         const [
           {
@@ -929,7 +944,10 @@ const Header: React.FC<{
           import("../../lib/pointRanks"),
         ]);
         if (cancelled) return;
-        if (studentRankRefresh > 0) {
+        if (requested) {
+          // Marked only here, so a request interrupted by a page change is
+          // still honoured by the next run instead of being served from cache.
+          handledStudentRankRefreshRef.current = studentRankRefresh;
           invalidateStudentRankPromotionSnapshotCache(config, currentUser.uid);
         }
         const snapshot = await loadStudentRankPromotionSnapshot(
@@ -976,6 +994,7 @@ const Header: React.FC<{
     isTeacherPortal,
     refreshStudentRank,
     studentRankRefresh,
+    studentRankVisitKey,
   ]);
 
   const profileLink =
