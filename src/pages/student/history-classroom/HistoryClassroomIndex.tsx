@@ -1123,7 +1123,7 @@ const HistoryClassroomIndex: React.FC = () => {
                       className="flex flex-col gap-2 rounded-[24px] border border-slate-200 bg-white px-5 py-3 shadow-sm transition hover:border-blue-200 hover:shadow-md sm:flex-row sm:items-center sm:gap-4"
                     >
                       <div className="min-w-0 flex-1">
-                        <h2 className="text-xl font-black text-slate-950 [overflow-wrap:anywhere]">
+                        <h2 className="text-xl font-extrabold text-slate-950 [overflow-wrap:anywhere]">
                           {item.assignment.title}
                         </h2>
                         {(item.assignmentReason ||
@@ -1305,7 +1305,7 @@ const HistoryClassroomIndex: React.FC = () => {
                                 item.availableExemption.id,
                               );
                             }}
-                            className="min-h-11 whitespace-nowrap rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-xs font-bold leading-5 text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
+                            className="min-h-11 whitespace-nowrap rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-xs font-bold leading-5 text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
                           >
                             {isRequestingExemption
                               ? "요청 보내는 중"
