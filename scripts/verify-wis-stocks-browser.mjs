@@ -34,6 +34,7 @@ export const activateWisStockCatalogExits=async(scope,revision,exitOverrides)=>{
 export const watchWisStockListings=(scope,next,failed)=>{qa.watches=(qa.watches||0)+1;qa.activeWatches=(qa.activeWatches||0)+1;qa.listingNext=next;qa.listingFail=failed;next(qa.market.stocks.map(stock=>stock.id).sort());return()=>{qa.activeWatches--;qa.listingNext=null;qa.listingFail=null}};
 export const isWisStockRevisionConflict=error=>error.details?.reason==='WIS_STOCK_REVISION_CONFLICT';
 export const wisStockErrorMessage=error=>error.message;
+export const getWisStockRankTrace=async()=>{throw Error('Unexpected rank trace read')};
 export const getWisStockInvestmentHistories=async()=>{throw Error('Unexpected investment history read')};
 export const wisStockInvestmentHistoryError=error=>error.message;
 export const watchWisStockExchange=()=>{throw Error('Unexpected exchange subscription')};
@@ -52,7 +53,11 @@ const deposit=async(page,amount='5000')=>{await page.getByLabel('이체 금액 (
 const tab=async(page,name)=>page.getByRole('button',{name,exact:true}).press('Enter');
 const assertClickable=async locator=>{await locator.scrollIntoViewIfNeeded();assert.equal(await locator.evaluate(element=>{const box=element.getBoundingClientRect(),hit=document.elementFromPoint(box.left+box.width/2,box.top+box.height/2);return element===hit||element.contains(hit)}),true);};
 const choose=async page=>{await page.locator('.wis-stocks__row').filter({hasText:'합성'}).first().press('Enter');await page.getByRole('button',{name:/^종목 (편집|설정 보기)$/}).press('Enter');};
-const assertLayout=async(page,width)=>{const layout=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,width:innerWidth,titleBackground:getComputedStyle(document.querySelector('.teacher-settings-heading')).backgroundColor,tabsBackground:getComputedStyle(document.querySelector('.teacher-settings-navigation')).backgroundColor,headers:document.querySelectorAll('.wis-stocks header').length}));assert(layout.scroll<=width,JSON.stringify(layout));assert.equal(layout.titleBackground,'rgba(0, 0, 0, 0)');assert.equal(layout.tabsBackground,'rgba(0, 0, 0, 0)');assert.equal(layout.headers,0);assert.equal(await page.locator('.teacher-settings-sections.ws-page-tabs').evaluate(element=>getComputedStyle(element).borderBottomWidth),'0px');for(const section of await page.locator('.wis-stock-rules__section').all())assert.equal(await section.evaluate(element=>getComputedStyle(element).borderTopWidth),'0px');};
+const assertLayout=async(page,width)=>{const layout=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,width:innerWidth,titleBackground:getComputedStyle(document.querySelector('.teacher-settings-heading')).backgroundColor,tabsBackground:getComputedStyle(document.querySelector('.teacher-settings-navigation')).backgroundColor,headers:document.querySelectorAll('.wis-stocks header').length}));assert(layout.scroll<=width,JSON.stringify(layout));assert.equal(layout.titleBackground,'rgba(0, 0, 0, 0)');assert.equal(layout.tabsBackground,'rgba(0, 0, 0, 0)');assert.equal(layout.headers,0);const tabBar=await page.locator('.teacher-settings-sections.ws-page-tabs').evaluate(nav=>{
+  const style=getComputedStyle(nav), active=nav.querySelector('[aria-pressed="true"]'), box=nav.getBoundingClientRect();
+  const control=nav.closest('aside').querySelector('.wis-stock-emergency__button').getBoundingClientRect();
+  return {baseline:style.borderBottomWidth, selected:getComputedStyle(active).borderBottomWidth, singleRow:[...nav.children].every(el=>el.getBoundingClientRect().top===active.getBoundingClientRect().top), fullWidth:Math.abs(box.width-nav.closest('aside').getBoundingClientRect().width)<=2,controlAbove:control.bottom<=box.top,controlVisible:control.x>=0 && control.right<=innerWidth};
+});assert.deepEqual(tabBar,{baseline:'1px',selected:'3px',singleRow:true,fullWidth:true,controlAbove:true,controlVisible:true});for(const section of await page.locator('.wis-stock-rules__section').all())assert.equal(await section.evaluate(element=>getComputedStyle(element).borderTopWidth),'0px');};
 try {
   if (process.argv.includes('--reports-only')) {
     await verifyWeeklyReports({ open, enter, evidence });
@@ -79,7 +84,7 @@ try {
       await page.waitForFunction(()=>typeof window.stockQa.releaseExit==='function');
       assert.equal(await page.evaluate(()=>window.stockQa.exitSaves),1);
       assert.deepEqual(await page.evaluate(()=>window.stockQa.exitPayload),{scope:{year:'2026',semester:'2'},revision:1,exitOverrides:overrides('2026-11-24')});
-      await page.evaluate(()=>window.stockQa.releaseExit());await form.getByText('자동 종료 적용',{exact:true}).waitFor();
+      await page.evaluate(()=>window.stockQa.releaseExit());await form.waitFor({state:'detached'});
       assert.equal(await page.getByRole('button',{name:'종료 일정 적용',exact:true}).count(),0);
       assert.equal(await page.evaluate(()=>window.stockQa.reads),1);
       await assertLayout(page,width);await page.screenshot({path:path.join(evidence,'exit-schedule-'+width+'.png'),fullPage:true});await page.close();
@@ -89,14 +94,14 @@ try {
     await retry.evaluate(()=>window.stockQa.failExit=true);await retry.getByRole('button',{name:'종료 일정 적용',exact:true}).click();
     await retry.getByRole('alert').filter({hasText:'종료 일정 저장 오류'}).waitFor();
     assert.equal(await retry.getByLabel('지난 종료일 연장 날짜',{exact:true}).inputValue(),'2026-11-25');
-    await retry.evaluate(()=>window.stockQa.failExit=false);await retry.getByRole('button',{name:'종료 일정 적용',exact:true}).click();await retry.getByText('자동 종료 적용',{exact:true}).waitFor();
+    await retry.evaluate(()=>window.stockQa.failExit=false);await retry.getByRole('button',{name:'종료 일정 적용',exact:true}).click();await retry.getByRole('form',{name:'6주 종료 일정',exact:true}).waitFor({state:'detached'});
     assert.equal(await retry.evaluate(()=>window.stockQa.exitSaves),2);assert.deepEqual(await retry.evaluate(()=>window.stockQa.exitPayload.exitOverrides),overrides('2026-11-25'));await retry.close();
     const conflict=await open(768,'?exits');await enter(conflict);await conflict.getByLabel('지난 종료일 연장 날짜',{exact:true}).fill('2026-11-26');
     await conflict.evaluate(()=>window.stockQa.exitConflict=true);await conflict.getByRole('button',{name:'종료 일정 적용',exact:true}).click();await conflict.getByRole('alert').filter({hasText:'최신 종료 일정을 확인'}).waitFor();
     assert.equal(await conflict.getByRole('button',{name:'종료 일정 적용',exact:true}).isDisabled(),true);
     await conflict.getByRole('button',{name:'최신 자료 확인',exact:true}).click();await conflict.waitForFunction(()=>window.stockQa.completedReads===2);
     assert.equal(await conflict.getByLabel('지난 종료일 연장 날짜',{exact:true}).inputValue(),'2026-11-26');
-    await conflict.getByRole('button',{name:'종료 일정 적용',exact:true}).click();await conflict.getByText('자동 종료 적용',{exact:true}).waitFor();
+    await conflict.getByRole('button',{name:'종료 일정 적용',exact:true}).click();await conflict.getByRole('form',{name:'6주 종료 일정',exact:true}).waitFor({state:'detached'});
     assert.equal(await conflict.evaluate(()=>window.stockQa.exitPayload.revision),2);assert.deepEqual(await conflict.evaluate(()=>window.stockQa.exitPayload.exitOverrides),overrides('2026-11-26'));await conflict.close();
     const readonly=await open(390,'?exits&readonly');await enter(readonly);
     assert.equal(await readonly.getByRole('button',{name:'종료 일정 적용',exact:true}).count(),0);assert.equal(await readonly.getByLabel('지난 종료일 연장 날짜',{exact:true}).count(),0);
@@ -105,7 +110,7 @@ try {
     await legacyExit.evaluate(()=>{const stock=window.stockQa.market.stocks.find(stock=>stock.settings.name==='비파메탈');stock.id='stock_000000000000000000000999';stock.settings.tradingStatus='GRADUATED';});
     await enter(legacyExit);
     assert.match(await legacyExit.getByRole('form',{name:'6주 종료 일정',exact:true}).innerText(),/비파메탈/);
-    await legacyExit.getByRole('button',{name:'종료 일정 적용',exact:true}).click();await legacyExit.getByText('자동 종료 적용',{exact:true}).waitFor();
+    await legacyExit.getByRole('button',{name:'종료 일정 적용',exact:true}).click();await legacyExit.getByRole('form',{name:'6주 종료 일정',exact:true}).waitFor({state:'detached'});
     assert.deepEqual(await legacyExit.evaluate(()=>window.stockQa.exitPayload.exitOverrides),overrides('2026-11-24'));
     assert.equal(await legacyExit.evaluate(()=>window.stockQa.exitSaves),1);await legacyExit.close();
     checks.push('Exit schedule: five overdue catalog exits retain 11/12/13/14 KST hours on Nov 24; duplicate click sends one exact payload, failure/retry and revision refresh preserve chosen dates, readonly blocks writes, 390/768/1280 layout passes.');
@@ -223,9 +228,9 @@ try {
     await scheduled.getByLabel('상장 시작일',{exact:true}).fill('2026-11-16');
     await scheduled.evaluate(()=>window.stockQa.failPlan=true);await scheduled.getByRole('button',{name:'상장 일정 적용',exact:true}).click();await scheduled.getByRole('alert').filter({hasText:'일정 적용 오류'}).waitFor();
     await scheduled.evaluate(()=>window.stockQa.failPlan=false);await scheduled.getByRole('button',{name:'상장 일정 적용',exact:true}).click();
-    await scheduled.getByText('상장 0 · 예정 80',{exact:true}).waitFor();await scheduled.waitForFunction(()=>window.stockQa.activeWatches===1);
+    await scheduled.getByRole('form',{name:'6주 상장 일정',exact:true}).waitFor({state:'detached'});await scheduled.waitForFunction(()=>window.stockQa.activeWatches===1);
     assert.equal(await scheduled.evaluate(()=>window.stockQa.reads),1);
-    assert.equal(await scheduled.locator('form[aria-label="6주 상장 일정"]').evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
+    assert.equal(await scheduled.locator('.wis-stocks__summary:not(form)').count(),0);
     await choose(scheduled);await scheduled.getByLabel('종목명',{exact:true}).fill('상장 중 보존할 초안');
     await scheduled.evaluate(()=>{const q=window.stockQa;q.market.stocks[0].price++;q.listingNext(q.market.stocks.map(stock=>stock.id).sort())});
     assert.equal(await scheduled.evaluate(()=>window.stockQa.reads),1);
@@ -242,7 +247,7 @@ try {
     await scheduled.getByRole('button',{name:'다시 불러오기',exact:true}).click();await scheduled.waitForFunction(()=>window.stockQa.activeWatches===1);assert.equal(await scheduled.evaluate(()=>window.stockQa.reads),3);
     await assertLayout(scheduled,width);await scheduled.screenshot({path:path.join(evidence,'scheduled-listings-'+width+'.png'),fullPage:true});await scheduled.close();
   }
-  checks.push('390/768/1280: Monday-only plan activation, explicit retry, no extra activation read, one management reload per new listing, no price-only reload, dirty draft retained, hidden/inactive/error cleanup, transparent schedule row.');
+  checks.push('390/768/1280: Monday-only plan activation, explicit retry, no extra activation read, one management reload per new listing, no price-only reload, dirty draft retained, hidden/inactive/error cleanup, no persistent summary after schedule activation.');
   if (!process.argv.includes('--schedule-only')) {
   for(const width of [320,390,768,1280,1440]) {
     const page=await open(width,'?long');await page.waitForTimeout(50);assert.equal(await page.evaluate(()=>window.stockQa.reads),0);

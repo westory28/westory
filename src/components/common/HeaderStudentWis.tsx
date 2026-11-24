@@ -1,3 +1,4 @@
+import { InlineLoading } from "./LoadingState";
 import React, { useEffect, useId, useRef, useState } from "react";
 import type { PointRankDisplay } from "../../lib/pointRanks";
 import PointRankBadge from "./PointRankBadge";
@@ -110,7 +111,7 @@ const HeaderStudentWis: React.FC<HeaderStudentWisProps> = ({
                 </button>
               </>
             ) : (
-              <p className="header-student-wis-status">불러오는 중…</p>
+              <InlineLoading />
             )}
           </div>
         </div>

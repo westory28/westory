@@ -1,17 +1,10 @@
 import { useId, useMemo, useRef, useState, useEffect } from "react";
 import {
   wisStockReturnObservations,
-  type WisStockReturnObservation,
+  type HoldingReturnSeries,
 } from "./wisStockInvestmentReturns";
 import "./WisStockReturnHistoryChart.css";
 
-interface ReturnSeries {
-  studentKey: string;
-  studentName: string;
-  studentLabel: string;
-  returnPercent: number | null;
-  observations: readonly WisStockReturnObservation[];
-}
 const percent = (value: number) =>
   `${value > 0 ? "+" : ""}${value.toLocaleString("ko-KR", { maximumFractionDigits: 2 })}%`;
 const exactTime = new Intl.DateTimeFormat("ko-KR", {
@@ -38,7 +31,7 @@ export default function WisStockReturnHistoryChart({
   range,
   label = "보유 수익률 상위 5명",
 }: {
-  series: readonly ReturnSeries[];
+  series: readonly HoldingReturnSeries[];
   range?: { fromMs: number; toMs: number };
   label?: string;
 }) {
@@ -51,13 +44,16 @@ export default function WisStockReturnHistoryChart({
   } | null>(null);
   const lines = useMemo(
     () =>
-      series.map((item) => ({
-        ...item,
-        points: wisStockReturnObservations(item.observations).filter(
-          (point) =>
-            !range || (point.atMs >= range.fromMs && point.atMs <= range.toMs),
-        ),
-      })),
+      series
+        .map((item) => ({
+          ...item,
+          points: wisStockReturnObservations(item.observations).filter(
+            (point) =>
+              !range ||
+              (point.atMs >= range.fromMs && point.atMs <= range.toMs),
+          ),
+        }))
+        .filter((line) => !line.formerLeader || line.points.length),
     [series, range?.fromMs, range?.toMs],
   );
   useEffect(() => {
@@ -138,53 +134,72 @@ export default function WisStockReturnHistoryChart({
     );
     setSelected(target);
   };
+  const legendItem = (line: (typeof lines)[number], index: number) => (
+    <li
+      key={line.studentKey}
+      data-series={line.formerLeader ? "former" : index}
+    >
+      <svg width="32" height="16" viewBox="0 0 32 16" aria-hidden="true">
+        <line
+          x1="1"
+          x2="31"
+          y1="8"
+          y2="8"
+          strokeDasharray={line.formerLeader ? "3 4" : strokes[index]}
+        />
+      </svg>
+      <div>
+        <strong>
+          {line.formerLeader
+            ? "이전 상위 · "
+            : lines.length > 1
+              ? `${index + 1}. `
+              : ""}
+          {line.studentName}
+        </strong>
+        <small>
+          {line.studentLabel}
+          {!line.points.length
+            ? " · 기록 없음"
+            : line.points.every((point) => point.returnPercent === null)
+              ? " · 수익률 기록 없음"
+              : ""}
+        </small>
+      </div>
+      <span
+        className={
+          (line.returnPercent ?? 0) > 0
+            ? "is-up"
+            : (line.returnPercent ?? 0) < 0
+              ? "is-down"
+              : "is-flat"
+        }
+      >
+        {line.returnPercent === null ? "미보유" : percent(line.returnPercent)}
+      </span>
+    </li>
+  );
+  const currentLines = lines.filter((line) => !line.formerLeader);
+  const formerLines = lines.filter((line) => line.formerLeader);
   return (
     <div className="wis-return-history">
       <ol
         className="wis-return-history__legend"
         aria-label="차트에 표시된 학생"
       >
-        {lines.map((line, index) => (
-          <li key={line.studentKey} data-series={index}>
-            <svg width="32" height="16" viewBox="0 0 32 16" aria-hidden="true">
-              <line
-                x1="1"
-                x2="31"
-                y1="8"
-                y2="8"
-                strokeDasharray={strokes[index]}
-              />
-            </svg>
-            <div>
-              <strong>
-                {lines.length > 1 ? `${index + 1}. ` : ""}
-                {line.studentName}
-              </strong>
-              <small>
-                {line.studentLabel}
-                {!line.points.length
-                  ? " · 기록 없음"
-                  : line.points.every((point) => point.returnPercent === null)
-                    ? " · 수익률 기록 없음"
-                    : ""}
-              </small>
-            </div>
-            <span
-              className={
-                (line.returnPercent ?? 0) > 0
-                  ? "is-up"
-                  : (line.returnPercent ?? 0) < 0
-                    ? "is-down"
-                    : "is-flat"
-              }
-            >
-              {line.returnPercent === null
-                ? "미보유"
-                : percent(line.returnPercent)}
-            </span>
-          </li>
-        ))}
+        {currentLines.map(legendItem)}
       </ol>
+      {!!formerLines.length && (
+        <details className="wis-return-history__former">
+          <summary>이전 상위 {formerLines.length}명</summary>
+          <ul
+            className="wis-return-history__legend"
+            aria-label="이전 상위 학생"
+          >
+            {formerLines.map(legendItem)}
+          </ul>
+        </details>
+      )}
       <div
         ref={canvas}
         className="wis-return-history__canvas"
@@ -321,6 +336,10 @@ export default function WisStockReturnHistoryChart({
             const segments: (typeof line.points)[] = [];
             let segment: typeof line.points = [];
             for (const point of line.points) {
+              if (point.breakBefore && segment.length) {
+                segments.push(segment);
+                segment = [];
+              }
               if (point.returnPercent === null) {
                 if (segment.length) segments.push(segment);
                 segment = [];
@@ -331,7 +350,7 @@ export default function WisStockReturnHistoryChart({
               <g
                 key={line.studentKey}
                 className="wis-return-history__plot"
-                data-series={index}
+                data-series={line.formerLeader ? "former" : index}
                 data-student-key={line.studentKey}
               >
                 {segments.map((segment, part) => (
@@ -339,7 +358,9 @@ export default function WisStockReturnHistoryChart({
                     {segment.length > 1 && (
                       <polyline
                         fill="none"
-                        strokeDasharray={strokes[index]}
+                        strokeDasharray={
+                          line.formerLeader ? "3 4" : strokes[index]
+                        }
                         points={segment
                           .map(
                             (point) =>

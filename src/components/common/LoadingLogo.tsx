@@ -125,7 +125,7 @@ function finishLogo(svg: SVGSVGElement, mountedAt: number) {
       borderRadius: surfaceStyle?.borderRadius || "0",
       overflow: "clip",
       pointerEvents: "none",
-      zIndex: local ? "50" : "20000",
+      zIndex: local ? "2147483647" : "20000",
     });
     const topLayer =
       !local && typeof HTMLElement.prototype.showPopover === "function";

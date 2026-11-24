@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { acquirePageScrollLock } from "../../../../lib/pageScrollLock";
 import InfoHelp from "../../../../components/common/InfoHelp";
 import { useAppToast } from "../../../../components/common/AppToastProvider";
 import { useStudentWisStockMarket } from "../../../../hooks/useStudentWisStocks";
@@ -15,7 +16,11 @@ import type {
 } from "../../../../lib/studentWisStockTypes";
 import StudentWisStockReadStatus from "./StudentWisStockReadStatus";
 
-export type WalletOrderTarget = { stockId: string; entry: "first" | "holding" };
+export type WalletOrderTarget = {
+  stockId: string;
+  entry: "first" | "holding";
+  side?: "BUY" | "SELL";
+};
 const money = (value: number) => value.toLocaleString("ko-KR");
 function amounts(
   price: number,
@@ -46,7 +51,7 @@ export default function StudentWisStockWalletOrders({
   onClose,
 }: {
   scope: WisStockScope;
-  account: WisStockLoad<StudentWisStockState>;
+  account: WisStockLoad<StudentWisStockState> & { retry: () => void };
   target: WalletOrderTarget | null;
   tradingEnabled: boolean;
   tradingEpoch?: number;
@@ -66,6 +71,18 @@ export default function StudentWisStockWalletOrders({
   const selected = market.data?.stocks.find(
     (stock) => stock.id === target?.stockId,
   );
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const open = !!target && tradingEnabled;
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (!open || !dialog) return;
+    dialog.showModal();
+    const release = acquirePageScrollLock();
+    return () => {
+      dialog.close();
+      release();
+    };
+  }, [open]);
   const ticketTitle = useRef<HTMLHeadingElement>(null);
   const lot = useRef("");
   const operation = useRef(false);
@@ -85,7 +102,7 @@ export default function StudentWisStockWalletOrders({
     };
   }, []);
   useEffect(() => {
-    setSide("BUY");
+    setSide(target?.side ?? "BUY");
     setNotice("");
     lot.current = "";
   }, [target]);
@@ -314,200 +331,227 @@ export default function StudentWisStockWalletOrders({
       </ul>
     </section>
   );
+  const feedback = notice && (
+    <p role="alert" className="student-wispi-error">
+      {notice}
+    </p>
+  );
+  if (!target || !tradingEnabled)
+    return (
+      <>
+        {feedback}
+        {pendingOrders}
+      </>
+    );
+  const recent = account.data?.account.recentOrders.find(
+    (order) => order.stockId === target.stockId,
+  );
   return (
-    <>
-      {tradingEnabled && target && (
-        <section className="student-wispi-wallet-ticket" aria-label="종목 주문">
-          <div className="student-wispi-ticket-heading">
-            <h2
-              ref={ticketTitle}
-              tabIndex={-1}
-              className="student-wispi-order-title"
-            >
-              {selected?.settings.name ||
-                account.data?.stocks.find(
-                  (stock) => stock.id === target.stockId,
-                )?.settings.name ||
-                "종목"}{" "}
-              주문
-              {market.data && (
-                <InfoHelp label="주식 거래 조건">
-                  <dl className="student-wispi-rule-help">
-                    <div>
-                      <dt>최소 잔액</dt>
-                      <dd>
-                        {money(market.data.rules.minimumCashReserve)} 위스
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>매수 / 매도 수수료</dt>
-                      <dd>
-                        {market.data.rules.buyFeeBps / 100}% /{" "}
-                        {market.data.rules.sellFeeBps / 100}%
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>하루 매수 한도</dt>
-                      <dd>
-                        {money(market.data.rules.dailyBuyLimit)} 위스 (수수료
-                        포함)
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>하루 주문 한도</dt>
-                      <dd>{money(market.data.rules.dailyOrderLimit)}회</dd>
-                    </div>
-                    <div>
-                      <dt>종목별 최대 비중</dt>
-                      <dd>{market.data.rules.maxConcentrationBps / 100}%</dd>
-                    </div>
-                    <div>
-                      <dt>주문 간격</dt>
-                      <dd>{market.data.rules.cooldownSeconds}초</dd>
-                    </div>
-                  </dl>
-                </InfoHelp>
-              )}
-            </h2>
-            <button
-              type="button"
-              className="student-wispi-close-ticket"
-              onClick={onClose}
-            >
-              주문 닫기
-            </button>
-          </div>
-          <StudentWisStockReadStatus
-            label="주식 시세"
-            loading={market.status === "loading"}
-            error={market.error}
-            retry={market.retry}
-          />
-          {account.status === "ready" && !ownershipMatches && (
-            <p role="status">
-              {owned
-                ? "보유 중인 종목입니다. 보유 종목에서 추가 매수하거나 매도할 수 있습니다."
-                : "현재 보유한 수량이 없습니다."}
-            </p>
+    <dialog
+      ref={dialogRef}
+      className="student-wispi-wallet-ticket"
+      aria-label="종목 주문"
+      onCancel={(event) => {
+        event.preventDefault();
+        if (!operation.current) onClose();
+      }}
+    >
+      <div className="student-wispi-ticket-heading">
+        <h2
+          ref={ticketTitle}
+          tabIndex={-1}
+          className="student-wispi-order-title"
+        >
+          {selected?.settings.name ||
+            account.data?.stocks.find((stock) => stock.id === target.stockId)
+              ?.settings.name ||
+            "종목"}{" "}
+          주문
+          {market.data && (
+            <InfoHelp label="주식 거래 조건">
+              <dl className="student-wispi-rule-help">
+                <div>
+                  <dt>최소 잔액</dt>
+                  <dd>{money(market.data.rules.minimumCashReserve)} 위스</dd>
+                </div>
+                <div>
+                  <dt>매수 / 매도 수수료</dt>
+                  <dd>
+                    {market.data.rules.buyFeeBps / 100}% /{" "}
+                    {market.data.rules.sellFeeBps / 100}%
+                  </dd>
+                </div>
+                <div>
+                  <dt>하루 매수 한도</dt>
+                  <dd>
+                    {money(market.data.rules.dailyBuyLimit)} 위스 (수수료 포함)
+                  </dd>
+                </div>
+                <div>
+                  <dt>하루 주문 한도</dt>
+                  <dd>{money(market.data.rules.dailyOrderLimit)}회</dd>
+                </div>
+                <div>
+                  <dt>종목별 최대 비중</dt>
+                  <dd>{market.data.rules.maxConcentrationBps / 100}%</dd>
+                </div>
+                <div>
+                  <dt>주문 간격</dt>
+                  <dd>{market.data.rules.cooldownSeconds}초</dd>
+                </div>
+              </dl>
+            </InfoHelp>
           )}
-          {market.status === "ready" &&
-            account.status === "ready" &&
-            ownershipMatches &&
-            (selected ? (
-              <form
-                className="student-wispi-order"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void submit();
-                }}
-              >
-                <p className="student-wispi-ticket-quote">
-                  현재가 <strong>{money(selected.price)} 위스</strong>
-                  {owned && <> · 보유 {money(position!.quantity)}주</>}
-                </p>
-                <div className="student-wispi-inline">
-                  <div
-                    className="student-wispi-segments"
-                    aria-label="주문 종류"
-                  >
-                    {owned ? (
-                      (["BUY", "SELL"] as const).map((value) => (
-                        <button
-                          key={value}
-                          type="button"
-                          aria-pressed={side === value}
-                          onClick={() => {
-                            setSide(value);
-                            setNotice("");
-                          }}
-                        >
-                          {value === "BUY" ? "매수" : "매도"}
-                        </button>
-                      ))
-                    ) : (
-                      <strong>첫 매수</strong>
-                    )}
-                  </div>
-                  <span className="student-wispi-muted">
-                    {side === "BUY"
-                      ? `사용 가능 ${money(available)} 위스`
-                      : `매도 가능 ${money(availableShares)}주`}
-                  </span>
-                </div>
-                <div className="student-wispi-order-action">
-                  <label>
-                    <span>수량</span>
-                    <input
-                      aria-label="수량"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={quantity}
-                      onChange={(event) =>
-                        setQuantity(event.target.value.replace(/[^0-9]/g, ""))
-                      }
-                      aria-describedby={
-                        orderProblem ? "student-wispi-order-problem" : undefined
-                      }
-                    />
-                    <span aria-hidden="true">주</span>
-                  </label>
-                  {busy === "place" ? (
-                    <div
-                      className="student-wispi-submitting"
-                      role="status"
-                      aria-label={`${submitting} 주문 접수 중`}
-                    >
-                      <strong>주문 접수 중</strong>
-                    </div>
-                  ) : (
-                    <button
-                      className="student-wispi-primary"
-                      type="submit"
-                      aria-label={`${side === "BUY" ? "매수" : "매도"} 주문 접수`}
-                      disabled={!!orderProblem}
-                      aria-describedby={
-                        orderProblem ? "student-wispi-order-problem" : undefined
-                      }
-                      title={orderProblem || undefined}
-                    >
-                      {side === "BUY" ? "매수" : "매도"}
-                    </button>
-                  )}
-                </div>
-                <div className="student-wispi-order-estimate">
-                  <span>{side === "BUY" ? "예상 결제" : "예상 수령"}</span>
-                  <strong>{estimate ? money(estimate.total) : "—"} 위스</strong>
-                  {estimate && (
-                    <small className="student-wispi-muted">
-                      (수수료 {money(estimate.fee)} 위스
-                      {side === "BUY" ? " 포함" : " 제외"})
-                    </small>
-                  )}
-                </div>
-                {orderProblem && (
-                  <p
-                    id="student-wispi-order-problem"
-                    className="student-wispi-order-problem"
-                    role="status"
-                  >
-                    {orderProblem}
-                  </p>
-                )}
-              </form>
-            ) : (
-              <p role="status">
-                선택한 종목을 더 이상 거래할 수 없습니다. 다른 종목을 선택해
-                주세요.
-              </p>
-            ))}
-        </section>
-      )}
-      {notice && (
-        <p role="alert" className="student-wispi-error">
-          {notice}
+        </h2>
+        <button
+          type="button"
+          className="student-wispi-close-ticket"
+          disabled={!!busy}
+          onClick={onClose}
+        >
+          주문 닫기
+        </button>
+      </div>
+      <StudentWisStockReadStatus
+        label="주식 시세"
+        loading={market.status === "loading"}
+        error={market.error}
+        retry={market.retry}
+      />
+      <StudentWisStockReadStatus
+        label="주식 지갑"
+        loading={account.status === "loading" && market.status !== "loading"}
+        error={account.error}
+        retry={account.retry}
+      />
+      {account.status === "ready" && !ownershipMatches && (
+        <p role="status">
+          {owned
+            ? "보유 수량이 변경되었습니다. 추가 주문은 주문창을 닫고 다시 선택해 주세요."
+            : "현재 보유한 수량이 없습니다."}
         </p>
       )}
+      {market.status === "ready" &&
+        account.status === "ready" &&
+        ownershipMatches &&
+        (selected ? (
+          <form
+            className="student-wispi-order"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submit();
+            }}
+          >
+            <p className="student-wispi-ticket-quote">
+              현재가 <strong>{money(selected.price)} 위스</strong>
+              {owned && <> · 보유 {money(position!.quantity)}주</>}
+            </p>
+            <div className="student-wispi-inline">
+              <div className="student-wispi-segments" aria-label="주문 종류">
+                {owned ? (
+                  (["BUY", "SELL"] as const).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={side === value}
+                      onClick={() => {
+                        setSide(value);
+                        setNotice("");
+                      }}
+                    >
+                      {value === "BUY" ? "매수" : "매도"}
+                    </button>
+                  ))
+                ) : (
+                  <strong>첫 매수</strong>
+                )}
+              </div>
+              <span className="student-wispi-muted">
+                {side === "BUY"
+                  ? `사용 가능 ${money(available)} 위스`
+                  : `매도 가능 ${money(availableShares)}주`}
+              </span>
+            </div>
+            <div className="student-wispi-order-action">
+              <label>
+                <span>수량</span>
+                <input
+                  aria-label="수량"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={quantity}
+                  onChange={(event) =>
+                    setQuantity(event.target.value.replace(/[^0-9]/g, ""))
+                  }
+                  aria-describedby={
+                    orderProblem ? "student-wispi-order-problem" : undefined
+                  }
+                />
+                <span aria-hidden="true">주</span>
+              </label>
+              {busy === "place" ? (
+                <div
+                  className="student-wispi-submitting"
+                  role="status"
+                  aria-label={`${submitting} 주문 접수 중`}
+                >
+                  <strong>주문 접수 중</strong>
+                </div>
+              ) : (
+                <button
+                  className="student-wispi-primary"
+                  type="submit"
+                  aria-label={`${side === "BUY" ? "매수" : "매도"} 주문 접수`}
+                  disabled={!!orderProblem}
+                  aria-describedby={
+                    orderProblem ? "student-wispi-order-problem" : undefined
+                  }
+                  title={orderProblem || undefined}
+                >
+                  {side === "BUY" ? "매수" : "매도"}
+                </button>
+              )}
+            </div>
+            <div className="student-wispi-order-estimate">
+              <span>{side === "BUY" ? "예상 결제" : "예상 수령"}</span>
+              <strong>{estimate ? money(estimate.total) : "—"} 위스</strong>
+              {estimate && (
+                <small className="student-wispi-muted">
+                  (수수료 {money(estimate.fee)} 위스
+                  {side === "BUY" ? " 포함" : " 제외"})
+                </small>
+              )}
+            </div>
+            {orderProblem && (
+              <p
+                id="student-wispi-order-problem"
+                className="student-wispi-order-problem"
+                role="status"
+              >
+                {orderProblem}
+              </p>
+            )}
+          </form>
+        ) : (
+          <p role="status">
+            선택한 종목을 더 이상 거래할 수 없습니다. 다른 종목을 선택해 주세요.
+          </p>
+        ))}
+      {feedback}
       {pendingOrders}
-    </>
+      {recent && (
+        <p role="status">
+          최근 주문 · {recent.side === "BUY" ? "매수" : "매도"}{" "}
+          {money(recent.quantity)}주 ·{" "}
+          <strong>
+            {recent.status === "FILLED"
+              ? "체결 완료"
+              : recent.status === "CANCELLED"
+                ? "취소"
+                : "처리 완료"}
+          </strong>
+        </p>
+      )}
+    </dialog>
   );
 }

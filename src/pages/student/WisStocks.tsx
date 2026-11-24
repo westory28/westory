@@ -11,6 +11,9 @@ import WisStockPriceChart, {
 } from "../../components/common/WisStockPriceChart";
 import type { StudentWisStockInstrument } from "../../lib/studentWisStockTypes";
 import StudentWisStockAccountPanel from "./components/wispi/StudentWisStockAccountPanel";
+import StudentWisStockWalletOrders, {
+  type WalletOrderTarget,
+} from "./components/wispi/StudentWisStockWalletOrders";
 import StudentWisStockRanking from "./components/wispi/StudentWisStockRanking";
 import StudentWisStockReadStatus from "./components/wispi/StudentWisStockReadStatus";
 import "./components/wispi/studentWisStocks.css";
@@ -75,14 +78,13 @@ const views = [
   { id: "reports", label: "주식 보고서", visible: false },
 ] as const;
 type OpenView = Extract<(typeof views)[number], { visible: true }>["id"];
-type WalletEntry = { stockId: string; owned: boolean };
 
 export default function StudentWisStocks() {
   const { currentUser, authGeneration, config } = useAuth();
   const scope = getYearSemester(config);
   const status = useStudentWisStockStatus();
   const [tab, setTab] = useState<OpenView>("market");
-  const [walletEntry, setWalletEntry] = useState<WalletEntry | null>(null);
+  const [ticket, setTicket] = useState<WalletOrderTarget | null>(null);
   const opened = status.data?.studentOpen === true;
   const market = useStudentWisStockMarket(opened && tab === "market");
   const account = useStudentWisStockAccount(opened && tab !== "ranking");
@@ -101,7 +103,7 @@ export default function StudentWisStocks() {
     setSearch("");
     setFilter("all");
     setMobileDetail(false);
-    setWalletEntry(null);
+    setTicket(null);
   }, [key]);
   const quotes = useMemo(
     () =>
@@ -144,16 +146,15 @@ export default function StudentWisStocks() {
     if (market.status === "ready" && !selected) setMobileDetail(false);
   }, [market.status, selected?.id]);
   const stopped = opened && status.data?.halted === true;
+  useEffect(() => {
+    if (status.status === "ready" && (!opened || stopped)) setTicket(null);
+  }, [status.status, opened, stopped]);
   const tradingEnabled =
     opened && status.status === "ready" && !status.data.halted;
   const owned =
     account.data?.account.positions.some(
       (position) => position.stockId === selected?.id && position.quantity > 0,
     ) === true;
-  const openWallet = (entry: WalletEntry | null) => {
-    setWalletEntry(entry);
-    setTab("account");
-  };
   const quote = selected
     ? quotes.get(selected.id)!
     : { change: null, percent: null };
@@ -172,7 +173,8 @@ export default function StudentWisStocks() {
       {status.status === "ready" && !opened && (
         <p>아직 위스피가 열리지 않았습니다.</p>
       )}
-      {(opened || (tab === "account" && status.status === "loading")) && (
+      {(opened ||
+        ((tab === "account" || ticket) && status.status === "loading")) && (
         <div className="student-wispi-stage" hidden={!opened}>
           <div
             className={
@@ -195,7 +197,7 @@ export default function StudentWisStocks() {
                     aria-pressed={tab === view.id}
                     onClick={() => {
                       if (tab === view.id) return;
-                      setWalletEntry(null);
+                      setTicket(null);
                       setTab(view.id);
                     }}
                   >
@@ -216,14 +218,6 @@ export default function StudentWisStocks() {
                 key={key}
                 tradingEnabled={tradingEnabled}
                 tradingEpoch={status.data?.tradingEpoch}
-                initialBuyId={
-                  walletEntry && !walletEntry.owned
-                    ? walletEntry.stockId
-                    : undefined
-                }
-                initialHoldingId={
-                  walletEntry?.owned ? walletEntry.stockId : undefined
-                }
               />
             ) : (
               <>
@@ -241,10 +235,21 @@ export default function StudentWisStocks() {
                   label="주식 지갑"
                   retry={account.retry}
                 />
+                {ticket && (
+                  <StudentWisStockWalletOrders
+                    key={key}
+                    scope={scope}
+                    account={account}
+                    tradingEnabled={tradingEnabled}
+                    tradingEpoch={status.data?.tradingEpoch}
+                    target={ticket}
+                    onClose={() => setTicket(null)}
+                  />
+                )}
                 {pendingCount > 0 && (
                   <div className="student-wispi-market-pending">
                     <strong>주식 체결 중 {pendingCount}건</strong>
-                    <button type="button" onClick={() => openWallet(null)}>
+                    <button type="button" onClick={() => setTab("account")}>
                       지갑에서 대기 주문 보기
                     </button>
                   </div>
@@ -397,22 +402,37 @@ export default function StudentWisStocks() {
                                 {money(selected.price)} <small>위스</small>
                               </p>
                             </div>
-                            <button
-                              type="button"
-                              className="student-wispi-market-trade student-wispi-primary"
-                              disabled={
-                                account.status !== "ready" || !tradingEnabled
-                              }
-                              onClick={() =>
-                                openWallet({ stockId: selected.id, owned })
-                              }
-                            >
-                              {account.status !== "ready"
-                                ? "지갑 확인 중"
-                                : owned
-                                  ? "지갑에서 보유 종목 보기"
-                                  : "지갑에서 첫 매수"}
-                            </button>
+                            <div className="student-wispi-trade-actions">
+                              {(owned
+                                ? (["BUY", "SELL"] as const)
+                                : (["BUY"] as const)
+                              ).map((side) => (
+                                <button
+                                  type="button"
+                                  key={side}
+                                  className={
+                                    side === "BUY"
+                                      ? "student-wispi-primary"
+                                      : undefined
+                                  }
+                                  aria-haspopup="dialog"
+                                  aria-label={`${selected.settings.name} ${side === "BUY" ? "매수" : "매도"} 주문 열기`}
+                                  disabled={
+                                    account.status !== "ready" ||
+                                    !tradingEnabled
+                                  }
+                                  onClick={() =>
+                                    setTicket({
+                                      stockId: selected.id,
+                                      entry: owned ? "holding" : "first",
+                                      side,
+                                    })
+                                  }
+                                >
+                                  {side === "BUY" ? "매수" : "매도"}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                           <div className="student-wispi-daily">
                             <span>전일 대비</span>

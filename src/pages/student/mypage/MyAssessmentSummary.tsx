@@ -1,3 +1,4 @@
+import { InlineLoading } from "../../../components/common/LoadingState";
 import { useMemo, useState } from "react";
 import {
   buildAssessmentScoreDistribution,
@@ -66,9 +67,7 @@ export default function MyAssessmentSummary({
         </button>
       </header>
       {loading ? (
-        <p role="status" className="my-assessment-summary__empty">
-          오답 노트를 불러오는 중입니다.
-        </p>
+        <InlineLoading />
       ) : error ? (
         <div role="alert" className="my-assessment-summary__empty">
           <p>{error}</p>

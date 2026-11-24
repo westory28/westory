@@ -156,7 +156,9 @@ const StudentExamAnswer: React.FC = () => {
   };
 
   if (loading) {
-    return <PageLoading message="시험 답안을 불러오는 중입니다." />;
+    return (
+      <PageLoading scope="screen" message="시험 답안을 불러오는 중입니다." />
+    );
   }
 
   if (!hasAnyInput) {

@@ -1,3 +1,4 @@
+import { InlineLoading } from "./LoadingState";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { acquirePageScrollLock } from "../../lib/pageScrollLock";
 import { STUDENT_AVATAR_SHOP_URL } from "../../lib/avatarRoutes";
@@ -66,7 +67,35 @@ export function StudentShortcutIcon({ path }: { path: string }) {
   );
 }
 
-export default function StudentLearningShortcutsEditor({
+type ShortcutOption<Id extends string> = {
+  id: Id;
+  label: string;
+  icon: string;
+};
+interface EditorProps<Id extends string> {
+  items: Id[];
+  availableIds: Id[];
+  loading: boolean;
+  loaded: boolean;
+  error: string;
+  onReload: () => Promise<void>;
+  onSave: (items: Id[]) => Promise<void>;
+  onClose: () => void;
+}
+export default function StudentLearningShortcutsEditor(
+  props: EditorProps<StudentLearningShortcutId>,
+) {
+  return (
+    <ShortcutEditor
+      {...props}
+      options={STUDENT_LEARNING_SHORTCUTS}
+      fixedHelp="사전과 공부의 신문고는 기본 메뉴입니다."
+    />
+  );
+}
+export function ShortcutEditor<Id extends string>({
+  options,
+  fixedHelp,
   items,
   availableIds,
   loading,
@@ -75,16 +104,7 @@ export default function StudentLearningShortcutsEditor({
   onReload,
   onSave,
   onClose,
-}: {
-  items: StudentLearningShortcutId[];
-  availableIds: StudentLearningShortcutId[];
-  loading: boolean;
-  loaded: boolean;
-  error: string;
-  onReload: () => Promise<void>;
-  onSave: (items: StudentLearningShortcutId[]) => Promise<void>;
-  onClose: () => void;
-}) {
+}: EditorProps<Id> & { options: ShortcutOption<Id>[]; fixedHelp: string }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLOListElement>(null);
@@ -92,17 +112,15 @@ export default function StudentLearningShortcutsEditor({
   const [initialized, setInitialized] = useState(loaded);
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState("");
-  const [dragging, setDragging] = useState<StudentLearningShortcutId | null>(
-    null,
-  );
+  const [dragging, setDragging] = useState<Id | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const drag = useRef<{
-    id: StudentLearningShortcutId;
+    id: Id;
     pointerId: number;
   } | null>(null);
   const mounted = useRef(true);
   const saveFlight = useRef(false);
-  const keyboardFocus = useRef<StudentLearningShortcutId | null>(null);
+  const keyboardFocus = useRef<Id | null>(null);
   useLayoutEffect(() => {
     if (!keyboardFocus.current) return;
     listRef.current
@@ -129,7 +147,7 @@ export default function StudentLearningShortcutsEditor({
       setInitialized(true);
     }
   }, [initialized, loaded, items]);
-  const move = (id: StudentLearningShortcutId, destination: number) => {
+  const move = (id: Id, destination: number) => {
     const position = Math.max(0, Math.min(draft.length - 1, destination));
     if (draft.indexOf(id) === position) return;
     setDraft((previous) => {
@@ -142,7 +160,7 @@ export default function StudentLearningShortcutsEditor({
       return next;
     });
     setAnnouncement(
-      `${STUDENT_LEARNING_SHORTCUTS.find((item) => item.id === id)?.label}, ${position + 1}번째`,
+      `${options.find((item) => item.id === id)?.label}, ${position + 1}번째`,
     );
   };
   const changed = JSON.stringify(draft) !== JSON.stringify(items);
@@ -164,8 +182,7 @@ export default function StudentLearningShortcutsEditor({
           <h2 id="student-shortcuts-title">바로가기 편집</h2>
           <InfoHelp label="바로가기 편집 도움말">
             왼쪽 손잡이를 누른 채 위아래로 끌어 순서를 바꿉니다. 키보드에서는
-            손잡이에 초점을 두고 위·아래 방향키를 누릅니다. 사전과 공부의
-            신문고는 기본 메뉴입니다.
+            손잡이에 초점을 두고 위·아래 방향키를 누릅니다. {fixedHelp}
           </InfoHelp>
         </div>
         <button
@@ -196,9 +213,11 @@ export default function StudentLearningShortcutsEditor({
         </div>
       )}
       {!initialized ? (
-        <p role="status">
-          {loading ? "불러오는 중…" : "바로가기를 불러오지 못했습니다."}
-        </p>
+        loading ? (
+          <InlineLoading />
+        ) : (
+          <p role="status">바로가기를 불러오지 못했습니다.</p>
+        )
       ) : (
         <>
           <ol
@@ -245,9 +264,7 @@ export default function StudentLearningShortcutsEditor({
             }}
           >
             {draft.map((id, index) => {
-              const item = STUDENT_LEARNING_SHORTCUTS.find(
-                (candidate) => candidate.id === id,
-              )!;
+              const item = options.find((candidate) => candidate.id === id)!;
               return (
                 <li
                   key={id}
@@ -315,27 +332,27 @@ export default function StudentLearningShortcutsEditor({
             className="student-shortcuts-available"
             aria-label="추가할 수 있는 메뉴"
           >
-            {STUDENT_LEARNING_SHORTCUTS.filter(
-              (item) => !draft.includes(item.id),
-            ).map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                disabled={busy || !availableIds.includes(item.id)}
-                onClick={() =>
-                  setDraft((previous) =>
-                    previous.includes(item.id)
-                      ? previous
-                      : [...previous, item.id],
-                  )
-                }
-                aria-label={`${item.label} 추가`}
-              >
-                <StudentShortcutIcon path={item.icon} />
-                <span>{item.label}</span>
-                <span aria-hidden="true">+</span>
-              </button>
-            ))}
+            {options
+              .filter((item) => !draft.includes(item.id))
+              .map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  disabled={busy || !availableIds.includes(item.id)}
+                  onClick={() =>
+                    setDraft((previous) =>
+                      previous.includes(item.id)
+                        ? previous
+                        : [...previous, item.id],
+                    )
+                  }
+                  aria-label={`${item.label} 추가`}
+                >
+                  <StudentShortcutIcon path={item.icon} />
+                  <span>{item.label}</span>
+                  <span aria-hidden="true">+</span>
+                </button>
+              ))}
           </div>
         </>
       )}

@@ -934,6 +934,19 @@ try {
         ),
         `${view}/${width} overflow`,
       );
+      const tabs = page.locator(".ws-page-tabs.history-atlas__subjects");
+      assert.equal(
+        await tabs.evaluate(
+          (element) => getComputedStyle(element).borderBottomWidth,
+        ),
+        "1px",
+      );
+      assert.equal(
+        await tabs.locator('[aria-pressed="true"]').evaluate(
+          (element) => getComputedStyle(element).borderBottomWidth,
+        ),
+        "3px",
+      );
       const terrainToggle = page.getByRole("button", {
         name: "지형",
         exact: true,

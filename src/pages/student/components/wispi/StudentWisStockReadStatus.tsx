@@ -1,7 +1,5 @@
-import { useEffect, useState } from "react";
 import { InlineLoading } from "../../../../components/common/LoadingState";
 
-/** The timer changes presentation only; reads and bounded recovery belong to the client. */
 export default function StudentWisStockReadStatus({
   loading,
   error = "",
@@ -13,21 +11,10 @@ export default function StudentWisStockReadStatus({
   label: string;
   retry?: () => void;
 }) {
-  const [delayed, setDelayed] = useState(false);
-  useEffect(() => {
-    setDelayed(false);
-    if (!loading) return;
-    const timer = window.setTimeout(() => setDelayed(true), 800);
-    return () => window.clearTimeout(timer);
-  }, [loading]);
   if (loading)
     return (
       <div className="student-wispi-read-status" aria-busy="true">
-        {delayed ? (
-          <InlineLoading />
-        ) : (
-          <p role="status">{label} 확인 중입니다.</p>
-        )}
+        <InlineLoading />
       </div>
     );
   if (!error) return null;

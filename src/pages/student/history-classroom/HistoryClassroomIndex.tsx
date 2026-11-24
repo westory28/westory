@@ -913,7 +913,11 @@ const HistoryClassroomIndex: React.FC = () => {
 
   if (loading) {
     return (
-      <InlineLoading message="역사교실을 불러오는 중입니다." showWarning />
+      <InlineLoading
+        scope="screen"
+        message="역사교실을 불러오는 중입니다."
+        showWarning
+      />
     );
   }
 

@@ -1,5 +1,8 @@
 import RefreshButton from "../../../components/common/RefreshButton";
-import { LoadingOverlay } from "../../../components/common/LoadingState";
+import {
+  LoadingOverlay,
+  InlineLoading,
+} from "../../../components/common/LoadingState";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import {
   useCallback,
@@ -861,9 +864,7 @@ export default function YutManagement() {
                       <p>최근 방 100개를 표시합니다.</p>
                     )}
                     {!monitor.data ? (
-                      monitor.status === "connecting" && (
-                        <p>게임방을 확인하고 있습니다.</p>
-                      )
+                      monitor.status === "connecting" && <InlineLoading />
                     ) : visibleRooms.length === 0 ? (
                       <p>대기 중이거나 진행 중인 방이 없습니다.</p>
                     ) : (

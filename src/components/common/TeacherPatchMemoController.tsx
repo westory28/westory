@@ -1,3 +1,4 @@
+import TeacherShortcuts from "./TeacherShortcuts";
 import { LoadingOverlay } from "./LoadingState";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
@@ -1088,30 +1089,13 @@ const TeacherPatchMemoController: React.FC = () => {
         </aside>
       )}
 
-      <button
-        ref={buttonRef}
-        data-patch-memo-root="true"
-        type="button"
-        onClick={openPanel}
-        className={`fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] z-[112] inline-flex h-14 w-14 items-center justify-center rounded-full border shadow-[0_18px_42px_rgba(37,99,235,0.30)] transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] sm:right-[calc(env(safe-area-inset-right,0px)+1.5rem)] ${
-          open
-            ? "border-blue-500 bg-blue-600 text-white hover:bg-blue-700"
-            : "border-blue-100 bg-white text-blue-700 hover:bg-blue-50"
-        }`}
-        aria-label={open ? "패치 메모 닫기" : "패치 메모 열기"}
-        aria-expanded={open}
-        title="패치 메모"
-      >
-        <i
-          className={`fas ${open ? "fa-times" : "fa-pen"} text-lg`}
-          aria-hidden="true"
-        ></i>
-        {openCount > 0 && !open && (
-          <span className="absolute -right-1 -top-1 inline-flex min-w-6 items-center justify-center rounded-full border-2 border-white bg-rose-500 px-1.5 py-0.5 text-[11px] font-extrabold text-white">
-            {openCount > 99 ? "99+" : openCount}
-          </span>
-        )}
-      </button>
+      <TeacherShortcuts
+        key={uid + ":" + authGeneration}
+        uid={uid}
+        buttonRef={buttonRef}
+        onMemo={openPanel}
+        memoCount={openCount}
+      />
     </>
   );
 };

@@ -104,6 +104,20 @@
 }
 
 @media (max-width: 1023px) {
+  .student-layout .teacher-mobile-account {
+    position: relative;
+  }
+
+  .student-layout .teacher-mobile-account .header-student-wis {
+    position: static;
+  }
+
+  .student-layout .teacher-mobile-account .header-student-wis-panel {
+    top: calc(100% - 4px);
+    right: 12px;
+    max-width: calc(100% - 24px);
+  }
+
   :is(.teacher-mobile-account, .mobile-account-block) .header-student-profile {
     width: 100%;
     padding-inline: 12px;

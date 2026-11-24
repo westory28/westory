@@ -11,6 +11,9 @@ function createWisStockTradingExports({ db,
   const result = {};
   for (const name of ['getStudentWisStockState', 'getStudentWisStockHistory', 'getStudentWisStockBonus', 'claimStudentWisStockBonus', 'transferStudentWisStock',
     'placeStudentWisStockOrder', 'cancelStudentWisStockOrder']) result[name] = onCall(runtime, handlers[name]);
+  result.archiveWisStockRankTrace = onDocumentWritten({ ...runtime, retry: true,
+    document: 'years/{year}/semesters/{semester}/wis_stock_investment_boards/{boardId}',
+  }, require('./wisStockRankTrace').createRankTraceWriter(db));
   result.getWisStockInvestmentHistory = onCall(runtime,
     require('./wisStockInvestmentHistory').createWisStockInvestmentHistory({ db }));
   result.settleWisStockOrderTask = onTaskDispatched({ ...runtime, maxInstances: 5,

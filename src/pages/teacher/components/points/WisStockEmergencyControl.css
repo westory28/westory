@@ -37,22 +37,8 @@
   justify-content: flex-end;
   margin-top: 24px;
 }
-@media (max-width: 767px) {
-  .wis-stocks .teacher-sub-navigation--tabs .teacher-settings-sections {
-    flex-wrap: wrap;
-    overflow: visible;
-  }
-  .wis-stocks .teacher-sub-navigation--tabs .teacher-settings-section {
-    flex: 1 1 auto;
-    padding-inline: 8px;
-    font-size: 14px;
-  }
-  .wis-stocks .wis-stock-emergency {
-    flex: 0 0 100%;
-    justify-content: flex-end;
-    margin-left: 0;
-  }
-  .wis-stocks .wis-stock-emergency > span {
-    display: none;
+@container wis-stocks (max-width: 420px) {
+  .wis-stocks .teacher-sub-navigation-actions {
+    flex: 1 0 100%;
   }
 }

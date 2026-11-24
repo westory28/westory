@@ -2,7 +2,6 @@ import React, {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useId,
   useLayoutEffect,
   useRef,
@@ -85,7 +84,7 @@ export function LoadingProvider({ children }: { children: React.ReactNode }) {
 
 function LoadingScreen() {
   const layer = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const overlay = layer.current;
     if (!overlay) return;
     const previousFocus = document.activeElement;
@@ -111,7 +110,35 @@ function LoadingScreen() {
       }
     };
     protectBackground();
-    const observer = new MutationObserver(protectBackground);
+    // A dialog or popover opened by another effect after this request can
+    // enter the browser's top layer above the loader, regardless of z-index.
+    const bringLoaderForward = () => {
+      if (!overlay.open || typeof overlay.showModal !== "function") return;
+      overlay.close();
+      overlay.showModal();
+    };
+    const observer = new MutationObserver((records) => {
+      protectBackground();
+      const newModal = records.some(
+        ({ target, attributeName }) =>
+          attributeName === "open" &&
+          target !== overlay &&
+          target instanceof HTMLDialogElement &&
+          target.matches(":modal"),
+      );
+      if (newModal) bringLoaderForward();
+    });
+    const onPopoverToggle = (event: Event) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        target.hasAttribute("popover") &&
+        typeof target.showPopover === "function" &&
+        target.matches(":popover-open")
+      )
+        bringLoaderForward();
+    };
+    document.addEventListener("toggle", onPopoverToggle, true);
     observer.observe(document.body, {
       childList: true,
       subtree: true,
@@ -120,7 +147,9 @@ function LoadingScreen() {
     });
     return () => {
       observer.disconnect();
+      document.removeEventListener("toggle", onPopoverToggle, true);
       for (const [node, inert] of inertStates) node.inert = inert;
+      finishLoadingIn(overlay);
       if (typeof overlay.close === "function") overlay.close();
       releaseScrollLock();
       if (
@@ -339,6 +368,9 @@ function LoadingRequest({
         (node) =>
           node.hidden ||
           (node instanceof HTMLDialogElement && !node.open) ||
+          (node instanceof HTMLDetailsElement &&
+            !node.open &&
+            !node.querySelector(":scope > summary")?.contains(slot)) ||
           node.getAttribute("aria-hidden") === "true" ||
           getComputedStyle(node).display === "none",
       );

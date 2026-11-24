@@ -7,6 +7,7 @@ import http from "node:http";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import { reportServiceFixture } from "./verify-wis-stock-weekly-reports-browser.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
@@ -26,7 +27,7 @@ async function adapter(file, next) {
     new RegExp("const service = (`[\\s\\S]*?`);\\r?\\nconst " + next),
   );
   assert(literal, `Synthetic adapter missing in ${file}`);
-  return Function("root", "path", `return ${literal[1]}`)(root, path);
+  return Function("root", "path", "reportServiceFixture", `return ${literal[1]}`)(root, path, reportServiceFixture);
 }
 const wallet =
   "import {cloneDefaultMenus} from './src/constants/menus';\n" +
@@ -59,6 +60,7 @@ export const updateAvatarCatalogPricing=reject,getTeacherMyPage=reject,saveTeach
 const board = `
 export const watchWisStockExchange=()=>{throw Error("Unexpected exchange subscription")};
 export const getWisStockInvestmentHistories=async()=>{throw Error('Unexpected investment history read')};
+export const getWisStockRankTrace=async()=>{throw Error('Unexpected rank trace read')};
 export const wisStockInvestmentHistoryError=error=>error.message;
 export function watchWisStockInvestmentBoard(scope,onData,onConnection){
   window.villageQa.boardSubscriptions++;
@@ -673,9 +675,7 @@ try {
     const page = await open(320, "stocks", `&${state}=1`);
     await (
       state === "loading"
-        ? page.getByRole("status").filter({
-            hasText: "주식 자료를 불러오는 중입니다.",
-          })
+        ? page.locator(".wis-stocks").getByRole("status", { name: "처리 중" })
         : page.getByRole("alert")
     ).waitFor();
     assert.equal(await shopLinks(page).count(), 3);

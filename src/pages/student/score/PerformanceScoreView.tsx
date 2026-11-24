@@ -2467,7 +2467,7 @@ const ScopedScoreConfirmationView: React.FC<
   };
 
   if (loading) {
-    return <PageLoading message={resolvedCopy.loadingMessage} />;
+    return <PageLoading scope="screen" message={resolvedCopy.loadingMessage} />;
   }
 
   if (loadError) {

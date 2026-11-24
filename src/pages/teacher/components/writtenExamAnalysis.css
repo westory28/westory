@@ -219,30 +219,7 @@
   gap: 12px;
   margin: 16px 0;
 }
-.written-exam-kind-tabs {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.written-exam-kind-tabs button {
-  min-height: 44px;
-  padding: 8px 18px;
-  border: 1px solid var(--ws-border, #e2e8f0);
-  border-radius: 999px;
-  color: var(--ws-text-muted, #64748b);
-  background: transparent;
-  font-size: 14px;
-  font-weight: 600;
-}
-.written-exam-kind-tabs button.is-active {
-  border-color: var(--ws-primary, #2563eb);
-  color: var(--ws-primary, #2563eb);
-  background: var(--ws-primary-soft, #eff6ff);
-}
-.written-exam-kind-tabs button:focus-visible {
-  outline: 2px solid var(--ws-primary, #2563eb);
-  outline-offset: 2px;
-}
+.written-exam-kind-tabs { flex: 1; margin: 0; }
 .written-exam-materials {
   display: grid;
   gap: 16px;

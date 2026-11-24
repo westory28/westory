@@ -119,6 +119,22 @@ try {
     }
   });
   clients.anon = env.unauthenticatedContext().firestore();
+  const shortcuts = (actor, owner = actor) => doc(clients[actor], `users/${owner}/preferences/teacherShortcuts`);
+  for (const actor of ["admin", "teacher"]) {
+    await setDoc(shortcuts(actor), {items: ["/teacher/quiz", "/teacher/points?tab=stocks"]});
+    assert.equal((await getDocFromServer(shortcuts(actor))).data().items.length, 2);
+    await setDoc(shortcuts(actor), {items: []});
+    await denied(setDoc(shortcuts(actor), {items: ["/teacher/quiz", "/teacher/quiz"]}));
+    await denied(setDoc(shortcuts(actor), {items: ["https://outside.invalid"]}));
+    await denied(setDoc(shortcuts(actor), {items: [], role: "admin"}));
+  }
+  for (const actor of ["staff", "student-a", "anon", "expired", "pending"]) {
+    await denied(getDocFromServer(shortcuts(actor)));
+    await denied(setDoc(shortcuts(actor), {items: []}));
+  }
+  await denied(getDocFromServer(shortcuts("teacher", "admin")));
+  await denied(setDoc(shortcuts("teacher", "admin"), {items: []}));
+  console.log("PASS teacher shortcut preferences: owner only, authorized menus, live session, no extra fields");
   const student = "student-a";
   const scoreId = "signature-rule-fixture";
   const scorePath = `users/${student}/performance_scores/${scoreId}`;

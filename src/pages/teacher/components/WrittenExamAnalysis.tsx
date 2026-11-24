@@ -9,7 +9,10 @@ import {
 import { createPortal } from "react-dom";
 import { useAuth } from "../../../contexts/AuthContext";
 import RefreshButton from "../../../components/common/RefreshButton";
-import { LoadingOverlay } from "../../../components/common/LoadingState";
+import {
+  LoadingOverlay,
+  InlineLoading,
+} from "../../../components/common/LoadingState";
 import {
   invalidateWrittenExamAnalysisCache,
   readWrittenExamAnalysisCache,
@@ -352,7 +355,7 @@ export default function WrittenExamAnalysis({
       {navigation}
       <div className="written-exam-tab-toolbar">
         <div
-          className="written-exam-kind-tabs"
+          className="ws-page-tabs written-exam-kind-tabs"
           role="tablist"
           aria-label="분석 유형"
         >
@@ -851,7 +854,7 @@ function PaperPreview({
           alt={`${number}번 원안지 문항, 정답 선지 강조`}
         />
       ) : (
-        <p role="status">문항을 불러오는 중입니다.</p>
+        <InlineLoading />
       )}
     </Dialog>
   );

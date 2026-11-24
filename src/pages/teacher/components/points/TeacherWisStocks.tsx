@@ -1,3 +1,4 @@
+import { InlineLoading } from "../../../../components/common/LoadingState";
 import React, {
   useCallback,
   useEffect,
@@ -494,14 +495,6 @@ export default function TeacherWisStocks({
       }
     }
   };
-  const stats = useMemo(
-    () => ({
-      count: market?.stocks.length || 0,
-      automatic:
-        market?.stocks.filter((stock) => stock.settings.automatic).length || 0,
-    }),
-    [market],
-  );
   const typeStocks = useMemo(
     () =>
       (market?.stocks || []).filter(
@@ -580,6 +573,20 @@ export default function TeacherWisStocks({
                 등록을 중단합니다.
               </p>
             </InfoHelp>
+            <div className="wis-stock-emergency" aria-label="시장 거래 제어">
+              <button
+                type="button"
+                className={`wis-stock-emergency__button${marketOpen ? "" : " wis-stock-emergency__button--open"}`}
+                disabled={!canManage || halting || !market}
+                onClick={() => void changeHalted(marketOpen)}
+              >
+                {halting
+                  ? "처리 중…"
+                  : marketOpen
+                    ? "주식 시장 닫기"
+                    : "주식 시장 열기"}
+              </button>
+            </div>
           </>
         }
       >
@@ -605,20 +612,6 @@ export default function TeacherWisStocks({
             {item.label}
           </button>
         ))}
-        <div className="wis-stock-emergency" aria-label="시장 거래 제어">
-          <button
-            type="button"
-            className={`wis-stock-emergency__button${marketOpen ? "" : " wis-stock-emergency__button--open"}`}
-            disabled={!canManage || halting || !market}
-            onClick={() => void changeHalted(marketOpen)}
-          >
-            {halting
-              ? "처리 중…"
-              : marketOpen
-                ? "주식 시장 닫기"
-                : "주식 시장 열기"}
-          </button>
-        </div>
       </PortalSubNavigation>
       {haltError && (
         <div className="wis-stocks__error" role="alert">
@@ -643,7 +636,7 @@ export default function TeacherWisStocks({
           </button>
         </div>
       )}
-      {market && tab === "stocks" && (
+      {market && tab === "stocks" && canManage && !schedule?.plan && (
         <form
           className="wis-stocks__summary wis-stocks__schedule"
           onSubmit={activatePlan}
@@ -658,118 +651,78 @@ export default function TeacherWisStocks({
               아래에서 별도로 적용합니다.
             </p>
           </InfoHelp>
-          {schedule?.plan ? (
-            <>
-              <span>시작 {date(schedule.plan.startsAtMs)}</span>
-              <span>
-                상장 {schedule.listedCount} · 예정 {schedule.pendingCount}
-              </span>
-              {schedule.nextListingAtMs !== null && (
-                <span>다음 상장 {date(schedule.nextListingAtMs)}</span>
-              )}
-            </>
-          ) : canManage ? (
-            <>
+
+          <label>
+            시작일{" "}
+            <input
+              aria-label="상장 시작일"
+              type="date"
+              value={startsOn}
+              min={`${year}-01-01`}
+              max={`${year}-12-31`}
+              required
+              disabled={saving || loading}
+              onChange={(event) => setStartsOn(event.target.value)}
+            />
+          </label>
+          <button type="submit" disabled={saving || loading || conflict}>
+            {saving ? "적용 중…" : "상장 일정 적용"}
+          </button>
+        </form>
+      )}
+      {market &&
+        tab === "stocks" &&
+        canManage &&
+        schedule?.plan &&
+        !schedule.plan.exitsEnabledAtMs && (
+          <form
+            className="wis-stocks__summary wis-stocks__schedule"
+            onSubmit={activateExits}
+            aria-label="6주 종료 일정"
+          >
+            <strong>6주 종료 일정</strong>
+            <InfoHelp
+              label="6주 종료 일정"
+              sections={[
+                {
+                  items: [
+                    "기획안의 합병·퇴장일에 해당 종목 거래 종료",
+                    "종료 시 마지막 운영 가격으로 보유 주식 정산, 수수료 없음",
+                    "예약 주문 취소, 정산 위스는 주식 계좌에 반영",
+                    "시장 중지·비공개·휴장 중이면 다음 거래 시간에 처리",
+                    "지난 종료일만 선택한 날짜의 기존 시각으로 연장",
+                  ],
+                },
+              ]}
+            />
+
+            {overdueExits.length > 0 && (
               <label>
-                시작일{" "}
+                지난 종료일 연장
                 <input
-                  aria-label="상장 시작일"
                   type="date"
-                  value={startsOn}
-                  min={`${year}-01-01`}
-                  max={`${year}-12-31`}
+                  aria-label="지난 종료일 연장 날짜"
+                  value={overdueExitDate}
+                  min={tomorrowKst()}
                   required
                   disabled={saving || loading}
-                  onChange={(event) => setStartsOn(event.target.value)}
+                  onChange={(event) => setOverdueExitDate(event.target.value)}
                 />
               </label>
-              <button type="submit" disabled={saving || loading || conflict}>
-                {saving ? "적용 중…" : "상장 일정 적용"}
-              </button>
-            </>
-          ) : (
-            <span>미적용</span>
-          )}
-        </form>
-      )}
-      {market && tab === "stocks" && schedule?.plan && (
-        <form
-          className="wis-stocks__summary wis-stocks__schedule"
-          onSubmit={activateExits}
-          aria-label="6주 종료 일정"
-        >
-          <strong>6주 종료 일정</strong>
-          <InfoHelp
-            label="6주 종료 일정"
-            sections={[
-              {
-                items: [
-                  "기획안의 합병·퇴장일에 해당 종목 거래 종료",
-                  "종료 시 마지막 운영 가격으로 보유 주식 정산, 수수료 없음",
-                  "예약 주문 취소, 정산 위스는 주식 계좌에 반영",
-                  "시장 중지·비공개·휴장 중이면 다음 거래 시간에 처리",
-                  "지난 종료일만 선택한 날짜의 기존 시각으로 연장",
-                ],
-              },
-            ]}
-          />
-          {schedule.plan.exitsEnabledAtMs ? (
-            <>
-              <span>자동 종료 적용</span>
-              {Object.entries(schedule.plan.exitOverrides || {}).map(
-                ([id, atMs]) => (
-                  <span key={id}>
-                    {wisStockCatalog.find((entry) => entry.id === id)?.name ||
-                      id}{" "}
-                    {date(atMs)}
+            )}
+            <button type="submit" disabled={saving || loading || conflict}>
+              {saving ? "적용 중…" : "종료 일정 적용"}
+            </button>
+            {revisedExits.map(
+              ({ entry, atMs }) =>
+                Number.isFinite(atMs) && (
+                  <span key={entry.id}>
+                    {entry.name} {date(atMs)}
                   </span>
                 ),
-              )}
-            </>
-          ) : canManage ? (
-            <>
-              {overdueExits.length > 0 && (
-                <label>
-                  지난 종료일 연장
-                  <input
-                    type="date"
-                    aria-label="지난 종료일 연장 날짜"
-                    value={overdueExitDate}
-                    min={tomorrowKst()}
-                    required
-                    disabled={saving || loading}
-                    onChange={(event) => setOverdueExitDate(event.target.value)}
-                  />
-                </label>
-              )}
-              <button type="submit" disabled={saving || loading || conflict}>
-                {saving ? "적용 중…" : "종료 일정 적용"}
-              </button>
-              {revisedExits.map(
-                ({ entry, atMs }) =>
-                  Number.isFinite(atMs) && (
-                    <span key={entry.id}>
-                      {entry.name} {date(atMs)}
-                    </span>
-                  ),
-              )}
-            </>
-          ) : (
-            <span>미적용</span>
-          )}
-        </form>
-      )}
-      {market && tab === "stocks" && (
-        <div className="wis-stocks__summary">
-          <span>
-            등록 {stats.count} / {market.maxStocks}
-          </span>
-          <span>자동 변동 {stats.automatic}개</span>
-          {market.updatedAtMs > 0 && (
-            <span>최근 변경 {date(market.updatedAtMs)}</span>
-          )}
-        </div>
-      )}
+            )}
+          </form>
+        )}
       {error && (
         <div className="wis-stocks__error" role="alert">
           <p>{error}</p>
@@ -788,7 +741,7 @@ export default function TeacherWisStocks({
           )}
         </div>
       )}
-      {loading && <p role="status">주식 자료를 불러오는 중입니다.</p>}
+      {loading && <InlineLoading />}
       {market && tab === "stocks" && (
         <div className="wis-stocks__filters" aria-label="종목 필터">
           <label className="wis-stocks__type-filter">
@@ -1270,11 +1223,14 @@ export default function TeacherWisStocks({
                 type="button"
                 className="wis-stocks__primary"
                 disabled={
-                  saving || loading || dirty || stats.count >= market.maxStocks
+                  saving ||
+                  loading ||
+                  dirty ||
+                  market.stocks.length >= market.maxStocks
                 }
                 onClick={() => choose()}
               >
-                {stats.count >= market.maxStocks
+                {market.stocks.length >= market.maxStocks
                   ? "등록 한도 도달"
                   : "새 종목 추가"}
               </button>
@@ -1315,7 +1271,7 @@ export default function TeacherWisStocks({
         />
       )}
       {tab === "reports" && userData?.role === "teacher" && (
-        <React.Suspense fallback={<p role="status">보고서를 여는 중입니다.</p>}>
+        <React.Suspense fallback={<InlineLoading />}>
           <WisStockWeeklyReports
             key={ownerKey}
             year={year}

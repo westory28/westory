@@ -1,3 +1,4 @@
+import { InlineLoading } from "../../components/common/LoadingState";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import WeplayGameCatalog from "../../components/common/weplay/WeplayGameCatalog";
@@ -376,9 +377,7 @@ function NavalWeplay({ groupTitle }: { groupTitle: string }) {
   if (!lobby || loadedScope !== scope) {
     return (
       <main className="weplay-page">
-        <p role={error ? "alert" : "status"}>
-          {error || "게임을 확인하는 중입니다."}
-        </p>
+        {error ? <p role="alert">{error}</p> : <InlineLoading scope="screen" />}
         {error && (
           <button
             type="button"

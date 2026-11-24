@@ -1,7 +1,10 @@
 import React, { lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import PortalSubNavigation from "../../../components/common/PortalSubNavigation";
-import { PageLoading } from "../../../components/common/LoadingState";
+import {
+  PageLoading,
+  InlineLoading,
+} from "../../../components/common/LoadingState";
 import { WRITTEN_EXAM_SCORE_KIND } from "../../../lib/performanceScores";
 import PerformanceScoreManager from "./PerformanceScoreManager";
 import "./writtenExamAnalysis.css";
@@ -52,9 +55,7 @@ const WrittenExamEssayScoreManager: React.FC = () => {
       scoreKind={WRITTEN_EXAM_SCORE_KIND}
       navigation={navigation}
       writtenExamMaterials={(onBusyChange) => (
-        <Suspense
-          fallback={<p role="status">원안지 등록을 준비하고 있습니다.</p>}
-        >
+        <Suspense fallback={<InlineLoading />}>
           <WrittenExamMaterials onBusyChange={onBusyChange} />
         </Suspense>
       )}

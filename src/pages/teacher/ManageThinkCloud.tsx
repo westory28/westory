@@ -983,7 +983,11 @@ const ManageThinkCloud: React.FC = () => {
     if (!selectedSession)
       return (
         <div className="think-empty">
-          <p>주제를 불러오는 중입니다.</p>
+          {readError ? null : initialLoading ? (
+            <InlineLoading />
+          ) : (
+            <p>선택한 주제를 찾을 수 없습니다.</p>
+          )}
         </div>
       );
     const status = getStatus(selectedSession);

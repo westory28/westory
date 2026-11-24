@@ -1,5 +1,17 @@
 # 운영 배포 절차
 
+## 교사 위스피 보유 수익률의 이전 상위권 (2026-11-24)
+
+투자 현황의 전체·선택 학급 그래프에는 해당 시점에 상위 5명에 든 학생의 기록을 남긴다. 순위 밖으로 나가면 선이 끊기고 재진입 시 새 선이 시작된다. 현재 보드에 없는 학생은 응답에서 제외한다. 개인 선택 그래프는 기존 계좌별 거래·시세 이력을 사용한다.
+
+- 미국 `archiveWisStockRankTrace`는 학기별 `wis_stock_investment_boards/{boardId}`의 실제 변경 전후를 비교한다. 상위 5명의 키·평가액·원가가 같으면 추가 읽기·쓰기는 0건이다. 변경 시 해당 보드 아래 `rank_trace/{UTC날짜}_{revision묶음}`에 관측 시각·revision·상위 5명 값만 저장한다. 한 문서에 최대 128개 revision을 담는다. 같은 묶음이면 트랜잭션 1읽기·최대 1쓰기, 경계를 넘으면 최대 2읽기·2쓰기이며 중복 이벤트는 기존 관측을 쓰지 않는다. 학급 문서·전체 문서마다 독립적으로 적용된다.
+- 기존 교사 callable `getWisStockInvestmentHistory`의 `rank-trace` 조회는 현재 세션·권한·학기·보드 범위를 확인한다. 최초에는 날짜 접두사로 선택 기간의 묶음을 16문서씩 끝까지 조회한다. 같은 범위를 갱신할 때는 마지막 서버 읽기 시각 이후 바뀐 묶음만 받아 늦게 도착한 이전 revision도 합친다. 매 페이지에서 권한용 7문서와 조회된 이력 묶음을 읽는다. 이 경로의 시세·계좌·개인 원장 조회 및 쓰기는 0건이다. 화면에서 범위를 줄일 때 같은 보드 revision의 이미 받은 기간은 재사용한다.
+- 11월 24일에는 Firestore의 시점 복원(PITR)으로 보관 중인 전체 보드에서 장중 10분 간격과 자정 등을 포함한 338개 시점을 조회했다. 11월 17일 22:57:50~24일 17:50:46(한국 시각)에 생성된 서로 다른 167개 원본을 확인했다. 각 원본에서 전체와 학급별 실제 상위권만 산출해 177개 묶음을 기록하고, 전체를 다시 읽어 일치 여부를 확인했다. 이 기간 전체 순위에서 상위권에 관측된 학생은 28명이다. 표본 간 순위와 보존 기간 밖의 순위는 복원하지 않았다.
+
+최초 배포는 기존 조회 함수 revision `getwisstockinvestmenthistory-00005-xik`의 운영 ZIP 260파일에서 시작했다. 조회 모듈·현재 운영 export 진입점에 필요한 변경만 적용하고 `wisStockRankTrace.js`를 추가했다. 이름이 같은 저장소의 다른 export까지 복사하지 않는다. 운영 이력 조회 권한과 세션 경계, 이전 조회 요청 호환, Firestore 에뮬레이터의 순위 이탈·재진입·지연 전달·중복 쓰기·학적 제외 검사를 통과한 준비본을 사용한다.
+
+준비본에서 `firebase deploy --only "functions:getWisStockInvestmentHistory" --project history-quiz-yongsin` 및 `firebase deploy --only "functions:archiveWisStockRankTrace" --project history-quiz-yongsin`으로 선택 배포한다. 신규 Eventarc 트리거는 재시도 시 멱등성을 검증한 후 재시도 정책을 승인한다. 배포 후 `firebase functions:list --project history-quiz-yongsin`에서 두 함수의 `us-central1 ACTIVE`를 확인하고 `gcloud functions describe <함수명> --gen2 --region us-central1 --project history-quiz-yongsin`의 `buildConfig.source.storageSource`로 내려받은 ZIP을 준비본 전체 해시와 대조한다. 기존 조회 함수의 IAM·자원, 신규 트리거의 대상 경로와 익명 조회 거부도 확인한다. 11월 24일 확인한 서버 revision은 `getwisstockinvestmenthistory-00006-foc`, `archivewisstockranktrace-00001-car`이며 운영 ZIP 각 261파일이 일치했고 익명 호출은 HTTP 401이었다.
+
 ## 위스피 지갑 주문·교사용 주간 보고서 (2026-11-24)
 
 교사는 위스피의 ‘주식 보고서’에서 주차를 선택해 시세·체결 수급·주주 수 증감·다음 주 운영 예정가를 담은 JSON을 내려받는다. 수급은 한국 시각으로 종료된 날짜까지 집계하며 작은 거래 집단은 업종, 시장 순으로 합산한다. 분석 파일의 집계 범위와 결측 표기를 확인한다. 분석은 교사가 직접 수행하고, 완성된 PDF·Markdown·UTF-8 텍스트 파일(최대 3MiB)을 미리 본 뒤 교사용으로 발행한다. 동일 주차 발행본 교체에는 최신 판본 번호가 필요하다.

@@ -3,7 +3,7 @@
 .wis-investment-board__toolbar, .wis-investment-board__list-heading, .wis-investment-board__status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .wis-investment-board :is(.wis-investment-board__toolbar,.wis-investment-board__list-heading) label { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
 .wis-investment-board select { min-width: 0; max-width: 100%; min-height: 44px; padding: 8px; border: 1px solid var(--ws-border, #e5e7eb); border-radius: 8px; background: var(--ws-surface, #fff); color: inherit; font: inherit; }
-.wis-investment-board__screen { margin-left: auto; }
+.wis-investment-board__toolbar button.wis-investment-board__screen { margin-left: auto; background: var(--ws-primary-text, #1e3a8a); color: #fff; border-color: transparent; font-weight: 700; }
 .wis-investment-board__status { margin: 8px 0 12px; min-height: 24px; font-size: 12px; color: var(--ws-text-muted, #6b7280); }
 .wis-investment-board__status > span::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: currentColor; }
 .wis-investment-board__status > .is-live { color: var(--ws-success, #15803d); }
@@ -58,7 +58,7 @@
 @media (max-width: 599px) {
  .wis-investment-board__stats { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px 8px; }
  .wis-investment-board__toolbar { gap: 4px 8px; }
- .wis-investment-board__screen { margin-left: 0; }
+ .wis-investment-board__toolbar button.wis-investment-board__screen { margin-left: 0; }
 
 }
 

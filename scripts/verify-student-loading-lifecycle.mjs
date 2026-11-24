@@ -30,6 +30,8 @@ export const getKoreanPublicHolidays=async()=>{await wait('holidays');return[]};
 export const mergeEventsWithKoreanPublicHolidays=events=>events;
 export const getStudentMenuLabel=(_,__,label)=>label;
 export const getScheduleEventColor=()=> '#2563eb';
+export const useScheduleCategories=()=>({categories:[]});
+export const getScheduleCategoryMeta=()=>({label:'학사 일정',color:'#2563eb'});
 export const getSchedulePeriodRangeLabel=()=>'';
 export const useAttendanceDates=()=>({dates:[],loading:false,error:null,retry:()=>{}});
 `;

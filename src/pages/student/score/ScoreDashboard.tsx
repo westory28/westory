@@ -596,7 +596,9 @@ const ScoreDashboard: React.FC = () => {
   );
 
   if (loading)
-    return <PageLoading message="성적 데이터를 불러오는 중입니다." />;
+    return (
+      <PageLoading scope="screen" message="성적 데이터를 불러오는 중입니다." />
+    );
 
   return (
     <div className="ws-page score-calculator animate-fadeIn">

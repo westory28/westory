@@ -101,19 +101,6 @@
   min-height: calc(var(--wis-ranking-content-height) - 4px);
 }
 
-.wis-ranking-skeleton {
-  display: flex;
-  flex-direction: column;
-  gap: var(--wis-ranking-row-gap);
-}
-
-.wis-ranking-skeleton-row {
-  height: var(--wis-ranking-row-height);
-  border: 1px solid var(--ws-border, #e5e7eb);
-  border-radius: 8px;
-  background: var(--ws-surface-subtle, #f8fafc);
-}
-
 .wis-ranking-with-avatar .wis-ranking-state {
   min-height: calc(var(--wis-ranking-content-height) - 8px);
 }

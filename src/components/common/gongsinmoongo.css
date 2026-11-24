@@ -225,6 +225,14 @@
   background: var(--ws-primary-soft, #eff6ff);
   color: var(--ws-primary-text, #1e3a8a);
 }
+.gsm-tabs-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  box-shadow: inset 0 -1px var(--ws-border, #e5e7eb);
+}
 .gsm-workspace .gsm-page-header .ws-page-tabs {
   flex: 1;
   order: 0;

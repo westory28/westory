@@ -15,13 +15,21 @@ const fail = (reason, message = '학생 수익률 이력을 확인하지 못했�
 function createWisStockInvestmentHistory({ db, now = Date.now, assertSession = assertScoreWorkflowSession }) {
   return async request => {
     const authority = await assertSession(request), input = request.data;
+    const trace = input?.view === 'rank-trace';
     const batch = Array.isArray(input?.studentKeys);
     const studentKeys = batch ? input.studentKeys : [input?.studentKey];
     if (!input || typeof input !== 'object' || Array.isArray(input)
-      || Object.keys(input).some(key => !['year', 'semester', 'grade', 'classNumber', 'studentKey', 'studentKeys', '_session'].includes(key))
+      || Object.keys(input).some(key => !['year', 'semester', 'grade', 'classNumber', '_session',
+        ...(trace ? ['view', 'after', 'through', 'fromMs', 'sinceMs'] : ['studentKey', 'studentKeys'])].includes(key))
+      || (trace && (!Number.isSafeInteger(input.through) || input.through < 1
+        || [input.fromMs, input.sinceMs].some(value => !Number.isSafeInteger(value) || value < 0 || value > 8_640_000_000_000_000)
+        || (input.after !== undefined && (!input.after || typeof input.after !== 'object'
+          || !/^\d{4}-\d{2}-\d{2}_\d{14}$/.test(input.after.id)
+          || (input.sinceMs && (!Number.isSafeInteger(input.after.sec) || input.after.sec < 0 || input.after.sec > 253402300799
+            || !Number.isInteger(input.after.nano) || input.after.nano < 0 || input.after.nano >= 1_000_000_000))))))
       || (batch && Object.hasOwn(input, 'studentKey')) || (!batch && Object.hasOwn(input, 'studentKeys'))
       || studentKeys.length < 1 || studentKeys.length > 5 || new Set(studentKeys).size !== studentKeys.length
-      || studentKeys.some(key => typeof key !== 'string' || !/^student_[a-f0-9]{24}$/.test(key)))
+      || (!trace && studentKeys.some(key => typeof key !== 'string' || !/^student_[a-f0-9]{24}$/.test(key))))
       fail('WIS_STOCK_INPUT_INVALID', undefined, 'invalid-argument');
     let scope;
     try { scope = normalizeWisStockInvestmentBoardScope(input); } catch { fail('WIS_STOCK_INPUT_INVALID', undefined, 'invalid-argument'); }
@@ -39,9 +47,9 @@ function createWisStockInvestmentHistory({ db, now = Date.now, assertSession = a
           && (profile.role !== 'staff' || !permissions.some(value => value === 'point_read' || value === 'point_manage'))))
         fail('WIS_STOCK_TEACHER_REQUIRED', '학생 투자 현황을 볼 권한이 없습니다.', 'permission-denied');
       const paths = ['site_settings/config', 'site_settings/semester_active', `semester_manifests/${scope.semesterId}`,
-        `${root}/wis_stock_investment_boards/${scope.documentId}`, `${root}/wis_stock_markets/current`,
-        `application_sessions/${uid}/sessions/${authTime}`, 'site_settings/student_maintenance'];
-      const [configSnap, pointerSnap, manifestSnap, boardSnap, marketSnap, sessionSnap, maintenanceSnap]
+        `${root}/wis_stock_investment_boards/${scope.documentId}`,
+        `application_sessions/${uid}/sessions/${authTime}`, 'site_settings/student_maintenance', ...(trace ? [] : [`${root}/wis_stock_markets/current`])];
+      const [configSnap, pointerSnap, manifestSnap, boardSnap, sessionSnap, maintenanceSnap, marketSnap]
         = await tx.getAll(...paths.map(path => db.doc(path)));
       const asOfMs = now();
       let session;
@@ -56,6 +64,7 @@ function createWisStockInvestmentHistory({ db, now = Date.now, assertSession = a
         || !Number.isSafeInteger(pointer.revision) || pointer.revision < 1 || manifest.revision !== pointer.revision)
         fail('WIS_STOCK_SCOPE_CHANGED', '현재 학기에서 다시 조회해 주세요.');
       const board = parseWisStockInvestmentBoardSnapshot(boardSnap.exists ? boardSnap.data() : null, scope);
+      if (trace) return require('./wisStockRankTrace').readRankTrace(tx, boardSnap.ref, board, input);
       const histories = [];
       // Authority, semester, scoped board and prices are read once for up to
       // five displayed students. Each ledger query remains account-scoped.

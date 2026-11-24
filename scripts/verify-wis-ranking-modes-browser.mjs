@@ -96,7 +96,7 @@ try {
     await cumulative.focus();await page.keyboard.press('ArrowRight');
     await page.waitForFunction(()=>wisRankingQa.pending.length===1);
     assert.equal(await page.locator('.wis-ranking-row').count(),0,'No old filter rows under new label');
-    assert.equal(await page.locator('.wis-ranking-skeleton-row').count(),5);
+    assert.equal(await page.locator('.wis-ranking-list .ws-loading__logo:not(.ws-loading__logo--exit)').count(),1);
     await stable(page,before,'Uncached mode loading preserves layout and scroll');
     await page.evaluate(()=>{wisRankingQa.hold=false;wisRankingQa.pending.at(-1).resolve()});
     await waitName(page,'현재전체');await stable(page,before,'Loaded mode preserves layout and scroll');
@@ -115,7 +115,7 @@ try {
     await page.waitForFunction(()=>wisRankingQa.pending.length===3);
     const cachePaintMs=await page.evaluate(()=>performance.now()-wisRankingQa.clickedAt);
     assert(cachePaintMs<250,`Cache paint ${cachePaintMs}ms at ${width}`);
-    assert.equal(await page.locator('.wis-ranking-skeleton-row').count(),0);
+    assert.equal(await page.locator('.wis-ranking-list .ws-loading__logo:not(.ws-loading__logo--exit)').count(),0);
     await stable(page,before,'Cached selection paints before held server revalidation without movement');
     await page.evaluate(()=>{wisRankingQa.hold=false;wisRankingQa.pending.at(-1).resolve();wisRankingQa.rowCount=1});
     await page.getByRole('radio',{name:'누적',exact:true}).click();

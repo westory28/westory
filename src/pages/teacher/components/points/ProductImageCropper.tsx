@@ -1,3 +1,4 @@
+import { InlineLoading } from "../../../../components/common/LoadingState";
 import React, { useEffect, useRef, useState } from "react";
 import InfoHelp from "../../../../components/common/InfoHelp";
 import ProductImageWatermark from "./ProductImageWatermark";
@@ -252,8 +253,10 @@ const ProductImageCropper: React.FC<Props> = ({
             <span className="wis-product-crop__guides" aria-hidden="true" />
             <ProductImageWatermark />
           </>
+        ) : error ? (
+          <span>사진을 확인해 주세요.</span>
         ) : (
-          <span>{error ? "사진을 확인해 주세요." : "사진을 불러오는 중…"}</span>
+          <InlineLoading />
         )}
       </div>
       {rect && (

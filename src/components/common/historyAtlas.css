@@ -103,26 +103,10 @@
   background: var(--ws-surface-subtle, #f8fafc);
 }
 .history-atlas__subjects {
-  display: flex;
-  gap: 8px;
   margin-bottom: 12px;
-  border-bottom: 1px solid var(--ws-border, #e5e7eb);
 }
 .history-atlas__subjects button {
-  min-height: 48px;
   min-width: 96px;
-  border: 0;
-  border-radius: 0;
-  border-bottom: 3px solid transparent;
-  background: transparent;
-  padding: 8px 16px;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--ws-text-muted, #6b7280);
-}
-.history-atlas__subjects button[aria-pressed="true"] {
-  border-bottom-color: var(--ws-primary, #2563eb);
-  color: var(--ws-primary, #2563eb);
 }
 .history-atlas__filters {
   display: grid;

@@ -62,17 +62,6 @@
   padding: 0;
 }
 
-.teacher-settings-sitemap-tabs {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 100%;
-}
-
-.teacher-settings-sitemap-tabs button {
-  min-height: 44px;
-}
-
 .teacher-settings-menu-order {
   display: flex;
   gap: 4px;

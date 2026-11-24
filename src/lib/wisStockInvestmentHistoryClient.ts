@@ -231,3 +231,79 @@ export function wisStockInvestmentHistoryError(error: unknown) {
     return "수익률 기록 조회 권한이나 로그인 상태를 확인해 주세요.";
   return "수익률 기록을 불러오지 못했습니다. 다시 시도해 주세요.";
 }
+
+export type WisStockRankSample = {
+  revision: number;
+  atMs: number;
+  leaders: {
+    studentKey: string;
+    holdingValue: number;
+    holdingCostBasis: number;
+  }[];
+};
+type RankScope = Omit<HistoryScope, "studentKey"> & {
+  through: number;
+  fromMs: number;
+  sinceMs: number;
+};
+type RankCursor = { id: string; sec?: number; nano?: number };
+export async function getWisStockRankTrace(
+  scope: RankScope,
+  active: () => boolean,
+) {
+  const owner = auth.currentUser;
+  if (!owner) throw ownerChanged();
+  const epoch = Number((await owner.getIdTokenResult()).claims.auth_time);
+  const check = () => {
+    if (
+      !active() ||
+      auth.currentUser !== owner ||
+      !Number.isSafeInteger(epoch) ||
+      epoch < 1
+    )
+      throw ownerChanged();
+  };
+  check();
+  const call = await getHistoryDictionaryCallable<
+    RankScope & { view: "rank-trace"; after?: RankCursor },
+    {
+      semesterId: string;
+      grade: string;
+      classNumber: string;
+      samples: WisStockRankSample[];
+      next: RankCursor | null;
+      readMs: number;
+    }
+  >("getWisStockInvestmentHistory", { beforeDispatch: check });
+  const samples: WisStockRankSample[] = [];
+  let after: RankCursor | undefined;
+  let readMs = 0;
+  do {
+    check();
+    const { data } = await call({
+      ...scope,
+      view: "rank-trace",
+      ...(after && { after }),
+    });
+    check();
+    if (Number((await owner.getIdTokenResult()).claims.auth_time) !== epoch)
+      throw ownerChanged();
+    if (
+      data.semesterId !== scope.year + "-" + scope.semester ||
+      data.grade !== scope.grade ||
+      data.classNumber !== scope.classNumber ||
+      !Array.isArray(data.samples) ||
+      !Number.isSafeInteger(data.readMs) ||
+      data.readMs <= 0 ||
+      (data.next !== null &&
+        (!/^\d{4}-\d{2}-\d{2}_\d{14}$/.test(data.next.id) ||
+          JSON.stringify(data.next) === JSON.stringify(after)))
+    ) {
+      throw new Error("상위권 기록 범위를 확인하지 못했습니다.");
+    }
+    readMs = Math.min(readMs || data.readMs, data.readMs);
+    samples.push(...data.samples);
+    after = data.next || undefined;
+  } while (after);
+  return { samples, readMs };
+}

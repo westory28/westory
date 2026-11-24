@@ -26,3 +26,7 @@
 .wis-return-history__tooltip { position: absolute; top: 12px; display: grid; gap: 4px; width: 192px; max-width: calc(100% - 16px); padding: 8px 12px; background: var(--ws-surface, #fff); border: 1px solid var(--ws-border, #e5e7eb); border-radius: 8px; font-size: 12px; pointer-events: none; overflow-wrap: anywhere; }
 .wis-return-history__tooltip strong { font-size: 16px; }
 .wis-return-history__notice { margin: 8px 0 0; font-size: 14px; color: var(--ws-text-muted, #6b7280); }
+
+.wis-return-history [data-series="former"] { --series-color: var(--ws-text-muted, #64748b); }
+
+.wis-return-history__former summary { width: fit-content; min-height: 44px; align-content: center; cursor: pointer; color: var(--ws-text-muted, #64748b); font-size: 14px; }

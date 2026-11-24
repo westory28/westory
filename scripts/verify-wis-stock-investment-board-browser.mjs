@@ -122,6 +122,7 @@ function App(){const[mounted,setMounted]=useState(true),[account,setAccount]=use
  <main className="ws-page wis-stocks"><h1>학생 투자 현황</h1>{mounted&&<Board key={account} {...scope} displayMarket={{updatedAtMs:0,studentOpen:true,rules:{halted:false},stocks:[]}}/>}</main></>;
 }createRoot(document.getElementById('root')).render(<App/>);`;
 const historyService = `
+export async function getWisStockRankTrace(){ return {samples:window.boardQa.traceSamples || [],readMs:Date.now()}; }
 export async function getWisStockInvestmentHistories(scope){
  const qa=window.boardQa;qa.historyRequests??=[];qa.historyRequests.push(scope);
  if(qa.historyFailure)throw new Error('Synthetic history error');
@@ -671,6 +672,8 @@ async function checkBulletinCycle(width, height) {
     assert(!text.includes("검증학생") && !text.includes("매수") && !text.includes("매도"), "fills stay in the trade panel");
     assert(!text.includes("옛철도"));
     if (text !== pages.at(-1)) pages.push(text);
+    // A bulletin transition can resize the mobile panel. Check fit after layout observers run.
+    await page.clock.runFor(64);
     await checkBoardFit(display, "quotes");
     await page.clock.fastForward(3_010);
   }
@@ -717,6 +720,29 @@ async function checkBulletinCycle(width, height) {
 }
 
 try {
+  {
+    const page = await open(390);
+    await push(page);
+    await chartReady(page);
+    const formerKey = await page.evaluate(() => {
+      const qa=window.boardQa, row=qa.last.rows[0], atMs=qa.last.asOfMs;
+      const leader={studentKey:row.studentKey,holdingValue:200,holdingCostBasis:100};
+      qa.traceSamples=[{revision:1,atMs:atMs-5000,leaders:[leader]}, {revision:2,atMs:atMs-4000,leaders:[leader]},
+        {revision:3,atMs:atMs-3000,leaders:[]}, {revision:4,atMs:atMs-2000,leaders:[leader]}];
+      qa.push("READY",5);return row.studentKey;
+    });
+    const plot=page.locator('.wis-return-history__plot[data-student-key="'+formerKey+'"]');
+    await plot.waitFor();
+    assert.equal(await plot.locator(':scope > g').count(),2);
+    assert.equal(await plot.locator('circle').count(),3);
+    assert.equal(await page.locator('.wis-return-history__legend li[data-series="former"]').count(),1);
+    await page.getByRole('button',{name:"수익률 기록 새로고침",exact:true}).click();
+    await plot.waitFor();assert.equal(await plot.locator('circle').count(),3);
+    const style=await page.getByRole('button',{name:"전광판 보기"}).evaluate(el=>({color:getComputedStyle(el).color,bg:getComputedStyle(el).backgroundColor}));
+    assert.deepEqual(style,{color:"rgb(255, 255, 255)",bg:"rgb(30, 58, 138)"});
+    await page.locator('.wis-investment-board__returns').screenshot({path:path.join(output,'former-leader.png')});
+    await page.close();
+  }
   await checkBulletinCycle(320, 568);
   await checkBulletinCycle(1280, 720);
   checks.push("Center popups replay current-slot confirmed listings and ±10% observed prices on entry, show both types with an unobstructed board between cycles, omit expired listings and trade details, and restart after pause or re-entry. Rotation adds zero watcher registrations and history requests at 320×568 and 1280×720.");
@@ -1192,10 +1218,7 @@ try {
   });
   await push(states);
   await states.waitForFunction(() => Boolean(window.boardQa.releaseHistory));
-  assert.match(
-    await states.locator(".wis-investment-board__returns").innerText(),
-    /기록을 확인/,
-  );
+  await states.locator(".wis-investment-board__returns .ws-loading").waitFor();
   await rows(states).first().click();
   await chartReady(states, 1);
   await states.evaluate(() => window.boardQa.releaseHistory());

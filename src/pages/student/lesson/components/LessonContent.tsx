@@ -1829,13 +1829,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
         >
           {reviewPopup && lessonVideo}
           {!!worksheet.pageImages.length && (
-            <React.Suspense
-              fallback={
-                <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm font-semibold text-gray-500">
-                  학습지를 준비하는 중입니다.
-                </div>
-              }
-            >
+            <React.Suspense fallback={<InlineLoading />}>
               <LessonWorksheetStage
                 pageImages={worksheet.pageImages}
                 blanks={worksheet.blanks}

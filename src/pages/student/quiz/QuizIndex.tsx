@@ -324,6 +324,7 @@ const QuizIndex: React.FC = () => {
   if (loading) {
     return (
       <InlineLoading
+        scope="screen"
         message="문제 풀이 목록을 불러오는 중입니다."
         showWarning
       />
@@ -566,9 +567,7 @@ const QuizIndex: React.FC = () => {
                   </button>
                 </div>
               ) : mockOverviewLoading && selected.visible ? (
-                <p className="student-exam-lobby__notice" role="status">
-                  응시 상태 확인 중…
-                </p>
+                <InlineLoading />
               ) : !canEnter && !retakeBlocked && !scheduled ? (
                 <p className="student-exam-lobby__notice">
                   {selected.visible && selectedState?.prerequisiteMet === false

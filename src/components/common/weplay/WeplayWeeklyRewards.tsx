@@ -1,3 +1,4 @@
+import { InlineLoading } from "../LoadingState";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
 import {
@@ -292,7 +293,7 @@ export default function WeplayWeeklyRewards({
           새로고침
         </button>
       </div>
-      {loading && <p role="status">보상 설정을 불러오는 중…</p>}
+      {loading && <InlineLoading />}
       {plan && (
         <>
           {mode === "recurring" && (

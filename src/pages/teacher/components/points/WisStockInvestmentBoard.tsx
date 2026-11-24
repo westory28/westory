@@ -1,3 +1,4 @@
+import { InlineLoading } from "../../../../components/common/LoadingState";
 import { useEffect, useMemo, useRef, useState } from "react";
 import WisStockExchangeDisplay from "./WisStockExchangeDisplay";
 import type { WisStockManagement } from "../../../../lib/wisStocksClient";
@@ -8,10 +9,15 @@ import WisStockLoadMore from "../../../../components/common/WisStockLoadMore";
 import WisStockReturnHistoryChart from "./WisStockReturnHistoryChart";
 import {
   getWisStockInvestmentHistories,
+  getWisStockRankTrace,
+  type WisStockRankSample,
   wisStockInvestmentHistoryError,
   type WisStockInvestmentHistory,
 } from "../../../../lib/wisStockInvestmentHistoryClient";
-import { topWisStockHoldingReturns } from "./wisStockInvestmentReturns";
+import {
+  topWisStockHoldingReturns,
+  withRankTrace,
+} from "./wisStockInvestmentReturns";
 import {
   watchWisStockInvestmentBoard,
   type WisStockBoardConnection,
@@ -198,6 +204,99 @@ export default function WisStockInvestmentBoard({
     retry,
     historyRetry,
   ]);
+  const through = data?.revision || 0;
+  const fromMs = Number.isFinite(periodDays)
+    ? Math.max(0, (data?.asOfMs || 0) - periodDays * 86400000)
+    : 0;
+  const traceKey = live ? JSON.stringify([historyScope, through, fromMs]) : "";
+  const traceCache = useRef<{
+    scope: string;
+    fromMs: number;
+    readMs: number;
+    samples: WisStockRankSample[];
+    through: number;
+    refresh: number;
+  } | null>(null);
+  const [trace, setTrace] = useState<{
+    key: string;
+    samples: WisStockRankSample[];
+    error: string;
+  } | null>(null);
+  const traceReady = !!traceKey && trace?.key === traceKey;
+  const showTop = !selectedStudent && !displayOpen;
+  useEffect(() => {
+    if (!live) {
+      traceCache.current = null;
+      setTrace(null);
+      return;
+    }
+    if (!showTop || !through || traceReady) return;
+    let active = true;
+    const [grade = "", classNumber = ""] =
+      classKey === "all" ? [] : classKey.split(":");
+    const ownerScope = JSON.stringify([year, semester, classKey]);
+    const cached =
+      traceCache.current?.scope === ownerScope &&
+      traceCache.current.fromMs <= fromMs
+        ? traceCache.current
+        : null;
+    if (
+      cached &&
+      cached.through === through &&
+      cached.refresh === historyRetry
+    ) {
+      setTrace({
+        key: traceKey,
+        samples: cached.samples.filter((sample) => sample.atMs >= fromMs),
+        error: "",
+      });
+      return;
+    }
+    void getWisStockRankTrace(
+      {
+        year,
+        semester,
+        grade,
+        classNumber,
+        through,
+        fromMs,
+        sinceMs: cached?.readMs || 0,
+      },
+      () => active,
+    )
+      .then(({ samples: changes, readMs }) => {
+        if (!active) return;
+        const merged = new Map(
+          (cached?.samples || [])
+            .filter((sample) => sample.atMs >= fromMs)
+            .map((sample) => [sample.revision, sample]),
+        );
+        changes.forEach((sample) => merged.set(sample.revision, sample));
+        const samples = [...merged.values()].sort(
+          (a, b) => a.revision - b.revision,
+        );
+        traceCache.current = {
+          scope: ownerScope,
+          fromMs,
+          readMs,
+          samples,
+          through,
+          refresh: historyRetry,
+        };
+        setTrace({ key: traceKey, samples, error: "" });
+      })
+      .catch((failure) => {
+        if (active)
+          setTrace({
+            key: traceKey,
+            samples: [],
+            error: wisStockInvestmentHistoryError(failure),
+          });
+      });
+    return () => {
+      active = false;
+    };
+  }, [live, showTop, through, traceReady, traceKey, year, semester, classKey]);
   const selectedHoldings =
     selectedStudent && historyCache.current.scope === historyScope
       ? histories.find(
@@ -368,6 +467,20 @@ export default function WisStockInvestmentBoard({
         : [],
     };
   });
+  const traceSamples = showTop && traceReady ? trace.samples : [];
+  const displaySeries = useMemo(() => {
+    if (!data || !traceSamples.length) return historySeries;
+    const latest = {
+      atMs: data.asOfMs,
+      revision: data.revision,
+      leaders: topReturns,
+    };
+    return withRankTrace(historySeries, rows, [
+      ...traceSamples.filter((sample) => sample.revision < latest.revision),
+      latest,
+    ]);
+  }, [historySeries, traceSamples, data, topReturns, rows]);
+  const traceError = showTop && traceReady ? trace.error : "";
   const chartAsOfMs = Math.max(
     data?.asOfMs || 0,
     ...histories.map((history) => history.asOfMs),
@@ -600,18 +713,18 @@ export default function WisStockInvestmentBoard({
                   </li>
                 )}
               </ul>
+            ) : !error && connection === "CONNECTING" ? (
+              <InlineLoading />
             ) : (
               <div className="wis-investment-board__empty">
                 <strong>
                   {error
                     ? "투자 현황을 불러오지 못했습니다."
-                    : connection === "CONNECTING"
-                      ? "투자 현황을 확인하고 있습니다."
-                      : connection === "PAUSED" || connection === "OFFLINE"
-                        ? "투자 현황 조회가 중지되었습니다."
-                        : ready
-                          ? "투자 내역이 없습니다."
-                          : "아직 집계된 투자 현황이 없습니다."}
+                    : connection === "PAUSED" || connection === "OFFLINE"
+                      ? "투자 현황 조회가 중지되었습니다."
+                      : ready
+                        ? "투자 내역이 없습니다."
+                        : "아직 집계된 투자 현황이 없습니다."}
                 </strong>
               </div>
             )}
@@ -626,8 +739,9 @@ export default function WisStockInvestmentBoard({
             <h3>{chartTitle}</h3>
             <InfoHelp label="보유 수익률 변화 기준">
               <p>
-                현재 보유 수익률 상위 5명 또는 선택한 학생의 기록입니다. 당시
-                주식 평가손익을 수수료가 포함된 보유 원가로 나눈 비율이며, 계좌
+                상위 5명에서 벗어난 학생은 당시 순위에 들었던 구간만 남습니다.
+                개인을 선택하면 전체 보유 기록을 볼 수 있습니다. 당시 주식
+                평가손익을 수수료가 포함된 보유 원가로 나눈 비율이며, 계좌
                 현금과 실현손익은 제외합니다. 보관된 실제 시세와 체결 기록을
                 사용하며, 시세 기록이 없거나 주식을 보유하지 않은 구간은 선을
                 잇지 않습니다. 기간은 마지막 확인 시각부터 최근 24시간·7일·30일
@@ -636,7 +750,7 @@ export default function WisStockInvestmentBoard({
             </InfoHelp>
             <RefreshButton
               label="수익률 기록 새로고침"
-              disabled={!live || !chartRows.length}
+              disabled={!live}
               loading={historyLoading}
               onClick={() => setHistoryRetry((value) => value + 1)}
             />
@@ -672,7 +786,9 @@ export default function WisStockInvestmentBoard({
             <p className="wis-investment-board__returns-empty">
               투자 현황을 불러오면 수익률 기록을 확인할 수 있습니다.
             </p>
-          ) : !chartRows.length ? (
+          ) : !chartRows.length &&
+            !displaySeries.length &&
+            (!showTop || (traceReady && !traceError)) ? (
             <p className="wis-investment-board__returns-empty">
               보유 주식이 있는 학생이 없습니다.
             </p>
@@ -686,9 +802,9 @@ export default function WisStockInvestmentBoard({
                 투자 현황 다시 조회
               </button>
             </div>
-          ) : historyError ? (
+          ) : historyError || traceError ? (
             <div className="wis-stocks__error" role="alert">
-              <p>{historyError}</p>
+              <p>{historyError || traceError}</p>
               <button
                 type="button"
                 onClick={() => setHistoryRetry((value) => value + 1)}
@@ -696,13 +812,11 @@ export default function WisStockInvestmentBoard({
                 수익률 기록 다시 조회
               </button>
             </div>
-          ) : historyLoading ? (
-            <p className="wis-return-history__notice" role="status">
-              수익률 기록을 확인하고 있습니다.
-            </p>
+          ) : historyLoading || (showTop && !traceReady) ? (
+            <InlineLoading />
           ) : (
             <WisStockReturnHistoryChart
-              series={historySeries}
+              series={displaySeries}
               range={chartRange}
               label={chartTitle}
             />
@@ -763,13 +877,18 @@ export default function WisStockInvestmentBoard({
                 aria-label={`${selectedStudent.displayName} 보유 주식`}
               >
                 <h4>보유 주식</h4>
-                {selectedHoldings === undefined ? (
+                {selectedHoldings === undefined &&
+                historyLoading &&
+                !historyStale &&
+                !historyError ? (
+                  <InlineLoading />
+                ) : selectedHoldings === undefined ? (
                   <p role="status">
                     {historyStale
                       ? "투자 현황을 다시 조회해 주세요."
                       : historyError
                         ? "보유 종목을 확인하지 못했습니다."
-                        : "보유 종목을 확인하고 있습니다."}
+                        : "조회된 보유 종목 내역이 없습니다."}
                   </p>
                 ) : selectedHoldings.length === 0 ? (
                   <p>보유한 주식이 없습니다.</p>

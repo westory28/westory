@@ -26,6 +26,7 @@ export const auth={currentUser:user};
 qa.setAuthenticated=value=>{auth.currentUser=value?user:null};
 export const useAuth=()=>({currentUser:user,userData:{uid:'wis-fixture',email,role:teacher?'teacher':'student',name:'긴이름의검증학생',staffPermissions:[]},authGeneration:1,config,configReady:true,menuConfigReady:true,menuConfig:qa.menus,logout:async()=>{}});
 export const useAppToast=()=>({showToast(){}});
+export const useStudentWisStockStatus=()=>({status:'ready',data:{studentOpen:false}});
 export const lazyWithRetry=()=>()=>null;
 export const preloadStudentWeplay=()=>{};
 export default function Empty(){return null}
@@ -49,7 +50,7 @@ function Fixture(){const location=useLocation();const teacher=location.pathname.
 createRoot(document.getElementById('root')).render(<HashRouter><Fixture/></HashRouter>);
 `;
 const bundle = await build({stdin:{contents:harness,loader:'tsx',resolveDir:root},bundle:true,write:false,format:'esm',platform:'browser',target:'es2022',outfile:path.join(os.tmpdir(),'westory-header-wis-qa.js'),loader:{'.svg':'dataurl','.webp':'dataurl'},define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'header-data-fixture',setup(plugin){
-plugin.onResolve({filter:/^fixture:|(?:^|\/)contexts\/AuthContext$|(?:^|\/)common\/AppToastProvider$|^\.\/(AppToastProvider|NotificationBell)$|(?:^|\/)lib\/(pointRankPromotion|pointRanks|lazyWithRetry|semesterArchive|firebase|weplayPreload)$/},()=>({path:'service',namespace:'fixture'}));
+plugin.onResolve({filter:/^fixture:|(?:^|\/)contexts\/AuthContext$|(?:^|\/)hooks\/useStudentWisStocks$|(?:^|\/)common\/AppToastProvider$|^\.\/(AppToastProvider|NotificationBell)$|(?:^|\/)lib\/(pointRankPromotion|pointRanks|lazyWithRetry|semesterArchive|firebase|weplayPreload)$/},()=>({path:'service',namespace:'fixture'}));
 plugin.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:service,loader:'ts',resolveDir:root}));
 }}]});
 const js=bundle.outputFiles.find(f=>f.path.endsWith('.js')).text;
@@ -69,14 +70,14 @@ const panel=page=>page.getByRole('region',{name:'내 위스',exact:true});
 try{
 for(const width of viewportWidths){
 const page=await open(width);await page.waitForFunction(()=>window.headerWisQa.calls.length>0);await trigger(page).press('Enter');await panel(page).getByText('1,234',{exact:false}).waitFor();assert.equal(await page.locator('a .header-student-wis-trigger').count(),0);assert.match(page.url(),/student\/dashboard$/);
-const layout=await panel(page).evaluate(el=>{const r=el.getBoundingClientRect();const b=document.querySelector('.header-student-wis-trigger').getBoundingClientRect();return {left:r.left,right:r.right,width:innerWidth,buttonWidth:b.width,buttonHeight:b.height,overflow:document.documentElement.scrollWidth>innerWidth};});assert(layout.left>=0&&layout.right<=width);assert(layout.buttonWidth>=44&&layout.buttonHeight>=44);assert.equal(layout.overflow,false);layouts.push({width,...layout});await page.screenshot({path:path.join(evidence,`header-wis-${width}.png`),fullPage:true});
+const layout=await panel(page).evaluate(el=>{const r=el.getBoundingClientRect();const b=document.querySelector('.header-student-wis-trigger').getBoundingClientRect();return {left:r.left,right:r.right,width:innerWidth,buttonWidth:b.width,buttonHeight:b.height,overflow:document.documentElement.scrollWidth>innerWidth};});assert(layout.left>=0&&layout.right<=width, JSON.stringify(layout));assert(layout.buttonWidth>=44&&layout.buttonHeight>=44);assert.equal(layout.overflow,false);layouts.push({width,...layout});await page.screenshot({path:path.join(evidence,`header-wis-${width}.png`),fullPage:true});
 await trigger(page).press('Escape');assert.equal(await panel(page).count(),0);assert.equal(await trigger(page).evaluate(el=>el===document.activeElement),true);if(width<1024)assert.equal(await page.getByRole('dialog',{name:'학생 메뉴',exact:true}).isVisible(),true);
 await trigger(page).click();await panel(page).waitFor();await trigger(page).press('Tab');await panel(page).waitFor({state:'detached'});
 await page.close();}
 checks.push(viewportWidths.join('/')+': desktop header and mobile drawer expose a separate rank button; keyboard open, Escape focus return, Tab dismissal, minimum 44px target and no viewport overflow.');
 const page=await open();await trigger(page).click();await panel(page).getByText('1,234',{exact:false}).waitFor();await page.evaluate(()=>{window.headerWisQa.balance=1227;window.dispatchEvent(new CustomEvent('westory:points-updated'));});await panel(page).getByText('1,227',{exact:false}).waitFor();assert(await page.evaluate(()=>window.headerWisQa.invalidations.length)>0);assert(await page.evaluate(()=>window.headerWisQa.calls.every(call=>call.uid==='wis-fixture'&&call.scope.year==='2026'&&call.scope.semester==='2')));
 await page.locator('#outside').click();assert.equal(await panel(page).count(),0);
-await page.evaluate(()=>{window.headerWisQa.hold=true;window.headerWisQa.balance=0;});await trigger(page).click();await panel(page).getByText('불러오는 중…',{exact:true}).waitFor();assert.equal(await panel(page).getByText('1,227',{exact:false}).count(),0);await page.evaluate(()=>{window.headerWisQa.hold=false;window.headerWisQa.release();});await panel(page).getByText('0 위스',{exact:true}).waitFor();
+await page.evaluate(()=>{window.headerWisQa.hold=true;window.headerWisQa.balance=0;});await trigger(page).click();await panel(page).getByRole('status',{name:'처리 중',exact:true}).waitFor();assert.equal(await panel(page).getByText('1,227',{exact:false}).count(),0);await page.evaluate(()=>{window.headerWisQa.hold=false;window.headerWisQa.release();});await panel(page).getByText('0 위스',{exact:true}).waitFor();
 await trigger(page).click();await page.evaluate(()=>{window.headerWisQa.fail=true;});await trigger(page).click();await panel(page).getByText('위스를 불러오지 못했습니다.',{exact:true}).waitFor();await page.screenshot({path:path.join(evidence,'header-wis-error-1280.png'),fullPage:true});await page.evaluate(()=>{window.headerWisQa.fail=false;window.headerWisQa.balance=null;});await panel(page).getByRole('button',{name:'다시 불러오기',exact:true}).click();await panel(page).getByText('0 위스',{exact:true}).waitFor();
 await page.getByRole('link',{name:'위스 페이지',exact:true}).click();assert.equal(await panel(page).count(),0);await trigger(page).click();await panel(page).getByText('0 위스',{exact:true}).waitFor();assert.match(page.url(),/student\/points$/);await page.close();
 checks.push('Own UID/current semester only; balance reloaded on points-updated and every open; loading hides stale balance; true zero/missing wallet, read failure, retry and navigation closure verified.');

@@ -1899,7 +1899,9 @@ const HistoryClassroomRunner: React.FC = () => {
   ]);
 
   if (loading) {
-    return <PageLoading message="역사교실을 준비하는 중입니다." />;
+    return (
+      <PageLoading scope="screen" message="역사교실을 준비하는 중입니다." />
+    );
   }
 
   if (error || !assignment) {

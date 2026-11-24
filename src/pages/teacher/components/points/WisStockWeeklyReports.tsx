@@ -1,3 +1,4 @@
+import { InlineLoading } from "../../../../components/common/LoadingState";
 import { useEffect, useRef, useState } from "react";
 import InfoHelp from "../../../../components/common/InfoHelp";
 import {
@@ -101,7 +102,7 @@ function PublishedWeeks({
             </button>
           ))}
           {loaded && !rows.length && <p>발행한 보고서가 없습니다.</p>}
-          {busy && <p role="status">목록을 불러오는 중입니다.</p>}
+          {busy && <InlineLoading />}
           {error && <p role="alert">{error}</p>}
           {(cursor || error) && (
             <button
@@ -272,9 +273,7 @@ function ReportEdition({
           <h3>{file ? "발행 전 미리보기" : "교사용 발행본"}</h3>
           <span>학생 비공개</span>
         </div>
-        {!ready && !readError && (
-          <p role="status">발행본을 확인하는 중입니다.</p>
-        )}
+        {!ready && !readError && <InlineLoading />}
         {readError && (
           <p role="alert">
             {readError}{" "}

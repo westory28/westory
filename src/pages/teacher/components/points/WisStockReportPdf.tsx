@@ -1,3 +1,4 @@
+import { InlineLoading } from "../../../../components/common/LoadingState";
 import { useEffect, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/TextLayer.css";
@@ -46,13 +47,18 @@ export default function WisStockReportPdf({ file }: { file: Blob }) {
       )}
       <Document
         file={file}
-        loading="PDF를 여는 중입니다."
+        loading={total === -1 ? null : <InlineLoading />}
         error="PDF를 표시하지 못했습니다. 원본 파일을 확인해 주세요."
         onPassword={(_callback) => setTotal(-1)}
         onLoadSuccess={({ numPages }) => setTotal(numPages)}
       >
         {width > 0 && total > 0 && (
-          <Page pageNumber={page} width={width} renderAnnotationLayer={false} />
+          <Page
+            loading={<InlineLoading />}
+            pageNumber={page}
+            width={width}
+            renderAnnotationLayer={false}
+          />
         )}
       </Document>
       {total === -1 && (

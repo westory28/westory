@@ -1015,6 +1015,28 @@ service cloud.firestore {
       allow update: if isAdmin() || isValidOwnStudentUpdate(userId);
       allow delete: if isAdmin();
 
+      match /preferences/teacherShortcuts {
+        function mayUseShortcuts() {
+          return isOwnUser(userId) && (isTeacherRole() || isAdmin());
+        }
+        allow get: if mayUseShortcuts();
+        allow create, update: if mayUseShortcuts()
+          && request.resource.data.keys().hasOnly(['items'])
+          && request.resource.data.items is list
+          && request.resource.data.items.size() == request.resource.data.items.toSet().size()
+          && request.resource.data.items.hasOnly([
+            '/teacher/dashboard', '/teacher/lesson', '/teacher/lesson/history-dictionary',
+            '/teacher/lesson/maps', '/teacher/lesson/source-archive', '/teacher/lesson/think-cloud',
+            '/teacher/quiz', '/teacher/quiz/history-classroom', '/teacher/exam', '/teacher/exam?tab=omr',
+            '/teacher/exam?tab=performance', '/teacher/exam?tab=written-essay',
+            '/teacher/points', '/teacher/points?tab=grant', '/teacher/points?tab=policy',
+            '/teacher/points?tab=ranks', '/teacher/points?tab=hall-of-fame', '/teacher/points?tab=products',
+            '/teacher/points?tab=products&shop=avatar', '/teacher/points?tab=requests',
+            '/teacher/points?tab=stocks', '/teacher/weplay', '/teacher/students',
+            '/teacher/gongsinmoongo', '/teacher/schedule', '/teacher/settings'
+          ]);
+      }
+
       match /academic_records/{recordId} {
         allow read: if canUseWestory() && (isOwnUser(userId) || isAdmin());
         allow create, update: if canUseWestory()

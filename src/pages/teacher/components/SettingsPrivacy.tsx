@@ -297,31 +297,26 @@ const SettingsPrivacy: React.FC = () => {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <div className="border-b border-gray-100 p-3">
-        <div className="flex flex-wrap gap-2">
+    <div>
+      <nav className="ws-page-tabs" aria-label="개인정보 설정 보기">
+        {(
+          [
+            ["terms", "이용 약관"],
+            ["privacy", "개인정보 처리 방침"],
+            ["consent", "개인정보 동의 관리"],
+          ] as const
+        ).map(([id, label]) => (
           <button
-            onClick={() => setActiveTab("terms")}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === "terms" ? "bg-blue-600 text-white shadow" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+            type="button"
+            key={id}
+            aria-pressed={activeTab === id}
+            onClick={() => setActiveTab(id)}
           >
-            이용 약관
+            {label}
           </button>
-          <button
-            onClick={() => setActiveTab("privacy")}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === "privacy" ? "bg-blue-600 text-white shadow" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            개인정보 처리 방침
-          </button>
-          <button
-            onClick={() => setActiveTab("consent")}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === "consent" ? "bg-blue-600 text-white shadow" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            개인정보 동의 관리
-          </button>
-        </div>
-      </div>
-
-      <div className="p-6 lg:p-8">
+        ))}
+      </nav>
+      <div className="ws-surface p-6 lg:p-8">
         {activeTab === "terms" && (
           <div className="space-y-4">
             <div>

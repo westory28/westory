@@ -574,6 +574,7 @@ try {
           const title = rect(".gsm-page-header h1");
           const badge = rect(".gsm-status");
           const tabs = rect(".gsm-page-header .ws-page-tabs");
+          const tabRow = document.querySelector(".gsm-tabs-row");
           const refresh = rect(".gsm-refresh");
           const composer = rect(".gsm-composer");
           const logout = rect(".teacher-account-header .btn-logout");
@@ -586,6 +587,9 @@ try {
             badgeY: badge.y,
             titleY: title.y,
             tabsY: tabs.y,
+            tabsRight: tabRow.getBoundingClientRect().right,
+            headerRight: rect(".gsm-page-header").right,
+            tabsRule: getComputedStyle(tabRow).boxShadow,
             refreshRight: refresh.right,
             composerRight: composer.right,
             logoutRight: logout.right,
@@ -602,6 +606,10 @@ try {
             headingLayout.badgeBottom <= headingLayout.titleBottom + 1,
         );
         assert.equal(headingLayout.badgeBorder, "999px");
+        assert(headingLayout.tabsRule.includes("inset"));
+        assert(
+          Math.abs(headingLayout.tabsRight - headingLayout.headerRight) <= 1,
+        );
         assert.notEqual(headingLayout.badgeBackground, "rgba(0, 0, 0, 0)");
         if (width >= 1280) {
           assert(

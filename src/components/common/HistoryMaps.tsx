@@ -75,7 +75,7 @@ export default function HistoryMaps({
   );
   const navigation = (
     <div
-      className="history-atlas__subjects"
+      className="ws-page-tabs history-atlas__subjects"
       role="group"
       aria-label="지도 보기"
     >

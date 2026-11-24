@@ -22,7 +22,7 @@ const { outputFiles } = await build({
   platform: "node",
   format: "cjs",
   jsx: "automatic",
-  loader: { ".css": "empty" },
+  loader: { ".css": "empty", ".webp": "dataurl" },
   external: ["react", "react/jsx-runtime", "react-dom"],
   plugins: [{ name: "result-popup-boundary", setup(builder) {
     builder.onResolve({ filter: /\/QuizLessonPopup$/ }, () => ({ path: "popup-stub", namespace: "popup-fixture" }));

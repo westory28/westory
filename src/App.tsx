@@ -15,7 +15,7 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import MainLayout from "./components/layout/MainLayout";
 import { AppToastProvider } from "./components/common/AppToastProvider";
 import { AppDialogProvider } from "./components/common/AppDialogProvider";
-import { InlineLoading, PageLoading } from "./components/common/LoadingState";
+import { PageLoading } from "./components/common/LoadingState";
 import { SensitiveOperationController } from "./components/common/SensitiveOperationController";
 import { lazyWithRetry } from "./lib/lazyWithRetry";
 import { loadStudentWeplay } from "./lib/weplayPreload";
@@ -180,9 +180,7 @@ const LegacyRouteRedirect: React.FC<{ to: string }> = ({ to }) => {
   return <Navigate to={`${to}${location.search}`} replace />;
 };
 
-const RouteContentFallback: React.FC = () => (
-  <InlineLoading className="min-h-[12rem] items-center" />
-);
+const RouteContentFallback: React.FC = () => <PageLoading scope="screen" />;
 
 const GongsinmoongoRoute: React.FC = () => {
   const { currentUser, userData } = useAuth();

@@ -861,31 +861,33 @@ export default function GongsinmoongoWorkspace({
               </span>
             )}
           </div>
-          <nav className="ws-page-tabs" aria-label="공부의 신문고 보기">
-            <button
-              aria-pressed={view === "inbox"}
-              onClick={() => setView("inbox")}
-            >
-              질문함
-            </button>
-            {teacher && state?.canManageSettings && (
+          <div className="gsm-tabs-row">
+            <nav className="ws-page-tabs" aria-label="공부의 신문고 보기">
               <button
-                aria-pressed={view === "settings"}
-                onClick={() => setView("settings")}
+                aria-pressed={view === "inbox"}
+                onClick={() => setView("inbox")}
               >
-                운영 설정
+                질문함
               </button>
-            )}
-          </nav>
-          <RefreshButton
-            className="gsm-refresh"
-            label="질문함 새로고침"
-            loading={loading || !gate.loaded}
-            disabled={busy || conversationBusy}
-            onClick={() =>
-              gate.error ? gate.retry() : setRefresh((i) => i + 1)
-            }
-          />
+              {teacher && state?.canManageSettings && (
+                <button
+                  aria-pressed={view === "settings"}
+                  onClick={() => setView("settings")}
+                >
+                  운영 설정
+                </button>
+              )}
+            </nav>
+            <RefreshButton
+              className="gsm-refresh"
+              label="질문함 새로고침"
+              loading={loading || !gate.loaded}
+              disabled={busy || conversationBusy}
+              onClick={() =>
+                gate.error ? gate.retry() : setRefresh((i) => i + 1)
+              }
+            />
+          </div>
         </header>
         {error && (
           <div className="gsm-error" role="alert">

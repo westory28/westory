@@ -1,3 +1,4 @@
+import { InlineLoading } from "../../components/common/LoadingState";
 import { useEffect, useRef, useState } from "react";
 import GongsinDrumButton from "../../components/common/GongsinDrumButton";
 import { useAuth } from "../../contexts/AuthContext";
@@ -211,7 +212,7 @@ export default function AvatarEventSubmission({
         </div>
         <div className="avatar-event-dialog-body">
           {loading ? (
-            <p role="status">접수 상태를 확인하는 중입니다.</p>
+            <InlineLoading />
           ) : (
             <>
               {image && (

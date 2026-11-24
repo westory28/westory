@@ -1,5 +1,8 @@
 import RefreshButton from "../../../../components/common/RefreshButton";
-import { LoadingOverlay } from "../../../../components/common/LoadingState";
+import {
+  LoadingOverlay,
+  InlineLoading,
+} from "../../../../components/common/LoadingState";
 import NumericInput from "../../../../components/common/NumericInput";
 import React from "react";
 import "../teacher-list-controls.css";
@@ -247,14 +250,7 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
             </div>
           </div>
           <div className="divide-y divide-gray-100">
-            {loading && (
-              <div
-                role="status"
-                className="px-5 py-12 text-center text-sm text-gray-500"
-              >
-                위스 명단을 불러오고 있습니다.
-              </div>
-            )}
+            {loading && <InlineLoading />}
             {!loading && totalWalletCount === 0 && (
               <div className="px-5 py-12 text-center text-sm text-gray-400">
                 조건에 맞는 학생이 없습니다.

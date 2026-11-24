@@ -1,3 +1,4 @@
+import { InlineLoading } from "../../../../components/common/LoadingState";
 import { lazy, Suspense, useMemo } from "react";
 import type { ReportUpload } from "../../../../lib/wisStockWeeklyReports";
 
@@ -105,7 +106,7 @@ export default function WisStockReportDocument({
         </button>
       </div>
       {document.text === null ? (
-        <Suspense fallback={<p>PDF를 여는 중입니다.</p>}>
+        <Suspense fallback={<InlineLoading />}>
           <ReportPdf file={document.blob} />
         </Suspense>
       ) : /\.md$/i.test(file.fileName) && document.text.length < 128_000 ? (

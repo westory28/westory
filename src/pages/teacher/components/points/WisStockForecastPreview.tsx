@@ -1,3 +1,4 @@
+import { InlineLoading } from "../../../../components/common/LoadingState";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import InfoHelp from "../../../../components/common/InfoHelp";
 import StockChart from "../../../../components/common/WisStockPriceChart";
@@ -177,7 +178,7 @@ export default function WisStockForecastPreview({
               </button>
             </div>
           ) : !forecast ? (
-            <p role="status">예정 시세를 불러오는 중입니다.</p>
+            <InlineLoading />
           ) : (
             <>
               <p className="wis-stock-catalog__range">

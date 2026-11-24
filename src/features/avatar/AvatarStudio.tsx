@@ -1,3 +1,4 @@
+import { InlineLoading } from "../../components/common/LoadingState";
 import React, {
   useCallback,
   useEffect,
@@ -441,14 +442,7 @@ export function AvatarStudio({
       if (current === generation.current) setBusy(null);
     }
   };
-  if (loading)
-    return (
-      <div className="avatar-studio-status" role="status">
-        {allAvailable
-          ? "아바타를 불러오는 중입니다."
-          : "아바타와 위스 지갑을 불러오는 중입니다."}
-      </div>
-    );
+  if (loading) return <InlineLoading />;
   if (!saved)
     return (
       <div className="avatar-studio-status" role="alert">

@@ -33,7 +33,7 @@
       href="/icons/westory-icon-180.png?v=20261025"
     />
     <title>위스토리</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.tailwindcss.com"></script>
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
@@ -41,8 +41,15 @@
   </head>
 
   <body>
-    <div id="root"></div>
-    <noscript>위스토리는 JavaScript가 필요합니다.</noscript>
+    <div id="root">
+      <div role="status" aria-label="처리 중" aria-busy="true" style="position: fixed; inset: 0; display: grid; place-items: center; background: #f9fafb">
+        <img src="/src/assets/brand/westory-wordmark.webp" alt="" width="288" height="67" style="max-width: 75vw; height: auto" />
+      </div>
+    </div>
+    <noscript>
+      <style>#root { display: none }</style>
+      <p>위스토리는 JavaScript가 필요합니다.</p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

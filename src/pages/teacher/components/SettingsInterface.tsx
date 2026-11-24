@@ -621,7 +621,7 @@ const SettingsInterface: React.FC = () => {
                 <div
                   role="tablist"
                   aria-label="사이트맵 미리보기 대상"
-                  className="teacher-settings-sitemap-tabs"
+                  className="ws-page-tabs"
                 >
                   {(["student", "teacher"] as PortalType[]).map((portal) => {
                     const stats = getPortalMenuStats(portal);
@@ -632,22 +632,9 @@ const SettingsInterface: React.FC = () => {
                         role="tab"
                         aria-selected={activePortal === portal}
                         onClick={() => setActivePortal(portal)}
-                        className={`min-w-0 rounded-full border px-4 py-2 text-sm font-bold transition ${
-                          activePortal === portal
-                            ? "border-blue-600 bg-blue-600 text-white"
-                            : "border-gray-300 text-gray-600 hover:bg-blue-50 hover:text-blue-600"
-                        }`}
                       >
                         {getPortalLabel(portal)}
-                        <span
-                          className={`ml-2 text-xs font-semibold ${
-                            activePortal === portal
-                              ? "text-blue-100"
-                              : "text-gray-400"
-                          }`}
-                        >
-                          {stats.parentCount}개
-                        </span>
+                        <span className="text-xs">{stats.parentCount}개</span>
                       </button>
                     );
                   })}

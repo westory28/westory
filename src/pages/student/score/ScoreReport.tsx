@@ -371,7 +371,9 @@ const ScoreReport: React.FC = () => {
   ];
 
   if (loading)
-    return <PageLoading message="성적 리포트를 불러오는 중입니다." />;
+    return (
+      <PageLoading scope="screen" message="성적 리포트를 불러오는 중입니다." />
+    );
 
   return (
     <div className="ws-page">

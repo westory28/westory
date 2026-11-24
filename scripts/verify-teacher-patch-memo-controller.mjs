@@ -173,6 +173,7 @@ const harness = async (operations = {}, options = {}) => {
       },
     },
     "./AppToastProvider": { useAppToast: () => ({ showToast }) },
+    "./TeacherShortcuts": { default: "TeacherShortcuts", __esModule: true },
     "./LoadingState": { LoadingOverlay: "LoadingOverlay" },
     "./useFloatingLauncherVisibility": {
       useFloatingLauncherVisibility: () => () => {},
@@ -216,8 +217,9 @@ const harness = async (operations = {}, options = {}) => {
     assert.ok(found, "Expected rendered control is missing");
     return found;
   };
-  const button = (label, root) =>
-    find(
+  const button = (label, root) => label === "패치 메모 열기"
+    ? { props: { onClick: find(node => node.type === "TeacherShortcuts", root).props.onMemo } }
+    : find(
       (item) =>
         item.type === "button" &&
         (item.props["aria-label"] === label || text(item).trim() === label),

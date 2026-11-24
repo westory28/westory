@@ -429,13 +429,10 @@ try {
   const menus = menu.cloneDefaultMenus();
   assert.equal(menu.getStudentRouteAccess(target, config, menus).allowed, true);
   const hidden = structuredClone(menus);
-  hidden.student
-    .find((item) => item.url === target.pathname)
-    .children.push({
-      name: "덩기덕 쿵더Rock",
-      url: target.pathname + target.search,
-      hidden: true,
-    });
+  const hiddenRhythm = hidden.student.find(item => item.url === target.pathname)
+    .children.find(item => item.url === target.pathname + target.search);
+  hiddenRhythm.hidden = true;
+  assert.equal(menu.getStudentRouteAccess(target, config, menu.sanitizeMenuConfig(hidden)).allowed, false);
   assert.equal(menu.buildStudentMenuVisibility(hidden).rhythm, false);
   assert.equal(
     menu.getStudentRouteAccess(target, config, hidden).allowed,
@@ -472,13 +469,15 @@ try {
   oldGames.children = oldGames.children.filter(
     (item) => item.url !== target.pathname + target.search,
   );
+  const migrated = menu.sanitizeMenuConfig(oldMenus);
   assert.equal(
-    menu
-      .sanitizeMenuConfig(oldMenus)
-      .student.find((item) => item.url === target.pathname)
-      .children.some((item) => item.url === target.pathname + target.search),
-    false,
+    migrated.student.find(item => item.url === target.pathname)
+      .children.filter(item => item.url === target.pathname + target.search).length,
+    1,
+    "Restore the canonical rhythm sitemap entry exactly once in a legacy menu",
   );
+  assert.equal(menu.getStudentRouteAccess(target,
+    { ...config, studentMenuVisibility: { rhythm: false } }, migrated).allowed, false);
   const visibleChildren = menu
     .getStudentVisibleMenuItems(menus.student, {
       ...config,
@@ -503,7 +502,7 @@ try {
     true,
   );
   ok(
-    "No default sidebar disclosure; projection/direct-link gates preserve parent/child closure and catalog access",
+    "Sitemap migration preserves visibility controls; projection/direct-link gates preserve parent/child closure and catalog access",
   );
   writeFileSync(
     path.join(output, "report.json"),

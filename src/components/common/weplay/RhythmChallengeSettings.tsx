@@ -1,3 +1,4 @@
+import { InlineLoading } from "../LoadingState";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
 import {
@@ -194,7 +195,7 @@ export default function RhythmChallengeSettings() {
           )}
         </form>
       )}
-      {loading && <span role="status">도전 설정 확인 중…</span>}
+      {loading && <InlineLoading />}
       {!validLimit && state && (
         <p role="alert">아이쿠 종료 횟수는 1~300회로 입력해 주세요.</p>
       )}

@@ -1,3 +1,4 @@
+import { PageLoading } from "../../../components/common/LoadingState";
 import {
   Suspense,
   useCallback,
@@ -783,7 +784,7 @@ export default function QuizRelearning({
         </nav>
       )}
       {reviewLessonId && (
-        <Suspense fallback={null}>
+        <Suspense fallback={lessonOpen ? <PageLoading scope="screen" /> : null}>
           <QuizLessonPopup
             unitId={reviewLessonId}
             open={lessonOpen}

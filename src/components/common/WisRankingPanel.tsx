@@ -1,3 +1,4 @@
+import { InlineLoading } from "./LoadingState";
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
@@ -405,18 +406,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
           tabIndex={0}
         >
           <div className="wis-ranking-list min-h-0 flex-1 space-y-2">
-            {scopeLoading && (
-              <div className="wis-ranking-skeleton" role="status">
-                <span className="sr-only">순위를 불러오는 중입니다.</span>
-                {Array.from({ length: 5 }, (_, index) => (
-                  <div
-                    key={index}
-                    className="wis-ranking-skeleton-row"
-                    aria-hidden="true"
-                  />
-                ))}
-              </div>
-            )}
+            {scopeLoading && <InlineLoading className="wis-ranking-state" />}
 
             {!scopeLoading && loadError && (
               <div

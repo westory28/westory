@@ -1161,15 +1161,36 @@ async function runEngine(engine) {
     await waitRunning(nested.page);
     await checkLayout(nested.page, 1280, "nested-container-1280", directory);
     await nested.page.evaluate(() => {
-      const button = document.createElement("button");
+      window.loaderOpenChanges = 0;
+      const changes = new MutationObserver((records) => {
+        window.loaderOpenChanges += records.length;
+      });
+      changes.observe(document.querySelector(".ws-loading-screen"), {
+        attributes: true,
+        attributeFilter: ["open"],
+      });
+      const button = document.createElement("dialog");
       button.id = "late-modal";
       button.textContent = "추가 모달";
       document.body.append(button);
+      button.showModal();
     });
     await nested.page.waitForFunction(
-      () => document.querySelector("#late-modal").inert,
+      () => document.querySelector("#late-modal").inert &&
+        document.elementFromPoint(innerWidth / 2, innerHeight / 2)?.closest(".ws-loading-screen") &&
+        document.activeElement?.closest(".ws-loading-screen"),
+    );
+    assert.equal(
+      await nested.page.evaluate(
+        () => new Promise(resolve => requestAnimationFrame(() =>
+          requestAnimationFrame(() => resolve(window.loaderOpenChanges)))),
+      ),
+      2,
+      "one close/reopen puts the loader in front and the observer settles",
     );
     await nested.page.evaluate(() => window.finishLoading());
+    await nested.page.waitForFunction(() => !document.querySelector(".ws-loading-screen"));
+    await nested.page.locator("#late-modal").evaluate((modal) => modal.close());
     await nested.page.getByRole("button", { name: "계속" }).waitFor();
     assert.equal(
       await nested.page.locator("#root").evaluate((n) => n.inert),

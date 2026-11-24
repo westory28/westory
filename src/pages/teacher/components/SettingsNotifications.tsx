@@ -1354,24 +1354,18 @@ const SettingsNotifications: React.FC = () => {
         </div>
       </div>
 
-      <div className="rounded-xl border border-gray-200 bg-white px-5 pt-4 shadow-sm">
-        <div className="flex gap-6 overflow-x-auto">
-          {TAB_ITEMS.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => setActiveTab(item.key)}
-              className={`whitespace-nowrap border-b-2 px-1 pb-3 text-sm font-extrabold transition ${
-                activeTab === item.key
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-900"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <nav className="ws-page-tabs" aria-label="알림 설정 보기">
+        {TAB_ITEMS.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            aria-pressed={activeTab === item.key}
+            onClick={() => setActiveTab(item.key)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
 
       {activeTab === "overview" && (
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">

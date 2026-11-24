@@ -1459,7 +1459,9 @@ const DeveloperLog: React.FC = () => {
   };
 
   if (detailLoading) {
-    return <PageLoading message="개발자 일지를 불러오는 중입니다." />;
+    return (
+      <PageLoading scope="screen" message="개발자 일지를 불러오는 중입니다." />
+    );
   }
 
   return (

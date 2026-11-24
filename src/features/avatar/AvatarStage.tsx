@@ -1,3 +1,4 @@
+import { LoadingOverlay } from "../../components/common/LoadingState";
 import React, {
   forwardRef,
   useCallback,
@@ -211,14 +212,7 @@ export const AvatarStage = forwardRef<AvatarStageHandle, AvatarStageProps>(
         aria-busy={loading}
       >
         <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
-        {loading && (
-          <p
-            role="status"
-            className="absolute inset-0 flex items-center justify-center text-sm text-slate-500"
-          >
-            아바타를 불러오는 중…
-          </p>
-        )}
+        {loading && <LoadingOverlay />}
         {error && active && (
           <div
             role="alert"

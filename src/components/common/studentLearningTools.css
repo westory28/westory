@@ -205,7 +205,7 @@
   }
 }
 
-[data-launcher-obscured] + .student-learning-tools-menu {
+[data-history-dictionary-launcher][data-launcher-obscured] + .student-learning-tools-menu {
   display: none;
 }
 
@@ -271,4 +271,34 @@
   .student-learning-tools-menu {
     animation: none;
   }
+}
+
+.teacher-shortcut-launcher {
+  position: fixed;
+  z-index: 80;
+  right: calc(env(safe-area-inset-right, 0px) + 16px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  color: var(--ws-text-muted, #6b7280);
+  font: 800 24px/1 Arial, sans-serif;
+}
+.teacher-shortcut-launcher[aria-expanded="true"] { color: var(--ws-primary, #2563eb); }
+dialog.teacher-shortcut-menu {
+  inset: auto calc(env(safe-area-inset-right, 0px) + 16px) calc(env(safe-area-inset-bottom, 0px) + 16px) auto;
+  margin: 0;
+  max-height: calc(100dvh - env(safe-area-inset-bottom, 0px) - 32px);
+  padding: 4px;
+}
+dialog.teacher-shortcut-menu:not([open]) { display: none; }
+.teacher-shortcut-menu::backdrop {
+  background: rgb(17 24 39 / 16%);
+  backdrop-filter: blur(4px);
+}
+@media (min-width: 1024px) {
+  .teacher-shortcut-launcher { right: calc(env(safe-area-inset-right, 0px) + 24px); bottom: calc(env(safe-area-inset-bottom, 0px) + 24px); }
+  dialog.teacher-shortcut-menu { right: calc(env(safe-area-inset-right, 0px) + 24px); bottom: calc(env(safe-area-inset-bottom, 0px) + 24px); }
 }

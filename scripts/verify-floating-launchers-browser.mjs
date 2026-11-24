@@ -44,7 +44,10 @@ export const doc=(_db,...segments)=>({path:segments.join('/')});
 export const onSnapshot=(ref,next,error)=>{qa.reads++;queueMicrotask(()=>params.has('gate-error')&&!qa.recovered?error(Error('Synthetic publication error')):next({data:()=>({enabled:params.has('open')||qa.recovered,revision:1})}));return()=>{qa.stops++}};
 export const callWithApplicationSession=async()=>{throw Error('Launcher must not query personal data')};
 export const useStudentLearningShortcuts=()=>({items:[],loading:false,loaded:true,error:'',reload:async()=>{},save:async()=>{}});
-export const isAdminUser=()=>true;
+export const isAdminUser=()=>true,canAccessTeacherPath=()=>true;
+export const teacherShortcutOptions=[{id:"/teacher/quiz",label:"평가 관리",icon:"M1 1h20"}];
+export const readTeacherShortcuts=async()=>JSON.parse(sessionStorage.getItem("teacherItems")||"[]");
+export const saveTeacherShortcuts=async(_uid,_before,items)=>sessionStorage.setItem("teacherItems",JSON.stringify(items));
 const toast={showToast(){}};export const useAppToast=()=>toast;
 export const prepareTeacherPatchNoteSession=async()=>{};
 export const getTeacherPatchNoteErrorMessage=()=>"fixture error";
@@ -73,7 +76,7 @@ const bundle = await build({
         builder.onResolve(
           {
             filter:
-              /^firebase\/firestore$|(?:^|\/)(?:firebase|applicationSession|AuthContext|permissions|teacherPatchNoteCommands|teacherPatchNotes|AppToastProvider|StudentHistoryDictionaryWorkspace|studentLearningShortcuts)$/,
+              /^firebase\/firestore$|(?:^|\/)(?:firebase|applicationSession|AuthContext|permissions|teacherPatchNoteCommands|teacherPatchNotes|AppToastProvider|StudentHistoryDictionaryWorkspace|studentLearningShortcuts|teacherShortcuts)$/,
           },
           () => ({ path: "services", namespace: "fixture" }),
         );
@@ -254,6 +257,21 @@ try {
       );
       if (role === "teacher") {
         await launcher.click();
+        const menu = page.getByRole("dialog", {name:"교사 바로가기"});
+        await menu.getByRole("button", {name:"바로가기 편집"}).click();
+        const editor = page.getByRole("dialog", {name:"바로가기 편집"});
+        await editor.getByRole("button", {name:"평가 관리 추가"}).click();
+        await editor.getByRole("button", {name:"저장", exact:true}).click();
+        await page.reload();
+        await launcher.click();
+        await menu.getByRole("button", {name:"평가 관리"}).waitFor();
+        await menu.getByRole("button", {name:"평가 관리"}).click();
+        assert.equal(new URL(page.url()).pathname, "/teacher/quiz");
+        await launcher.click();
+        await page.keyboard.press("Escape");
+        await launcher.click();
+        await menu.getByRole("button", {name:"패치 메모", exact:true}).click();
+        await page.waitForFunction(() => document.querySelector("button[data-launcher-obscured]"));
         assert.equal(await launcher.isVisible(), false);
         assert(
           await page.getByRole("heading", { name: "패치 메모" }).isVisible(),

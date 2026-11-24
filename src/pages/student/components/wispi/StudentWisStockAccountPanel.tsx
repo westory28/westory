@@ -28,14 +28,10 @@ const date = new Intl.DateTimeFormat("ko-KR", {
 export default function StudentWisStockAccountPanel({
   tradingEnabled = false,
   tradingEpoch,
-  initialBuyId,
-  initialHoldingId,
   active = true,
 }: {
   tradingEnabled?: boolean;
   tradingEpoch?: number;
-  initialBuyId?: string;
-  initialHoldingId?: string;
   active?: boolean;
 }) {
   const { currentUser, config, authGeneration } = useAuth();
@@ -47,12 +43,8 @@ export default function StudentWisStockAccountPanel({
   const [ticket, setTicket] = useState<{
     ownerKey: string;
     target: WalletOrderTarget;
-  } | null>(() =>
-    initialBuyId
-      ? { ownerKey, target: { stockId: initialBuyId, entry: "first" } }
-      : null,
-  );
-  const [focusHolding, setFocusHolding] = useState(initialHoldingId);
+  } | null>(null);
+  const [focusHolding, setFocusHolding] = useState<string>();
   useEffect(() => {
     if (ticket && ticket.ownerKey !== ownerKey) {
       setTicket(null);

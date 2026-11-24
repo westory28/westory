@@ -1,3 +1,4 @@
+import { InlineLoading } from "../../../components/common/LoadingState";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -123,7 +124,7 @@ export default function QuizAnalysisQuestionDialog({
           </button>
         </div>
         {!ready ? (
-          <p role="status">문항을 불러오는 중입니다.</p>
+          <InlineLoading />
         ) : error ? (
           <div role="alert" className="qca-error">
             {error}
