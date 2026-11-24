@@ -164,7 +164,7 @@ try {
       assert.ok(b.close >= 44);
     }
     if (width < 768)
-      assert.ok(Math.abs(boxes[0].y - 12) < 2, JSON.stringify(boxes));
+      assert.ok(Math.abs(boxes.at(-1).bottom - 788) < 2, JSON.stringify(boxes));
     else assert.ok(Math.abs(boxes.at(-1).bottom - 776) < 2);
     assert.equal(
       await page.evaluate(
@@ -198,8 +198,8 @@ try {
     const box = await page.locator(".ws-toast").boundingBox();
     if (width < 768) {
       assert.ok(box.height >= 72 && box.height < 96);
-      assert.ok(Math.abs(box.y - 12) < 2);
-    } else assert.ok(Math.abs(box.y + box.height - 696) < 2);
+    }
+    assert.ok(Math.abs(box.y + box.height - 696) < 2);
     checks.push("memo launcher clearance " + width);
   }
   const phone = await browser.newPage({
@@ -222,7 +222,9 @@ try {
       Promise.all(node.getAnimations().map((animation) => animation.finished)),
     );
   const phoneBox = await phone.locator(".ws-toast").boundingBox();
-  assert.ok(Math.abs(phoneBox.y - 12) < 2 && phoneBox.width <= 360);
+  assert.ok(
+    Math.abs(phoneBox.y + phoneBox.height - 378) < 2 && phoneBox.width <= 360,
+  );
   assert.equal(
     await phone
       .locator(".ws-toast__title")
@@ -233,7 +235,7 @@ try {
     path: path.join(evidence, "toasts-phone-landscape.png"),
   });
   await phone.close();
-  checks.push("touch phone landscape stays compact at the top");
+  checks.push("touch phone landscape stays compact at the bottom right");
   await page.setViewportSize({ width: 1280, height: 800 });
   await reset();
   await page.clock.install();

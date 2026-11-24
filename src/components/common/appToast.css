@@ -187,14 +187,11 @@ body:has(button[data-patch-memo-root]) .ws-toast-stack {
   }
 }
 @media (max-width: 767px), (max-height: 560px) and (pointer: coarse) {
-  .ws-toast-stack,
-  body:has(button[data-patch-memo-root]) .ws-toast-stack {
-    --ws-toast-enter-offset: -12px;
+  .ws-toast-stack {
     padding: 12px;
     margin: -12px;
     right: calc(12px + env(safe-area-inset-right, 0px));
-    top: calc(12px + env(safe-area-inset-top, 0px));
-    bottom: auto;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     gap: 8px;
     width: min(
       360px,
