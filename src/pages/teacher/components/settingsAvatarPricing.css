@@ -77,6 +77,9 @@
 .avatar-pricing .teacher-settings-heading { background: transparent; box-shadow: none; }
 .avatar-pricing .teacher-sub-navigation { margin-bottom: 24px; }
 .avatar-pricing-student-preview { min-width: 0; }
+/* The page frame has the shared gutter; the student shop preview keeps the full width it was drawn for. */
+.avatar-pricing.ws-page .avatar-pricing-student-preview { margin-inline: -24px; }
+@media (max-width: 767px) { .avatar-pricing.ws-page .avatar-pricing-student-preview { margin-inline: -16px; } }
 .avatar-pricing-student-preview .avatar-studio-toolbar { flex-wrap: wrap; }
 .avatar-pricing-student-preview .avatar-studio-categories { flex-wrap: wrap; flex-basis: 100%; overflow-x: visible; }
 @media (max-width: 767px) { .avatar-pricing-filters > label.avatar-pricing-search { flex: 1 1 100%; margin-left: 0; } }
