@@ -5,8 +5,8 @@
  * pending until the test answers them, which proves what is on screen while the
  * server check of a student page is still running:
  * - the shell an account already sees stays mounted, only the page is gated;
- * - a tab change inside a verified page keeps that page, except when the
- *   settings already held or the server answer close it;
+ * - a tab (query) change is gated exactly like a path change: the page area
+ *   waits for the server answer, so a tab hidden meanwhile never renders;
  * - a path change, a first entry and a failed check never show the page early;
  * - settings listeners are attached once and equal snapshots change nothing.
  */
@@ -428,51 +428,55 @@ try {
     );
     checks.push(`${width}: equal snapshots keep settings identity`);
 
-    // 5. Tab change inside a verified page: the page stays while re-checked.
+    // 5. Tab change inside a verified page: gated like any other page change.
     await go("/student/mypage");
     await settle();
     await body("/student/mypage").waitFor();
     const instance = (await state()).instance;
-    const effectsOnPage = (await state()).effects;
+    let mountsBefore = (await state()).mounts.length;
     readsBefore = await go("/student/mypage?menu=score");
     now = await state();
-    check(!now.loader, "tab change does not cover the page");
     check(
-      now.body === "/student/mypage?menu=score" && now.instance === instance,
-      "tab change keeps the same page instance",
+      now.loader && now.body === null,
+      "tab change waits behind the screen loader",
     );
-    check(now.pending.config === 1, "tab change still asks the server");
+    check(
+      !now.mounts.slice(mountsBefore).includes("/student/mypage?menu=score"),
+      "tab is not mounted before the server answered",
+    );
+    check(
+      now.header === 1 && now.header_.unmounts === 0,
+      "shell stays mounted during a tab re-check",
+    );
+    check(now.pending.config === 1, "tab change asks the server once");
     await settle();
-    await page.waitForTimeout(80);
+    await body("/student/mypage?menu=score").waitFor();
     now = await state();
     check(
-      now.body === "/student/mypage?menu=score" && now.instance === instance,
-      "page stays after the server confirmed the tab",
+      now.instance !== instance,
+      "tab change starts a fresh page after the re-check",
     );
     check(now.reads.length === readsBefore + 2, "one re-check per tab change");
-    check(
-      now.effects.config === effectsOnPage.config &&
-        now.effects.menuConfig === effectsOnPage.menuConfig,
-      "an unchanged re-check answer does not reload the page data",
-    );
     check(now.header_.mounts === 1, "shell kept through tab changes");
     check(
       now.launcher.mounts === 1 && now.launcher.unmounts === 0,
       "learning tools kept through every page and tab change",
     );
+    await page.waitForFunction(() => window.layoutQa.promotion.mounts === 6);
     check(
-      now.promotion.mounts === now.promotion.unmounts + 1 &&
-        now.promotion.mounts >= 6,
+      (await state()).promotion.unmounts === 5,
       "the rank promotion check ran once per opened page or tab",
     );
-    checks.push(`${width}: tab change keeps the verified page`);
+    checks.push(`${width}: tab change is gated and keeps only the shell`);
 
-    // 6. The server answer closes a tab that the held settings allowed.
+    // 6. The held settings allow the tab, the server answer hides it: the tab
+    // stays behind the gate the whole time and is never rendered.
+    mountsBefore = (await state()).mounts.length;
     await go("/student/mypage?menu=avatar");
     now = await state();
     check(
-      now.body === "/student/mypage?menu=avatar" && now.instance === instance,
-      "tab allowed by the held settings is shown during its re-check",
+      now.loader && now.body === null,
+      "tab allowed by the held settings still waits for the server",
     );
     const toastsBefore = now.toasts;
     await qa(
@@ -483,14 +487,18 @@ try {
     await page.waitForURL(/#\/student\/dashboard$/);
     await body("/student/dashboard").waitFor();
     now = await state();
+    check(
+      !now.mounts.slice(mountsBefore).includes("/student/mypage?menu=avatar"),
+      "a tab the server just hid is never rendered",
+    );
     check(now.toasts === toastsBefore + 1, "closed tab explains the redirect");
-    checks.push(`${width}: server answer closes a tab opened in place`);
+    checks.push(`${width}: a tab hidden during its re-check never renders`);
 
-    // 7. Held settings already hide the tab: it never mounts, not even once.
+    // 7. Held settings already hide the tab: it never mounts either.
     await go("/student/mypage");
     await settle();
     await body("/student/mypage").waitFor();
-    let mountsBefore = (await state()).mounts.length;
+    mountsBefore = (await state()).mounts.length;
     await go("/student/mypage?menu=avatar");
     now = await state();
     check(now.body === null && now.loader, "hidden tab keeps the full gate");
@@ -502,7 +510,7 @@ try {
       !now.mounts.slice(mountsBefore).includes("/student/mypage?menu=avatar"),
       "a tab hidden in the held settings is never rendered",
     );
-    checks.push(`${width}: hidden tab never renders in place`);
+    checks.push(`${width}: a tab already hidden never renders`);
 
     // 8. A live change closes a tab that is already open.
     await qa(
@@ -526,15 +534,13 @@ try {
     );
     checks.push(`${width}: live hiding still closes an open tab`);
 
-    // 9. A failed re-check closes the page that was kept; retry reopens it.
+    // 9. A failed tab re-check never showed the tab; retry opens it.
     await go("/student/points");
     await settle();
     await body("/student/points").waitFor();
+    mountsBefore = (await state()).mounts.length;
     await go("/student/points?tab=shop");
-    check(
-      (await state()).body === "/student/points?tab=shop",
-      "shop tab opens in place",
-    );
+    check((await state()).body === null, "shop tab waits for its re-check");
     await qa(() => {
       window.layoutQa.reject("config");
       window.layoutQa.resolve("menu_config");
@@ -545,12 +551,16 @@ try {
       now.body === null && now.header === 0,
       "failed re-check closes page and shell",
     );
+    check(
+      !now.mounts.slice(mountsBefore).includes("/student/points?tab=shop"),
+      "the tab was never rendered before its re-check failed",
+    );
     await page.getByRole("button", { name: "다시 시도", exact: true }).click();
     await settle();
     await body("/student/points?tab=shop").waitFor();
     checks.push(`${width}: failed re-check stays closed until retry`);
 
-    // 10. Pages outside the in-place list keep the full gate for a query.
+    // 10. A lesson selection (query change) is gated the same way.
     await go("/student/lesson/note");
     await settle();
     await body("/student/lesson/note").waitFor();
@@ -564,15 +574,15 @@ try {
       (await state()).instance !== noteInstance,
       "lesson selection still starts a fresh page",
     );
-    checks.push(`${width}: other pages keep the full gate on query changes`);
+    checks.push(`${width}: lesson selection is gated on a query change`);
 
-    // 11. A path change never reuses the previous page, even to a listed page.
+    // 11. A path change never reuses the previous page.
     await go("/student/points");
     now = await state();
-    check(now.body === null, "entering a listed page is still gated");
+    check(now.body === null, "entering another page is gated");
     await settle();
     await body("/student/points").waitFor();
-    checks.push(`${width}: listed pages are gated on entry`);
+    checks.push(`${width}: pages are gated on entry`);
 
     // 12. Leaving while a re-check is pending must not strand the next page.
     await qa(() => window.layoutQa.resolveAll());

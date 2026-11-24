@@ -34,14 +34,13 @@ import {
 
 const ROLE_SESSION_KEY = "westoryPortalRole";
 const VISIBILITY_SETTINGS_FRESH_MS = 5000;
-// Pages whose query only switches a tab they already render in place. A tab
-// change inside one of them keeps the verified page mounted during the server
-// re-check; every other page and every path change keeps the full gate.
-const IN_PLACE_QUERY_STUDENT_PATHS = new Set([
-  "/student/points",
-  "/student/mypage",
-  "/student/lesson/maps",
-]);
+// Empty on purpose: every path and every query change of a student page waits
+// for the server re-check behind the page-area gate, and only the shell stays
+// mounted. A path listed here would keep its verified page mounted through a
+// query change, which shows a tab hidden moments ago until the re-check
+// answers (up to its deadline on a stalled connection). Do not add a path
+// without accepting that for real-time visibility blocking.
+const IN_PLACE_QUERY_STUDENT_PATHS = new Set<string>();
 const WEPLAY_COMPACT_NAVIGATION = "(max-width: 1279px), (any-pointer: coarse)";
 
 const StudentHistoryDictionaryController = lazyWithRetry(
@@ -187,9 +186,10 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const shownStudentPageRef = React.useRef("");
   const studentShellOwner = currentUser?.uid || "";
   const studentPageIdentity = `${studentShellOwner}|${location.pathname}`;
-  // Only a tab change inside the page that is verified and still mounted, and
-  // only while the server-confirmed settings already held allow the new tab.
-  // The same server re-check still runs and closes the page if it says so.
+  // Always false while IN_PLACE_QUERY_STUDENT_PATHS is empty, so the page area
+  // is gated on every change. For a listed path it would apply only to a query
+  // change inside the page that is verified and still mounted, and only while
+  // the server-confirmed settings already held allow the new address.
   const keepStudentPageDuringRecheck =
     profileReady &&
     isStudentRoute &&
@@ -351,7 +351,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     !studentSettingsFailed &&
     studentAccessReady &&
     studentRouteAccess.allowed;
-  // While another student page waits for its server re-check, keep the shell
+  // While a student page or tab waits for its server re-check, keep the shell
   // this account already sees and gate only the page area. The first entry,
   // a failed or pending settings load and a denied page still replace it all.
   const keepStudentShell =
