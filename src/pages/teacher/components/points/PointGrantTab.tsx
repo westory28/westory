@@ -113,7 +113,7 @@ const PointGrantTab: React.FC<PointGrantTabProps> = ({
         <div className="points-student-filter-header ws-flat-section mb-4">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h2 className="text-lg font-bold text-gray-800">
+              <h2 className="text-lg font-extrabold text-gray-800">
                 지급 및 환수 대상 선택
               </h2>
             </div>

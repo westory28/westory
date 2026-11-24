@@ -566,9 +566,7 @@ const ScoreReport: React.FC = () => {
         </section>
 
         <aside className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.06)] lg:p-6">
-          <h2 className="text-2xl font-extrabold text-slate-900">
-            분석 리포트
-          </h2>
+          <h2 className="text-xl font-extrabold text-slate-900">분석 리포트</h2>
 
           <div className="grid grid-cols-2 gap-3">
             <section className="rounded-xl border border-slate-200 p-4">
