@@ -1377,6 +1377,13 @@ function providerHarness({ readSetting } = {}) {
         clearAuthDeadline: timer.clear,
       },
       "../lib/deviceSession": { clearDeviceSession: noop },
+      "../lib/writtenExamAnalysisCache": {
+        invalidateWrittenExamAnalysisCache: noop,
+      },
+      "../lib/settingsEquality": load(
+        compile("../src/lib/settingsEquality.ts"),
+        {},
+      ),
       "../constants/menus": {
         cloneDefaultMenus: () => ({}),
         sanitizeMenuConfig: (data) => data,

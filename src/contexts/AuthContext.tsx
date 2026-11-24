@@ -39,6 +39,7 @@ import {
   subscribeMenuConfigUpdated,
   subscribeSystemConfigUpdated,
 } from "../lib/appEvents";
+import { keepSameSetting } from "../lib/settingsEquality";
 
 interface AuthContextType {
   // Backward-compatible alias for legacy pages.
@@ -142,6 +143,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const menuRequestRef = useRef(0);
   const [settingsSubscriptionRevision, setSettingsSubscriptionRevision] =
     useState(0);
+  const settingsListenerFailedRef = useRef(false);
 
   const loadPublicInterfaceConfig = useCallback(async () => {
     const request = ++interfaceRequestRef.current;
@@ -150,7 +152,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const data =
         await readFreshSiteSettingDoc<InterfaceConfig>("interface_config");
       if (request !== interfaceRequestRef.current) return;
-      setInterfaceConfig(data || ({} as InterfaceConfig));
+      const next = data || ({} as InterfaceConfig);
+      setInterfaceConfig((previous) => keepSameSetting(previous, next));
       setInterfaceConfigReady(true);
       markLoginPerf("westory-interface-config-ready");
     } catch (e) {
@@ -187,7 +190,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             authPhaseRef.current !== "ready"
           )
             return;
-          setConfig(normalizeSystemConfig(data));
+          const next = normalizeSystemConfig(data);
+          setConfig((previous) => keepSameSetting(previous, next));
           setConfigReady(true);
           setConfigLoadedAt(Date.now());
           markLoginPerf("westory-auth-config-ready");
@@ -243,7 +247,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             authPhaseRef.current !== "ready"
           )
             return;
-          setMenuConfig(data ? sanitizeMenuConfig(data) : cloneDefaultMenus());
+          const next = data ? sanitizeMenuConfig(data) : cloneDefaultMenus();
+          setMenuConfig((previous) => keepSameSetting(previous, next));
           setMenuConfigReady(true);
           setMenuConfigLoadedAt(Date.now());
         } catch (e) {
@@ -444,6 +449,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     )
       return;
     let active = true;
+    settingsListenerFailedRef.current = false;
+    // A reconnect or a repeated read delivers the same content again. Keep the
+    // object consumers already hold so only a real change reloads their data.
     const subscriptions = [
       onSnapshot(
         doc(db, "site_settings", "config"),
@@ -456,15 +464,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           )
             return;
           systemRequestRef.current += 1;
-          setConfig(
-            normalizeSystemConfig(
-              snapshot.exists() ? (snapshot.data() as SystemConfig) : null,
-            ),
+          const next = normalizeSystemConfig(
+            snapshot.exists() ? (snapshot.data() as SystemConfig) : null,
           );
+          setConfig((previous) => keepSameSetting(previous, next));
           setConfigLoadedAt(Date.now());
         },
         () => {
           if (active) {
+            settingsListenerFailedRef.current = true;
             systemRequestRef.current += 1;
             setConfig(null);
           }
@@ -481,11 +489,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           )
             return;
           menuRequestRef.current += 1;
-          setMenuConfig(sanitizeMenuConfig(snapshot.data()));
+          const next = sanitizeMenuConfig(snapshot.data());
+          setMenuConfig((previous) => keepSameSetting(previous, next));
           setMenuConfigLoadedAt(Date.now());
         },
         () => {
           if (active) {
+            settingsListenerFailedRef.current = true;
             menuRequestRef.current += 1;
             setMenuConfig(null);
           }
@@ -502,11 +512,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           )
             return;
           interfaceRequestRef.current += 1;
-          setInterfaceConfig((snapshot.data() || {}) as InterfaceConfig);
+          const next = (snapshot.data() || {}) as InterfaceConfig;
+          setInterfaceConfig((previous) => keepSameSetting(previous, next));
           setInterfaceConfigReady(true);
         },
         () => {
           if (active) {
+            settingsListenerFailedRef.current = true;
             interfaceRequestRef.current += 1;
             setInterfaceConfig(null);
             setInterfaceConfigReady(true);
@@ -608,7 +620,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
   const refreshConfig = useCallback(async () => {
-    setSettingsSubscriptionRevision((value) => value + 1);
+    // Live listeners keep delivering server changes; attaching them again on
+    // every refresh only repeats their reads. A listener that ended with an
+    // error receives no further events, so only then start new ones.
+    if (settingsListenerFailedRef.current) {
+      settingsListenerFailedRef.current = false;
+      setSettingsSubscriptionRevision((value) => value + 1);
+    }
     invalidateSiteSettingDocCache("config");
     systemConfigLoadRef.current = null;
     await loadAuthedSystemConfig(currentUser);
