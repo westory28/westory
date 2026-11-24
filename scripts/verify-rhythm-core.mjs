@@ -1055,8 +1055,49 @@ if (process.argv.includes("--audio-render")) {
         };
         const controller = new RhythmAudio();
         await controller.start(song, 1);
+        if (song === RHYTHM_SONGS[0]) {
+          // Compare matched center/rim pairs in the quiet spaces after the
+          // first two identical count-in cues, including compressor output.
+          const until = performance.now() + 5000;
+          while (!controller.strikeBuffer && performance.now() < until)
+            await new Promise(resolve => setTimeout(resolve, 5));
+          if (!controller.strikeBuffer) throw new Error("Strike sounds did not render");
+          const liveSources = controller.sources.size;
+          controller.context.currentTime = 0.4;
+          controller.hit("center");
+          controller.context.currentTime = 0.8;
+          controller.hit("rim");
+          if (controller.sources.size !== liveSources + 2)
+            throw new Error("Each buffered strike must use a single live source");
+          controller.strikeBuffer = null;
+          controller.context.currentTime = 1.4;
+          controller.hit("center");
+          controller.context.currentTime = 1.8;
+          controller.hit("rim");
+        }
         const rendered = await offline.startRendering();
         const samples = rendered.getChannelData(0);
+        if (song === RHYTHM_SONGS[0]) {
+          for (const [at, duration] of [[0.4, 0.36], [0.8, 0.13]]) {
+            const start = Math.round(at * offline.sampleRate);
+            const end = start + Math.ceil(duration * offline.sampleRate);
+            // A live oscillator can start at a slightly different phase within
+            // an audio render quantum. Compare its attack and decay in 20ms bins.
+            const windowSize = Math.round(0.02 * offline.sampleRate);
+            let envelopeError = 0, signal = 0;
+            for (let from = start; from < end; from += windowSize) {
+              let buffered = 0, live = 0;
+              for (let i = from; i < Math.min(from + windowSize, end); i++) {
+                buffered += samples[i] ** 2;
+                live += samples[i + offline.sampleRate] ** 2;
+              }
+              envelopeError += (Math.sqrt(buffered) - Math.sqrt(live)) ** 2;
+              signal += live;
+            }
+            if (signal < 0.1 || Math.sqrt(envelopeError / signal) > 0.08)
+              throw new Error(`Buffered strike at ${at}s lost its original attack or decay`);
+          }
+        }
         let peak = 0,
           sum = 0,
           tail = 0,

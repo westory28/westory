@@ -1,14 +1,25 @@
 import {
-  memo,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
-  type MutableRefObject,
 } from "react";
+import RhythmLaneNotes from "./RhythmLaneNotes";
 import RhythmHelp from "./RhythmHelp";
+import {
+  ARRIVAL_FRAMES,
+  PULSE_FRAMES,
+  DRUM_FRAMES,
+  MALLET_FRAMES,
+  MASCOT_FRAMES,
+  SPARK_COUNTS,
+  SPARK_PATHS,
+  playCompactFlight,
+  replayStroke,
+  type CollectedNote,
+} from "./rhythmHitEffects";
 import { useAuth } from "../../../../contexts/AuthContext";
 import {
   startRhythmRankingGame,
@@ -32,7 +43,6 @@ import { RhythmAudio } from "./rhythmAudio";
 import { RHYTHM_SONGS } from "./rhythmSongs";
 import {
   COUNT_IN_SECONDS,
-  HIT_WINDOW_SECONDS,
   applyJudgement,
   advanceMissedNotes,
   FEVER_BONUSES,
@@ -45,7 +55,6 @@ import {
   type DrumHand,
   type RhythmDifficulty,
   type RhythmJudgement,
-  type RhythmNote,
 } from "./rhythmCore";
 import "./rhythm.css";
 
@@ -67,121 +76,6 @@ const HIT_SPOTS = [
   { kind: "center", hand: "left", x: 0.38, y: 0.32, key: "←" },
   { kind: "center", hand: "right", x: 0.62, y: 0.32, key: "→" },
 ] as const;
-type CollectedNote = {
-  id: number;
-  kind: DrumKind;
-  hand: DrumHand;
-  grade: RhythmJudgement;
-  x: number;
-  y: number;
-  dx: number;
-  dy: number;
-  points: number;
-};
-
-/** Only note membership uses React; the audio clock moves the visible notes. */
-const RhythmLaneNotes = memo(function RhythmLaneNotes({
-  chart,
-  audio,
-  judged,
-  phase,
-  offset,
-  travelSeconds,
-}: {
-  chart: RhythmNote[];
-  audio: MutableRefObject<RhythmAudio | null>;
-  judged: MutableRefObject<Set<string>>;
-  phase: Phase;
-  offset: number;
-  travelSeconds: number;
-}) {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const nodes = useRef(new Map<string, HTMLDivElement>());
-  const width = useRef(0);
-  const time = useRef(0);
-  const visible = useRef<RhythmNote[]>([]);
-  const [notes, setNotes] = useState<RhythmNote[]>([]);
-  const position = (node: HTMLDivElement, note: RhythmNote) => {
-    const x =
-      width.current *
-      (0.14 + ((note.time - time.current) / travelSeconds) * 0.78);
-    node.style.transform = `translate3d(${x}px, -50%, 0) translateX(-50%)`;
-  };
-
-  useEffect(() => {
-    let frame = 0;
-    let first = 0;
-    let previousTime = -Infinity;
-    const draw = () => {
-      time.current = (audio.current?.currentTime ?? 0) - offset / 1000;
-      if (time.current < previousTime) first = 0;
-      previousTime = time.current;
-      while (
-        first < chart.length &&
-        chart[first].time < time.current - HIT_WINDOW_SECONDS
-      )
-        first++;
-      const upcoming: RhythmNote[] = [];
-      for (let index = first; index < chart.length; index++) {
-        const note = chart[index];
-        if (note.time > time.current + travelSeconds) break;
-        if (judged.current.has(note.id)) continue;
-        upcoming.push(note);
-        const node = nodes.current.get(note.id);
-        if (node) position(node, note);
-      }
-      if (
-        upcoming.length !== visible.current.length ||
-        upcoming.some((note, index) => note !== visible.current[index])
-      ) {
-        visible.current = upcoming;
-        setNotes(upcoming);
-      }
-      if (phase === "playing") frame = requestAnimationFrame(draw);
-    };
-    const track = trackRef.current!;
-    width.current = track.clientWidth;
-    const observer = new ResizeObserver(([entry]) => {
-      width.current = entry.contentRect.width;
-      for (const note of visible.current) {
-        const node = nodes.current.get(note.id);
-        if (node) position(node, note);
-      }
-    });
-    observer.observe(track);
-    draw();
-    return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-    };
-  }, [chart, audio, judged, phase, offset, travelSeconds]);
-
-  return (
-    <div className="rhythm-note-track" ref={trackRef}>
-      {notes.map((note) => (
-        <div
-          key={note.id}
-          ref={(node) => {
-            if (node) {
-              nodes.current.set(note.id, node);
-              position(node, note);
-            } else nodes.current.delete(note.id);
-          }}
-          data-kind={note.kind}
-          data-hand={note.hand}
-          data-note-id={note.id}
-          className={`rhythm-note rhythm-note--${note.kind}`}
-        >
-          <RhythmNoteArt kind={note.kind} />
-          <b className="rhythm-note-hand">
-            {note.hand === "left" ? "왼" : "오"}
-          </b>
-          <span>{note.kind === "center" ? "쿵" : "덕"}</span>
-        </div>
-      ))}
-    </div>
-  );
-});
 
 export default function RhythmGame({
   preview = false,
@@ -220,7 +114,8 @@ export default function RhythmGame({
   const phaseRef = useRef<Phase>("ready");
   const playableRef = useRef(playable);
   playableRef.current = playable;
-  const [elapsed, setElapsed] = useState(0);
+  const [countIn, setCountIn] = useState(COUNT_IN_SECONDS);
+  const progressRef = useRef<HTMLProgressElement>(null);
   const [score, setScore] = useState(createScore);
   const [feedback, setFeedback] = useState("");
   const [feedbackGrade, setFeedbackGrade] = useState<RhythmJudgement | null>(
@@ -228,17 +123,47 @@ export default function RhythmGame({
   );
   const [collected, setCollected] = useState<CollectedNote[]>([]);
   const [arrivalId, setArrivalId] = useState(0);
-  const [handStrikes, setHandStrikes] = useState<
-    Partial<Record<DrumHand, { id: number; kind: DrumKind }>>
-  >({});
+  const [compactEffects, setCompactEffects] = useState(false);
+  const pulseRef = useRef<HTMLDivElement>(null);
+  const compactFlightRef = useRef<HTMLDivElement>(null);
+  const compactFlightMotion = useRef<Animation | null>(null);
+  const mallets = useRef<Partial<Record<DrumHand, HTMLImageElement | null>>>(
+    {},
+  );
+  const hitLineRef = useRef<HTMLDivElement>(null);
+  const touchSurface = useRef<HTMLDivElement>(null);
+  const touchBounds = useRef<DOMRect | null>(null);
+  const flightGeometry = useRef<{
+    hitX: number;
+    hitY: number;
+    laneWidth: number;
+    targetX: number;
+    targetY: number;
+  } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const [canvasWidth, setCanvasWidth] = useState(0);
   const scoreTargetRef = useRef<HTMLElement>(null);
   const [lastStrike, setLastStrike] = useState<{
     kind: DrumKind;
-    at: number;
     id: number;
   } | null>(null);
+  useEffect(() => {
+    if (!compactEffects || phase !== "playing") return;
+    const motion = compactFlightRef.current?.getAnimations()[0];
+    if (!motion) return;
+    compactFlightMotion.current = motion;
+    motion.onfinish = () =>
+      replayStroke(
+        scoreTargetRef.current,
+        "score-arrival",
+        ARRIVAL_FRAMES,
+        240,
+      );
+    return () => {
+      motion.onfinish = null;
+      compactFlightMotion.current = null;
+    };
+  }, [compactEffects, phase]);
   const [effects, setEffects] = useState<
     {
       id: number;
@@ -400,7 +325,7 @@ export default function RhythmGame({
     blockedUntil.current = 0;
     scoreRef.current = createScore();
     setScore(scoreRef.current);
-    setElapsed(0);
+    setCountIn(COUNT_IN_SECONDS);
     setFeedback("");
     setFeedbackGrade(null);
     setFeedbackPoints(0);
@@ -410,7 +335,7 @@ export default function RhythmGame({
       mode === "challenge" ? challenge!.missLimit : Infinity;
     runEndTime.current = 0;
     setCollected([]);
-    setHandStrikes({});
+    setCompactEffects(false);
     setArrivalId(0);
     setLastStrike(null);
     setEffects([]);
@@ -571,13 +496,36 @@ export default function RhythmGame({
     if (phase !== "playing") return;
     let raf = 0;
     let lastDisplayTime = -Infinity;
-    const tick = () => {
+    let previousCount = -1;
+    let lastFrame = 0;
+    let frames = 0;
+    let slowFrames = 0;
+    let previousStrike = strikeId.current;
+    const tick = (timestamp: number) => {
       if (phaseRef.current !== "playing" || !audio.current) return;
       if (audio.current.state !== "running" || !playableRef.current) {
         pause();
         return;
       }
       const time = audio.current.currentTime;
+      // A single late frame can be startup or rotation. Switch only after
+      // repeated frame stalls during actual inputs, for the rest of this run.
+      if (!compactEffects && lastFrame) {
+        frames++;
+        if (timestamp - lastFrame >= 40) slowFrames++;
+        if (frames === 12) {
+          if (slowFrames >= 4 && strikeId.current - previousStrike >= 2) {
+            setCompactEffects(true);
+            setCollected([]);
+            setEffects([]);
+            setLastStrike(null);
+          }
+          frames = 0;
+          slowFrames = 0;
+          previousStrike = strikeId.current;
+        }
+      }
+      lastFrame = timestamp;
       const advanced = advanceMissedNotes(
         chart,
         judged.current,
@@ -595,7 +543,13 @@ export default function RhythmGame({
       }
       if (time - lastDisplayTime >= 0.1 || time < lastDisplayTime) {
         lastDisplayTime = time;
-        setElapsed(time);
+        if (progressRef.current)
+          progressRef.current.value = Math.max(0, time - COUNT_IN_SECONDS);
+        const remaining = Math.max(0, Math.ceil(COUNT_IN_SECONDS - time));
+        if (remaining !== previousCount) {
+          previousCount = remaining;
+          setCountIn(remaining);
+        }
       }
       if (advanced.terminated) {
         finish(advanced.endedAt, true);
@@ -609,7 +563,81 @@ export default function RhythmGame({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [phase, chart, song.duration, offset, finish, pause]);
+  }, [phase, chart, song.duration, offset, finish, pause, compactEffects]);
+
+  const noteWidth = Math.min(106, Math.max(72, canvasWidth * 0.08));
+  const closestNoteGap = useMemo(
+    () =>
+      chart.reduce(
+        (gap, note, index) =>
+          index ? Math.min(gap, note.time - chart[index - 1].time) : gap,
+        2.4,
+      ),
+    [chart],
+  );
+  // Larger notes retain a clear gap even in the fastest chart on a small screen.
+  const laneTravelSeconds = Math.min(
+    2.4,
+    Math.max(
+      0.55,
+      ((canvasWidth - 64) * 0.78 * closestNoteGap) / (noteWidth + 8),
+    ),
+  );
+  useEffect(() => {
+    if (phase !== "playing") return;
+    const canvas = canvasRef.current;
+    const marker = hitLineRef.current;
+    const lane = marker?.parentElement;
+    const scoreGroup = scoreTargetRef.current?.parentElement;
+    if (!canvas || !marker || !lane || !scoreGroup) return;
+    // Store stage-local coordinates. Scrolling moves the whole stage together,
+    // and size/font/fullscreen changes refresh the cache outside the input path.
+    const measure = () => {
+      touchBounds.current =
+        touchSurface.current?.getBoundingClientRect() ?? null;
+      const scoreTarget = scoreTargetRef.current;
+      if (!scoreTarget) return;
+      const bounds = canvas.getBoundingClientRect();
+      if (!bounds.width || !bounds.height) return;
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      const center = (element: HTMLElement) => {
+        const rect = element.getBoundingClientRect();
+        const point = rhythmPointerPosition(
+          bounds,
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2,
+          stage.rotated,
+        );
+        return { x: point.x * width, y: point.y * height };
+      };
+      const hit = center(marker);
+      const target = center(scoreTarget);
+      flightGeometry.current = {
+        hitX: hit.x,
+        hitY: hit.y,
+        laneWidth: lane.clientWidth,
+        targetX: target.x,
+        targetY: target.y,
+      };
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    for (const element of [canvas, lane, scoreGroup]) observer.observe(element);
+    if (touchSurface.current) observer.observe(touchSurface.current);
+    const invalidatePosition = () => {
+      touchBounds.current = null;
+    };
+    window.addEventListener("scroll", invalidatePosition, true);
+    window.addEventListener("resize", invalidatePosition);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", invalidatePosition, true);
+      window.removeEventListener("resize", invalidatePosition);
+      touchBounds.current = null;
+      flightGeometry.current = null;
+    };
+  }, [phase, stage.rotated, stage.fullscreen]);
 
   const strike = useCallback(
     (kind: DrumKind, hand: DrumHand, point?: { x: number; y: number }) => {
@@ -649,8 +677,19 @@ export default function RhythmGame({
         });
       audio.current.hit(kind);
       const id = ++strikeId.current;
-      setLastStrike({ kind, at: now, id });
-      setHandStrikes((previous) => ({ ...previous, [hand]: { id, kind } }));
+      const mallet = mallets.current[hand];
+      if (mallet) {
+        mallet.dataset.strikeId = String(id);
+        mallet.dataset.kind = kind;
+        replayStroke(
+          mallet,
+          `rhythm-mallet-${kind}`,
+          MALLET_FRAMES[hand][kind],
+          220,
+        );
+      }
+      replayStroke(drumArtRef.current, "drum", DRUM_FRAMES, 220);
+      replayStroke(mascotRef.current, kind, MASCOT_FRAMES[kind], 320);
       const input = judgeInput(
         chart,
         judged.current,
@@ -665,16 +704,22 @@ export default function RhythmGame({
       const spot = HIT_SPOTS.find(
         (item) => item.kind === kind && item.hand === hand,
       )!;
-      setEffects((previous) => [
-        ...previous.slice(-7),
-        {
-          id,
-          kind,
-          grade,
-          x: point?.x ?? spot.x,
-          y: point?.y ?? spot.y,
-        },
-      ]);
+      const { x, y } = point ?? spot;
+      if (compactEffects) {
+        const pulse = pulseRef.current;
+        if (pulse) {
+          pulse.style.left = `${x * 100}%`;
+          pulse.style.top = `${y * 100}%`;
+          pulse.dataset.grade = grade;
+          replayStroke(pulse, "pulse", PULSE_FRAMES, 200);
+        }
+      } else {
+        setLastStrike({ kind, id });
+        setEffects((previous) => [
+          ...previous.slice(-7),
+          { id, kind, grade, x, y },
+        ]);
+      }
       if (judgement === "ignored") return;
       const previousScore = scoreRef.current.score;
       scoreRef.current = applyJudgement(scoreRef.current, judgement);
@@ -689,72 +734,37 @@ export default function RhythmGame({
         return;
       }
       if (!note || judgement === "miss") return;
-      const canvas = canvasRef.current;
-      const source = canvas?.querySelector(`[data-note-id="${note.id}"]`);
-      const target = scoreTargetRef.current;
-      if (canvas && source && target) {
-        const rect = canvas.getBoundingClientRect();
-        const from = source.getBoundingClientRect();
-        const to = target.getBoundingClientRect();
-        const origin = rhythmPointerPosition(
-          rect,
-          from.x + from.width / 2,
-          from.y + from.height / 2,
-          stage.rotated,
-        );
-        const destination = rhythmPointerPosition(
-          rect,
-          to.x + to.width / 2,
-          to.y + to.height / 2,
-          stage.rotated,
-        );
-        setCollected((items) => [
-          ...items.slice(-11),
-          {
-            id,
-            kind,
-            hand,
-            grade: judgement,
-            x: origin.x * canvas.clientWidth,
-            y: origin.y * canvas.clientHeight,
-            dx: (destination.x - origin.x) * canvas.clientWidth,
-            dy: (destination.y - origin.y) * canvas.clientHeight,
-            points: earnedPoints,
-          },
-        ]);
+      const geometry = flightGeometry.current;
+      if (geometry) {
+        const x =
+          geometry.hitX +
+          ((note.time - (now - offset / 1000)) * geometry.laneWidth * 0.78) /
+            laneTravelSeconds;
+        const flight = {
+          id,
+          kind,
+          hand,
+          grade: judgement,
+          x,
+          y: geometry.hitY,
+          dx: geometry.targetX - x,
+          dy: geometry.targetY - geometry.hitY,
+          points: earnedPoints,
+        };
+        if (compactEffects) {
+          playCompactFlight(
+            compactFlightRef.current,
+            compactFlightMotion.current,
+            flight,
+          );
+        } else {
+          setCollected((items) => [...items.slice(-11), flight]);
+        }
       }
       judged.current.add(note.id);
     },
-    [chart, offset, stage.rotated, finish],
+    [chart, offset, laneTravelSeconds, finish, compactEffects],
   );
-  useEffect(() => {
-    if (!lastStrike) return;
-    const drum = drumArtRef.current?.animate(
-      [
-        { transform: "scale(1)" },
-        { transform: "scale(1.035, .95)", offset: 0.25 },
-        { transform: "scale(.99, 1.025)", offset: 0.62 },
-        { transform: "scale(1)" },
-      ],
-      { duration: 220, easing: "ease-out" },
-    );
-    const mascot = mascotRef.current?.animate(
-      [
-        { transform: "translateY(0) rotate(0)" },
-        {
-          transform: `translateY(-14px) rotate(${lastStrike.kind === "center" ? -8 : 8}deg)`,
-          offset: 0.35,
-        },
-        { transform: "translateY(0) rotate(0)" },
-      ],
-      { duration: 320, easing: "ease-out" },
-    );
-    return () => {
-      drum?.cancel();
-      mascot?.cancel();
-    };
-  }, [lastStrike]);
-
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (
@@ -792,34 +802,15 @@ export default function RhythmGame({
     audio.current = null;
     blockedUntil.current = 0;
     setGamePhase("ready");
-    setElapsed(0);
+    setCountIn(COUNT_IN_SECONDS);
     setError("");
     setEffects([]);
     setCollected([]);
-    setHandStrikes({});
     rankingRun.current = null;
     setRankingSave("idle");
   };
   const active =
     phase === "playing" || phase === "paused" || phase === "starting";
-  const noteWidth = Math.min(106, Math.max(72, canvasWidth * 0.08));
-  const closestNoteGap = useMemo(
-    () =>
-      chart.reduce(
-        (gap, note, index) =>
-          index ? Math.min(gap, note.time - chart[index - 1].time) : gap,
-        2.4,
-      ),
-    [chart],
-  );
-  // Larger notes retain a clear gap even in the fastest chart on a small screen.
-  const laneTravelSeconds = Math.min(
-    2.4,
-    Math.max(
-      0.55,
-      ((canvasWidth - 64) * 0.78 * closestNoteGap) / (noteWidth + 8),
-    ),
-  );
   const accuracyTotal = Math.max(
     chart.length,
     score.perfect + score.good + score.ok + score.miss,
@@ -848,6 +839,7 @@ export default function RhythmGame({
       tabIndex={-1}
       aria-label="덩기덕 쿵더Rock 경기장"
       data-fever={active ? feverTier : 0}
+      data-compact-effects={active && compactEffects ? true : undefined}
       data-mode={mode}
     >
       <div className="rhythm-canvas" ref={canvasRef}>
@@ -1218,7 +1210,7 @@ export default function RhythmGame({
                         ? `피버 +${FEVER_BONUSES[feverTier] * 100}%`
                         : "이어치기"}
                     </span>
-                    <strong key={score.combo}>
+                    <strong key={compactEffects ? "compact" : score.combo}>
                       {score.combo}
                       <small>콤보</small>
                     </strong>
@@ -1235,7 +1227,8 @@ export default function RhythmGame({
                 </div>
                 <progress
                   className="rhythm-progress"
-                  value={Math.max(0, elapsed - COUNT_IN_SECONDS)}
+                  ref={progressRef}
+                  value={0}
                   max={song.duration - COUNT_IN_SECONDS}
                   aria-label="연주 진행"
                 />
@@ -1253,7 +1246,7 @@ export default function RhythmGame({
                       aria-label="오른쪽에서 왼쪽으로 오는 한 줄 악보: 주홍 쿵, 남색 덕"
                     >
                       <div className="rhythm-lane-thread" />
-                      <div className="rhythm-hit-line">
+                      <div className="rhythm-hit-line" ref={hitLineRef}>
                         <svg viewBox="0 0 100 100" aria-hidden="true">
                           <path d="M50 5Q63 18 70 12Q72 28 88 30Q82 42 95 50Q82 63 88 70Q72 72 70 88Q58 82 50 95Q37 82 30 88Q28 72 12 70Q18 58 5 50Q18 37 12 30Q28 28 30 12Q42 18 50 5Z" />
                           <circle cx="50" cy="50" r="28" />
@@ -1264,7 +1257,7 @@ export default function RhythmGame({
                         chart={chart}
                         audio={audio}
                         judged={judged}
-                        phase={phase}
+                        playing={phase === "playing"}
                         offset={offset}
                         travelSeconds={laneTravelSeconds}
                       />
@@ -1291,15 +1284,13 @@ export default function RhythmGame({
                       <RhythmMascot />
                     </div>
                     <div
-                      key={feedbackId}
-                      className={`rhythm-feedback rhythm-feedback--${feedbackGrade || "count"}`}
+                      key={compactEffects ? "compact" : feedbackId}
+                      className="rhythm-feedback"
                       data-grade={feedbackGrade}
                       aria-hidden="true"
                     >
-                      {elapsed < COUNT_IN_SECONDS
-                        ? Math.max(1, Math.ceil(COUNT_IN_SECONDS - elapsed))
-                        : feedback}
-                      {elapsed >= COUNT_IN_SECONDS &&
+                      {countIn || feedback}
+                      {!countIn &&
                         feedbackGrade &&
                         feedbackGrade !== "miss" && (
                           <small>+{feedbackPoints.toLocaleString()}</small>
@@ -1322,6 +1313,7 @@ export default function RhythmGame({
                         </div>
                         <div
                           className="rhythm-drum-touch"
+                          ref={touchSurface}
                           onKeyDown={(event) => {
                             if (
                               event.repeat &&
@@ -1346,8 +1338,10 @@ export default function RhythmGame({
                               );
                               return;
                             }
+                            const bounds = (touchBounds.current ??=
+                              event.currentTarget.getBoundingClientRect());
                             const point = rhythmPointerPosition(
-                              event.currentTarget.getBoundingClientRect(),
+                              bounds,
                               event.clientX,
                               event.clientY,
                               stage.rotated,
@@ -1392,6 +1386,16 @@ export default function RhythmGame({
                           ))}
                         </div>
                         <div className="rhythm-hit-effects" aria-hidden="true">
+                          {compactEffects && (
+                            <div className="rhythm-hit-pulse" ref={pulseRef}>
+                              <svg viewBox="-80 -80 160 160">
+                                <path
+                                  d={SPARK_PATHS.perfect}
+                                  fill="currentColor"
+                                />
+                              </svg>
+                            </div>
+                          )}
                           {effects.map((effect) => (
                             <div
                               key={effect.id}
@@ -1421,30 +1425,19 @@ export default function RhythmGame({
                                     ? "쿵!"
                                     : "덕!"}
                               </b>
-                              {Array.from(
-                                {
-                                  length:
-                                    effect.grade === "perfect"
-                                      ? 12
-                                      : effect.grade === "good"
-                                        ? 6
-                                        : effect.grade === "ok"
-                                          ? 3
-                                          : 0,
-                                },
-                                (_, index) => (
-                                  <i
-                                    key={index}
-                                    className="rhythm-spark"
-                                    style={
-                                      {
-                                        "--angle": `${index * (360 / (effect.grade === "perfect" ? 12 : effect.grade === "good" ? 6 : 3))}deg`,
-                                        "--travel": `${36 + (index % 3) * 18}px`,
-                                      } as CSSProperties
-                                    }
-                                  />
-                                ),
-                              )}
+                              {effect.grade !== "tap" &&
+                                effect.grade !== "miss" && (
+                                  <svg
+                                    className="rhythm-sparks"
+                                    viewBox="-80 -80 160 160"
+                                    data-sparks={SPARK_COUNTS[effect.grade]}
+                                  >
+                                    <path
+                                      d={SPARK_PATHS[effect.grade]}
+                                      fill="currentColor"
+                                    />
+                                  </svg>
+                                )}
                             </div>
                           ))}
                         </div>
@@ -1457,10 +1450,12 @@ export default function RhythmGame({
                           key={hand}
                         >
                           <img
-                            key={handStrikes[hand]?.id || 0}
-                            className={`rhythm-mallet rhythm-mallet--${hand}${handStrikes[hand] ? " rhythm-mallet--striking" : ""}`}
-                            data-kind={handStrikes[hand]?.kind || "center"}
-                            data-strike-id={handStrikes[hand]?.id || 0}
+                            ref={(el) => {
+                              mallets.current[hand] = el;
+                            }}
+                            className={`rhythm-mallet rhythm-mallet--${hand}`}
+                            data-kind="center"
+                            data-strike-id="0"
                             src={rhythmAsset(`mallet-${hand}`)}
                             alt=""
                             width={320}
@@ -1525,6 +1520,17 @@ export default function RhythmGame({
           </>
         )}
         <div className="rhythm-collection-layer" aria-hidden="true">
+          {active && compactEffects && (
+            <div
+              ref={compactFlightRef}
+              className="rhythm-collected-note rhythm-collected-note--compact"
+            >
+              <RhythmNoteArt kind="center" />
+              <RhythmNoteArt kind="rim" />
+              <b className="rhythm-note-hand">왼</b>
+              <strong>+0</strong>
+            </div>
+          )}
           {collected.map((note) => (
             <div
               key={note.id}

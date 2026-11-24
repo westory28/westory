@@ -4,6 +4,8 @@ import type { RhythmSong } from "./rhythmSongs";
 const clampVolume = (value: number) =>
   Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.7;
 const midiFrequency = (midi: number) => 440 * 2 ** ((midi - 69) / 12);
+const DRUM_SECONDS = { center: 0.32, rim: 0.1 };
+const RIM_STRIKE_OFFSET = 0.5;
 
 /**
  * Original oscillator/noise synthesis. No samples, third-party recordings,
@@ -18,6 +20,7 @@ export class RhythmAudio {
   private compressor: DynamicsCompressorNode | null = null;
   private sources = new Set<AudioScheduledSourceNode>();
   private noise: AudioBuffer | null = null;
+  private strikeBuffer: AudioBuffer | null = null;
   private pluckWave: PeriodicWave | null = null;
   private fluteWave: PeriodicWave | null = null;
   private bassWave: PeriodicWave | null = null;
@@ -96,6 +99,7 @@ export class RhythmAudio {
       this.fluteWave = this.wave([0, 1, 0.13, 0.08, 0.025]);
       this.bassWave = this.wave([0, 1, 0.2, 0.07]);
       this.noise = this.makeNoise(context);
+      void this.prepareStrikeBuffer(context);
       // A small scheduling lead keeps even the first cue out of the past.
       this.origin = context.currentTime + 0.08;
       this.scheduleSong(song);
@@ -161,7 +165,38 @@ export class RhythmAudio {
   hit(kind: DrumKind): void {
     if (this.context?.state !== "running" || !this.master || !this.noise)
       return;
-    this.drum(kind, this.context.currentTime + 0.002, 0.65);
+    const at = this.context.currentTime + 0.002;
+    if (!this.strikeBuffer) {
+      this.drum(kind, at, 0.65);
+      return;
+    }
+    const source = this.context.createBufferSource();
+    source.buffer = this.strikeBuffer;
+    source.connect(this.master);
+    source.start(at, kind === "center" ? 0 : RIM_STRIKE_OFFSET);
+    this.register(source, at + DRUM_SECONDS[kind] + 0.01, []);
+  }
+
+  private async prepareStrikeBuffer(context: AudioContext): Promise<void> {
+    // Render the two original voices once at this device's sample rate.
+    // The count-in and live synthesis can already play while this is pending.
+    const Offline = window.OfflineAudioContext;
+    if (!Offline) return;
+    try {
+      const offline = new Offline(
+        1,
+        Math.ceil(
+          (RIM_STRIKE_OFFSET + DRUM_SECONDS.rim + 0.01) * context.sampleRate,
+        ),
+        context.sampleRate,
+      );
+      this.drum("center", 0, 0.65, offline);
+      this.drum("rim", RIM_STRIKE_OFFSET, 0.65, offline);
+      const buffer = await offline.startRendering();
+      if (this.context === context) this.strikeBuffer = buffer;
+    } catch {
+      // A device that cannot render offline keeps using the same live voices.
+    }
   }
 
   stop(): void {
@@ -183,6 +218,7 @@ export class RhythmAudio {
     this.master = null;
     this.compressor = null;
     this.noise = null;
+    this.strikeBuffer = null;
     this.pluckWave = null;
     this.fluteWave = null;
     this.bassWave = null;
@@ -288,12 +324,17 @@ export class RhythmAudio {
     this.register(oscillator, at + hold + release + 0.01, [envelope]);
   }
 
-  private drum(kind: DrumKind, at: number, level: number): void {
-    const context = this.context!;
+  private drum(
+    kind: DrumKind,
+    at: number,
+    level: number,
+    offline?: OfflineAudioContext,
+  ): void {
+    const context = offline ?? this.context!;
     const oscillator = context.createOscillator();
     const envelope = context.createGain();
     const center = kind === "center";
-    const duration = center ? 0.32 : 0.1;
+    const duration = DRUM_SECONDS[kind];
     oscillator.type = "sine";
     oscillator.frequency.setValueAtTime(center ? 150 : 510, at);
     oscillator.frequency.exponentialRampToValueAtTime(
@@ -308,14 +349,17 @@ export class RhythmAudio {
     envelope.gain.exponentialRampToValueAtTime(0.0001, at + duration);
     envelope.gain.setValueAtTime(0, at + duration + 0.005);
     oscillator.connect(envelope);
-    envelope.connect(this.master!);
+    envelope.connect(offline?.destination ?? this.master!);
     oscillator.start(at);
-    this.register(oscillator, at + duration + 0.01, [envelope]);
+    const end = at + duration + 0.01;
+    if (offline) oscillator.stop(end);
+    else this.register(oscillator, end, [envelope]);
     this.noiseHit(
       at,
       center ? 0.045 : 0.07,
       level * (center ? 0.035 : 0.105),
       center ? 1000 : 2300,
+      offline,
     );
   }
 
@@ -324,8 +368,9 @@ export class RhythmAudio {
     duration: number,
     level: number,
     frequency: number,
+    offline?: OfflineAudioContext,
   ): void {
-    const context = this.context!;
+    const context = offline ?? this.context!;
     const source = context.createBufferSource();
     source.buffer = this.noise;
     const filter = context.createBiquadFilter();
@@ -338,9 +383,11 @@ export class RhythmAudio {
     envelope.gain.setValueAtTime(0, at + duration + 0.003);
     source.connect(filter);
     filter.connect(envelope);
-    envelope.connect(this.master!);
+    envelope.connect(offline?.destination ?? this.master!);
     source.start(at);
-    this.register(source, at + duration + 0.005, [filter, envelope]);
+    const end = at + duration + 0.005;
+    if (offline) source.stop(end);
+    else this.register(source, end, [filter, envelope]);
   }
 
   private scheduleSong(song: RhythmSong): void {

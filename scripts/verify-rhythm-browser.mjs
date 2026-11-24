@@ -84,12 +84,17 @@ import Entry from ${modulePath("src/components/common/weplay/rhythm/RhythmGameEn
 import WeeklyRewards from ${modulePath("src/components/common/weplay/WeplayWeeklyRewards.tsx")};
 import {RhythmAudio} from ${modulePath("src/components/common/weplay/rhythm/rhythmAudio.ts")};
 import {RHYTHM_SONGS} from ${modulePath("src/components/common/weplay/rhythm/rhythmSongs.ts")};
-import {createChart} from ${modulePath("src/components/common/weplay/rhythm/rhythmCore.ts")};
+import {createChart, replayRhythmPerformance, HIT_WINDOW_SECONDS} from ${modulePath("src/components/common/weplay/rhythm/rhythmCore.ts")};
 import ${modulePath("src/assets/index.css")};import ${modulePath("assets/css/style.css")};
 const qa=window.rhythmQA;
 qa.songs=RHYTHM_SONGS;qa.chart=(song=0,difficulty='normal')=>createChart(RHYTHM_SONGS[song],difficulty);
+qa.replay=replayRhythmPerformance;qa.hitWindow=HIT_WINDOW_SECONDS;
 const originalTime=Object.getOwnPropertyDescriptor(RhythmAudio.prototype,'currentTime').get;
-Object.defineProperty(RhythmAudio.prototype,'currentTime',{get(){return qa.time??originalTime.call(this)}});
+Object.defineProperty(RhythmAudio.prototype,'currentTime',{get(){
+  const value=qa.time??originalTime.call(this);
+  if (qa.captureStrikeTime) {qa.strikeTime=value;qa.captureStrikeTime=false;}
+  return value;
+}});
 const originalStart=RhythmAudio.prototype.start;
 RhythmAudio.prototype.start=async function(...args){qa.audio.push(this);return originalStart.apply(this,args)};
 const originalHit=RhythmAudio.prototype.hit;
@@ -194,14 +199,17 @@ const checks = [],
   external = [],
   assets = new Set();
 let activePage;
-const pageFor = async (width = 1280, height = 900, fallback = true) => {
+const pageFor = async (
+  width = 1280, height = 900, fallback = true, hasTouch = width <= 844, deviceScaleFactor = 1,
+) => {
   const page = await browser.newPage({
     viewport: { width, height },
-    hasTouch: width <= 844,
+    hasTouch,
+    deviceScaleFactor,
     reducedMotion: "reduce",
   });
   activePage = page;
-  page.rhythmHasTouch = width <= 844;
+  page.rhythmHasTouch = hasTouch;
   page.setDefaultTimeout(15000);
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("response", (response) => {
@@ -993,6 +1001,197 @@ if (process.argv.includes('--settings-only')) {
   }
   process.exit(0);
 }
+if (process.argv.includes("--lane-motion-only")) {
+  try {
+    const page = await pageFor(844, 390);
+    await page.goto(`${base}/?open`);
+    await phase(page, "ready");
+    await page.getByLabel("소리·판정 시차", { exact: true }).click();
+    await page.locator("#rhythm-offset").focus();
+    await page.keyboard.press("Home");
+    assert.equal(await page.locator("#rhythm-offset").inputValue(), "-250");
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "연주 시작" }).tap();
+    await phase(page, "playing");
+    await page.locator("[data-note-id]").first().waitFor();
+    const movement = await page.evaluate(async () => {
+      // A native transform timeline should keep advancing without JS writing
+      // a new position into the DOM after a busy input handler.
+      const note = document.querySelector("[data-note-id]");
+      const motion = note.getAnimations()[0];
+      const inline = note.style.transform;
+      const before = motion.currentTime;
+      const start = performance.now();
+      while (performance.now() - start < 90) { /* simulate one busy frame */ }
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      return {
+        elapsed: motion.currentTime - before,
+        retained: note.getAnimations().includes(motion),
+        unchanged: note.style.transform === inline,
+      };
+    });
+    assert(movement.elapsed >= 80 && movement.retained && movement.unchanged, JSON.stringify(movement));
+    await page.getByRole("button", { name: "일시정지", exact: true }).tap();
+    await phase(page, "paused");
+    const alignment = () => page.evaluate(() => {
+      const node = document.querySelector("[data-note-id]");
+      const note = window.rhythmQA.chart().find(item => item.id === node.dataset.noteId);
+      const animation = node.getAnimations()[0];
+      const chartTime = window.rhythmQA.audio.at(-1).currentTime + 0.25;
+      const travel = animation.effect.getTiming().duration / 1000 - window.rhythmQA.hitWindow;
+      return {
+        playState: animation.playState, currentTime: animation.currentTime,
+        errorMs: Math.abs(animation.currentTime - (chartTime - note.time + travel) * 1000),
+      };
+    });
+    const paused = await alignment();
+    await frames(page);
+    assert.equal(paused.playState, "paused");
+    assert.equal((await alignment()).currentTime, paused.currentTime);
+    assert(paused.errorMs < 12, JSON.stringify(paused));
+    await page.getByRole("button", { name: "계속 연주", exact: true }).tap();
+    await phase(page, "playing");
+    await frames(page);
+    const resumed = await alignment();
+    assert.equal(resumed.playState, "running");
+    assert(resumed.errorMs < 40, JSON.stringify(resumed));
+    assert.deepEqual(errors, []);
+    console.log(JSON.stringify({ movement, paused, resumed }));
+  } finally {
+    await browser.close();
+    await new Promise(resolve => server.close(resolve));
+  }
+  process.exit(0);
+}
+if (process.argv.includes("--dense-touch-only")) {
+  try {
+    const [width, height] = process.argv.includes("--tablet") ? [1180, 820] : [844, 390];
+    const rate = Number(process.env.RHYTHM_QA_CPU_RATE || 4);
+    // Dedicated native-tempo check. Set a repeatable frame budget for the
+    // device running it, e.g. RHYTHM_QA_MAX_FRAME_P95_MS=100 for 4x Chrome.
+    const maxFrameP95 = Number(process.env.RHYTHM_QA_MAX_FRAME_P95_MS || 100);
+    assert(Number.isFinite(maxFrameP95) && maxFrameP95 > 0, "Frame budget must be a positive millisecond value");
+    const deviceScaleFactor = 2;
+    const page = await pageFor(width, height, true, true, deviceScaleFactor);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto(`${base}/?open`);
+    if (process.env.RHYTHM_QA_TAILWIND) {
+      await page.addScriptTag({ path: process.env.RHYTHM_QA_TAILWIND });
+    }
+    await phase(page, "ready");
+    await page.locator(".rhythm-difficulty button").nth(2).tap();
+    const session = await page.context().newCDPSession(page);
+    await session.send("Emulation.setCPUThrottlingRate", { rate });
+    await page.getByRole("button", { name: "연주 시작" }).tap();
+    await phase(page, "playing");
+    const measured = await page.evaluate(async () => {
+      const qa = window.rhythmQA;
+      const player = qa.audio.at(-1);
+      const notes = qa.chart(0, "hard");
+      // The hardest Arirang phrase crosses the 100-combo fever boundary.
+      const startIndex = 72;
+      const stopIndex = 107;
+      const frameIntervals = [], inputTimes = [], timerDelays = [], nextFrames = [], allNextFrames = [];
+      const touches = [];
+      const controls = new Map(Array.from(document.querySelectorAll("[data-hit-kind]"),
+        button => [button.dataset.hitKind + button.dataset.hand, button]));
+      let previousFrame;
+      let frameId;
+      let changedLaneNodes = 0;
+      const lane = document.querySelector(".rhythm-note-track");
+      const laneChanges = new MutationObserver(records => {
+        for (const record of records) changedLaneNodes += record.addedNodes.length + record.removedNodes.length;
+      });
+      const measureFrame = now => {
+        if (previousFrame !== undefined) frameIntervals.push(now - previousFrame);
+        previousFrame = now;
+        frameId = requestAnimationFrame(measureFrame);
+      };
+      let index = 0;
+      let highestFever = 0;
+      let compactEffects = false;
+      await new Promise(resolve => {
+        const hit = () => {
+          const note = notes[index];
+          const remainingMs = (note.time - player.currentTime) * 1000;
+          if (remainingMs > 1) {
+            setTimeout(hit, remainingMs);
+            return;
+          }
+          if (index === startIndex) {
+            laneChanges.observe(lane, { childList: true });
+            frameId = requestAnimationFrame(measureFrame);
+          }
+          const button = controls.get(note.kind + note.hand);
+          const started = performance.now();
+          qa.captureStrikeTime = true;
+          button.dispatchEvent(new PointerEvent("pointerdown", {
+            bubbles: true, cancelable: true, pointerType: "touch", button: 0,
+          }));
+          touches.push({ kind: note.kind, hand: note.hand, time: qa.strikeTime });
+          const inPhrase = index >= startIndex;
+          requestAnimationFrame(() => {
+            const latency = performance.now() - started;
+            allNextFrames.push(latency);
+            if (inPhrase) nextFrames.push(latency);
+          });
+          if (inPhrase) {
+            inputTimes.push(performance.now() - started);
+            timerDelays.push(Math.max(0, -remainingMs));
+            highestFever = Math.max(highestFever, Number(document.querySelector(".rhythm-game").dataset.fever));
+            compactEffects ||= Boolean(document.querySelector("[data-compact-effects]"));
+          }
+          if (index++ < stopIndex) setTimeout(hit, Math.max(0, (notes[index].time - player.currentTime) * 1000));
+          else requestAnimationFrame(() => requestAnimationFrame(resolve));
+        };
+        hit();
+      });
+      cancelAnimationFrame(frameId);
+      laneChanges.disconnect();
+      const p = (values, percentile) =>
+        [...values].sort((a, b) => a - b)[Math.ceil(values.length * percentile) - 1];
+      const scoreAtEnd = qa.replay(notes, touches, player.currentTime).score;
+      const flights = document.querySelectorAll(".rhythm-collected-note--compact");
+      const compactVisuals = flights.length === 1 && flights[0].style.visibility === "visible"
+        && Boolean(document.querySelector(".rhythm-hit-pulse[data-grade]"));
+      return {
+        song: "arirang", difficulty: "hard", firstNote: startIndex + 1, lastNote: stopIndex + 1,
+        startAudioSeconds: notes[startIndex].time, endAudioSeconds: notes[stopIndex].time,
+        frames: frameIntervals.length, frameP95Ms: p(frameIntervals, 0.95),
+        frameP99Ms: p(frameIntervals, 0.99), maxFrameMs: Math.max(...frameIntervals),
+        framesOver40ms: frameIntervals.filter(ms => ms > 40).length,
+        inputP95Ms: p(inputTimes, 0.95), inputToRafP95Ms: p(nextFrames, 0.95),
+        allInputToRafP95Ms: p(allNextFrames, 0.95),
+        timerDelayP95Ms: p(timerDelays, 0.95), highestFever, totalTaps: qa.hits.length,
+        compactEffects, compactVisuals, changedLaneNodes,
+        hasTouch: navigator.maxTouchPoints > 0,
+        expectedScore: scoreAtEnd.score, successfulNotes: scoreAtEnd.perfect + scoreAtEnd.good + scoreAtEnd.ok,
+        maxCombo: scoreAtEnd.maxCombo,
+        rankingCalls: qa.rankingCalls.length, writes: qa.saves.length,
+        reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
+      };
+    });
+    measured.profile = { width, height, deviceScaleFactor, cpuRate: rate, maxFrameP95, tailwind: Boolean(process.env.RHYTHM_QA_TAILWIND) };
+    measured.combo = await combo(page);
+    measured.score = await score(page);
+    console.log(JSON.stringify(measured, null, 2));
+    await fs.writeFile(path.join(evidence, "dense-touch-report.json"), JSON.stringify(measured, null, 2));
+    assert.equal(measured.totalTaps, measured.lastNote);
+    assert(measured.frameP95Ms <= maxFrameP95, `Dense frame p95 ${measured.frameP95Ms.toFixed(1)}ms exceeds ${maxFrameP95}ms`);
+    assert.equal(measured.reducedMotion, false);
+    assert.equal(measured.hasTouch, true);
+    if (measured.compactEffects) assert(measured.compactVisuals, "Compact strikes retain a visible score flight and a drum pulse");
+    assert.equal(measured.changedLaneNodes, 0, "Dense play reuses the same note nodes");
+    assert.equal(measured.score, measured.expectedScore, "Native-tempo touches match the server's scoring at their actual audio deadlines");
+    assert.equal(measured.rankingCalls + measured.writes, 0);
+    assert.deepEqual(errors, []);
+    assert.deepEqual(external, []);
+  } finally {
+    await browser.close();
+    await new Promise(resolve => server.close(resolve));
+  }
+  process.exit(0);
+}
 if (process.argv.includes("--performance-only")) {
   try {
     const page = await pageFor();
@@ -1522,12 +1721,12 @@ try {
     assert(
       await page.evaluate(
         () =>
-          window.rhythmQA.leftMallet !==
+          window.rhythmQA.leftMallet ===
             document.querySelector(".rhythm-mallet--left") &&
           window.rhythmQA.rightMallet ===
             document.querySelector(".rhythm-mallet--right"),
       ),
-      "same-hand retrigger replaces only that mallet animation",
+      "repeated strikes reuse both illustrated mallets",
     );
     for (const kind of ["center", "rim"])
       for (const hand of ["left", "right"]) {
@@ -1550,11 +1749,12 @@ try {
             after[hand === "left" ? "right" : "left"],
             ids[hand === "left" ? "right" : "left"],
           );
-          assert.equal(
+          assert(
             await page
               .locator(`.rhythm-mallet--${hand}`)
-              .evaluate((el) => getComputedStyle(el).animationName),
-            `rhythm-mallet-${kind}`,
+              .evaluate((el, kind) => el.getAnimations().some(animation =>
+                animation.id === `rhythm-mallet-${kind}`), kind),
+            `${hand} mallet plays the ${kind} strike`,
           );
         }
       }
@@ -1572,6 +1772,8 @@ try {
     // Physical pointer positions are transformed by the actual DOM and game inverse.
     const first = notes[0];
     await time(page, first.time);
+    await page.getByRole("button", { name: "일시정지", exact: true }).click();
+    await phase(page, "paused");
     const alignment = await page.evaluate((id) => {
       const note = document
           .querySelector(`[data-note-id="${id}"]`)
@@ -1585,6 +1787,8 @@ try {
       );
     }, first.id);
     assert(alignment < 1, "chart time and visible judgement flower align");
+    await page.getByRole("button", { name: "계속 연주", exact: true }).click();
+    await phase(page, "playing");
     const before = await hitCount(page);
     const outside = await tap(page, 0.02, 0.02);
     assert.equal(await hitCount(page), before, "outside circular drum ignored");
@@ -1631,8 +1835,8 @@ try {
     assert.match(perfectStyle.font, /Dokdo/);
     await localFontCheck(page, ".rhythm-feedback", /Dokdo/);
     assert.equal(
-      await page.locator(".rhythm-hit-effect--perfect .rhythm-spark").count(),
-      12,
+      await page.locator(".rhythm-hit-effect--perfect .rhythm-sparks").getAttribute("data-sparks"),
+      "12",
     );
     assert.equal(
       await page
@@ -1694,8 +1898,8 @@ try {
     const goodStyle = await feedbackStyle(page);
     assert.match(goodStyle.font, /Dokdo/);
     assert.equal(
-      await page.locator(".rhythm-hit-effect--good .rhythm-spark").count(),
-      6,
+      await page.locator(".rhythm-hit-effect--good .rhythm-sparks").getAttribute("data-sparks"),
+      "6",
     );
     await collectCheck(page, secondTarget, "good");
     const third = notes[2];
@@ -1714,8 +1918,8 @@ try {
       `${label}: perfect > good > ok brush size: ${JSON.stringify({ perfectStyle, goodStyle, okStyle })}`,
     );
     assert.equal(
-      await page.locator(".rhythm-hit-effect--ok .rhythm-spark").count(),
-      3,
+      await page.locator(".rhythm-hit-effect--ok .rhythm-sparks").getAttribute("data-sparks"),
+      "3",
     );
     assert.equal(await combo(page), 3);
     await collectCheck(page, thirdTarget, "ok");

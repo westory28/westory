@@ -424,6 +424,7 @@
   flex-direction: column;
 }
 .rhythm-scorebar {
+  contain: size layout;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -495,6 +496,7 @@
   margin: 0 32px;
 }
 .rhythm-lanes {
+  contain: strict;
   position: relative;
   isolation: isolate;
   height: calc(100% - 24px);
@@ -718,7 +720,7 @@
   pointer-events: none;
   animation: rhythm-feedback 480ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
 }
-.rhythm-feedback--perfect {
+.rhythm-feedback:where([data-grade="perfect"]) {
   color: var(--rh-red);
 }
 .rhythm-combo-cheer {
@@ -753,6 +755,7 @@
   font-size: 11px;
 }
 .rhythm-hit-effects {
+  contain: size layout;
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -768,6 +771,35 @@
 }
 .rhythm-hit-effect--rim {
   color: var(--rh-blue);
+}
+.rhythm-hit-pulse {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  margin: -24px;
+  border: 4px solid var(--rh-green);
+  border-radius: 50%;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+.rhythm-hit-pulse[data-grade="perfect"] { border-color: var(--rh-gold); }
+.rhythm-hit-pulse[data-grade="ok"] { border-color: var(--rh-blue); }
+.rhythm-hit-pulse[data-grade="miss"] { border-color: var(--rh-red); }
+.rhythm-hit-pulse svg { display: none; }
+.rhythm-hit-pulse[data-grade="perfect"] svg {
+  display: block;
+  position: absolute;
+  inset: -35%;
+  width: 170%;
+  height: 170%;
+  color: var(--rh-gold);
+}
+.rhythm-game[data-compact-effects] .rhythm-feedback {
+  filter: none;
+  text-shadow: 1px 2px 0 var(--rh-paper);
+}
+.rhythm-game[data-compact-effects] .rhythm-fever-aura {
+  animation: none;
 }
 .rhythm-shockwave {
   position: absolute;
@@ -792,23 +824,12 @@
     -2px -2px 0 var(--rh-paper);
   animation: rhythm-hit-word 480ms ease-out both;
 }
-.rhythm-spark {
+.rhythm-sparks {
   position: absolute;
-  left: -5px;
-  top: -5px;
-  width: 10px;
-  height: 10px;
-  background: currentColor;
-  clip-path: polygon(
-    50% 0,
-    64% 34%,
-    100% 50%,
-    64% 64%,
-    50% 100%,
-    34% 64%,
-    0 50%,
-    34% 34%
-  );
+  left: -80px;
+  top: -80px;
+  width: 160px;
+  height: 160px;
   animation: rhythm-spark 420ms ease-out both;
 }
 .rhythm-pause {
@@ -1347,11 +1368,11 @@
 }
 @keyframes rhythm-spark {
   from {
-    transform: rotate(var(--angle)) translateX(4px) scale(0.5);
+    transform: scale(0.15);
     opacity: 1;
   }
   to {
-    transform: rotate(var(--angle)) translateX(var(--travel)) scale(0.1);
+    transform: scale(1);
     opacity: 0;
   }
 }
@@ -1473,25 +1494,25 @@
   font-family: "Rhythm Yeon Sung", serif;
   line-height: 1.2;
 }
-.rhythm-feedback--perfect {
+.rhythm-feedback:where([data-grade="perfect"]) {
   color: #facc15;
   font-size: clamp(44px, 6.5cqw, 76px);
   filter: drop-shadow(0 3px 0 #8d5200) drop-shadow(0 0 6px #e5b51e88);
 }
-.rhythm-feedback--good {
+.rhythm-feedback:where([data-grade="good"]) {
   color: #fff8df;
   font-size: clamp(38px, 5.5cqw, 68px);
 }
-.rhythm-feedback--ok {
+.rhythm-feedback:where([data-grade="ok"]) {
   color: var(--rh-blue);
   font-size: clamp(24px, 3cqw, 36px);
 }
-.rhythm-feedback--miss {
+.rhythm-feedback:where([data-grade="miss"]) {
   color: var(--rh-red);
   font-size: clamp(32px, 4.5cqw, 54px);
 }
-.rhythm-feedback--perfect,
-.rhythm-feedback--good {
+.rhythm-feedback:where([data-grade="perfect"]),
+.rhythm-feedback:where([data-grade="good"]) {
   left: 22%;
   top: 3%;
   line-height: 1.1;
@@ -1503,8 +1524,8 @@
     4px 5px 0 var(--rh-paper),
     5px 6px 0 var(--rh-green);
 }
-.rhythm-feedback--perfect::before,
-.rhythm-feedback--good::before {
+.rhythm-feedback:where([data-grade="perfect"])::before,
+.rhythm-feedback:where([data-grade="good"])::before {
   content: "✦";
   position: absolute;
   left: -0.5em;
@@ -1512,8 +1533,8 @@
   font-size: 0.55em;
   color: var(--rh-gold);
 }
-.rhythm-feedback--perfect::after,
-.rhythm-feedback--good::after {
+.rhythm-feedback:where([data-grade="perfect"])::after,
+.rhythm-feedback:where([data-grade="good"])::after {
   content: "✦";
   position: absolute;
   right: -0.5em;
@@ -1647,21 +1668,15 @@
 }
 .rhythm-mallet--left {
   transform-origin: 25% 81%;
-  --mallet-turn: -12deg;
-  --mallet-aim: -22deg;
 }
 .rhythm-mallet--right {
   transform-origin: 72% 79%;
-  --mallet-turn: 12deg;
-  --mallet-aim: 22deg;
 }
-.rhythm-mallet--striking {
-  animation: rhythm-mallet-center 220ms ease-out both;
-}
-.rhythm-mallet--striking[data-kind="rim"] {
-  animation-name: rhythm-mallet-rim;
+.rhythm-game--playing :is(.rhythm-stage-mascot, .rhythm-mallet, .rhythm-drum-visual) {
+  will-change: transform;
 }
 .rhythm-collection-layer {
+  contain: strict;
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -1678,6 +1693,14 @@
 .rhythm-collected-note img {
   width: 100%;
   height: 100%;
+}
+.rhythm-collected-note--compact {
+  visibility: hidden;
+  animation-play-state: paused;
+}
+.rhythm-collected-note--compact[data-kind="rim"] img:first-child,
+.rhythm-collected-note--compact:not([data-kind="rim"]) img:nth-child(2) {
+  display: none;
 }
 .rhythm-collected-note strong {
   position: absolute;
@@ -1734,37 +1757,6 @@
     color: var(--rh-red);
   }
 }
-@keyframes rhythm-mallet-center {
-  0%,
-  100% {
-    transform: rotate(0) translateY(0);
-  }
-  22% {
-    transform: rotate(var(--mallet-turn)) translateY(-8%);
-  }
-  48% {
-    transform: rotate(0) translateY(13%);
-  }
-  70% {
-    transform: rotate(var(--mallet-turn)) translateY(-4%);
-  }
-}
-@keyframes rhythm-mallet-rim {
-  0%,
-  100% {
-    transform: rotate(0) translateY(0);
-  }
-  22% {
-    transform: translateY(-36%) rotate(var(--mallet-aim));
-  }
-  48% {
-    transform: translateY(-28%) rotate(var(--mallet-aim));
-  }
-  70% {
-    transform: translateY(-32%) rotate(var(--mallet-aim));
-  }
-}
-
 /* The game uses local, open-license brush lettering; portal controls keep their type. */
 .rhythm-song-panel legend,
 .rhythm-result h2,
