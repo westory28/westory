@@ -42,7 +42,7 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
   openManager = false,
   onManagerOpened,
 }) => {
-  const { config } = useAuth();
+  const { config, configReady } = useAuth();
   const navigate = useNavigate();
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,6 +94,9 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
   }, [openManager, onManagerOpened]);
 
   useEffect(() => {
+    // While the semester settings are still on their way, wait for them
+    // instead of listening to the fallback semester first.
+    if (!config && !configReady) return undefined;
     const { year, semester } = getYearSemester(config);
 
     const path = `years/${year}/semesters/${semester}/notices`;
@@ -134,7 +137,7 @@ const TeacherNoticeBoard: React.FC<TeacherNoticeBoardProps> = ({
     );
 
     return () => unsubscribe();
-  }, [config]);
+  }, [config, configReady]);
 
   useEffect(() => {
     setActiveIndex(0);
