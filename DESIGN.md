@@ -524,7 +524,11 @@
 
 대시보드 알림장은 로딩·빈 상태에도 이미지와 조작 영역의 자리를 확보한다. 학생 페이지 선택 버튼은 한 행 안에서 가로로 스크롤한다. 1119px 이하 학사 일정 목록은 기존 최대 높이인 336px을 로딩·빈 상태에도 유지해 인접 패널과 로고의 위치가 바뀌지 않게 한다. 모바일 알림장 이미지의 기존 원본 비율은 유지한다.
 
-사용자 명시 지시로 `prefers-reduced-motion`에서도 이 로딩의 튀기·색 채우기는 작동한다. 숨긴 탭·화면 밖에서는 CSS 애니메이션을 멈추고 복귀 시 이어 간다. 매 프레임 React 갱신, 추가 서버 조회·쓰기·폴링, 외부 AI 호출은 없다. 게임 전용 로딩과 실제 업로드 진행률·오류 처리는 유지한다. 이 계약은 아래 지구본 로딩 및 로딩 로고 미표시 계약보다 우선한다.
+로딩 표시는 동작 줄이기의 예외다(사용자 명시 지시 2026-11-10, 재확인 2026-11-24). 공통 PageLoading·InlineLoading·LoadingOverlay, `scope="screen"` 로딩, React가 시작되기 전 `index.html`의 첫 화면 로고는 OS의 `prefers-reduced-motion: reduce`와 화면별 모션 끄기에서도 글자 튀기와 색 채우기를 계속 재생한다. 교사 위스피의 `.wis-stocks *`(동작 줄이기)나 대문의 `.public-entry[data-motion="off"] *`(모션 끄기)처럼 하위 요소의 애니메이션을 한꺼번에 끄는 규칙 안에서도 멈추지 않도록 `loadingState.css`가 표시 중인 로고의 애니메이션 값을 직접 지정한다. 이 예외는 로딩 로고에만 적용하고 다른 요소의 동작 줄이기 처리는 그대로 둔다.
+
+첫 화면 로고는 공통 로고와 같은 일곱 글자 클립, 1400ms 튀기, 110ms 시차, 30초 색 채우기를 사용한다. 첫 전체 화면 로딩과 같은 위치·크기(폭 288px, 좌우 여백 16px)로 표시하며 문구는 넣지 않는다. React의 첫 커밋이 바로 로딩을 표시하면 그 로고는 첫 화면 로고의 튀기 순서와 색 채움을 이어받고, 이후의 로딩은 기존처럼 처음부터 시작한다. `index.html`과 `LoadingLogo.tsx`·`loadingState.css`의 글자 클립·키프레임이 달라지면 `scripts/verify-loading-state-browser.mjs`가 실패한다.
+
+숨긴 탭·화면 밖에서는 CSS 애니메이션을 멈추고 복귀 시 이어 간다. 매 프레임 React 갱신, 추가 서버 조회·쓰기·폴링, 외부 AI 호출은 없다. 게임 전용 로딩과 실제 업로드 진행률·오류 처리는 유지한다. 이 계약은 아래 지구본 로딩 및 로딩 로고 미표시 계약보다 우선한다.
 
 ## 제공 로고의 사이트 전체 적용 (2026-10-25)
 
@@ -1324,7 +1328,7 @@ Motion supports orientation only. Do not use motion to decorate routine admin su
 Rules:
 
 - Animate only transform, opacity, or filter for new motion.
-- Respect `prefers-reduced-motion: reduce`.
+- Respect `prefers-reduced-motion: reduce`. The loading indicator (the `index.html` boot logo and the shared PageLoading/InlineLoading/LoadingOverlay logo) is exempt by explicit owner decision and always keeps its bounce and colour fill; see "글자별 로고 로딩".
 - Student reward/recognition motion can be more expressive, but it must not block learning flow.
 
 ## 7. Depth

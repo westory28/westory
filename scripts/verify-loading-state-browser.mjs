@@ -49,9 +49,12 @@ const scope = params.get('scope') || undefined;
 const root = createRoot(document.getElementById('root'));
 let key = 0;
 const component = mode === 'inline' ? InlineLoading : mode === 'overlay' ? LoadingOverlay : PageLoading;
+// Ancestors whose page-wide rules silence every descendant animation.
+const host = params.get('host');
+const hosted = (content) => host === 'wis-stocks' ? React.createElement('div', {className:'wis-stocks'}, content) : host === 'entry-off' ? React.createElement('div', {className:'public-entry', 'data-motion':'off'}, content) : content;
 const render = (node) => flushSync(() => {
  const content = React.createElement(LoadingProvider, null,
-   React.createElement('section', {id:'source-container', style:params.has('nested') ? {transform:'translateZ(0)', filter:'opacity(1)', overflow:'hidden', width:240, height:120} : {width:'calc(100% - 32px)',margin:'32px auto',position:'relative',minHeight:mode === 'overlay' ? 240 : undefined}}, node));
+   hosted(React.createElement('section', {id:'source-container', style:params.has('nested') ? {transform:'translateZ(0)', filter:'opacity(1)', overflow:'hidden', width:240, height:120} : {width:'calc(100% - 32px)',margin:'32px auto',position:'relative',minHeight:mode === 'overlay' ? 240 : undefined}}, node)));
  root.render(params.has('strict') ? React.createElement(React.StrictMode, null, content) : content);
 });
 const loading = () => mode === 'multiple' ? React.createElement(React.Fragment, null, React.createElement(InlineLoading, {scope,key:'a'+key}), React.createElement(InlineLoading, {scope,key:'b'+key})) : React.createElement(component, {scope,key, message:'OLD MESSAGE', detail:'OLD DETAIL', warning:'OLD WARNING'});
@@ -95,8 +98,68 @@ for (const env of ["production", "development"]) {
     if (file.path.endsWith(".css")) css = file.text;
   }
 }
+// The boot logo in index.html is static markup shown before React mounts. It
+// repeats the shared logo's geometry and motion, so keep both copies identical.
+const read = async (file) =>
+  (await fs.readFile(path.join(root, file), "utf8")).replace(/\r\n/g, "\n");
+const indexHtml = await read("index.html");
+const bootStyle = indexHtml.match(/<style>(?:(?!<\/style>)[\s\S])*\.ws-boot[\s\S]*?<\/style>/)?.[0];
+const bootMarkup = indexHtml.match(/<div id="root">([\s\S]*?)<\/div>\s*<noscript>/)?.[1];
+assert.ok(bootStyle && bootMarkup, "index.html provides the boot logo");
+const logoSource = await read("src/components/common/LoadingLogo.tsx");
+const boundarySource = logoSource.slice(
+  logoSource.indexOf("const BOUNDARIES = ["),
+  logoSource.indexOf("];", logoSource.indexOf("const BOUNDARIES = [")),
+);
+const boundaries = [...boundarySource.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+assert.deepEqual(
+  [...bootMarkup.matchAll(/<polygon points="([^"]+)"/g)].map((m) => m[1]),
+  boundaries
+    .slice(0, -1)
+    .map((left, i) => `${left} ${boundaries[i + 1].split(" ").reverse().join(" ")}`),
+  "boot logo uses the shared seven letter clips",
+);
+assert.deepEqual(
+  [...bootMarkup.matchAll(/<g class="ws-boot__letter"(?: style="animation-delay: (\d+)ms")?>/g)].map((m) => Number(m[1] || 0)),
+  [0, 110, 220, 330, 440, 550, 660],
+  "boot letters keep the shared 110ms stagger",
+);
+const keyframes = (text, name) =>
+  text
+    .slice(text.indexOf("@keyframes " + name + " "))
+    .match(/@keyframes [\w-]+\s*\{((?:[^{}]*\{[^{}]*\})*)\s*\}/)[1]
+    .replace(/\s+/g, "");
+const loaderSource = await read("src/components/common/loadingState.css");
+for (const name of ["bounce", "fill"])
+  assert.equal(
+    keyframes(bootStyle, "ws-boot-" + name),
+    keyframes(loaderSource, "ws-loading-" + name),
+    "boot " + name + " keyframes match the shared loading logo",
+  );
+assert.match(bootStyle, /animation:\s*ws-boot-bounce 1400ms ease-in-out infinite;/);
+assert.match(bootStyle, /animation:\s*ws-boot-fill 30000ms linear both;/);
+// With `handoff`, the test starts the React fixture over the boot logo itself.
+const bootPage = (handoff) =>
+  '<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{box-sizing:border-box}body{margin:0}</style>' +
+  bootStyle +
+  (handoff ? "<style>" + css + "</style>" : "") +
+  '<div id="root">' +
+  bootMarkup.replaceAll(
+    "/src/assets/brand/westory-wordmark.webp",
+    [...files.keys()].find((name) => name.endsWith(".webp")),
+  ) +
+  "</div>" +
+  (handoff
+    ? '<script>window.startApp=()=>{const app=document.createElement("script");app.type="module";app.src="/fixture.js";document.body.append(app)}</script>'
+    : "") +
+  "</html>";
 const server = http.createServer((req, res) => {
   const pathname = new URL(req.url, "http://localhost").pathname;
+  if (pathname === "/boot") {
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.end(bootPage(req.url.includes("handoff")));
+    return;
+  }
   if (files.has(pathname)) {
     res.setHeader(
       "Content-Type",
@@ -113,7 +176,9 @@ const server = http.createServer((req, res) => {
   res.end(
     '<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{box-sizing:border-box}body{margin:0;font-family:Noto Sans KR,sans-serif;background:#f9fafb}.z-\\[90\\]{z-index:90}nav{padding:16px;background:#dbeafe}.scoped-main{padding:16px}input{max-width:100%;min-width:0}button,input{min-height:44px}.scoped-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin:20px 0}.scoped-area{min-height:240px;background:#fef3c7}.scoped-area article{padding:16px}.scoped-area label{display:block}.scoped-area input{display:block}#outside-scroll{height:64px;overflow:auto;background:#e2e8f0;margin-top:12px}#outside-scroll>div{height:500px}#scoped-modal{width:min(600px,calc(100vw - 32px));padding:16px}#scoped-modal header{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}.long-space{height:1500px}@media(max-width:699px){.scoped-grid{grid-template-columns:1fr;gap:16px}}</style><style>' +
       css +
-      '</style><div id="root"></div><script type="module" src="' +
+      // Page-wide motion resets as written in TeacherWisStocks.css and
+      // public-entry.css, placed after the loader CSS so they win every tie.
+      '</style><style>@media (prefers-reduced-motion:reduce){.wis-stocks *,.wis-stocks *::before,.wis-stocks *::after{scroll-behavior:auto!important;transition-duration:0s!important;animation-duration:0s!important}}.public-entry[data-motion="off"] *,.public-entry[data-motion="off"] *::before,.public-entry[data-motion="off"] *::after{animation:none!important;transition:none!important}</style><div id="root"></div><script type="module" src="' +
       (req.url.includes("strict") ? "/fixture-dev.js" : "/fixture.js") +
       '"></script></html>',
   );
@@ -847,6 +912,183 @@ async function checkScopedContainers(browser, directory, result) {
   await page.close();
 }
 
+async function checkBootLogo(browser, directory, result) {
+  for (const motion of ["no-preference", "reduce"]) {
+    const boot = await makePage(browser, "normal", { reducedMotion: motion });
+    const page = boot.page;
+    for (const width of [390, 768, 1280]) {
+      const label = `boot ${motion} ${width}`;
+      await page.setViewportSize({ width, height: 900 });
+      const fetched = boot.requests.length;
+      await page.goto(url + "/boot");
+      assert.equal(
+        await page.getByRole("status", { name: "처리 중" }).count(),
+        1,
+      );
+      assert.equal(
+        (await page.locator("#root").textContent()).replace(/\s+/g, ""),
+        "",
+        label + ": no visible text",
+      );
+      assert.equal(
+        boot.requests.slice(fetched).filter((r) => r.type === "image").length,
+        1,
+        label + ": one shared WebP fetch",
+      );
+      // Document order: the fill clip in <defs>, then the seven letters.
+      assert.deepEqual(
+        await page.evaluate(() =>
+          [
+            ...document.querySelectorAll(".ws-boot__fill, .ws-boot__letter"),
+          ].map((node) =>
+            node.getAnimations().map((animation) => {
+              const timing = animation.effect.getComputedTiming();
+              return [
+                animation.animationName,
+                animation.playState,
+                timing.duration,
+                String(timing.iterations),
+              ].join(" ");
+            }),
+          ),
+        ),
+        [
+          ["ws-boot-fill running 30000 1"],
+          ...Array.from({ length: 7 }, () => [
+            "ws-boot-bounce running 1400 Infinity",
+          ]),
+        ],
+        label + ": CSS bounce and fill run",
+      );
+      const frames = [];
+      for (let i = 0; i < 7; i++) {
+        frames.push(
+          await page.evaluate(() => ({
+            letters: [...document.querySelectorAll(".ws-boot__letter")].map(
+              (node) => getComputedStyle(node).transform,
+            ),
+            fill: new DOMMatrixReadOnly(
+              getComputedStyle(document.querySelector(".ws-boot__fill"))
+                .transform,
+            ).a,
+          })),
+        );
+        if (i === 1 || i === 4)
+          await page.screenshot({
+            path: path.join(
+              directory,
+              `boot-${motion}-${width}-${i === 1 ? "a" : "b"}.png`,
+            ),
+          });
+        await page.waitForTimeout(180);
+      }
+      for (let i = 0; i < 7; i++)
+        assert.ok(
+          new Set(frames.map((frame) => frame.letters[i])).size > 1,
+          label + ": letter " + i + " bounces",
+        );
+      assert.ok(
+        frames.some((frame) => new Set(frame.letters).size > 1),
+        label + ": staggered glyphs",
+      );
+      assert.ok(
+        frames[0].fill < 0.5 && frames.at(-1).fill > frames[0].fill,
+        label + ": colour fills from the left",
+      );
+      const box = await page.locator(".ws-boot__logo").boundingBox();
+      assert.ok(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+        label + ": no horizontal overflow",
+      );
+      // React's first full-screen loader takes over at the same place and size.
+      await page.goto(url + "?scope=screen");
+      await waitRunning(page);
+      const next = await page.locator(".ws-loading__logo").boundingBox();
+      for (const key of ["x", "y", "width", "height"])
+        assert.ok(
+          Math.abs(next[key] - box[key]) < 1,
+          label + ": hand-off keeps the logo " + key,
+        );
+    }
+    // React's first loader continues the boot logo instead of restarting it.
+    const active = (selector) =>
+      page.evaluate((selector) => {
+        const timing = (node) => {
+          const value = node.getAnimations()[0].effect.getComputedTiming();
+          return (
+            ((value.currentIteration || 0) + (value.progress || 0)) *
+            value.duration
+          );
+        };
+        const fill = document.querySelector(selector);
+        return {
+          fill: timing(fill),
+          scale: new DOMMatrixReadOnly(getComputedStyle(fill).transform).a,
+          letters: [
+            ...fill.closest("svg").querySelectorAll(":scope > g"),
+          ].map(timing),
+        };
+      }, selector);
+    await page.goto(url + "/boot?scope=screen&handoff=1");
+    await page.waitForTimeout(900);
+    const before = await active(".ws-boot__fill");
+    await page.evaluate(() => window.startApp());
+    await waitRunning(page);
+    const after = await active("[data-loading-fill]");
+    assert.equal(await page.locator(".ws-boot").count(), 0);
+    assert.ok(
+      before.fill >= 800 &&
+        after.fill >= before.fill &&
+        after.fill < before.fill + 3000 &&
+        after.scale >= before.scale,
+      `boot ${motion}: colour continues across the hand-off`,
+    );
+    assert.ok(
+      after.letters.every(
+        (time, i) => Math.abs(time - (after.fill - i * 110)) < 60,
+      ),
+      `boot ${motion}: letters keep their bounce phase across the hand-off`,
+    );
+    assert.deepEqual(boot.errors, []);
+    await page.close();
+  }
+  result.checks.push(
+    "index.html boot logo at 390/768/1280px: seven letters bounce and colour fills in no-preference and reduced motion, one WebP fetch, same box as the first screen loader, which continues its bounce phase and colour",
+  );
+}
+
+async function checkMotionResets(browser, result) {
+  for (const [host, motion] of [
+    ["wis-stocks", "reduce"],
+    ["entry-off", "no-preference"],
+    ["entry-off", "reduce"],
+  ])
+    for (const mode of ["page", "inline", "overlay"]) {
+      const hosted = await makePage(browser, "normal", {
+        reducedMotion: motion,
+      });
+      const page = hosted.page;
+      await page.goto(`${url}?mode=${mode}&host=${host}`);
+      await waitRunning(page);
+      result.motion.push(await assertMotion(page, `${host} ${motion} ${mode}`));
+      if (mode === "inline") {
+        await page.evaluate(() => window.loadingQA.setHidden(true));
+        await assertPaused(page, host + " hidden");
+        await page.evaluate(() => window.loadingQA.setHidden(false));
+        await waitRunning(page);
+        // The exit copy must stay a frozen 180/240ms fade, not a bouncing logo.
+        await checkExit(page);
+      }
+      assert.deepEqual(hosted.errors, []);
+      await page.close();
+    }
+  result.checks.push(
+    "Page/inline/overlay inside page-wide motion resets (.wis-stocks * under reduced motion, .public-entry[data-motion=off] *): bounce, stagger and fill keep running; hidden pause and exit copy unchanged",
+  );
+}
+
 async function runEngine(engine) {
   const type = ["msedge", "chrome"].includes(engine) ? "chromium" : engine;
   const browser = await playwright[type].launch({
@@ -867,6 +1109,8 @@ async function runEngine(engine) {
   };
   try {
     await checkScopedContainers(browser, directory, result);
+    await checkBootLogo(browser, directory, result);
+    await checkMotionResets(browser, result);
     const staged = await makePage(browser);
     await staged.page.goto(url);
     await staged.page.evaluate(() => window.loadingStage(0));

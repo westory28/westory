@@ -1,4 +1,4 @@
-import React, { useId, useLayoutEffect, useRef } from "react";
+import React, { useId, useLayoutEffect, useRef, useState } from "react";
 import wordmarkUrl from "../../assets/brand/westory-wordmark.webp";
 
 // Follow the transparent seams in the supplied 1024×237 artwork, including
@@ -179,9 +179,36 @@ function finishLogo(svg: SVGSVGElement, mountedAt: number) {
   });
 }
 
+// React's first commit replaces the index.html boot logo. A loader shown by
+// that same commit continues its bounce and colour instead of restarting; the
+// removal record arrives after the commit and ends the hand-off.
+let bootStartedAt: number | null = null;
+try {
+  const boot = document.querySelector(".ws-boot");
+  const time = boot
+    ?.querySelector<SVGRectElement>(".ws-boot__fill")
+    ?.getAnimations?.()[0]?.currentTime;
+  if (boot?.parentNode && typeof time === "number") {
+    const observer = new MutationObserver(() => {
+      if (boot.isConnected) return;
+      bootStartedAt = null;
+      observer.disconnect();
+    });
+    observer.observe(boot.parentNode, { childList: true });
+    bootStartedAt = performance.now() - time;
+  }
+} catch {
+  // No boot logo to continue (tests without a DOM, older engines).
+}
+const bootLogoElapsed = () =>
+  bootStartedAt === null
+    ? 0
+    : Math.max(0, Math.round(performance.now() - bootStartedAt));
+
 export default function LoadingLogo() {
   const id = `loading-logo-${useId().replace(/:/g, "")}`;
   const root = useRef<SVGSVGElement>(null);
+  const [elapsed] = useState(bootLogoElapsed);
   useLayoutEffect(() => {
     const svg = root.current;
     if (!svg) return;
@@ -245,6 +272,14 @@ export default function LoadingLogo() {
           <rect
             data-loading-fill=""
             className="ws-loading__fill"
+            style={
+              elapsed
+                ? ({
+                    animationDelay: `${-elapsed}ms`,
+                    "--ws-loading-fill-delay": `${-elapsed}ms`,
+                  } as React.CSSProperties)
+                : undefined
+            }
             x="0"
             y="0"
             width="1024"
@@ -262,7 +297,13 @@ export default function LoadingLogo() {
           key={index}
           data-loading-letter={index}
           className="ws-loading__letter"
-          style={{ animationDelay: `${index * 110}ms` }}
+          style={
+            {
+              animationDelay: `${index * 110 - elapsed}ms`,
+              // Read by the guarded rule that outranks page-wide motion resets.
+              "--ws-loading-letter-delay": `${index * 110 - elapsed}ms`,
+            } as React.CSSProperties
+          }
         >
           <g clipPath={`url(#${id}-${index})`}>
             <image

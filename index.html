@@ -38,12 +38,131 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
     />
+    <style>
+      /* Boot logo until React mounts. Same letter clips, bounce and colour fill as
+         the shared loading logo (LoadingLogo.tsx, loadingState.css); by explicit
+         owner decision it also keeps moving under reduced motion. */
+      .ws-boot {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: #f9fafb;
+      }
+      .ws-boot__logo {
+        display: block;
+        width: 288px;
+        max-width: calc(100% - 32px);
+        height: auto;
+        overflow: visible;
+      }
+      .ws-boot__ghost {
+        opacity: 0.18;
+        filter: grayscale(1);
+      }
+      .ws-boot__letter {
+        animation: ws-boot-bounce 1400ms ease-in-out infinite;
+      }
+      .ws-boot__fill {
+        transform-origin: 0 0;
+        animation: ws-boot-fill 30000ms linear both;
+      }
+      @keyframes ws-boot-bounce {
+        0%,
+        45%,
+        100% {
+          transform: translateY(0);
+        }
+        16% {
+          transform: translateY(-28px);
+        }
+        30% {
+          transform: translateY(5px);
+        }
+        38% {
+          transform: translateY(-5px);
+        }
+      }
+      @keyframes ws-boot-fill {
+        0% {
+          transform: scaleX(0);
+        }
+        5% {
+          transform: scaleX(0.32);
+        }
+        15% {
+          transform: scaleX(0.58);
+        }
+        35% {
+          transform: scaleX(0.78);
+        }
+        65% {
+          transform: scaleX(0.89);
+        }
+        100% {
+          transform: scaleX(0.94);
+        }
+      }
+    </style>
   </head>
 
   <body>
     <div id="root">
-      <div role="status" aria-label="처리 중" aria-busy="true" style="position: fixed; inset: 0; display: grid; place-items: center; background: #f9fafb">
-        <img src="/src/assets/brand/westory-wordmark.webp" alt="" width="288" height="67" style="max-width: 75vw; height: auto" />
+      <div class="ws-boot" role="status" aria-label="처리 중" aria-busy="true">
+        <svg class="ws-boot__logo" viewBox="0 -40 1024 293" aria-hidden="true" focusable="false">
+          <defs>
+            <clipPath id="ws-boot-fill"><rect class="ws-boot__fill" x="0" y="0" width="1024" height="237" /></clipPath>
+            <clipPath id="ws-boot-0"><polygon points="0,0 0,237 245,237 245,210 246,209 246,191 247,190 250,125 254,118 257,107 265,91 272,82 296,34 296,0" /></clipPath>
+            <clipPath id="ws-boot-1"><polygon points="296,0 296,34 272,82 265,91 257,107 254,118 250,125 247,190 246,191 246,209 245,210 245,237 402,237 402,173 400,170 400,158 402,154 402,114 403,113 403,105 402,104 402,0" /></clipPath>
+            <clipPath id="ws-boot-2"><polygon points="402,0 402,104 403,105 403,113 402,114 402,154 400,158 400,170 402,173 402,237 526,237 526,217 525,216 525,204 524,203 523,177 522,176 522,144 519,134 519,123 518,122 518,113 517,112 516,98 515,97 515,90 511,76 511,69 513,65 513,0" /></clipPath>
+            <clipPath id="ws-boot-3"><polygon points="513,0 513,65 511,69 511,76 515,90 515,97 516,98 517,112 518,113 518,122 519,123 519,134 522,144 522,176 523,177 524,203 525,204 525,216 526,217 526,237 618,237 618,222 614,202 614,180 617,174 617,165 614,158 606,151 605,146 605,117 606,116 607,105 610,96 615,86 620,79 620,0" /></clipPath>
+            <clipPath id="ws-boot-4"><polygon points="620,0 620,79 615,86 610,96 607,105 606,116 605,117 605,146 606,151 614,158 617,165 617,174 614,180 614,202 618,222 618,237 762,237 762,137 763,136 764,121 763,120 763,109 762,108 762,0" /></clipPath>
+            <clipPath id="ws-boot-5"><polygon points="762,0 762,108 763,109 763,120 764,121 763,136 762,137 762,237 851,237 851,226 853,218 857,181 860,166 864,129 866,121 866,114 867,113 868,68 870,64 870,46 871,45 871,28 872,27 872,0" /></clipPath>
+            <clipPath id="ws-boot-6"><polygon points="872,0 872,27 871,28 871,45 870,46 870,64 868,68 867,113 866,114 866,121 864,129 860,166 857,181 853,218 851,226 851,237 1024,237 1024,0" /></clipPath>
+          </defs>
+          <g class="ws-boot__letter">
+            <g clip-path="url(#ws-boot-0)">
+              <image class="ws-boot__ghost" href="/src/assets/brand/westory-wordmark.webp" width="1024" height="237" />
+              <g clip-path="url(#ws-boot-fill)"><image href="/src/assets/brand/westory-wordmark.webp" width="1024" height="237" /></g>
+            </g>
+          </g>
+          <g class="ws-boot__letter" style="animation-delay: 110ms">
+            <g clip-path="url(#ws-boot-1)">
+              <image class="ws-boot__ghost" href="/src/assets/brand/westory-wordmark.webp" width="1024" height="237" />
+              <g clip-path="url(#ws-boot-fill)"><image href="/src/assets/brand/westory-wordmark.webp" width="1024" height="237" /></g>
+            </g>
+          </g>
+          <g class="ws-boot__letter" style="animation-delay: 220ms">
+            <g clip-path="url(#ws-boot-2)">
+              <image class="ws-boot__ghost" href="/src/assets/brand/westory-wordmark.webp" width="1024" height="237" />
+              <g clip-path="url(#ws-boot-fill)"><image href="/src/assets/brand/westory-wordmark.webp" width="1024" height="237" /></g>
+            </g>
+          </g>
+          <g class="ws-boot__letter" style="animation-delay: 330ms">
+            <g clip-path="url(#ws-boot-3)">
+              <image class="ws-boot__ghost" href="/src/assets/brand/westory-wordmark.webp" width="1024" height="237" />
+              <g clip-path="url(#ws-boot-fill)"><image href="/src/assets/brand/westory-wordmark.webp" width="1024" height="237" /></g>
+            </g>
+          </g>
+          <g class="ws-boot__letter" style="animation-delay: 440ms">
+            <g clip-path="url(#ws-boot-4)">
+              <image class="ws-boot__ghost" href="/src/assets/brand/westory-wordmark.webp" width="1024" height="237" />
+              <g clip-path="url(#ws-boot-fill)"><image href="/src/assets/brand/westory-wordmark.webp" width="1024" height="237" /></g>
+            </g>
+          </g>
+          <g class="ws-boot__letter" style="animation-delay: 550ms">
+            <g clip-path="url(#ws-boot-5)">
+              <image class="ws-boot__ghost" href="/src/assets/brand/westory-wordmark.webp" width="1024" height="237" />
+              <g clip-path="url(#ws-boot-fill)"><image href="/src/assets/brand/westory-wordmark.webp" width="1024" height="237" /></g>
+            </g>
+          </g>
+          <g class="ws-boot__letter" style="animation-delay: 660ms">
+            <g clip-path="url(#ws-boot-6)">
+              <image class="ws-boot__ghost" href="/src/assets/brand/westory-wordmark.webp" width="1024" height="237" />
+              <g clip-path="url(#ws-boot-fill)"><image href="/src/assets/brand/westory-wordmark.webp" width="1024" height="237" /></g>
+            </g>
+          </g>
+        </svg>
       </div>
     </div>
     <noscript>

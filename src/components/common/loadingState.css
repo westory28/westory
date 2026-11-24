@@ -111,7 +111,34 @@
 .ws-loading--paused .ws-loading__fill {
   animation-play-state: paused;
 }
-/* Explicit user preference: retain this loading motion in reduced-motion mode. */
+/* Explicit user preference: retain this loading motion in reduced-motion mode.
+   Screens that silence every descendant animation (`.wis-stocks *` under the OS
+   setting, `.public-entry[data-motion="off"] *` for the in-app switch) must not
+   freeze the live logo, so its own motion is re-asserted above such rules.
+   Play state is left to the cascade; the exit copy lives outside `.ws-loading`
+   and keeps its inline `animation: none`. */
+.ws-loading > .ws-loading__logo .ws-loading__letter {
+  animation-name: ws-loading-bounce !important;
+  animation-duration: 1400ms !important;
+  animation-timing-function: ease-in-out !important;
+  animation-delay: var(--ws-loading-letter-delay, 0ms) !important;
+  animation-iteration-count: infinite !important;
+  animation-direction: normal !important;
+  animation-fill-mode: none !important;
+}
+.ws-loading > .ws-loading__logo .ws-loading__fill {
+  animation-name: ws-loading-fill !important;
+  animation-duration: 30000ms !important;
+  animation-timing-function: linear !important;
+  animation-delay: var(--ws-loading-fill-delay, 0ms) !important;
+  animation-iteration-count: 1 !important;
+  animation-direction: normal !important;
+  animation-fill-mode: both !important;
+}
+.ws-loading.ws-loading--paused > .ws-loading__logo .ws-loading__letter,
+.ws-loading.ws-loading--paused > .ws-loading__logo .ws-loading__fill {
+  animation-play-state: paused !important;
+}
 @keyframes ws-loading-bounce {
   0%,
   45%,
