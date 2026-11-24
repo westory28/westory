@@ -63,6 +63,9 @@ type Effect = {
   damage?: number;
 };
 type Impact = { id: number; side: "enemy" | "allied"; damage: number };
+// Display-only tone for the status line; it never changes what is accepted.
+const feedbackTone = (text: string) =>
+  !text ? undefined : /오답|지났/.test(text) ? "miss" : "hit";
 function Sprite({
   className,
   rect,
@@ -133,6 +136,8 @@ export default function NavalBattleGame({
   acceptedRef.current = accepted;
   const [answer, setAnswer] = useState("");
   const [feedback, setFeedback] = useState("");
+  // Restarts the input's wrong-answer cue; no game state depends on it.
+  const [missCue, setMissCue] = useState(0);
   const [error, setError] = useState("");
   const [finishing, setFinishing] = useState(false);
   const [exitOpen, setExitOpen] = useState(false);
@@ -790,6 +795,7 @@ export default function NavalBattleGame({
     if (!word) {
       setAnswer("");
       setFeedback("오답입니다. 현재 보이는 단어를 입력해 주세요.");
+      setMissCue((current) => current + 1);
       if (guideDemo) guideInteractive?.onAttempt(false);
       return;
     }
@@ -826,7 +832,7 @@ export default function NavalBattleGame({
   const networkBusy = !guideDemo && (pendingCount > 0 || finishing);
   return (
     <section
-      className={`naval-game${reducedMotion ? " naval-game--still" : ""}${compactViewport ? " naval-game--compact" : ""}${compactViewport && !guideDemo && viewportHeight < 340 ? " naval-game--short" : ""}${pageHidden ? " naval-game--hidden" : ""}${guideDemo ? " naval-game--guide" : ""}${guideDemo && guideInteractive ? " naval-game--guide-interactive" : ""}`}
+      className={`naval-game${guideDemo ? "" : " naval-live"}${reducedMotion ? " naval-game--still" : ""}${compactViewport ? " naval-game--compact" : ""}${compactViewport && !guideDemo && viewportHeight < 340 ? " naval-game--short" : ""}${pageHidden ? " naval-game--hidden" : ""}${guideDemo ? " naval-game--guide" : ""}${guideDemo && guideInteractive ? " naval-game--guide-interactive" : ""}`}
       style={
         {
           position: "relative",
@@ -905,7 +911,7 @@ export default function NavalBattleGame({
               <span>점수</span>
               <strong>{battle.score.toLocaleString()}</strong>
             </div>
-            <div className="naval-hud-combo">
+            <div className={`naval-hud-combo${combo >= 2 ? " is-hot" : ""}`}>
               <span>연속</span>
               <strong>{combo}</strong>
             </div>
@@ -936,7 +942,7 @@ export default function NavalBattleGame({
         </div>
         <div
           key={`allied-health-${alliedImpact?.id || 0}`}
-          className={`naval-health naval-health--allied${alliedImpact ? " is-hit" : ""}`}
+          className={`naval-health naval-health--allied${alliedImpact ? " is-hit" : ""}${displayBattle.playerHp <= 25 ? " is-low" : ""}`}
           data-weplay-guide="health-allied"
           aria-label={`아군 체력 ${displayBattle.playerHp}`}
         >
@@ -1129,7 +1135,7 @@ export default function NavalBattleGame({
         >
           {prompts.map((word) => (
             <div
-              className="naval-word"
+              className={`naval-word${word.spawnAtMs + word.fallDurationMs - elapsed <= 3000 ? " is-urgent" : ""}`}
               key={word.id}
               data-word-id={word.id}
               style={{ gridColumn: wordLanes.current.get(word.id), gridRow: 1 }}
@@ -1167,8 +1173,15 @@ export default function NavalBattleGame({
           )}
         </div>
         {(!started || (ended && finishOnce.current)) && (
-          <div className="naval-screen-message" role="status">
-            <strong>
+          <div
+            className={`naval-screen-message${started ? "" : " is-countdown"}`}
+            role="status"
+          >
+            <strong
+              key={
+                started ? "end" : Math.ceil((session.startsAtMs - now) / 1000)
+              }
+            >
               {!started
                 ? Math.ceil((session.startsAtMs - now) / 1000)
                 : battle.outcome === "defeat"
@@ -1206,7 +1219,11 @@ export default function NavalBattleGame({
               </span>
             </strong>
           </div>
-          <div className="naval-input-frame" data-weplay-guide="input">
+          <div
+            className="naval-input-frame"
+            data-weplay-guide="input"
+            data-miss-cue={missCue ? (missCue % 2 ? "a" : "b") : undefined}
+          >
             {guideDemo && guideInteractive?.wordId && (
               <span className="weplay-guide-pointer" aria-hidden="true">
                 여기에 입력 <span>↓</span>
@@ -1332,7 +1349,11 @@ export default function NavalBattleGame({
                   ? "위스 변동 없음"
                   : `도전 비용 ${session.policy.challengeCost}위스`}
             </span>
-            <div className="naval-feedback" role="status">
+            <div
+              className="naval-feedback"
+              role="status"
+              data-tone={pendingCount > 0 ? "wait" : feedbackTone(feedback)}
+            >
               {pendingCount > 0 ? "장전 확인 중…" : feedback}
             </div>
           </div>

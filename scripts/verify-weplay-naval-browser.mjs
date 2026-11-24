@@ -51,6 +51,7 @@ import {MemoryRouter} from 'react-router-dom';
 import Game from ${modulePath('src/components/common/weplay/HistoryRainGame.tsx')};
 import NavalResult from ${modulePath('src/components/common/weplay/NavalBattleResult.tsx')};
 import ManageWeplay from ${modulePath('src/pages/teacher/ManageWeplay.tsx')};
+import WeplayGameFrame from ${modulePath('src/components/common/weplay/WeplayGameFrame.tsx')};
 import {createWeplayPreviewTransport} from ${modulePath('src/lib/weplayPreview.ts')};
 import * as weplay from ${modulePath('src/lib/weplay.ts')};
 import {simulateWeplayBattle} from ${modulePath('src/lib/weplayBattle.ts')};
@@ -76,7 +77,8 @@ function Fixture({session}){
 const params=new URLSearchParams(location.search);
 const[result,setResult]=useState(view==='result'?{sessionId:'result-fixture',difficulty:session.difficulty,mode:params.get('mode')==='challenge'?'challenge':'practice',correctCount:37,totalWords:60,score:12500,reward:5,cost:2,netWis:3,balance:103,finishedAtMs:Date.now(),missedWords:session.words.filter(word=>word.kind==='normal').slice(0,3),battleVersion:1,battle:{...simulateWeplayBattle(session,0),outcome:params.get('outcome')==='defeat'?'defeat':'victory',sunkShips:3,cannonShots:18,specialCount:2}}:null);
 const[replaying,setReplaying]=useState(false);
-return <MemoryRouter initialEntries={['/teacher/weplay?game=history-rain']}><AppToastProvider><AppDialogProvider>{!session?<div className='teacher-layout'><ManageWeplay/></div>:<main className='weplay-page' style={params.has('container')?{width:Number(params.get('container')),marginLeft:480}:undefined}>{view!=='result'&&<Game session={session} config={config} preview transport={qa.transport} onComplete={value=>{qa.completed=value;setResult(value);}}/>}{result?.battle&&<NavalResult result={result} preview={view!=='result'||params.get('preview')==='1'} replaying={replaying} onReplay={()=>{qa.replays=(qa.replays||0)+1;setReplaying(true);}}/>}{result&&<output hidden aria-label='QA 완료 결과'>{JSON.stringify(result)}</output>}</main>}</AppDialogProvider></AppToastProvider></MemoryRouter>}
+const Stage=params.has('frame')?WeplayGameFrame:React.Fragment;
+return <MemoryRouter initialEntries={['/teacher/weplay?game=history-rain']}><AppToastProvider><AppDialogProvider>{!session?<div className='teacher-layout'><ManageWeplay/></div>:<main className={params.has('frame')?'weplay-page weplay-game-page':'weplay-page'} style={params.has('container')?{width:Number(params.get('container')),marginLeft:480}:undefined}>{view!=='result'&&<Stage><Game session={session} config={config} preview transport={qa.transport} onComplete={value=>{qa.completed=value;setResult(value);}}/></Stage>}{result?.battle&&<NavalResult result={result} preview={view!=='result'||params.get('preview')==='1'} replaying={replaying} onReplay={()=>{qa.replays=(qa.replays||0)+1;setReplaying(true);}}/>}{result&&<output hidden aria-label='QA 완료 결과'>{JSON.stringify(result)}</output>}</main>}</AppDialogProvider></AppToastProvider></MemoryRouter>}
 function render(session){createRoot(document.getElementById('root')).render(<Fixture session={session}/>);}
 setup().catch(error=>{qa.error=error.message;throw error;});
 `;
@@ -222,6 +224,30 @@ try {
     await layout.close();
   }
   checks.push('320/390/768/1280px: three raster water-column words, 6+ enemy and 3+ allied ships, enemy HP above/allied HP near input, scene-contained help and feedback, 44px controls, desktop half-width command, dedicated portrait mobile layout');
+  // The real pages mount the arena inside the shared frame, which is much lower than the bare scene above.
+  for (const [width, height] of [[390, 844], [768, 1024], [1280, 800], [1366, 657]]) {
+    const framed = await open('battle', width, 'frame=1', { viewport: { width, height } });
+    await framed.locator('.naval-game').waitFor(); await advanceTo(framed, 2200);
+    await framed.waitForFunction(() => [...document.querySelectorAll('.naval-game img')].every(image => image.complete && image.naturalWidth > 0));
+    await framed.waitForTimeout(1000);
+    const flow = await framed.evaluate(() => {
+      const rect = selector => [...document.querySelectorAll(selector)].map(element => { const r = element.getBoundingClientRect(); return { selector, left: r.left, right: r.right, top: r.top, bottom: r.bottom }; });
+      const scene = rect('.naval-scene')[0], frame = rect('.weplay-game-frame')[0];
+      const parts = ['.naval-hud', '.naval-health--enemy', '.naval-word', '.naval-health--allied', '.naval-ammo', '.naval-input-frame', '.naval-footer'].flatMap(rect);
+      const overlaps = [];
+      for (let a = 0; a < parts.length; a++) for (let b = a + 1; b < parts.length; b++) if (Math.min(parts[a].right, parts[b].right) - Math.max(parts[a].left, parts[b].left) > 1 && Math.min(parts[a].bottom, parts[b].bottom) - Math.max(parts[a].top, parts[b].top) > 1) overlaps.push(parts[a].selector + ' x ' + parts[b].selector);
+      return { scene, frame, overlaps, words: parts.filter(part => part.selector === '.naval-word').length, outside: parts.filter(part => part.left < scene.left - 1 || part.right > scene.right + 1 || part.top < scene.top - 1 || part.bottom > scene.bottom + 1).map(part => part.selector), smallText: [...document.querySelectorAll('.naval-scene :is(span, strong, small, button, label, input)')].filter(element => element.getClientRects().length && element.textContent.trim() && parseFloat(getComputedStyle(element).fontSize) < 12).map(element => `${element.className || element.tagName} "${element.textContent.trim().slice(0, 16)}" ${getComputedStyle(element).fontSize}`) };
+    });
+    assert.equal(flow.words, 3, `${width}x${height} framed: three words`);
+    assert.ok(flow.scene.bottom <= flow.frame.bottom + 1 && flow.scene.bottom - flow.scene.top < 720, `${width}x${height} framed: the scene follows the frame height ${JSON.stringify(flow.scene)}`);
+    assert.deepEqual(flow.overlaps, [], `${width}x${height} framed: HUD, hull panels, words, ammo, input and footer must not overlap`);
+    assert.deepEqual(flow.outside, [], `${width}x${height} framed: every panel stays inside the scene`);
+    assert.deepEqual(flow.smallText, [], `${width}x${height} framed: arena text stays at 12px or larger`);
+    layoutMeasurements.push({ framed: `${width}x${height}`, scene: flow.scene });
+    await capture(framed, `naval-framed-flow-${width}x${height}`);
+    await framed.close();
+  }
+  checks.push('Inside the shared frame at 390x844, 768x1024, 1280x800 and 1366x657 the HUD, hull panels, three words, ammo, input and footer never overlap, stay inside the scene and keep 12px text');
   const lane = await open('battle', 390);
   await lane.locator('.naval-game').waitFor(); await advanceTo(lane, 2200);
   await lane.waitForTimeout(700);
