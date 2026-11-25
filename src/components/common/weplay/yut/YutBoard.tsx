@@ -699,6 +699,31 @@ export default function YutBoard({
       callback.current?.(false);
       return;
     }
+    // A move shown before the server answered was not accepted. The server's
+    // room takes its place at once, so nothing of the refused move is left to
+    // be played again (or skipped) when the next room is compared.
+    if (
+      before.revision >= room.revision &&
+      before.players.some((player) => {
+        const confirmed = room.players.find(
+          (entry) => entry.uid === player.uid,
+        )?.pieces;
+        return player.pieces.some(
+          (piece) =>
+            confirmed?.find((entry) => entry.id === piece.id)?.node !==
+            piece.node,
+        );
+      })
+    ) {
+      window.clearTimeout(motionTimer.current);
+      activeMotions.current.clear();
+      setMotions({});
+      setLandedMotions(new Set());
+      setCapture(null);
+      captureGroup.current = null;
+      callback.current?.(false);
+      return;
+    }
     const next: Record<string, PieceMotion> = {};
     if (
       before.id === room.id &&
@@ -830,7 +855,8 @@ export default function YutBoard({
       // rendered frame. This bounded fallback only handles suspended animations.
       6000,
     );
-  }, [room.id, room.revision]);
+    // A shown move and the event committed instead of it share one revision.
+  }, [room.id, room.revision, room.lastEvent?.kind, room.lastEvent?.atMs]);
   useEffect(() => {
     const hide = () => {
       if (!document.hidden) return;
