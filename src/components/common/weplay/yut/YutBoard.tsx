@@ -742,11 +742,17 @@ export default function YutBoard({
           if (!old || old.node === piece.node || included.has(piece.id))
             continue;
           const caught = piece.node === "home";
-          const pieceIds = (
+          // After a missed update the last event describes one piece only.
+          const moved =
             !caught &&
             eventMove?.uid === player.uid &&
-            eventMove.movingPieceIds?.length
-              ? eventMove.movingPieceIds
+            (!eventMove.movingPieceIds?.length ||
+              eventMove.movingPieceIds.includes(piece.id))
+              ? eventMove
+              : undefined;
+          const pieceIds = (
+            moved?.movingPieceIds?.length
+              ? moved.movingPieceIds
               : groupPieces(before, oldPlayer.pieces, old).map(
                   (entry) => entry.id,
                 )
@@ -775,10 +781,7 @@ export default function YutBoard({
           ];
           const originOffset =
             (oldGroups.indexOf(pieceIds[0]) - (oldGroups.length - 1) / 2) * 44;
-          const path =
-            !caught && eventMove?.uid === player.uid && eventMove.path?.length
-              ? eventMove.path
-              : [piece.node];
+          const path = moved?.path?.length ? moved.path : [piece.node];
           next[`${player.uid}-${pieceIds[0]}`] = {
             id: `${room.id}:${room.revision}:${player.uid}:${pieceIds.join(",")}`,
             uid: player.uid,
@@ -787,7 +790,7 @@ export default function YutBoard({
             carried: pieceIds.length > 1,
             boarding:
               !caught &&
-              Boolean(eventMove?.stacked) &&
+              Boolean(moved?.stacked) &&
               joinedPieceIds.length > pieceIds.length,
             originOffset,
             origin: old.node,
