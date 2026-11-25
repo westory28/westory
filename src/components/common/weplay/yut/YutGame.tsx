@@ -1605,7 +1605,7 @@ export default function YutGame({
     const recovery = { scope, data };
     pendingRef.current = data;
     recoveryCommand.current = recovery;
-    const sentAtMs = Date.now();
+    let sentAtMs = Date.now();
     if (action === "move" && activeRoom && data.pieceId && data.route) {
       try {
         // The rules are deterministic, so the chosen move is drawn at once.
@@ -1625,8 +1625,59 @@ export default function YutGame({
         /* The server explains a move it does not accept. */
       }
     }
+    // True once the room shows what another player did first.
+    const movedOn = async () => {
+      for (let waited = 0; waited < 2000; waited += 50) {
+        if (
+          !mounted.current ||
+          pendingRef.current !== data ||
+          generation.current !== run ||
+          roomEpoch.current !== epoch ||
+          roomRef.current?.id !== data.roomId
+        )
+          return false;
+        if (roomRef.current!.revision > (data.expectedRevision ?? 0))
+          return true;
+        await new Promise((resolve) => window.setTimeout(resolve, 50));
+      }
+      return false;
+    };
+    const send = async () => {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          sentAtMs = Date.now();
+          return await withYutTimeout(commandYutRoom(config, data));
+        } catch (failure) {
+          // Players often act in the same moment. The server wrote nothing for
+          // the later one; the room it was refused for is already replaced.
+          if (
+            attempt > 4 ||
+            !activeRoom ||
+            !/aborted/.test(
+              String((failure as { code?: string })?.code || ""),
+            ) ||
+            !(await movedOn())
+          )
+            throw failure;
+          // Leaving and being ready mean the same in the newer room. Any other
+          // action is chosen again from what the player now sees.
+          if (
+            action !== "leave" &&
+            !(action === "ready" && roomRef.current?.status === "waiting")
+          )
+            return null;
+          data.requestKey = requestKey();
+          data.expectedRevision = roomRef.current?.revision;
+        }
+      }
+    };
     try {
-      const result = await withYutTimeout(commandYutRoom(config, data));
+      const result = await send();
+      if (!result) {
+        if (recoveryCommand.current === recovery)
+          recoveryCommand.current = null;
+        return;
+      }
       if (
         !mounted.current ||
         pendingRef.current !== data ||
@@ -1675,13 +1726,22 @@ export default function YutGame({
         generation.current === run &&
         roomEpoch.current === epoch
       ) {
-        setError(yutErrorMessage(failure));
         const code = String((failure as { code?: string })?.code || "");
-        // A refused turn is safe to try again from the subscribed room.
-        // Permission failures and uncertain writes still require reconciliation.
+        if (activeRoom && /aborted/.test(code)) {
+          // The room update has not come by itself: read the room once.
+          setRetry((value) => value + 1);
+          return;
+        }
+        setError(yutErrorMessage(failure));
+        // A refused action is safe to try again from the subscribed room, and
+        // a wrong code from the menu. Permission failures, uncertain writes and
+        // a room that was not opened or left still require reconciliation.
         setNeedsSync(
-          !isTurnCommand(action) ||
-            !/aborted|failed-precondition|resource-exhausted/.test(code),
+          ["create", "match", "leave", "close"].includes(action) ||
+            !(
+              /failed-precondition|resource-exhausted/.test(code) ||
+              (action === "join" && /not-found|invalid-argument/.test(code))
+            ),
         );
       }
     } finally {
