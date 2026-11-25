@@ -813,7 +813,17 @@ export default function YutBoard({
     const active = Object.values(next);
     // Non-movement snapshots (for example an opponent leaving) must not cancel
     // a move already on screen. Only a new move or leaving the board replaces it.
-    if (!active.length) return;
+    if (!active.length) {
+      // A leaver's piece is no longer drawn, so it cannot report its own end.
+      for (const motion of Object.values(motions))
+        if (
+          !room.players.some(
+            (player) => player.uid === motion.uid && player.active,
+          )
+        )
+          completeMotion(motion.id);
+      return;
+    }
     window.clearTimeout(motionTimer.current);
     setLandedMotions(new Set());
     setCapture(null);
