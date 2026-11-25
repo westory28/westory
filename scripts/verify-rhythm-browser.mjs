@@ -1068,8 +1068,41 @@ if (process.argv.includes("--lane-motion-only")) {
     const resumed = await alignment();
     assert.equal(resumed.playState, "running");
     assert(resumed.errorMs < 40, JSON.stringify(resumed));
+    // Bluetooth sound and some tablets advance the audio clock in coarse steps.
+    // Moving notes must not be re-timed by those steps.
+    const coarse = {};
+    for (const step of [43, 64, 93]) {
+      const stepped = await pageFor(844, 390);
+      await stepped.addInitScript(seconds => {
+        const Native = window.AudioContext;
+        window.AudioContext = class extends Native {
+          get currentTime() { return Math.floor(super.currentTime / seconds) * seconds; }
+        };
+        const descriptor = Object.getOwnPropertyDescriptor(Animation.prototype, "startTime");
+        window.noteRetimes = 0;
+        Object.defineProperty(Animation.prototype, "startTime", {
+          configurable: true,
+          get: descriptor.get,
+          set(value) {
+            if (this.playState === "running") window.noteRetimes++;
+            descriptor.set.call(this, value);
+          },
+        });
+      }, step / 1000);
+      await stepped.goto(`${base}/?open`);
+      await phase(stepped, "ready");
+      await stepped.getByRole("button", { name: "연주 시작" }).tap();
+      await phase(stepped, "playing");
+      await stepped.locator("[data-note-id]").first().waitFor();
+      await stepped.waitForTimeout(1000);
+      const before = await stepped.evaluate(() => window.noteRetimes);
+      await stepped.waitForTimeout(6000);
+      coarse[step] = await stepped.evaluate(value => window.noteRetimes - value, before);
+      await stepped.close();
+    }
+    assert.deepEqual(coarse, { 43: 0, 64: 0, 93: 0 }, JSON.stringify(coarse));
     assert.deepEqual(errors, []);
-    console.log(JSON.stringify({ movement, paused, resumed }));
+    console.log(JSON.stringify({ movement, paused, resumed, coarse }));
   } finally {
     await browser.close();
     await new Promise(resolve => server.close(resolve));
