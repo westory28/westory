@@ -1076,7 +1076,12 @@ if (process.argv.includes("--lane-motion-only")) {
       await stepped.addInitScript(seconds => {
         const Native = window.AudioContext;
         window.AudioContext = class extends Native {
-          get currentTime() { return Math.floor(super.currentTime / seconds) * seconds; }
+          get currentTime() {
+            // Whole buffers, now and then one early or one late.
+            const buffer = Math.floor(super.currentTime / seconds);
+            const spread = Math.abs(Math.sin(buffer * 12.9898) * 43758.5453) % 1;
+            return (buffer + (spread < 0.08 ? 1 : spread > 0.92 ? -1 : 0)) * seconds;
+          }
         };
         const descriptor = Object.getOwnPropertyDescriptor(Animation.prototype, "startTime");
         window.noteRetimes = 0;

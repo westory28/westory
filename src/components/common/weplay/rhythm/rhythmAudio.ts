@@ -5,6 +5,15 @@ const clampVolume = (value: number) =>
   Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.7;
 const midiFrequency = (midi: number) => 440 * 2 ** ((midi - 69) / 12);
 const DRUM_SECONDS = { center: 0.32, rim: 0.1 };
+// A whole song at once keeps over a thousand nodes on the audio thread, which
+// slow tablets cannot render in time: the sound breaks up and its clock stalls.
+// Only the next seconds are scheduled; a hidden tab still wakes once a second.
+const SCHEDULE_AHEAD_SECONDS = 4;
+const CLOCK_TICK_MS = 16;
+const CLOCK_WINDOW_MS = 1500;
+const CLOCK_SETTLE_MS = 600;
+const CLOCK_SLEW = 0.012;
+const CLOCK_SNAP_MS = 60;
 const RIM_STRIKE_OFFSET = 0.5;
 
 /**
@@ -25,15 +34,57 @@ export class RhythmAudio {
   private fluteWave: PeriodicWave | null = null;
   private bassWave: PeriodicWave | null = null;
   private origin = 0;
+  private queue: { at: number; play: () => void }[] = [];
+  private ticker: ReturnType<typeof setInterval> | undefined;
+  private clock = {
+    base: NaN,
+    since: 0,
+    at: 0,
+    last: 0,
+    samples: [] as { at: number; base: number }[],
+  };
   private generation = 0;
   private disposed = false;
   private volume = 0.7;
 
-  /** Audio seconds since start, including the three-second count-in. */
+  /**
+   * Audio seconds since start, including the three-second count-in. Notes and
+   * judgement read this one clock. A device advances its audio clock in uneven
+   * steps (a few milliseconds, or 40 to 100 on Bluetooth and some tablets), so
+   * the middle of recent readings is followed and time never moves backwards.
+   */
   get currentTime(): number {
-    return this.context && this.master
-      ? Math.max(0, this.context.currentTime - this.origin)
-      : 0;
+    if (!this.context || !this.master) return 0;
+    const raw = this.context.currentTime - this.origin;
+    const clock = this.clock;
+    if (this.context.state !== "running") {
+      clock.base = NaN;
+      return (clock.last = Math.max(clock.last, raw, 0));
+    }
+    const now = performance.now();
+    const base = now - raw * 1000;
+    // A pause, a held device or a jump of the clock starts the reading afresh.
+    if (!Number.isFinite(clock.base) || Math.abs(base - clock.base) > 250) {
+      clock.base = base;
+      clock.since = now;
+      clock.at = now;
+      clock.samples = [];
+    }
+    const samples = clock.samples;
+    if (!samples.length || now - samples[samples.length - 1].at >= 4)
+      samples.push({ at: now, base });
+    while (now - samples[0].at > CLOCK_WINDOW_MS) samples.shift();
+    const sorted = samples.map((item) => item.base).sort((a, b) => a - b);
+    const middle = sorted[sorted.length >> 1];
+    const error = middle - clock.base;
+    if (now - clock.since < CLOCK_SETTLE_MS || Math.abs(error) > CLOCK_SNAP_MS)
+      clock.base = middle;
+    else {
+      const step = (now - clock.at) * CLOCK_SLEW;
+      clock.base += Math.max(-step, Math.min(step, error));
+    }
+    clock.at = now;
+    return (clock.last = Math.max(clock.last, (now - clock.base) / 1000, 0));
   }
 
   get state(): string {
@@ -103,6 +154,12 @@ export class RhythmAudio {
       // A small scheduling lead keeps even the first cue out of the past.
       this.origin = context.currentTime + 0.08;
       this.scheduleSong(song);
+      this.pump();
+      this.ticker = setInterval(() => {
+        // Regular readings keep the clock even between a player's inputs.
+        void this.currentTime;
+        this.pump();
+      }, CLOCK_TICK_MS);
       this.onStateChange?.();
     } catch (error) {
       if (this.context === context) this.stop();
@@ -216,6 +273,9 @@ export class RhythmAudio {
 
   stop(): void {
     this.generation += 1;
+    clearInterval(this.ticker);
+    this.queue = [];
+    this.clock = { base: NaN, since: 0, at: 0, last: 0, samples: [] };
     const context = this.context;
     this.context = null;
     if (context) context.onstatechange = null;
@@ -405,20 +465,38 @@ export class RhythmAudio {
     else this.register(source, end, [filter, envelope]);
   }
 
+  /** Hand the due part of the song to the audio thread, a few seconds ahead. */
+  private pump(): void {
+    const context = this.context;
+    if (!context || !this.master || !this.queue.length) return;
+    const now = context.currentTime;
+    let due = 0;
+    while (
+      due < this.queue.length &&
+      this.queue[due].at <= now + SCHEDULE_AHEAD_SECONDS
+    ) {
+      // After a long stall, missed sounds are dropped rather than piled up.
+      const item = this.queue[due++];
+      if (item.at >= now - 0.02) item.play();
+    }
+    if (due) this.queue.splice(0, due);
+  }
+
   private scheduleSong(song: RhythmSong): void {
+    const queue: { at: number; play: () => void }[] = [];
+    const tone = (...args: Parameters<RhythmAudio["tone"]>) =>
+      queue.push({ at: args[1], play: () => this.tone(...args) });
+    const drum = (...args: Parameters<RhythmAudio["drum"]>) =>
+      queue.push({ at: args[1], play: () => this.drum(...args) });
+    const noise = (...args: Parameters<RhythmAudio["noiseHit"]>) =>
+      queue.push({ at: args[0], play: () => this.noiseHit(...args) });
     const beatSeconds = 60 / song.bpm;
     const start = this.origin + COUNT_IN_SECONDS;
     for (let count = 0; count < COUNT_IN_SECONDS; count++)
-      this.tone(
-        count === 2 ? 84 : 79,
-        this.origin + count,
-        0.065,
-        0.12,
-        "pluck",
-      );
+      tone(count === 2 ? 84 : 79, this.origin + count, 0.065, 0.12, "pluck");
     for (const event of song.melody) {
       const voice = song.style === "festival" ? "pluck" : "flute";
-      this.tone(
+      tone(
         event.midi,
         start + event.beat * beatSeconds,
         Math.max(0.055, event.length * beatSeconds * 0.88),
@@ -427,7 +505,7 @@ export class RhythmAudio {
       );
       // Quiet octave reinforcement opens up the second half without a sample.
       if (song.style === "anthem" && event.beat >= song.totalBeats / 2)
-        this.tone(
+        tone(
           event.midi - 12,
           start + event.beat * beatSeconds,
           event.length * beatSeconds * 0.8,
@@ -441,32 +519,33 @@ export class RhythmAudio {
       const at = start + bar * song.beatsPerBar * beatSeconds;
       const barSeconds = song.beatsPerBar * beatSeconds;
       if (song.style === "anthem") {
-        this.tone(root + 12, at, barSeconds * 0.9, 0.045, "flute");
-        this.tone(root + 19, at, barSeconds * 0.9, 0.035, "flute");
+        tone(root + 12, at, barSeconds * 0.9, 0.045, "flute");
+        tone(root + 19, at, barSeconds * 0.9, 0.035, "flute");
       }
       for (let beat = 0; beat < song.beatsPerBar; beat++) {
         const time = at + beat * beatSeconds;
         const downbeat = beat === 0;
-        this.tone(
+        tone(
           root + (beat === 2 ? 7 : 0),
           time,
           beatSeconds * 0.58,
           downbeat ? 0.15 : 0.095,
           "bass",
         );
-        this.drum(
+        drum(
           downbeat || (song.style === "rock" && beat === 2) ? "center" : "rim",
           time,
           downbeat ? 0.52 : 0.32,
         );
         const offbeat = song.style === "arirang" ? 2 / 3 : 0.5;
-        this.noiseHit(time + beatSeconds * offbeat, 0.045, 0.035, 5500);
+        noise(time + beatSeconds * offbeat, 0.045, 0.035, 5500);
         if (song.style === "rock" && beat % 2 === 1)
-          this.tone(root + 19, time, beatSeconds * 0.4, 0.045, "pluck");
+          tone(root + 19, time, beatSeconds * 0.4, 0.045, "pluck");
       }
       // Two compound accents per 6/8 bar give the harvest track its own gait.
       if (song.style === "festival")
-        this.drum("center", at + beatSeconds * 1.5, 0.3);
+        drum("center", at + beatSeconds * 1.5, 0.3);
     }
+    this.queue = queue.sort((left, right) => left.at - right.at);
   }
 }

@@ -23,6 +23,10 @@ const load = async (entry, globals = {}) => {
     exports: module.exports,
     setTimeout,
     clearTimeout,
+    // Tests hand the song over and read its clock themselves.
+    setInterval: () => 0,
+    clearInterval() {},
+    performance,
     ...globals,
   });
   return module.exports;
@@ -647,12 +651,47 @@ for (const song of songs) {
   const context = contexts.at(-1);
   assert.equal(audio.state, "running");
   assert.equal(audio.currentTime, 0);
-  assert(context.sources.length > 200 && context.sources.length < 2000);
-  assert(
-    context.sources.every(
-      (s) => s.startTime >= 10 && s.startTime <= 10.08 + song.duration,
-    ),
-  );
+  // Only the next seconds are on the audio thread; the rest follows in time.
+  assert(context.sources.length > 0 && context.sources.length < 160);
+  assert(context.sources.every((s) => s.startTime <= 14.0001));
+  {
+    const whole = new RhythmAudio();
+    await whole.start(song, 0.7);
+    const played = contexts.at(-1);
+    let most = 0;
+    for (let at = 0; at < song.duration + 1; at += 0.5) {
+      whole.pump();
+      most = Math.max(most, played.sources.filter((s) => s.startTime > played.currentTime).length);
+      assert(
+        played.sources.every((s) => s.startTime <= played.currentTime + 4.0001),
+        "nothing further than the lookahead is scheduled",
+      );
+      played.advance(0.5);
+    }
+    assert(played.sources.length > 200 && played.sources.length < 2000);
+    assert(most < 160, "the audio thread never holds the whole song");
+    assert(
+      played.sources.every(
+        (s) => s.startTime >= 10 && s.startTime <= 10.08 + song.duration,
+      ),
+    );
+    assert.equal(whole.queue.length, 0, "the whole song has been handed over");
+    whole.stop();
+  }
+  {
+    // A stall longer than the lookahead drops what was missed instead of
+    // playing it all at once.
+    const stalled = new RhythmAudio();
+    await stalled.start(song, 0.7);
+    const held = contexts.at(-1);
+    const before = held.sources.length;
+    held.advance(12);
+    stalled.pump();
+    assert(
+      held.sources.slice(before).every((s) => s.startTime >= held.currentTime - 0.02),
+    );
+    stalled.stop();
+  }
   for (const gain of context.gains)
     for (const [value, at] of gain.gain.events) {
       assert(Number.isFinite(value) && value >= 0 && value < 1);
@@ -693,6 +732,47 @@ for (const song of songs) {
   assert(context.sources.every((s) => s.disconnected && s.stops.length >= 2));
 }
 assert(stateChanges > 8);
+{
+  // Uneven device clocks: coarse steps, bursts and late readings. The reported
+  // time stays even, never runs backwards and stays close to the sound.
+  for (const step of [0.003, 0.043, 0.093]) {
+    const player = new RhythmAudio();
+    await player.start(songs[0], 0.7);
+    const context = contexts.at(-1);
+    const realNow = performance.now.bind(performance);
+    let now = realNow();
+    const started = now;
+    performance.now = () => now;
+    let seed = 7;
+    const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const errors = [];
+    let last = 0;
+    let worstStep = 0;
+    try {
+      for (let frame = 0; frame < 1200; frame++) {
+        now += 16;
+        const truth = (now - started) / 1000;
+        // Rendered in whole buffers, sometimes a buffer early or late.
+        const buffers = Math.floor(truth / step) + (random() < 0.08 ? 1 : random() < 0.08 ? -1 : 0);
+        context.currentTime = 10.08 + Math.max(0, buffers * step);
+        const time = player.currentTime;
+        assert(time >= last, "the song clock never runs backwards");
+        if (frame > 120) {
+          worstStep = Math.max(worstStep, Math.abs((time - last) * 1000 - 16));
+          errors.push(truth - time);
+        }
+        last = time;
+      }
+    } finally {
+      performance.now = realNow;
+    }
+    assert(worstStep < 1.5, `even steps on a ${step * 1000}ms clock: ${worstStep}`);
+    const spread = Math.max(...errors) - Math.min(...errors);
+    assert(spread < 0.02, `steady offset on a ${step * 1000}ms clock: ${spread}`);
+    assert(Math.max(...errors.map(Math.abs)) < step + 0.02);
+    player.stop();
+  }
+}
 audio.dispose();
 assert.equal(audio.state, "closed");
 await assert.rejects(() => audio.start(songs[0]), /종료된/);
@@ -747,7 +827,7 @@ assert.equal(
 );
 permission.resolve(true);
 await guardedStart;
-assert(waitingContext.sources.length > 200);
+assert(waitingContext.sources.length > 0);
 assert.equal(guardedAudio.currentTime, 0);
 guardedAudio.stop();
 for (const [initialVolume, chosenVolume] of [[0, 0.65], [0.65, 0]]) {
