@@ -1723,9 +1723,7 @@ export default function YutGame({
         recoveryCommand.current = null;
       if (
         automatic &&
-        /aborted|failed-precondition/.test(
-          String((failure as { code?: string })?.code),
-        )
+        /failed-precondition/.test(String((failure as { code?: string })?.code))
       )
         return;
       if (
