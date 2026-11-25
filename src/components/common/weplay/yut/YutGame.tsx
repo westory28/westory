@@ -2458,6 +2458,7 @@ export default function YutGame({
                         onChange={(event) =>
                           setCode(
                             event.target.value
+                              .normalize("NFKC")
                               .replace(/[^a-zA-Z0-9]/g, "")
                               .slice(0, 6)
                               .toUpperCase(),
