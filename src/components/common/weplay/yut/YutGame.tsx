@@ -1408,6 +1408,10 @@ export default function YutGame({
             recoveryCommand.current = null;
             roomRef.current = null;
             acceptRoom(null);
+            // The server ended this room: nothing about it is left to confirm.
+            setDisconnected(false);
+            setNeedsSync(false);
+            setError("");
             setNote(
               next && next.status !== "closed"
                 ? "방에서 나왔습니다. 새 방에 참가할 수 있습니다."
