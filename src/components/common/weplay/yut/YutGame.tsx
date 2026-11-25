@@ -2152,6 +2152,10 @@ export default function YutGame({
       setLocalMode(mode);
     }
   };
+  useEffect(() => {
+    // Nothing is left to leave once the room is gone.
+    if (!room) setDialog((open) => (open === "leave" ? null : open));
+  }, [room?.id]);
   const back = () => {
     if (room) setDialog("leave");
     else {
