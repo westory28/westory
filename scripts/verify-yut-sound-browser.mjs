@@ -59,7 +59,7 @@ const server = http.createServer((req, res) => {
   } else if (req.url === "/qa.css") {
     res.setHeader("Content-Type", "text/css");
     res.end(css);
-  } else if (req.url.includes("tide-of-victory.wav")) {
+  } else if (req.url.includes("tide-of-victory.")) {
     res.setHeader("Content-Type", "audio/wav");
     res.end(wav);
   } else {

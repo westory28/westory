@@ -96,7 +96,7 @@ function NavalWeplay({ groupTitle }: { groupTitle: string }) {
     (game) => game.id === params.get("game"),
   );
   const gameTitle = getWeplayGameTitle(menuConfig);
-  const music = useWeplayMusic(!!selectedGame);
+  const music = useWeplayMusic(!!selectedGame, { autoStart: true });
   const [lobby, setLobby] = useState<WeplayLobby | null>(null);
   const [session, setSession] = useState<WeplaySession | null>(null);
   const [result, setResult] = useState<WeplayResult | null>(null);

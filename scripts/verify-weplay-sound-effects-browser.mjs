@@ -46,7 +46,7 @@ const server = http.createServer((request, response) => {
   if (request.url === '/qa.js') {
     response.setHeader('Content-Type', 'text/javascript');
     response.end(js);
-  } else if (request.url.includes('tide-of-victory.wav')) {
+  } else if (request.url.includes('tide-of-victory.')) {
     response.setHeader('Content-Type', 'audio/wav');
     response.end(wav);
   } else {
@@ -216,7 +216,7 @@ try {
   assert.equal(await muted.page.evaluate(() => window.soundQa.contexts.length), 0);
   checks.push({ name: 'persisted mute prevents even allocating an AudioContext', passed: true });
   await muted.context.close();
-  assert.equal(requests.filter(request => !['/', '/qa.js', '/favicon.ico'].includes(request) && !request.includes('tide-of-victory.wav')).length, 0);
+  assert.equal(requests.filter(request => !['/', '/qa.js', '/favicon.ico'].includes(request) && !request.includes('tide-of-victory.')).length, 0);
   assert.deepEqual(errors, []);
   const report = { passed: true, checks, errors, boundary: 'Real Web Audio/React; document.hidden is a deterministic visibility fixture. Listening preference is subjective; no third-party samples or effect audio downloads.' };
   await fs.writeFile(path.join(evidence, 'sound-effects-report.json'), JSON.stringify(report, null, 2));

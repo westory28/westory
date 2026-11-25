@@ -16,8 +16,11 @@ catch { playwright = require(process.env.PLAYWRIGHT_MODULE_PATH || path.join(os.
 const evidence = path.resolve(process.env.WEPLAY_MUSIC_QA_EVIDENCE_DIR || path.join(root, '.superloopy/sessions/weplay-music-20261007/evidence'));
 await fs.mkdir(evidence, { recursive: true });
 const source = relative => JSON.stringify(path.join(root, relative).replaceAll('\\', '/'));
-const musicUrl = '/assets/weplay/naval/tide-of-victory.wav';
-const wav = await fs.readFile(path.join(root, 'public', musicUrl));
+const musicUrl = '/assets/weplay/naval/tide-of-victory.mp3';
+const fallbackUrl = '/assets/weplay/naval/tide-of-victory.wav';
+const compact = await fs.readFile(path.join(root, 'public', musicUrl));
+const original = await fs.readFile(path.join(root, 'public', fallbackUrl));
+assert.ok(compact.length < original.length / 3, 'The delivered music stays small.');
 const harness = `
 import React,{useEffect,useState} from 'react';
 import {createRoot} from 'react-dom/client';
@@ -26,7 +29,8 @@ import WeplayMusicButton from ${source('src/components/common/weplay/WeplayMusic
 function Player(){
   const [active,setActive]=useState(true);
   window.musicQa.setActive=setActive;
-  const music=useWeplayMusic(active);
+  const query=new URLSearchParams(location.search);
+  const music=useWeplayMusic(active,{autoStart:query.has('entry'),...(query.has('broken')?{source:'/broken/tide-of-victory.mp3'}:{})});
   useEffect(()=>{if(new URLSearchParams(location.search).has('autostart'))music.start()},[music.start]);
   return <section><WeplayMusicButton {...music}/><button onClick={music.start}>게임 시작</button><output data-enabled={music.enabled} data-failed={music.failed}/></section>;
 }
@@ -48,8 +52,14 @@ const server = http.createServer((request, response) => {
     response.end(pathname.endsWith('.js') ? js : css);
     return;
   }
-  if (pathname === musicUrl) {
-    response.setHeader('Content-Type', 'audio/wav');
+  if (pathname === '/broken/tide-of-victory.mp3') {
+    response.writeHead(404);
+    response.end();
+    return;
+  }
+  if ([musicUrl, '/broken/tide-of-victory.wav'].includes(pathname)) {
+    const wav = pathname === musicUrl ? compact : original;
+    response.setHeader('Content-Type', pathname === musicUrl ? 'audio/mpeg' : 'audio/wav');
     response.setHeader('Accept-Ranges', 'bytes');
     const range = /^bytes=(\d+)-(\d*)$/.exec(request.headers.range || '');
     const start = range ? Number(range[1]) : 0;
@@ -166,7 +176,7 @@ try {
   assert.ok(Math.abs(active.duration - 45) < 0.02);
   assert.equal(active.source, `${musicUrl}?v=naval-war-2`, 'The updated naval score bypasses the cached previous arrangement.');
   assert.equal(active.loop, true);
-  assert.ok(Math.abs(active.volume - 0.28) < 0.001);
+  assert.ok(Math.abs(active.volume - 0.35) < 0.001);
   assert.equal(active.error, null);
   checks.push({ name: 'native HTMLAudioElement plays after gesture', ...active });
   await page.evaluate(() => window.musicQa.setActive(false));
@@ -231,6 +241,50 @@ try {
   await denied.page.screenshot({ path: path.join(evidence, 'gesture-retry-playing.png') });
   checks.push({ name: 'real Chromium autoplay rejection and gesture retry', passed: true });
   await denied.context.close();
+
+  // Opening a game asks for its music. After a reload the browser refuses sound
+  // until the first touch anywhere; that touch is enough.
+  const entry = await contextPage('?entry=1');
+  await entry.page.waitForSelector('output[data-failed="true"]', { state: 'attached' });
+  assert.equal(await entry.page.evaluate(() => window.musicQa.players.length), 1);
+  await entry.page.getByRole('heading', { name: '위플레이 음악 검증' }).click();
+  await waitPlaying(entry.page);
+  await entry.page.waitForSelector('output[data-failed="false"][data-enabled="true"]', { state: 'attached' });
+  // The device stopped the sound (a call, another app): the next touch resumes.
+  await entry.page.evaluate(() => window.musicQa.players.at(-1).pause());
+  await entry.page.getByRole('heading', { name: '위플레이 음악 검증' }).click();
+  await waitPlaying(entry.page);
+  // The sound button itself still turns it off, and touches then leave it off.
+  await button(entry.page).click();
+  await waitPaused(entry.page);
+  await entry.page.getByRole('heading', { name: '위플레이 음악 검증' }).click();
+  await entry.page.waitForTimeout(300);
+  assert.equal(await entry.page.evaluate(() => window.musicQa.players.at(-1).paused), true);
+  await button(entry.page).click();
+  await waitPlaying(entry.page);
+  assert.equal(await entry.page.evaluate(() => window.musicQa.players.length), 1);
+  checks.push({ name: 'entering plays; the first touch recovers blocked or interrupted music; mute is respected', passed: true });
+  await entry.context.close();
+
+  const mutedEntry = await contextPage('?entry=1');
+  await mutedEntry.page.evaluate(() => localStorage.setItem('westory.weplay.musicMuted', 'true'));
+  await mutedEntry.page.reload();
+  await button(mutedEntry.page).waitFor();
+  await mutedEntry.page.getByRole('heading', { name: '위플레이 음악 검증' }).click();
+  await mutedEntry.page.waitForTimeout(300);
+  assert.equal(await mutedEntry.page.evaluate(() => window.musicQa.players.length), 0, 'A saved mute downloads and plays nothing.');
+  checks.push({ name: 'saved mute is kept on entry', passed: true });
+  await mutedEntry.context.close();
+
+  const fallback = await contextPage('?entry=1&broken=1');
+  await fallback.page.getByRole('heading', { name: '위플레이 음악 검증' }).click();
+  await fallback.page.waitForFunction(() => {
+    const player = window.musicQa.players.at(-1);
+    return player && player.src.endsWith('.wav') && !player.paused && player.currentTime > 0.04;
+  });
+  await fallback.page.waitForSelector('output[data-failed="false"][data-enabled="true"]', { state: 'attached' });
+  checks.push({ name: 'an unavailable compact file falls back to the original recording', passed: true });
+  await fallback.context.close();
 
   assert.deepEqual(errors, []);
   assert.deepEqual(externalRequests, []);

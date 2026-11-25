@@ -2281,6 +2281,7 @@ export default function YutGame({
                     : "소리 켜기"
               }
               aria-pressed={music.enabled}
+              data-weplay-sound
               onClick={music.toggle}
             >
               <YutIcon name={music.enabled ? "sound" : "muted"} />
