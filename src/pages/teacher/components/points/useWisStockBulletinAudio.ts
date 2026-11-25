@@ -337,7 +337,7 @@ export function useWisStockBulletinAudio(
       speak(
         stockBulletinSpeech(bulletin.stocks),
         Math.min(
-          ...bulletin.stocks.map((item) => stockBulletinExpiresAt(item.atMs)),
+          ...bulletin.stocks.map((item) => stockBulletinExpiresAt(item)),
         ),
         sound && soundReady ? 500 : 0,
       );
@@ -384,7 +384,7 @@ export function useWisStockBulletinAudio(
       speak(
         stockBulletinSpeech(bulletin.stocks),
         Math.min(
-          ...bulletin.stocks.map((item) => stockBulletinExpiresAt(item.atMs)),
+          ...bulletin.stocks.map((item) => stockBulletinExpiresAt(item)),
         ),
       );
     } else speak("음성 안내를 켰습니다.", Infinity);

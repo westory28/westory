@@ -416,7 +416,7 @@ export default function WisStockExchangeDisplay({
                 <span>
                   {
                     {
-                      listing: "현재 10분 시간대",
+                      listing: "오늘",
                       previous: "직전 시세 대비",
                       received: "직전 수신 시세 대비",
                     }[bulletin.stocks[0].kind]

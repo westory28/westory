@@ -55,11 +55,44 @@ try {
   assert.equal(current, null, 'daily comparison without an event timestamp is not breaking news');
   now = baseline + 9 * 60_000 + 59_000;
   rotation.clear();
-  rotation.update(market([{ id: 'late', name: '늦은상장', price: 300, previousClose: 300, listedAtMs: now, listingPrice: 300 }]), new Set());
-  assert.equal(current.stocks[0].kind, 'listing');
+  rotation.update(market([stock('마감직전', now)]), new Set());
   advance(1_000);
   assert.equal(current, null, 'visible page is removed at the next ten-minute boundary');
   assert.equal(timers.size, 0, 'expired events leave no polling timer');
+  // A listing stays news for its Korean calendar day and is announced once.
+  rotation.clear();
+  now = Date.parse('2026-11-24T13:40:00+09:00');
+  const listed = { id: 'late', name: '아침상장', price: 310, previousClose: 300, listedAtMs: Date.parse('2026-11-24T09:00:38+09:00'), listingPrice: 300 };
+  const earlier = { id: 'old', name: '어제상장', price: 310, previousClose: 300, listedAtMs: Date.parse('2026-11-23T15:00:07+09:00'), listingPrice: 300 };
+  rotation.update(market([listed, earlier, stock('급락', now)]), new Set());
+  assert.equal(current.stocks[0].kind, 'listing', 'opening the display later the same day still announces the listing');
+  assert.equal(current.stocks[0].id, 'late', 'a listing of an earlier day is not news');
+  assert.equal(current.stocks[0].price, 300, 'the listing price is announced, not the moved price');
+  advance(3_000);
+  assert.equal(current.stocks[0].id, '급락');
+  advance(3_000);
+  assert.equal(current, null);
+  rotation.clear();
+  rotation.update(market([listed]), new Set());
+  assert.equal(current, null, 'a reconnect does not repeat the listings already announced');
+  now = Date.parse('2026-11-24T14:00:03+09:00');
+  rotation.update(market([listed, { ...listed, id: 'new', name: '방금상장', listedAtMs: now }]), new Set(['listing:new']));
+  assert.equal(current.stocks[0].id, 'new', 'a new listing is announced the moment it arrives');
+  advance(3_000);
+  assert.equal(current, null);
+  now = Date.parse('2026-11-24T23:59:59+09:00');
+  rotation.update(market([{ ...listed, id: 'midnight', listedAtMs: now }]), new Set());
+  advance(1_000);
+  assert.equal(current, null, 'the listing notice ends with its day');
+  rotation.clear();
+  // A display clock a few seconds behind the server still shows the event.
+  now = Date.parse('2026-11-25T09:00:00+09:00');
+  rotation.update(market([{ ...listed, id: 'skew', listedAtMs: now + 20_000 }, stock('느린시계', now + 20_000)]), new Set());
+  assert.equal(current.stocks[0].id, 'skew');
+  advance(3_000);
+  assert.equal(current.stocks[0].id, '느린시계');
+  advance(3_000);
+  rotation.clear();
   now = baseline;
   rotation.update(market(Array.from({ length: 6 }, (_, i) => stock('종목' + i))), new Set());
   const reached = new Set(current.stocks.map(item => item.id));
@@ -88,7 +121,8 @@ try {
   assert.equal(current, null);
   rotation.clear();
   assert.equal(timers.size, 0);
-  assert.equal(stockBulletinExpiresAt(baseline), baseline + 600_000);
+  assert.equal(stockBulletinExpiresAt({ kind: 'previous', atMs: baseline }), baseline + 600_000);
+  assert.equal(stockBulletinExpiresAt({ kind: 'listing', atMs: baseline }), Date.parse('2026-11-24T00:00:00+09:00'));
   console.log('PASS: inclusive ±10% boundaries, three-second bulletins, ten-minute expiry, dismissal/new-event recovery, duplicate/stale/legacy suppression, complete paging and cleanup; no network calls.');
 } finally {
   rotation.clear();

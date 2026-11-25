@@ -19,7 +19,19 @@ export type StockBulletin = {
   before: StockBulletinItem[];
   stocks: StockBulletinItem[];
 };
-export const stockBulletinExpiresAt = nextWisStockPriceTick;
+const KST_OFFSET_MS = 9 * 3_600_000;
+const DAY_MS = 24 * 3_600_000;
+// A display computer whose clock runs a little slow must not miss an event.
+const CLOCK_SKEW_MS = 120_000;
+/** A price move is news until the next quote; a listing is news all its day. */
+export function stockBulletinExpiresAt(
+  item: Pick<StockBulletinItem, "kind" | "atMs">,
+) {
+  return item.kind === "listing"
+    ? (Math.floor((item.atMs + KST_OFFSET_MS) / DAY_MS) + 1) * DAY_MS -
+        KST_OFFSET_MS
+    : nextWisStockPriceTick(item.atMs);
+}
 export function isWisStockBreakingMove(price: number, previousPrice: number) {
   return (
     previousPrice > 0 && Math.abs(price - previousPrice) * 10 >= previousPrice
@@ -32,15 +44,18 @@ function eligibleItems(
 ): StockBulletinItem[] {
   const listings: StockBulletinItem[] = [];
   const movements: Extract<StockBulletinItem, { percent: number }>[] = [];
-  const current = (time: number | undefined): time is number =>
+  const current = (
+    kind: StockBulletinItem["kind"],
+    time: number | undefined,
+  ): time is number =>
     time !== undefined &&
     Number.isFinite(time) &&
     time > 0 &&
-    time <= now &&
-    now < stockBulletinExpiresAt(time);
+    time <= now + CLOCK_SKEW_MS &&
+    now < stockBulletinExpiresAt({ kind, atMs: time });
   for (const stock of market.stocks) {
     const { id, name, price, listedAtMs, priceAtMs, previousPrice } = stock;
-    if (current(listedAtMs)) {
+    if (current("listing", listedAtMs)) {
       listings.push({
         kind: "listing",
         id,
@@ -53,7 +68,7 @@ function eligibleItems(
     // A document refresh or yesterday's close does not establish when a price
     // moved. Only an observed tick can create a time-limited breaking headline.
     if (
-      current(priceAtMs) &&
+      current("previous", priceAtMs) &&
       previousPrice &&
       isWisStockBreakingMove(price, previousPrice)
     ) {
@@ -71,7 +86,8 @@ function eligibleItems(
   return [...listings, ...movements];
 }
 
-// Each confirmed event is announced once within its ten-minute quote interval.
+// Each confirmed event is announced once: a price move within its ten-minute
+// quote interval, a listing once a day while this display stays open.
 export function createStockBulletinRotation(
   publish: (value: StockBulletin | null) => void,
 ) {
@@ -105,15 +121,13 @@ export function createStockBulletinRotation(
       );
     const lead = available[0];
     if (lead) {
-      const before = page.filter(
-        (item) => now < stockBulletinExpiresAt(item.atMs),
-      );
+      const before = page.filter((item) => now < stockBulletinExpiresAt(item));
       page = [lead];
       shown.add(key(lead));
       publish({ id: ++sequence, before, stocks: page });
       const deadline = Math.min(
         now + 3_000,
-        ...page.map((item) => stockBulletinExpiresAt(item.atMs)),
+        ...page.map((item) => stockBulletinExpiresAt(item)),
       );
       timer = setTimeout(() => show(priority), Math.max(0, deadline - now));
       return;
@@ -125,7 +139,9 @@ export function createStockBulletinRotation(
     clearTimeout(timer);
     timer = undefined;
     page = [];
-    shown.clear();
+    // A reconnect announces current price moves again, not the day's listings.
+    for (const eventKey of shown)
+      if (!eventKey.startsWith("listing:")) shown.delete(eventKey);
     market = null;
     publish(null);
   }
