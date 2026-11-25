@@ -97,13 +97,6 @@ function retainSheet(look: AvatarLook) {
     );
     baked.set(key, created);
     entry = created;
-    // Frames nobody shows any more give their memory back, oldest first.
-    for (const [other, unused] of baked) {
-      if (baked.size <= KEPT_SHEETS) break;
-      if (unused.users || !unused.url) continue;
-      URL.revokeObjectURL(unused.url);
-      baked.delete(other);
-    }
   }
   entry.users += 1;
   return { key, sheet: entry.sheet };
@@ -111,6 +104,15 @@ function retainSheet(look: AvatarLook) {
 function releaseSheet(key: string) {
   const entry = baked.get(key);
   if (entry) entry.users -= 1;
+}
+/** Frames nobody shows any more give their memory back, oldest first. */
+function trimSheets() {
+  for (const [key, unused] of baked) {
+    if (baked.size <= KEPT_SHEETS) break;
+    if (unused.users || !unused.url) continue;
+    URL.revokeObjectURL(unused.url);
+    baked.delete(key);
+  }
 }
 
 /**
@@ -223,6 +225,9 @@ export function useYutCast({
         },
       );
     }
+    // Only after every look of this answer is held: a player's own frames must
+    // never be given back while a newcomer's are added.
+    trimSheets();
     return () => {
       active = false;
       held.forEach(releaseSheet);
@@ -233,7 +238,13 @@ export function useYutCast({
     const result: Record<string, YutAvatarSheet> = {};
     for (const [player, look] of Object.entries(answer.looks)) {
       const entry = ready[player];
-      if (entry && entry.look === lookKey(look)) result[player] = entry.sheet;
+      // Frames given back since the player was last met are baked again first.
+      if (
+        entry &&
+        entry.look === lookKey(look) &&
+        baked.get(entry.look)?.url === entry.sheet.url
+      )
+        result[player] = entry.sheet;
     }
     return Object.keys(result).length ? result : NO_SHEETS;
   }, [answer, ready]);
