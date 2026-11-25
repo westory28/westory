@@ -283,10 +283,7 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  color: var(--ws-text-muted, #6b7280);
-  font: 800 24px/1 Arial, sans-serif;
 }
-.teacher-shortcut-launcher[aria-expanded="true"] { color: var(--ws-primary, #2563eb); }
 dialog.teacher-shortcut-menu {
   inset: auto calc(env(safe-area-inset-right, 0px) + 16px) calc(env(safe-area-inset-bottom, 0px) + 16px) auto;
   margin: 0;

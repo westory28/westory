@@ -155,8 +155,8 @@ export const AVATAR_SLOTS: { key: AvatarSlot; label: string; icon: string }[] =
   [
     { key: "character", label: "캐릭터", icon: "fa-user" },
     { key: "hairStyle", label: "헤어", icon: "fa-scissors" },
-    { key: "expression", label: "눈매·표정", icon: "fa-face-smile" },
-    { key: "skinTone", label: "피부색", icon: "fa-hand" },
+    { key: "expression", label: "표정", icon: "fa-face-smile" },
+    { key: "skinTone", label: "피부", icon: "fa-hand" },
     { key: "top", label: "상의", icon: "fa-shirt" },
     { key: "bottom", label: "하의", icon: "fa-layer-group" },
     { key: "shoes", label: "신발", icon: "fa-shoe-prints" },

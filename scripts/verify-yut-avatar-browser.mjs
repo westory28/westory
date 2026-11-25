@@ -1104,8 +1104,75 @@ try {
       await shot(small, `entry-choice-${width}x${height}`);
       await small.context().close();
     }
-    // No saved avatar, and a teacher: no choice is offered and nothing is drawn as an avatar.
-    for (const query of ["uid=d", "uid=a&portal=teacher"]) {
+    // A teacher with a saved avatar: the same choice, and the avatar in a match
+    // played alone and in the practice room.
+    for (const start of ["single", "practice"]) {
+      const teacher = await open("uid=a&portal=teacher", { seed: "none" });
+      const choice = teacher.getByRole("group", { name: "내 말" });
+      await choice.waitFor();
+      assert.equal(
+        await choice
+          .getByRole("button", { name: "내 아바타" })
+          .getAttribute("aria-pressed"),
+        "true",
+      );
+      if (start === "single") {
+        await choice.getByRole("button", { name: "동물 말" }).click();
+        await choice
+          .getByRole("button", { name: "동물 말", pressed: true })
+          .waitFor();
+        await choice.getByRole("button", { name: "내 아바타" }).click();
+        await choice
+          .getByRole("button", { name: "내 아바타", pressed: true })
+          .waitFor();
+        assert.deepEqual(
+          await teacher.evaluate(() => window.yutQA.pieceCalls),
+          ["classic", "avatar"],
+        );
+        await teacher.getByRole("button", { name: /혼자서 시작/ }).click();
+        await teacher.getByRole("button", { name: "싱글 시작" }).click();
+        await teacher.locator(".yut-player .yut-portrait").first().waitFor();
+        await teacher.waitForFunction(() =>
+          document.querySelector(".yut-player .yut-avatar-sprite"),
+        );
+        assert.deepEqual(
+          await art(teacher, ".yut-player .yut-portrait").then((rows) =>
+            rows.map((row) => row.avatar),
+          ),
+          [true, false, false, false],
+          "the teacher's own pieces only",
+        );
+      } else {
+        await teacher
+          .getByRole("button", { name: /대기실부터 체험하기/ })
+          .click();
+        await teacher.waitForFunction(() =>
+          document.querySelector(".yut-seat .yut-avatar-sprite"),
+        );
+        assert.deepEqual(
+          await art(teacher, ".yut-seat.is-filled").then((rows) =>
+            rows.map((row) => row.avatar),
+          ),
+          [true, false, false, false],
+          "the practice room shows the teacher's avatar",
+        );
+      }
+      assert.equal(
+        await teacher.evaluate(() => window.yutQA.commands.length),
+        0,
+      );
+      await shot(teacher, `teacher-${start}-1280x800`);
+      await teacher.context().close();
+    }
+    // A teacher seated in a room with students.
+    {
+      const seated = await open("uid=a&portal=teacher", { layout: START });
+      await settle(seated, 4);
+      assert.ok((await art(seated)).some((row) => row.avatar));
+      await seated.context().close();
+    }
+    // No saved avatar: no choice is offered and nothing is drawn as an avatar.
+    for (const query of ["uid=d", "uid=d&portal=teacher"]) {
       const none = await open(query, { seed: "none" });
       await none.getByRole("button", { name: /여럿이서 시작/ }).waitFor();
       await none.waitForTimeout(500);
@@ -1116,13 +1183,13 @@ try {
       );
       assert.equal(
         await none.evaluate(() => window.yutQA.castCalls.length),
-        query.includes("teacher") ? 0 : 1,
+        1,
         query,
       );
       await none.context().close();
     }
     pass(
-      "The entry screen offers 내 아바타 / 동물 말 only to a student with a saved avatar; a refused save keeps the choice and shows the game's message; single-player uses my avatar for my pieces only and sends no command.",
+      "The entry screen offers 내 아바타 / 동물 말 only to a player with a saved avatar, teachers included; a refused save keeps the choice and shows the game's message; single-player and a teacher's practice room use my avatar for my pieces only and send no command.",
     );
   }
 

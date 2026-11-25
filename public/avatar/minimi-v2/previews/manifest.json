@@ -7,7 +7,7 @@
   "sources": {
     "scripts/render-avatar-item-previews.mjs": "21824d36525ab7d768cbffcf376b344c7f4c7614313d71010615812afb4d3ff5",
     "functions/avatarCatalog.json": "3ddf0e44ef6aba09f62d6cced521cacfefb1b483acf6bbb4eb105c00131aed05",
-    "src/features/avatar/catalog.ts": "161cbf230aae0f7e5eb16585a166071f4438c30c4e5560082e473094ce2e2994",
+    "src/features/avatar/catalog.ts": "1a9b365e410c9e03e261a5181cb4e1426018e2d52e5247b05685b9d74217c0bc",
     "src/features/avatar/minimi/bowlHair.ts": "d94aa59ddeb07cee0a6ece2cde6e28192edfae4aab4fd37fbb1f328580a6c9ad",
     "src/features/avatar/minimi/details.ts": "d5a82fae39c455e458b782f363ee33b1a550cde4b9d7548cddcd265699b96728",
     "src/features/avatar/minimi/draw.ts": "100a81b2efea4a409b0f8f7de91187ca82e9153edf46f02cc7a4abac3709818e",

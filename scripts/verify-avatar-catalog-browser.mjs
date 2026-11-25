@@ -77,7 +77,7 @@ try {
   await button("꾸미기 화면").click();
   await page.locator(".avatar-studio").waitFor();
   assert.equal(await button("헤어").getAttribute("aria-pressed"), "true");
-  assert.deepEqual((await page.locator('.avatar-studio-categories button').allTextContents()).map(text=>text.trim()).slice(0,5), ['헤어','눈매·표정','피부색','상의','하의']);
+  assert.deepEqual((await page.locator('.avatar-studio-categories button').allTextContents()).map(text=>text.trim()).slice(0,5), ['헤어','표정','피부','상의','하의']);
   assert.equal(
     await page.evaluate(() => window.avatarQa.loadCalls),
     1,
@@ -239,8 +239,8 @@ try {
     accessory: "장식",
     hairStyle: "헤어",
     hairTone: "염색",
-    expression: "눈매·표정",
-    skinTone: "피부색",
+    expression: "표정",
+    skinTone: "피부",
     pose: "포즈",
   };
   for (const character of ["girl", "boy"]) {

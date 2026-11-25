@@ -4,7 +4,9 @@
   container-type: inline-size;
   min-width: 0;
 }
-.avatar-studio button:not(.gongsin-drum-button),
+/* :where() keeps this base as weak as a plain element rule, so the tab, badge,
+   search and card styles below and in avatarShopItem.css are not overridden. */
+.avatar-studio button:where(:not(.gongsin-drum-button)),
 .avatar-studio-status button {
   min-height: 44px;
   border: 1px solid var(--ws-border, #e5e7eb);
@@ -14,12 +16,12 @@
   font: inherit;
   cursor: pointer;
 }
-.avatar-studio button:not(.gongsin-drum-button):focus-visible,
+.avatar-studio button:where(:not(.gongsin-drum-button)):focus-visible,
 .avatar-studio-status button:focus-visible {
   outline: 2px solid var(--ws-primary, #2563eb);
   outline-offset: 2px;
 }
-.avatar-studio button:not(.gongsin-drum-button):disabled {
+.avatar-studio button:where(:not(.gongsin-drum-button)):disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -148,22 +150,23 @@
 }
 .avatar-studio-toolbar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   min-width: 0;
   border-bottom: 1px solid var(--ws-border, #e5e7eb);
 }
+/* Categories never scroll: icons give way first, then the row wraps. */
 .avatar-studio-categories {
   display: flex;
   flex: 1;
+  flex-wrap: wrap;
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  gap: 4px;
+  gap: 0 4px;
 }
 .avatar-studio-categories button {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   border: 0;
   border-radius: 0;
@@ -358,13 +361,6 @@
     height: 280px;
     min-height: 0;
   }
-  .avatar-studio-categories {
-    gap: 4px;
-  }
-  .avatar-studio-categories button {
-    padding: 8px;
-    font-size: 14px;
-  }
   .avatar-studio-items {
     grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
     gap: 8px;
@@ -374,6 +370,48 @@
   }
   .avatar-studio-wallet {
     font-size: 14px;
+  }
+}
+
+@container avatar-picker (width < 900px) {
+  .avatar-studio-categories {
+    gap: 0;
+  }
+  .avatar-studio-categories button > i {
+    display: none;
+  }
+}
+/* The same width AvatarStudio folds the search at: its input opens in the free
+   end of the filter row below, so it covers no tab and moves no item. */
+@container avatar-picker (width < 680px) {
+  .avatar-studio-toolbar {
+    position: relative;
+  }
+  .avatar-studio-search input {
+    position: absolute;
+    z-index: 1;
+    top: calc(100% + 4px);
+    right: 0;
+    width: min(240px, calc(100cqi - 400px));
+  }
+}
+/* Below this the shop's two filter groups stack, which frees the row again. */
+@container avatar-picker (width < 620px) {
+  .avatar-studio-browse {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .avatar-studio-search input {
+    width: min(240px, calc(100cqi - 208px));
+  }
+}
+@container avatar-picker (width < 456px) {
+  .avatar-studio-categories {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .avatar-studio-categories button {
+    padding-inline: 0;
   }
 }
 

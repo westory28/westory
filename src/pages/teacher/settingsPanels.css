@@ -62,39 +62,117 @@
   padding: 0;
 }
 
-.teacher-settings-menu-order {
-  display: flex;
-  gap: 4px;
+/* Sitemap: one quiet card per parent menu, one line per child. */
+.teacher-sitemap {
+  padding-bottom: 96px;
 }
 
-.teacher-settings-menu-order button {
+.teacher-sitemap-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0 0 16px;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+}
+
+.teacher-sitemap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  align-items: start;
+  gap: 16px;
+}
+
+.teacher-sitemap-grid,
+.teacher-sitemap-menu ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.teacher-sitemap-menu,
+.teacher-sitemap-add {
+  min-width: 0;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--ws-surface, #ffffff);
+}
+
+.teacher-sitemap-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 8px 0 16px;
+  border-top: 1px solid var(--ws-border, #e5e7eb);
+}
+
+.teacher-sitemap-row--head {
+  min-height: 56px;
+  border-top: 0;
+}
+
+.teacher-sitemap-name {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--ws-text, #374151);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.4;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+h4.teacher-sitemap-name {
+  color: var(--ws-text-strong, #111827);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+[data-hidden] > .teacher-sitemap-name,
+[data-hidden] > .teacher-sitemap-row--head .teacher-sitemap-name,
+[data-hidden] > .teacher-sitemap-child-edit input {
+  color: var(--ws-text-muted, #6b7280);
+  text-decoration: line-through;
+}
+
+.teacher-sitemap-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 8px;
+  border-radius: 9999px;
+  background: var(--ws-surface-subtle, #f3f4f6);
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  vertical-align: middle;
+}
+
+.teacher-sitemap-actions {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.teacher-sitemap-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  min-width: 40px;
-  min-height: 44px;
-  flex: 1;
-  padding: 4px 8px;
-  border: 1px solid var(--ws-border, #e5e7eb);
+  width: 36px;
+  height: 44px;
+  padding: 0;
+  border: 0;
   border-radius: 8px;
-  color: var(--ws-text-muted, #64748b);
-  font-size: 12px;
+  background: transparent;
+  color: var(--ws-text-muted, #6b7280);
+  cursor: pointer;
 }
 
-.teacher-settings-menu-order button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.teacher-settings-menu-order button:not(:disabled):hover {
-  color: var(--ws-primary, #2563eb);
-  background: var(--ws-surface-subtle, #f8fafc);
-}
-
-.teacher-settings-menu-order svg {
-  width: 16px;
-  height: 16px;
+.teacher-sitemap-icon svg {
+  width: 20px;
+  height: 20px;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -102,41 +180,132 @@
   stroke-linejoin: round;
 }
 
-.teacher-settings-menu-order--child {
-  width: 100%;
-  justify-content: flex-end;
+.teacher-sitemap-icon:not(:disabled):hover,
+.teacher-sitemap-icon[aria-expanded="true"] {
+  background: var(--ws-primary-soft, #eff6ff);
+  color: var(--ws-primary, #2563eb);
 }
 
-.teacher-settings-menu-order--child button {
-  flex: 0 0 40px;
+.teacher-sitemap-icon--hidden {
+  color: var(--ws-text-strong, #111827);
 }
 
-.teacher-settings-sitemap-preview {
+.teacher-sitemap-icon--danger,
+.teacher-sitemap-icon--danger:not(:disabled):hover {
+  color: var(--ws-danger-text, #b91c1c);
+}
+
+.teacher-sitemap-icon:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.teacher-sitemap :is(button, input):focus-visible {
+  outline: 2px solid var(--ws-ring, #3b82f6);
+  outline-offset: -2px;
+}
+
+.teacher-sitemap-empty {
+  margin: 0;
+  padding: 12px 16px;
+  border-top: 1px solid var(--ws-border, #e5e7eb);
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+}
+
+.teacher-sitemap-edit {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--ws-border, #e5e7eb);
 }
 
-.teacher-settings-sitemap-preview > * {
+.teacher-sitemap-field {
+  display: grid;
+  gap: 4px;
   min-width: 0;
+  color: var(--ws-text, #374151);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.teacher-sitemap-field input,
+.teacher-sitemap-child-edit input {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-border, #d1d5db);
+  border-radius: 8px;
+  background: var(--ws-surface, #ffffff);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.teacher-sitemap-child-edit {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 0;
+}
+
+.teacher-sitemap-url {
+  margin: 0;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
   overflow-wrap: anywhere;
 }
 
-.teacher-settings-sitemap-child {
+.teacher-sitemap-edit-actions {
+  display: flex;
   flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-.teacher-settings-sitemap-child > span:first-child {
-  flex-basis: 80px;
-}
-
-.teacher-settings-sitemap-child button {
+.teacher-sitemap-button {
   min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--ws-border, #d1d5db);
+  border-radius: 8px;
+  background: var(--ws-surface, #ffffff);
+  color: var(--ws-text, #374151);
+  font-size: 14px;
+  font-weight: 700;
   white-space: nowrap;
 }
 
+.teacher-sitemap-button:hover {
+  border-color: var(--ws-primary, #2563eb);
+  color: var(--ws-primary, #2563eb);
+}
+
+.teacher-sitemap-button--danger,
+.teacher-sitemap-button--danger:hover {
+  border-color: currentColor;
+  color: var(--ws-danger-text, #b91c1c);
+}
+
+.teacher-sitemap-add {
+  margin-top: 16px;
+  padding: 16px;
+}
+
+.teacher-sitemap-add h4 {
+  margin: 0 0 12px;
+  color: var(--ws-text-strong, #111827);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.teacher-sitemap-add > div {
+  display: grid;
+  align-items: end;
+  gap: 12px;
+}
+
 @container teacher-settings (min-width: 480px) {
-  .teacher-settings-sitemap-preview,
   .teacher-settings-school-levels {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -151,7 +320,7 @@
     padding: 0;
   }
 
-  .teacher-settings-sitemap-preview {
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  .teacher-sitemap-add > div {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   }
 }

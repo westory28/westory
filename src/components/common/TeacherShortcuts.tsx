@@ -12,6 +12,7 @@ import {
   ShortcutEditor,
   StudentShortcutIcon,
 } from "./StudentLearningShortcutsEditor";
+import BrandLogo from "./BrandLogo";
 import { InlineLoading } from "./LoadingState";
 import "./studentLearningTools.css";
 
@@ -106,7 +107,7 @@ export default function TeacherShortcuts({
           setPanel("menu");
         }}
       >
-        <span aria-hidden="true">Ws</span>
+        <BrandLogo variant="mark" decorative />
       </button>
       {panel === "menu" && (
         <dialog

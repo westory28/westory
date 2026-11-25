@@ -790,9 +790,9 @@ export default function YutGame({
     portal === "student" && localPlayerName.current?.scope === accountScope
       ? localPlayerName.current.name
       : undefined;
-  // Avatar pieces are looked up beside the game and never hold it up. A
-  // student's own piece is also known without a room: the choice on the entry
-  // screen, and the single-player match.
+  // Avatar pieces are looked up beside the game and never hold it up. The
+  // player's own piece is also known without a room: the choice on the entry
+  // screen, and a match played alone (a teacher's practice room included).
   const signedInUid = currentUser?.uid || "";
   const onlineRoom = local ? null : room;
   const cast = useYutCast({
@@ -801,19 +801,22 @@ export default function YutGame({
     uid: signedInUid,
     room: onlineRoom,
     self:
-      portal === "student" &&
       !onlineRoom &&
-      (local ? localMode === "single" : lobby?.enabled === true),
+      (portal === "teacher"
+        ? local || lobby !== null
+        : local
+          ? localMode === "single"
+          : lobby?.enabled === true),
   });
   const ownSheet = cast.sheets[signedInUid];
   const avatars = useMemo<YutAvatarSheets>(
     () =>
       !local
         ? cast.sheets
-        : ownSheet && localMode === "single"
+        : ownSheet && (portal === "teacher" || localMode === "single")
           ? { [YUT_PREVIEW_UID]: ownSheet }
           : {},
-    [local, localMode, cast.sheets, ownSheet],
+    [local, localMode, portal, cast.sheets, ownSheet],
   );
   const [pieceSaving, setPieceSaving] = useState(false);
   const choosePiece = (choice: YutPieceChoice) => {

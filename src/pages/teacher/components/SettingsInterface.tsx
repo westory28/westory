@@ -37,15 +37,41 @@ const createDefaultInterfaceConfig = () => ({
 
 const DEFAULT_PARENT_ICON =
   "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253";
-const SITEMAP_HEADER_COLORS = [
-  "bg-blue-700",
-  "bg-amber-600",
-  "bg-lime-700",
-  "bg-sky-700",
-  "bg-indigo-700",
-  "bg-cyan-700",
-  "bg-rose-700",
-];
+const SITEMAP_ICONS = {
+  previous: "m14 6-6 6 6 6",
+  next: "m10 6 6 6-6 6",
+  up: "m6 14 6-6 6 6",
+  down: "m6 10 6 6 6-6",
+  edit: "M4 20h4L19 9l-4-4L4 16v4Zm9-13 4 4",
+  shown:
+    "M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Zm6.5 0a3 3 0 1 0 6 0 3 3 0 0 0-6 0Z",
+  hidden:
+    "M4 4l16 16M9.9 5.8A9 9 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-3 3.7M6.2 7.6A16 16 0 0 0 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4-.9M9.9 9.9a3 3 0 0 0 4.2 4.2",
+  remove: "M5 7h14M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
+};
+
+const SitemapIconButton: React.FC<{
+  icon: keyof typeof SITEMAP_ICONS;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  expanded?: boolean;
+  tone?: "danger" | "hidden";
+}> = ({ icon, label, onClick, disabled, expanded, tone }) => (
+  <button
+    type="button"
+    className={`teacher-sitemap-icon${tone ? ` teacher-sitemap-icon--${tone}` : ""}`}
+    aria-label={label}
+    title={label}
+    aria-expanded={expanded}
+    disabled={disabled}
+    onClick={onClick}
+  >
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d={SITEMAP_ICONS[icon]} />
+    </svg>
+  </button>
+);
 
 const normalizeMenuUrl = (value: string) => {
   const trimmed = value.trim();
@@ -85,9 +111,7 @@ const SettingsInterface: React.FC = () => {
   const [childDrafts, setChildDrafts] = useState<
     Record<string, { name: string; url: string }>
   >({});
-
-  const getSitemapHeaderClass = (index: number) =>
-    SITEMAP_HEADER_COLORS[index % SITEMAP_HEADER_COLORS.length];
+  const [editingMenu, setEditingMenu] = useState<string | null>(null);
 
   const getPortalLabel = (portal: PortalType) =>
     portal === "student" ? "학생 포털" : "교사 포털";
@@ -505,6 +529,8 @@ const SettingsInterface: React.FC = () => {
       </div>
     );
 
+  const menuStats = getPortalMenuStats(activePortal);
+
   return (
     <div className="teacher-settings-interface">
       <div className="ws-page-tabs" role="tablist" aria-label="인터페이스 설정">
@@ -609,484 +635,312 @@ const SettingsInterface: React.FC = () => {
         )}
 
         {activeTab === "sitemap" && (
-          <div className="teacher-floating-action-space space-y-5 pb-24">
-            <section>
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div>
-                  <h3 className="flex items-center gap-2 text-base font-extrabold text-gray-900">
-                    <i className="fas fa-sitemap text-blue-500"></i>
-                    사이트맵 메뉴 관리
-                  </h3>
-                </div>
-                <div
-                  role="tablist"
-                  aria-label="사이트맵 미리보기 대상"
-                  className="ws-page-tabs"
-                >
-                  {(["student", "teacher"] as PortalType[]).map((portal) => {
-                    const stats = getPortalMenuStats(portal);
-                    return (
-                      <button
-                        key={`sitemap-portal-tab-${portal}`}
-                        type="button"
-                        role="tab"
-                        aria-selected={activePortal === portal}
-                        onClick={() => setActivePortal(portal)}
-                      >
-                        {getPortalLabel(portal)}
-                        <span className="text-xs">{stats.parentCount}개</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="mt-4 grid grid-cols-1 gap-2 text-sm md:grid-cols-3">
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                  <span className="text-gray-500">상위 메뉴</span>
-                  <strong className="ml-2 text-gray-900">
-                    {getPortalMenuStats(activePortal).parentCount}개
-                  </strong>
-                </div>
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                  <span className="text-gray-500">하위 메뉴</span>
-                  <strong className="ml-2 text-gray-900">
-                    {getPortalMenuStats(activePortal).childCount}개
-                  </strong>
-                </div>
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                  <span className="text-gray-500">숨김 메뉴</span>
-                  <strong className="ml-2 text-gray-900">
-                    {getPortalMenuStats(activePortal).hiddenCount}개
-                  </strong>
-                </div>
-              </div>
-            </section>
-
-            <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h4 className="text-sm font-extrabold text-gray-900">
-                    {getPortalLabel(activePortal)} 미리보기
-                  </h4>
-                </div>
-                <span className="inline-flex w-fit items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-600">
-                  상위 {getPortalMenuStats(activePortal).parentCount}개
-                </span>
-              </div>
-
-              <div
-                className="teacher-settings-sitemap-preview"
-                style={
-                  {
-                    "--sitemap-columns": Math.max(
-                      1,
-                      menuConfig[activePortal].length,
-                    ),
-                  } as React.CSSProperties
-                }
-              >
-                {menuConfig[activePortal].map((item, idx) => (
-                  <div
-                    key={`preview-${activePortal}-${item.url}`}
-                    className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
-                  >
-                    <div
-                      className={`px-3 py-2.5 text-sm font-bold text-white ${getSitemapHeaderClass(idx)}`}
-                    >
-                      <span className={item.hidden ? "line-through" : ""}>
-                        {item.name}
-                      </span>
-                    </div>
-                    <div className="bg-white p-3">
-                      <div className="teacher-settings-menu-order mb-3">
-                        <button
-                          type="button"
-                          aria-label={`${item.name} 상위 메뉴 앞으로`}
-                          onClick={() => moveParent(activePortal, idx, -1)}
-                          disabled={idx === 0}
-                        >
-                          <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="m14 6-6 6 6 6" />
-                          </svg>
-                          앞으로
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={`${item.name} 상위 메뉴 뒤로`}
-                          onClick={() => moveParent(activePortal, idx, 1)}
-                          disabled={idx === menuConfig[activePortal].length - 1}
-                        >
-                          뒤로
-                          <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="m10 6 6 6-6 6" />
-                          </svg>
-                        </button>
-                      </div>
-                      {activePortal === "student" && (
-                        <button
-                          type="button"
-                          aria-label={`${item.name} 전체 ${item.hidden ? "숨김 해제" : "숨기기"}`}
-                          aria-pressed={item.hidden === true}
-                          onClick={() => toggleParentHidden(activePortal, idx)}
-                          className="mb-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700"
-                        >
-                          {item.hidden ? "전체 숨김 해제" : "전체 숨기기"}
-                        </button>
-                      )}
-                      {item.children && item.children.length > 0 ? (
-                        <ul className="space-y-1.5">
-                          {item.children.map((child, childIdx) => (
-                            <li
-                              key={`preview-child-${child.url}`}
-                              className="teacher-settings-sitemap-child flex items-center justify-between gap-2 border-b border-dashed border-gray-200 pb-1 text-sm"
-                            >
-                              <span
-                                className={`min-w-0 flex-1 ${child.hidden || item.hidden ? "text-gray-400 line-through" : "text-gray-700"}`}
-                              >
-                                • {child.name}
-                              </span>
-                              {activePortal === "student" && (
-                                <button
-                                  type="button"
-                                  aria-label={`${child.name} ${child.hidden ? "숨김 해제" : "숨기기"}`}
-                                  aria-pressed={child.hidden}
-                                  onClick={() =>
-                                    toggleChildHidden(
-                                      activePortal,
-                                      idx,
-                                      childIdx,
-                                    )
-                                  }
-                                  className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition ${child.hidden ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"}`}
-                                >
-                                  {child.hidden ? "숨김 해제" : "숨기기"}
-                                </button>
-                              )}
-                              {activePortal !== "student" && child.hidden && (
-                                <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
-                                  숨김
-                                </span>
-                              )}
-                              <div className="teacher-settings-menu-order teacher-settings-menu-order--child">
-                                <button
-                                  type="button"
-                                  aria-label={`${child.name} 하위 메뉴 위로`}
-                                  onClick={() =>
-                                    moveChild(activePortal, idx, childIdx, -1)
-                                  }
-                                  disabled={childIdx === 0}
-                                >
-                                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                                    <path d="m6 14 6-6 6 6" />
-                                  </svg>
-                                </button>
-                                <button
-                                  type="button"
-                                  aria-label={`${child.name} 하위 메뉴 아래로`}
-                                  onClick={() =>
-                                    moveChild(activePortal, idx, childIdx, 1)
-                                  }
-                                  disabled={
-                                    childIdx === item.children!.length - 1
-                                  }
-                                >
-                                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                                    <path d="m6 10 6 6 6-6" />
-                                  </svg>
-                                </button>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-sm text-gray-400">하위 메뉴 없음</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-              <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h4 className="text-sm font-extrabold text-gray-900">
-                    상위 메뉴 추가
-                  </h4>
-                </div>
-                <span className="inline-flex w-fit items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-600">
-                  {getPortalLabel(activePortal)}
-                </span>
-              </div>
-              <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-2">
-                <input
-                  lang="ko"
-                  inputMode="text"
-                  type="text"
-                  value={parentDraft[activePortal].name}
-                  onChange={(e) =>
-                    updateParentDraft(activePortal, "name", e.target.value)
-                  }
-                  placeholder="상위 메뉴 이름"
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-                <input
-                  type="text"
-                  value={parentDraft[activePortal].url}
-                  onChange={(e) =>
-                    updateParentDraft(activePortal, "url", e.target.value)
-                  }
-                  placeholder="/teacher/custom-page"
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none"
-                />
+          <div className="teacher-floating-action-space teacher-sitemap">
+            <div
+              role="tablist"
+              aria-label="사이트맵 대상"
+              className="ws-page-tabs"
+            >
+              {(["student", "teacher"] as PortalType[]).map((portal) => (
                 <button
+                  key={`sitemap-portal-tab-${portal}`}
                   type="button"
-                  onClick={() => addParent(activePortal)}
-                  className="px-4 py-2.5 rounded-lg text-sm font-bold bg-blue-600 hover:bg-blue-700 text-white"
+                  role="tab"
+                  aria-selected={activePortal === portal}
+                  onClick={() => setActivePortal(portal)}
                 >
-                  상위 추가
+                  {getPortalLabel(portal)}
                 </button>
-              </div>
+              ))}
             </div>
+            <p className="teacher-sitemap-summary">
+              <span>상위 메뉴 {menuStats.parentCount}개</span>
+              <span>하위 메뉴 {menuStats.childCount}개</span>
+              {activePortal === "student" && (
+                <span>숨김 {menuStats.hiddenCount}개</span>
+              )}
+            </p>
 
-            <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h4 className="text-sm font-extrabold text-gray-900">
-                    {getPortalLabel(activePortal)} 메뉴 편집
-                  </h4>
-                </div>
-                <span className="inline-flex w-fit items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-600">
-                  상위 {getPortalMenuStats(activePortal).parentCount}개
-                </span>
-              </div>
-              {menuConfig[activePortal].map((item, parentIndex) => (
-                <div
-                  key={`${activePortal}-${item.url}`}
-                  className="border border-gray-200 rounded-xl overflow-hidden"
-                >
-                  <div className="p-4 bg-gray-50 border-b border-gray-200">
-                    <div className="flex flex-wrap items-center gap-2 mb-3">
-                      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-700 text-white text-xs font-bold">
-                        {parentIndex + 1}
-                      </span>
-                      <span className="text-xs font-semibold text-gray-500">
-                        상위 메뉴
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          moveParent(activePortal, parentIndex, -1)
-                        }
-                        disabled={parentIndex === 0}
-                        className="ml-auto px-2.5 py-1.5 text-xs rounded-md border border-gray-300 text-gray-600 disabled:opacity-40"
-                      >
-                        위로
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveParent(activePortal, parentIndex, 1)}
-                        disabled={
-                          parentIndex === menuConfig[activePortal].length - 1
-                        }
-                        className="px-2.5 py-1.5 text-xs rounded-md border border-gray-300 text-gray-600 disabled:opacity-40"
-                      >
-                        아래로
-                      </button>
-                      {activePortal === "student" && (
-                        <button
-                          type="button"
-                          aria-pressed={item.hidden === true}
+            <ul className="teacher-sitemap-grid">
+              {menuConfig[activePortal].map((item, parentIndex) => {
+                const editKey = getChildDraftKey(activePortal, parentIndex);
+                const editing = editingMenu === editKey;
+                const children = item.children || [];
+                return (
+                  <li
+                    key={`${activePortal}-${item.url}`}
+                    className="teacher-sitemap-menu"
+                    data-hidden={item.hidden || undefined}
+                  >
+                    <div className="teacher-sitemap-row teacher-sitemap-row--head">
+                      <h4 className="teacher-sitemap-name">
+                        {item.name}
+                        {item.hidden && (
+                          <span className="teacher-sitemap-badge">숨김</span>
+                        )}
+                      </h4>
+                      <div className="teacher-sitemap-actions">
+                        <SitemapIconButton
+                          icon="edit"
+                          label={`${item.name} 편집`}
+                          expanded={editing}
                           onClick={() =>
-                            toggleParentHidden(activePortal, parentIndex)
+                            setEditingMenu(editing ? null : editKey)
                           }
-                          className="px-3 py-2 text-xs rounded-md border border-gray-300 text-gray-700"
-                        >
-                          {item.hidden ? "전체 숨김 해제" : "전체 숨기기"}
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => deleteParent(activePortal, parentIndex)}
-                        className="px-2.5 py-1.5 text-xs rounded-md border border-red-200 text-red-500"
-                      >
-                        삭제
-                      </button>
-                    </div>
-                    <input
-                      lang="ko"
-                      inputMode="text"
-                      type="text"
-                      value={item.name}
-                      onChange={(e) =>
-                        updateParentName(
-                          activePortal,
-                          parentIndex,
-                          e.target.value,
-                        )
-                      }
-                      className="w-full border border-gray-300 rounded-lg p-2.5 font-bold text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
-                    <p className="text-xs text-gray-500 mt-2 break-all">
-                      URL: {item.url}
-                    </p>
-                  </div>
-
-                  <div className="p-4 space-y-3 bg-white">
-                    <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-2">
-                      <input
-                        lang="ko"
-                        inputMode="text"
-                        type="text"
-                        value={
-                          childDrafts[
-                            getChildDraftKey(activePortal, parentIndex)
-                          ]?.name || ""
-                        }
-                        onChange={(e) =>
-                          updateChildDraft(
-                            activePortal,
-                            parentIndex,
-                            "name",
-                            e.target.value,
-                          )
-                        }
-                        placeholder="하위 메뉴 이름"
-                        className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                      />
-                      <input
-                        type="text"
-                        value={
-                          childDrafts[
-                            getChildDraftKey(activePortal, parentIndex)
-                          ]?.url || ""
-                        }
-                        onChange={(e) =>
-                          updateChildDraft(
-                            activePortal,
-                            parentIndex,
-                            "url",
-                            e.target.value,
-                          )
-                        }
-                        placeholder="/teacher/custom-page?tab=1"
-                        className="w-full border border-gray-300 rounded-lg p-2 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => addChild(activePortal, parentIndex)}
-                        className="px-3 py-2 rounded-lg text-sm font-bold bg-sky-600 hover:bg-sky-700 text-white"
-                      >
-                        하위 추가
-                      </button>
+                        />
+                        {activePortal === "student" && (
+                          <SitemapIconButton
+                            icon={item.hidden ? "hidden" : "shown"}
+                            tone={item.hidden ? "hidden" : undefined}
+                            label={`${item.name} 전체 ${item.hidden ? "숨김 해제" : "숨기기"}`}
+                            onClick={() =>
+                              toggleParentHidden(activePortal, parentIndex)
+                            }
+                          />
+                        )}
+                        <SitemapIconButton
+                          icon="previous"
+                          label={`${item.name} 상위 메뉴 앞으로`}
+                          disabled={parentIndex === 0}
+                          onClick={() =>
+                            moveParent(activePortal, parentIndex, -1)
+                          }
+                        />
+                        <SitemapIconButton
+                          icon="next"
+                          label={`${item.name} 상위 메뉴 뒤로`}
+                          disabled={
+                            parentIndex === menuConfig[activePortal].length - 1
+                          }
+                          onClick={() =>
+                            moveParent(activePortal, parentIndex, 1)
+                          }
+                        />
+                      </div>
                     </div>
 
-                    {item.children && item.children.length > 0 ? (
-                      item.children.map((child, childIndex) => (
-                        <div
-                          key={child.url}
-                          className="rounded-lg border border-gray-200 p-3"
-                        >
-                          <div className="flex flex-wrap items-center gap-2 mb-2">
-                            <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
-                              하위 {childIndex + 1}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                moveChild(
-                                  activePortal,
-                                  parentIndex,
-                                  childIndex,
-                                  -1,
-                                )
-                              }
-                              disabled={childIndex === 0}
-                              className="ml-auto px-2 py-1 text-[11px] rounded border border-gray-300 text-gray-600 disabled:opacity-40"
-                            >
-                              위로
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                moveChild(
-                                  activePortal,
-                                  parentIndex,
-                                  childIndex,
-                                  1,
-                                )
-                              }
-                              disabled={
-                                childIndex === item.children!.length - 1
-                              }
-                              className="px-2 py-1 text-[11px] rounded border border-gray-300 text-gray-600 disabled:opacity-40"
-                            >
-                              아래로
-                            </button>
-                            {activePortal === "student" && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  toggleChildHidden(
-                                    activePortal,
-                                    parentIndex,
-                                    childIndex,
-                                  )
-                                }
-                                className={`px-2 py-1 text-[11px] rounded border ${child.hidden ? "border-emerald-300 text-emerald-700 bg-emerald-50" : "border-amber-300 text-amber-700 bg-amber-50"}`}
-                              >
-                                {child.hidden ? "숨김 해제" : "숨기기"}
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                deleteChild(
-                                  activePortal,
-                                  parentIndex,
-                                  childIndex,
-                                )
-                              }
-                              className="px-2 py-1 text-[11px] rounded border border-red-200 text-red-500"
-                            >
-                              삭제
-                            </button>
-                          </div>
+                    {editing && (
+                      <div className="teacher-sitemap-edit">
+                        <label className="teacher-sitemap-field">
+                          상위 메뉴 이름
                           <input
                             lang="ko"
                             inputMode="text"
                             type="text"
-                            value={child.name}
+                            value={item.name}
                             onChange={(e) =>
-                              updateChildName(
+                              updateParentName(
                                 activePortal,
                                 parentIndex,
-                                childIndex,
                                 e.target.value,
                               )
                             }
-                            className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                           />
-                          <p className="text-[11px] text-gray-500 mt-2 break-all">
-                            URL: {child.url}
-                          </p>
-                          {activePortal === "student" && child.hidden && (
-                            <p className="text-[11px] text-amber-700 mt-1">
-                              학생 대시보드에서 숨김 처리됨
-                            </p>
-                          )}
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-sm text-gray-400 py-2">
-                        하위 메뉴가 없습니다.
+                        </label>
+                        <p className="teacher-sitemap-url">{item.url}</p>
                       </div>
                     )}
-                  </div>
-                </div>
-              ))}
-            </div>
+
+                    {children.length > 0 ? (
+                      <ul>
+                        {children.map((child, childIndex) => (
+                          <li
+                            key={child.url}
+                            className="teacher-sitemap-row"
+                            data-hidden={
+                              child.hidden || item.hidden || undefined
+                            }
+                          >
+                            {editing ? (
+                              <div className="teacher-sitemap-child-edit">
+                                <input
+                                  lang="ko"
+                                  inputMode="text"
+                                  type="text"
+                                  aria-label={`하위 메뉴 이름 ${childIndex + 1}`}
+                                  value={child.name}
+                                  onChange={(e) =>
+                                    updateChildName(
+                                      activePortal,
+                                      parentIndex,
+                                      childIndex,
+                                      e.target.value,
+                                    )
+                                  }
+                                />
+                                <p className="teacher-sitemap-url">
+                                  {child.url}
+                                </p>
+                              </div>
+                            ) : (
+                              <span className="teacher-sitemap-name">
+                                {child.name}
+                                {child.hidden && (
+                                  <span className="teacher-sitemap-badge">
+                                    숨김
+                                  </span>
+                                )}
+                              </span>
+                            )}
+                            <div className="teacher-sitemap-actions">
+                              {editing && (
+                                <SitemapIconButton
+                                  icon="remove"
+                                  tone="danger"
+                                  label={`${child.name} 하위 메뉴 삭제`}
+                                  onClick={() =>
+                                    deleteChild(
+                                      activePortal,
+                                      parentIndex,
+                                      childIndex,
+                                    )
+                                  }
+                                />
+                              )}
+                              {activePortal === "student" && (
+                                <SitemapIconButton
+                                  icon={child.hidden ? "hidden" : "shown"}
+                                  tone={child.hidden ? "hidden" : undefined}
+                                  label={`${child.name} ${child.hidden ? "숨김 해제" : "숨기기"}`}
+                                  onClick={() =>
+                                    toggleChildHidden(
+                                      activePortal,
+                                      parentIndex,
+                                      childIndex,
+                                    )
+                                  }
+                                />
+                              )}
+                              <SitemapIconButton
+                                icon="up"
+                                label={`${child.name} 하위 메뉴 위로`}
+                                disabled={childIndex === 0}
+                                onClick={() =>
+                                  moveChild(
+                                    activePortal,
+                                    parentIndex,
+                                    childIndex,
+                                    -1,
+                                  )
+                                }
+                              />
+                              <SitemapIconButton
+                                icon="down"
+                                label={`${child.name} 하위 메뉴 아래로`}
+                                disabled={childIndex === children.length - 1}
+                                onClick={() =>
+                                  moveChild(
+                                    activePortal,
+                                    parentIndex,
+                                    childIndex,
+                                    1,
+                                  )
+                                }
+                              />
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="teacher-sitemap-empty">하위 메뉴 없음</p>
+                    )}
+
+                    {editing && (
+                      <div className="teacher-sitemap-edit">
+                        <label className="teacher-sitemap-field">
+                          추가할 하위 메뉴 이름
+                          <input
+                            lang="ko"
+                            inputMode="text"
+                            type="text"
+                            value={childDrafts[editKey]?.name || ""}
+                            onChange={(e) =>
+                              updateChildDraft(
+                                activePortal,
+                                parentIndex,
+                                "name",
+                                e.target.value,
+                              )
+                            }
+                          />
+                        </label>
+                        <label className="teacher-sitemap-field">
+                          주소
+                          <input
+                            type="text"
+                            value={childDrafts[editKey]?.url || ""}
+                            onChange={(e) =>
+                              updateChildDraft(
+                                activePortal,
+                                parentIndex,
+                                "url",
+                                e.target.value,
+                              )
+                            }
+                            placeholder={`/${activePortal}/custom-page?tab=1`}
+                          />
+                        </label>
+                        <div className="teacher-sitemap-edit-actions">
+                          <button
+                            type="button"
+                            className="teacher-sitemap-button teacher-sitemap-button--danger"
+                            onClick={() => {
+                              setEditingMenu(null);
+                              deleteParent(activePortal, parentIndex);
+                            }}
+                          >
+                            상위 메뉴 삭제
+                          </button>
+                          <button
+                            type="button"
+                            className="teacher-sitemap-button"
+                            onClick={() => addChild(activePortal, parentIndex)}
+                          >
+                            하위 추가
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+
+            <section className="teacher-sitemap-add">
+              <h4>상위 메뉴 추가</h4>
+              <div>
+                <label className="teacher-sitemap-field">
+                  이름
+                  <input
+                    lang="ko"
+                    inputMode="text"
+                    type="text"
+                    value={parentDraft[activePortal].name}
+                    onChange={(e) =>
+                      updateParentDraft(activePortal, "name", e.target.value)
+                    }
+                  />
+                </label>
+                <label className="teacher-sitemap-field">
+                  주소
+                  <input
+                    type="text"
+                    value={parentDraft[activePortal].url}
+                    onChange={(e) =>
+                      updateParentDraft(activePortal, "url", e.target.value)
+                    }
+                    placeholder={`/${activePortal}/custom-page`}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="teacher-sitemap-button"
+                  onClick={() => addParent(activePortal)}
+                >
+                  상위 추가
+                </button>
+              </div>
+            </section>
 
             <div className="teacher-floating-action-above-patch fixed bottom-4 left-4 right-4 z-40 flex justify-end sm:bottom-6 sm:left-auto sm:right-6">
               <button

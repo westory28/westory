@@ -165,7 +165,8 @@ test('cast writes nothing and reads at most the avatar and the choice of each st
   const result = await run('student-a', cast());
   assert.deepEqual(result.reads.slice().sort(), [...own, `${base}/yut_rooms/room-1`, ...pieces].sort());
   assert.deepEqual([result.writes.length, result.readOnly, result.transactions], [0, 1, 1]);
-  // A teacher in a seat, a player who left and a kicked uid cost no read.
+  // A player who left and a kicked uid cost no read; a teacher in a seat costs
+  // the teacher's own record, never a student record.
   seed({ [`${base}/yut_rooms/room-2`]: (() => {
     const value = room('room-2', ['student-a', 'teacher-t', 'student-b', 'student-c']);
     value.players[2].active = false;
@@ -174,7 +175,8 @@ test('cast writes nothing and reads at most the avatar and the choice of each st
   })() });
   const mixed = await run('teacher-t', cast({ roomId: 'room-2' }));
   assert.deepEqual(mixed.value, { cast: { 'student-a': { look: girl } } });
-  assert.deepEqual(mixed.reads.filter((path) => /student_avatars|yut_players|teacher_avatars/.test(path)).sort(), ['student_avatars/student-a', `${base}/yut_players/student-a`].sort());
+  assert.deepEqual(mixed.reads.filter((path) => /student_avatars|yut_players|teacher_avatars/.test(path)).sort(),
+    ['student_avatars/student-a', `${base}/yut_players/student-a`, 'teacher_avatars/teacher-t', `${base}/yut_players/teacher-t`].sort());
   assert.equal(mixed.reads.some((path) => /^users\/student/.test(path)), false, 'no profile of another account is read');
 });
 
@@ -187,7 +189,44 @@ test('without a room the cast is the caller\'s own piece only', async () => {
   assert.deepEqual((await run('student-c', { action: 'cast' })).value, { cast: {} });
   const teacher = await run('teacher-t', { action: 'cast' });
   assert.deepEqual(teacher.value, { cast: {} });
-  assert.equal(teacher.reads.some((path) => /avatars|yut_players/.test(path)), false);
+  assert.deepEqual(teacher.reads.filter((path) => /avatars|yut_players/.test(path)).sort(), ['teacher_avatars/teacher-t', `${base}/yut_players/teacher-t`].sort());
+});
+
+test('a teacher in a seat is drawn as the avatar saved in the teacher studio, to everyone in the room', async () => {
+  const { run, seed, room, documents } = world();
+  const { studentUid, ...shape } = saved('teacher-t', boy);
+  const teacherSaved = { ...shape, teacherUid: 'teacher-t' };
+  seed({ 'teacher_avatars/teacher-t': teacherSaved, [`${base}/yut_rooms/room-t`]: room('room-t', ['teacher-t', 'student-a']) });
+  const both = { cast: { 'teacher-t': { look: boy }, 'student-a': { look: girl } }, piece: 'avatar' };
+  assert.deepEqual((await run('teacher-t', cast({ roomId: 'room-t' }))).value, both);
+  assert.deepEqual((await run('student-a', cast({ roomId: 'room-t' }))).value, both);
+  // Single play and the practice room ask without a room.
+  assert.deepEqual((await run('teacher-t', { action: 'cast' })).value, { cast: { 'teacher-t': { look: boy } }, piece: 'avatar' });
+  // A monitor outside the seats has no choice of piece in that room.
+  assert.equal('piece' in (await run('staff-s', cast({ roomId: 'room-t' }))).value, false);
+  // The teacher's own choice, kept beside the other fields of the same record.
+  const path = `${base}/yut_players/teacher-t`;
+  seed({ [path]: { roomId: 'room-t', lastCommandAtMs: 5 } });
+  assert.deepEqual((await run('teacher-t', { action: 'piece', piece: 'classic' })).value, { piece: 'classic' });
+  assert.deepEqual(documents.get(path), { roomId: 'room-t', lastCommandAtMs: 5, pieceStyle: 'classic' });
+  assert.deepEqual((await run('teacher-t', cast({ roomId: 'room-t' }))).value, { cast: { 'student-a': { look: girl } }, piece: 'classic' });
+  assert.deepEqual((await run('teacher-t', { action: 'piece', piece: 'avatar' })).value, { piece: 'avatar' });
+  assert.deepEqual(documents.get(path), { roomId: 'room-t', lastCommandAtMs: 5 });
+  // Never from a record of the other audience, another owner, or an unsaved one.
+  for (const [name, records] of Object.entries({
+    'a student-shaped record': { 'teacher_avatars/teacher-t': saved('teacher-t', boy) },
+    'another owner': { 'teacher_avatars/teacher-t': { ...teacherSaved, teacherUid: 'staff-s' } },
+    'never saved': { 'teacher_avatars/teacher-t': { ...teacherSaved, lastSavedAtMs: 0 } },
+    'a student record under a teacher account': { 'teacher_avatars/teacher-t': undefined, 'student_avatars/teacher-t': saved('teacher-t', boy) },
+  })) {
+    for (const [key, value] of Object.entries(records)) { if (value === undefined) documents.delete(key); else seed({ [key]: value }); }
+    assert.deepEqual((await run('teacher-t', cast({ roomId: 'room-t' }))).value, { cast: { 'student-a': { look: girl } } }, name);
+  }
+  // An older room that recorded no membership for the seat costs no read.
+  seed({ 'teacher_avatars/teacher-t': teacherSaved, [`${base}/yut_rooms/room-legacy`]: room('room-legacy', ['teacher-t', 'student-a'], { enrollmentIds: { 'student-a': 'enrollment-student-a' } }) });
+  const legacy = await run('teacher-t', cast({ roomId: 'room-legacy' }));
+  assert.deepEqual(legacy.value, { cast: { 'student-a': { look: girl } } });
+  assert.equal(legacy.reads.some((entry) => /teacher_avatars/.test(entry)), false);
 });
 
 test('cast refuses malformed requests and a failed session before answering', async () => {
@@ -200,7 +239,7 @@ test('cast refuses malformed requests and a failed session before answering', as
   assert.equal(await code(() => run('student-a', cast())), 'unauthenticated');
 });
 
-test('a student chooses the animal piece or the avatar; the choice is one optional field of the player record', async () => {
+test('a player chooses the animal piece or the avatar; the choice is one optional field of the player record', async () => {
   const { run, documents, seed } = world();
   const path = `${base}/yut_players/student-a`;
   seed({ [path]: { roomId: 'room-1', lastCommandAtMs: 5, commands: [{ key: 'kept', fingerprint: 'f', roomId: 'room-1' }], privatePlayDay: '2026-11-25', privatePlayCount: 1 } });
@@ -231,7 +270,6 @@ test('the piece choice is validated strictly and never touches a room', async ()
     assert.equal(await code(() => run('student-a', { action: 'piece', ...data })), 'invalid-argument', JSON.stringify(data));
   }
   assert.equal(await code(() => run(null, { action: 'piece', piece: 'classic' })), 'unauthenticated');
-  assert.equal(await code(() => run('teacher-t', { action: 'piece', piece: 'classic' })), 'permission-denied');
   assert.equal(await code(() => run('outsider', { action: 'piece', piece: 'classic' })), 'permission-denied');
   state.session = async () => { throw Object.assign(new Error('session'), { code: 'permission-denied' }); };
   assert.equal(await code(() => run('student-a', { action: 'piece', piece: 'classic' })), 'permission-denied');

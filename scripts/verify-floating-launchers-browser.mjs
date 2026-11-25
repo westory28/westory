@@ -153,6 +153,31 @@ try {
         `${role}/${width}: hidden inactive dialog must not hide launcher`,
       );
       const box = await launcher.boundingBox();
+      // Both portals' launchers are the same circle around the same brand mark.
+      const mark = await launcher.evaluate((element) => {
+        const image = element.querySelector("img.ws-brand-logo"),
+          style = getComputedStyle(element);
+        return {
+          image: Boolean(image?.complete && image.naturalWidth),
+          ratio: image ? image.clientWidth / image.clientHeight : 0,
+          inside: image ? image.clientWidth <= element.clientWidth - 16 : false,
+          filter: image ? getComputedStyle(image).filter : "",
+          text: element.textContent.trim(),
+          radius: parseFloat(style.borderRadius) > 0,
+        };
+      });
+      assert.deepEqual(
+        { ...mark, ratio: Math.abs(mark.ratio - 256 / 127) < 0.1 },
+        {
+          image: true,
+          ratio: true,
+          inside: true,
+          filter: "grayscale(1)",
+          text: "",
+          radius: true,
+        },
+        `${role}/${width}: the We mark`,
+      );
       await page.locator("#action").evaluate((element, rect) => {
         element.classList.remove("off");
         element.style.left = `${rect.x}px`;

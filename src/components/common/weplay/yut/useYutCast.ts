@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AvatarLook } from "../../../../features/avatar/catalog";
+import { getAvatarRevision } from "../../../../features/avatar/events";
 // Read through the namespace: a service without the cast view (an earlier
 // bundle, a test double) then simply fails like any other cast failure.
 import * as yutService from "../../../../lib/yut";
@@ -134,7 +135,7 @@ export function useYutCast({
   uid: string;
   /** The room whose players are shown, if any. */
   room: { id: string; players: { uid: string; active: boolean }[] } | null;
-  /** Without a room, ask for the caller's own piece (a student's own match). */
+  /** Without a room, ask for the caller's own piece (a match played alone). */
   self?: boolean;
 }) {
   const roomId = room?.id;
@@ -145,7 +146,9 @@ export function useYutCast({
         .sort()
         .join(",")
     : "";
-  const key = roomId || self ? `${scope}|${roomId || ""}` : "";
+  // An avatar saved since the last answer is asked about again.
+  const key =
+    roomId || self ? `${scope}|${getAvatarRevision()}|${roomId || ""}` : "";
   const [refresh, setRefresh] = useState(0);
   const [answered, setAnswered] = useState<{
     key: string;

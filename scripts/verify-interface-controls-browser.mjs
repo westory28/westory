@@ -244,15 +244,46 @@ try {
     screenshots.push(shot);
     await page.getByRole("tab", { name: "사이트맵 메뉴", exact: true }).click();
     const portalTab = page.getByRole("tab", { name: /^학생 포털/ });
-    const portalStyle = await portalTab.evaluate(element => {
-      const style = getComputedStyle(element);
-      return { radius: parseFloat(style.borderRadius), height: element.getBoundingClientRect().height };
-    });
-    assert(portalStyle.radius >= 20 && portalStyle.height >= 44, 'Portal selector uses accessible badge buttons');
+    assert((await portalTab.boundingBox()).height >= 44, 'Portal selector keeps a 44px target');
+    const rows = await page.locator('.teacher-sitemap-menu li').evaluateAll((items) => items.map((row) => {
+      const name = row.querySelector('.teacher-sitemap-name').getBoundingClientRect();
+      const box = row.getBoundingClientRect();
+      const buttons = [...row.querySelectorAll('button')].map((button) => button.getBoundingClientRect());
+      return {
+        height: box.height,
+        oneLine: buttons.every((button) => Math.abs(button.y + button.height / 2 - (name.y + name.height / 2)) < 1),
+        apart: name.right <= buttons[0].left,
+        inside: buttons.every((button) => button.right <= box.right + 0.5),
+        target: buttons.every((button) => button.height >= 44 && button.width >= 36),
+        font: parseFloat(getComputedStyle(row.querySelector('.teacher-sitemap-name')).fontSize),
+        pills: buttons.some((button) => button.width > 60),
+      };
+    }));
+    assert.equal(rows.length, 24, 'Every child menu is one row');
+    assert(rows.every((row) => row.oneLine && row.apart && row.inside && row.target && row.font >= 16 && !row.pills), JSON.stringify(rows));
+    assert(rows.filter((row) => row.height <= 50).length >= 22, 'Child rows stay compact');
     await page.getByRole("button", { name: "덩기덕 쿵더Rock 숨기기", exact: true }).waitFor();
     await page.getByRole("button", { name: "위스 상위 메뉴 앞으로", exact: true }).click();
     assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), '위스 상위 메뉴 앞으로', 'Moving a menu retains keyboard focus');
     await page.getByRole("button", { name: "명예의 전당 하위 메뉴 위로", exact: true }).click();
+    // Names, addresses, adding and removing appear only for the menu being edited.
+    assert.equal(await page.locator('.teacher-sitemap-menu input').count(), 0);
+    await page.getByRole("button", { name: "학습 편집", exact: true }).click();
+    const editor = page.locator('.teacher-sitemap-menu').filter({ has: page.getByRole('button', { name: '학습 편집', exact: true }) });
+    assert.equal(await page.getByRole("button", { name: "학습 편집", exact: true }).getAttribute('aria-expanded'), 'true');
+    assert.equal(await editor.getByRole('textbox').count(), 7, 'Parent name, four child names and the two fields of a new child');
+    await editor.getByRole('textbox', { name: '하위 메뉴 이름 1', exact: true }).fill('수업 자료실');
+    await editor.getByRole('textbox', { name: '추가할 하위 메뉴 이름', exact: true }).fill('추가 메뉴');
+    await editor.getByRole('textbox', { name: '주소', exact: true }).fill('student/lesson/extra');
+    await editor.getByRole('button', { name: '하위 추가', exact: true }).click();
+    await editor.getByRole('button', { name: '추가 메뉴 하위 메뉴 위로', exact: true }).click();
+    await editor.getByRole('button', { name: '역사 사전 하위 메뉴 삭제', exact: true }).click();
+    const editShot = path.join(evidence, "menus-edit-" + width + ".png");
+    await page.screenshot({ path: editShot, fullPage: true });
+    screenshots.push(editShot);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await page.getByRole("button", { name: "학습 편집", exact: true }).click();
+    assert.equal(await page.locator('.teacher-sitemap-menu input').count(), 0);
     await page
       .getByRole("button", { name: "마이페이지 전체 숨기기", exact: true })
       .click();
@@ -277,6 +308,9 @@ try {
     assert(savedMenus.student.findIndex(item => item.url === '/student/points') < savedMenus.student.findIndex(item => item.url === '/student/weplay'), 'Parent move is saved');
     assert.equal(savedMenus.student.find(item => item.url === '/student/points').children[0].url, '/student/points?tab=hall-of-fame', 'Child move is saved');
     assert.equal(savedMenus.orderVersion, 1, 'Saved order is marked to preserve explicit ordering');
+    const savedLesson = savedMenus.student.find(item => item.url === '/student/lesson/note').children;
+    assert.equal(savedLesson[0].name, '수업 자료실', 'Child rename is saved');
+    assert(savedLesson.some(child => child.url === '/student/lesson/extra' && child.name === '추가 메뉴'), 'Child add is saved');
     assert.deepEqual(await page.evaluate(() => ({ reads: window.interfaceQa.reads.length, transactionReads: window.interfaceQa.transactionReads, writes: window.interfaceQa.writes.length })), { reads: 2, transactionReads: 1, writes: 3 }, 'Moves stay local; menu save reads one current menu and atomically writes menu plus visibility');
     await page.getByRole('button', { name: '사이트맵 저장', exact: true }).click();
     assert.deepEqual(await page.evaluate(() => ({ transactionReads: window.interfaceQa.transactionReads, writes: window.interfaceQa.writes.length })), { transactionReads: 1, writes: 3 }, 'Saving unchanged menus adds no server calls');
@@ -295,9 +329,19 @@ try {
   }
   await page.goto(origin);
   await page.getByRole("tab", { name: "사이트맵 메뉴", exact: true }).click();
+  await page.getByRole("tab", { name: "교사 포털", exact: true }).click();
+  assert.equal(await page.getByRole("button", { name: /숨기기$/ }).count(), 0, "The teacher portal has no visibility control");
+  const teacherShot = path.join(evidence, "menus-teacher-1280.png");
+  await page.screenshot({ path: teacherShot, fullPage: true });
+  screenshots.push(teacherShot);
+  await page.getByRole("tab", { name: "학생 포털", exact: true }).click();
   await page
     .getByRole("button", { name: "아바타 옷장 숨기기", exact: true })
     .click();
+  await page.getByRole("button", { name: "아바타 옷장 숨김 해제", exact: true }).waitFor();
+  const hiddenRow = page.locator('.teacher-sitemap-menu li').filter({ has: page.getByRole('button', { name: '아바타 옷장 숨김 해제', exact: true }) });
+  assert.match(await hiddenRow.locator('.teacher-sitemap-name').evaluate(element => getComputedStyle(element).textDecorationLine), /line-through/);
+  assert.equal(await hiddenRow.getByText('숨김', { exact: true }).count(), 1, 'A hidden menu is named, not only coloured');
   await page
     .getByRole("button", { name: "마우저구 윷놀이 숨기기", exact: true })
     .click();

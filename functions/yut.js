@@ -279,13 +279,13 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
       return { settings, serverNowMs };
     });
   };
-  // The look a student saved in the avatar studio, which validated it then.
+  // The look an account saved in the avatar studio, which validated it then.
   // Only the record's owner, saved state and shape are checked here: the
   // avatar catalogue is not part of every deployment that carries this file.
   // The game screen draws a look only when its own drawing code knows every
   // item of it, and keeps the animal piece otherwise.
-  const savedAvatarLook = (stored, uid) => {
-    if (!stored || stored.studentUid !== uid || stored.schemaVersion !== 1
+  const savedAvatarLook = (stored, uid, ownerField) => {
+    if (!stored || stored[ownerField] !== uid || stored.schemaVersion !== 1
       || !Number.isSafeInteger(stored.revision) || stored.revision < 1 || !stored.lastSavedAtMs || !stored.thumbnailPath
       || !stored.look || typeof stored.look !== 'object' || Array.isArray(stored.look)) return null;
     const entries = Object.entries(stored.look);
@@ -295,7 +295,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
   };
   // Which pieces are drawn as avatars. Nothing about it is kept in the room:
   // each call reads the saved look and the piece choice of at most four
-  // students, and answers the look alone, never an image address or a profile.
+  // players, and answers the look alone, never an image address or a profile.
   // Without a room it answers the caller's own piece only.
   const readCast = (request) => viewBesideSession(request, async () => {
     const scope = scopeFrom(request.data), data = request.data;
@@ -306,24 +306,27 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
         authority(transaction, request, scope),
         data.roomId === undefined ? Promise.resolve(null) : transaction.get(ref(scope, 'yut_rooms', data.roomId)),
       ]);
-      let uids = actor.manager ? [] : [actor.uid];
+      let seats = [{ uid: actor.uid, manager: actor.manager }];
       if (roomSnapshot) {
         const room = roomSnapshot.data();
         // The gates of a command on this room; a monitor may watch any room.
         checkRoomAccess(actor, room);
         if (room.status === 'closed') fail('not-found', '방을 찾을 수 없거나 이용 시간이 지났습니다.');
         if (!actor.manager && (!room.participantUids.includes(actor.uid) || !modeAllowed(actor, room))) fail('permission-denied', '참가 중인 방에서만 이용할 수 있습니다.');
-        // Only students have an enrollment in the room; a teacher keeps the animal piece.
-        uids = room.players.filter((player) => player.active && room.participantUids.includes(player.uid)
-          && identifier(room.enrollmentIds?.[player.uid])).map((player) => player.uid).slice(0, 4);
+        // A student's seat records an enrollment, a teacher's an empty one. A
+        // seat with neither (an older room) keeps the animal piece.
+        seats = room.players.filter((player) => player.active && room.participantUids.includes(player.uid))
+          .map((player) => ({ uid: player.uid, enrollmentId: room.enrollmentIds?.[player.uid] }))
+          .filter(({ enrollmentId }) => enrollmentId === '' || identifier(enrollmentId))
+          .map(({ uid, enrollmentId }) => ({ uid, manager: enrollmentId === '' })).slice(0, 4);
       }
-      const stored = await Promise.all(uids.map((uid) => Promise.all([
-        transaction.get(db.doc(`student_avatars/${uid}`)), transaction.get(ref(scope, 'yut_players', uid)),
+      const stored = await Promise.all(seats.map(({ uid, manager }) => Promise.all([
+        transaction.get(db.doc(`${manager ? 'teacher_avatars' : 'student_avatars'}/${uid}`)), transaction.get(ref(scope, 'yut_players', uid)),
       ])));
       const cast = {};
       let piece;
-      uids.forEach((uid, index) => {
-        const look = savedAvatarLook(stored[index][0].data(), uid);
+      seats.forEach(({ uid, manager }, index) => {
+        const look = savedAvatarLook(stored[index][0].data(), uid, manager ? 'teacherUid' : 'studentUid');
         if (!look) return;
         const classic = stored[index][1].data()?.pieceStyle === 'classic';
         if (uid === actor.uid) piece = classic ? 'classic' : 'avatar';
@@ -332,8 +335,8 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
       return { cast, ...(piece ? { piece } : {}) };
     });
   });
-  // A student's own choice between the avatar and the animal piece, kept on the
-  // record this file already writes for that student. Absent means the avatar.
+  // A player's own choice between the avatar and the animal piece, kept on the
+  // record this file already writes for that account. Absent means the avatar.
   const savePiece = async (request) => {
     await assertSession(request);
     if (!request.auth?.uid) fail('unauthenticated', '로그인 후 이용해 주세요.');
@@ -342,8 +345,7 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
       || Object.keys(data).some((field) => !['year', 'semester', '_session', 'action', 'piece'].includes(field))) fail('invalid-argument', '말 모양을 다시 선택해 주세요.');
     return db.runTransaction(async (transaction) => {
       const playerRef = ref(scope, 'yut_players', request.auth.uid);
-      const [actor, playerSnapshot] = await Promise.all([authority(transaction, request, scope), transaction.get(playerRef)]);
-      if (actor.manager) fail('permission-denied', '학생 계정에서 이용할 수 있습니다.');
+      const [, playerSnapshot] = await Promise.all([authority(transaction, request, scope), transaction.get(playerRef)]);
       const { pieceStyle, ...player } = playerSnapshot.data() || {};
       // An unchanged choice writes nothing.
       if ((pieceStyle === 'classic') !== (data.piece === 'classic')) transaction.set(playerRef, data.piece === 'classic' ? { ...player, pieceStyle: 'classic' } : player);

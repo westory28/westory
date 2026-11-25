@@ -652,13 +652,7 @@ export function AvatarStudio({
                   type="button"
                   key={category.key}
                   aria-pressed={slot === category.key}
-                  onClick={(event) => {
-                    setSlot(category.key);
-                    event.currentTarget.scrollIntoView({
-                      block: "nearest",
-                      inline: "nearest",
-                    });
-                  }}
+                  onClick={() => setSlot(category.key)}
                 >
                   <i className={`fas ${category.icon}`} aria-hidden="true" />
                   <span>{category.label}</span>
