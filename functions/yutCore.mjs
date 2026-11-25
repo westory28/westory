@@ -294,7 +294,12 @@ export function leaveYutRoom(source, uid, nowMs) {
   room.participantUids = room.participantUids.filter((value) => value !== uid);
   if (room.emotes) delete room.emotes[uid];
   if (room.status === 'waiting') room.players = room.players.filter((entry) => entry.uid !== uid);
-  else { player.active = false; player.pieces = piecesFor(player.pieces.length); }
+  else {
+    player.active = false;
+    // A finished match keeps its result; only a match still in play takes the
+    // departing player's pieces off the board.
+    if (room.status === 'playing') player.pieces = piecesFor(player.pieces.length);
+  }
   const remaining = room.players.filter((entry) => entry.active && entry.uid !== uid);
   if (room.hostUid === uid) {
     room.hostUid = remaining[0]?.uid || '';

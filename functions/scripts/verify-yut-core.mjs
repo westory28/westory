@@ -508,5 +508,9 @@ test('many seeded matches end with valid positions and exactly one winner', () =
     }
     assert.equal(room.status, 'finished');
     assert.equal(room.players.filter((player) => player.pieces.every((piece) => piece.node === 'finish')).length, 1);
+    // The result stays when the winner is the first to leave the finished match.
+    const after = leaveYutRoom(room, room.winnerUid, tick + 1);
+    assert.deepEqual(after.players.map((player) => player.pieces), room.players.map((player) => player.pieces));
+    assert.equal(after.winnerUid, room.winnerUid); assert.equal(after.finishReason, 'completion');
   }
 });
