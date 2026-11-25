@@ -181,7 +181,13 @@ export function useYutCast({
         entry = created;
       }
       void entry.answer.then((answer) => {
-        if (active) setAnswered({ key, answer: answer || NOBODY });
+        // A failed look-up for a newcomer takes nobody's avatar away.
+        if (active)
+          setAnswered((previous) =>
+            !answer && previous?.key === key
+              ? previous
+              : { key, answer: answer || NOBODY },
+          );
       });
     };
     // Players arriving one after another are asked about together.
