@@ -3804,23 +3804,31 @@ try {
               bounds.y + bounds.height <= height,
             `${width}: reaction stays in the viewport`,
           );
+          // The reaction lasts 900ms: look inside the page, at a fixed moment.
+          assert.deepEqual(
+            await page.evaluate(async () => {
+              const shownAt = window.qa.reactions[0].at;
+              window.qa.repeat();
+              window.qa.bump();
+              await new Promise((resolve) =>
+                setTimeout(
+                  resolve,
+                  Math.max(0, shownAt + 700 - performance.now()),
+                ),
+              );
+              return [
+                document.querySelectorAll(
+                  '.yut-capture-reaction[role="status"]',
+                ).length,
+                window.qa.motion.at(-1).value,
+              ];
+            }),
+            [1, true],
+            "Unrelated snapshots preserve the active reaction",
+          );
           await page.screenshot({
             path: path.join(evidence, `capture-${width}-${height}.png`),
           });
-          await page.evaluate(() => {
-            window.qa.repeat();
-            window.qa.bump();
-          });
-          await page.waitForTimeout(350);
-          assert.equal(
-            await reaction.count(),
-            1,
-            "Unrelated snapshots preserve the active reaction",
-          );
-          assert.equal(
-            await page.evaluate(() => window.qa.motion.at(-1).value),
-            true,
-          );
           await reaction.waitFor({ state: "detached" });
           const ended = await page.evaluate(() => ({
             reactions: window.qa.reactions,
@@ -3934,11 +3942,16 @@ try {
         0,
         "Actual game keeps its countdown hidden throughout the capture reaction",
       );
-      assert.equal(
-        await captureGame
-          .getByRole("button", { name: "윷 던지기", exact: true })
-          .isEnabled(),
-        false,
+      assert.deepEqual(
+        await captureGame.evaluate(() => {
+          const button = document.querySelector('[aria-label="윷 던지기"]');
+          return [
+            document.querySelectorAll(".yut-capture-reaction").length,
+            button.disabled,
+            button.getClientRects().length,
+          ];
+        }),
+        [1, true, 0],
         "Capture reaction holds the actual game's next throw action",
       );
       await captureGame.screenshot({
@@ -3972,8 +3985,8 @@ try {
       }));
       assert.equal(
         timing.phaseStartsAtMs - timing.moveAtMs,
-        2700,
-        "Capture reserves 2700ms for traversal and reaction",
+        (await import("../functions/yutCore.mjs")).YUT_CAPTURE_ANIMATION_MS,
+        "Capture reserves the shared grace for traversal and reaction",
       );
       assert.equal(
         timing.turnDeadlineMs - timing.phaseStartsAtMs,
@@ -3996,7 +4009,7 @@ try {
         path: path.join(evidence, "capture-next-turn-five-seconds.png"),
       });
       report.checks.push(
-        "Actual mobile landscape game holds input through capture and 2700ms grace, then starts the next five-second server turn with a visible 5-second gauge",
+        "Actual mobile landscape game holds input through capture and its shared grace, then starts the next five-second server turn with a visible 5-second gauge",
       );
       await captureGame.close();
     }
