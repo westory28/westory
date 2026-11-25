@@ -360,21 +360,32 @@ async function delayed(page, action, run, { reply = false, ms = 3100 } = {}) {
     action,
   );
   if (action === "throw" || action === "move") {
-    const control = page.getByRole("button", {
-      name: action === "throw" ? "윷 던지기" : "결정",
-      exact: true,
-    });
-    if (await control.count()) {
+    // The room update may replace the control at any moment: look only once.
+    const control = await page.evaluate(
+      (label) => {
+        const node = [...document.querySelectorAll("button")].find(
+          (item) =>
+            (item.getAttribute("aria-label") || item.textContent.trim()) ===
+            label,
+        );
+        if (!node) return null;
+        const { x, y, width, height } = node.getBoundingClientRect();
+        return { enabled: !node.disabled, x, y, width, height };
+      },
+      action === "throw" ? "윷 던지기" : "결정",
+    );
+    if (control) {
       assert.equal(
-        await control.isEnabled(),
+        control.enabled,
         false,
         action + ": only the command control is disabled",
       );
-      const box = await control.boundingBox();
-      if (box)
-        await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, {
-          clickCount: 2,
-        });
+      if (control.width)
+        await page.mouse.click(
+          control.x + control.width / 2,
+          control.y + control.height / 2,
+          { clickCount: 2 },
+        );
     }
   }
   await page.waitForTimeout(450);

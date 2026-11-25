@@ -510,8 +510,8 @@ try {
         })),
       );
     assert.ok(
-      animation.some((item) => item.duration === 220 && item.frames === 4),
-      "sequential 220ms hops with painted landings",
+      animation.some((item) => item.duration === 160 && item.frames === 4),
+      "sequential 160ms hops with painted landings",
     );
     await page.waitForFunction(
       () => !document.querySelector('[data-motion="capture"]'),
