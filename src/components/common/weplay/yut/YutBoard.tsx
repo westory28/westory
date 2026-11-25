@@ -388,6 +388,7 @@ function MovingPawn({
   selected,
   selectable,
   motion,
+  headings,
   onSelect,
   onMotionComplete,
   onStep,
@@ -405,13 +406,18 @@ function MovingPawn({
   selected: boolean;
   selectable: boolean;
   motion?: PieceMotion;
+  /** The last heading of every piece, kept while a piece is not drawn. */
+  headings: Map<string, "left" | "right">;
   onSelect: () => void;
   onMotionComplete: (id: string) => void;
   onStep?: (index: number) => void;
   onArrive: (id: string) => void;
 }) {
   const button = useRef<HTMLButtonElement>(null);
-  const [facing, setFacing] = useState<"left" | "right">("right");
+  const headingKey = `${role}-${pieceIds[0]}`;
+  const [facing, setFacing] = useState<"left" | "right">(
+    () => headings.get(headingKey) || "right",
+  );
   const complete = useRef(onMotionComplete);
   complete.current = onMotionComplete;
   const step = useRef(onStep);
@@ -458,8 +464,11 @@ function MovingPawn({
             next = nodePosition(nodes[index + 1]);
           // Mirror only the artwork. Vertical steps retain the last horizontal
           // heading, while every turn in a shortcut is resolved independently.
-          if (Math.abs(next[0] - current[0]) > 0.01)
-            setFacing(next[0] < current[0] ? "left" : "right");
+          if (Math.abs(next[0] - current[0]) > 0.01) {
+            const heading = next[0] < current[0] ? "left" : "right";
+            headings.set(headingKey, heading);
+            setFacing(heading);
+          }
           const previousAnimation = animation;
           const startOffset =
             index === 0 ? motion.originOffset + homeOffset : 0;
@@ -668,6 +677,7 @@ export default function YutBoard({
   const captureGroup = useRef<typeof capture>(null);
   const motionTimer = useRef<number | undefined>(undefined);
   const activeMotions = useRef(new Set<string>());
+  const headings = useRef(new Map<string, "left" | "right">());
   const completeMotion = useCallback((id: string) => {
     if (!activeMotions.current.delete(id) || activeMotions.current.size) return;
     window.clearTimeout(motionTimer.current);
@@ -1053,6 +1063,7 @@ export default function YutBoard({
                   moves.some((move) => ids.includes(move.pieceId))
                 }
                 motion={motion}
+                headings={headings.current}
                 onSelect={() => onSelectPiece(ids[0])}
                 onMotionComplete={completeMotion}
                 onArrive={arrive}
