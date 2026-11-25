@@ -832,9 +832,13 @@ export default function YutGame({
         ));
   useEffect(() => {
     if (!modeUnavailable) return;
+    // Answers still on their way are dropped, and so is what waited for them.
     generation.current++;
     pendingRef.current = null;
     setPending("");
+    setLoading(false);
+    emoteFlight.current = false;
+    setEmotePending(false);
     setDisconnected(false);
     setNeedsSync(false);
     setError("");
