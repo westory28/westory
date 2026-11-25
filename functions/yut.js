@@ -565,8 +565,8 @@ function createYutHandlers({ db, assertSession = assertScoreWorkflowSession, now
           if (action === 'start' && room.visibility !== 'public') room.privatePlayChargedAtMs = receivedAt;
           if (action === 'throw') {
             let drawIndex = 0;
-            const weightedSticks = core.sampleYutSticks(data.power, () => throwDraws[drawIndex++], room.players.find((member) => member.uid === actor.uid)?.lastThrow?.value, data.boost);
-            room = core.throwYut(room, actor.uid, room.rulesVersion === 2 ? weightedSticks : sticks, receivedAt, data.power, data.boost, arrivedAt);
+            const sampled = core.sampleYutThrow(data.power, () => throwDraws[drawIndex++], room.players.find((member) => member.uid === actor.uid)?.lastThrow?.value, data.boost, core.canThrowYutBack(room, actor.uid));
+            room = core.throwYut(room, actor.uid, room.rulesVersion === 2 ? sampled.sticks : sticks, receivedAt, data.power, data.boost, arrivedAt, room.rulesVersion === 2 && sampled.back);
           }
           if (action === 'move') room = core.moveYut(room, actor.uid, data.pieceId, data.route, receivedAt, data.stack, arrivedAt);
           if (action === 'skip') room = core.skipYutTurn(room, receivedAt);

@@ -14,6 +14,8 @@ export const YUT_EMOTE_COOLDOWN_MS = 5_000;
 export const YUT_EMOTE_VISIBLE_MS = 4_000;
 const labels = ['', '도', '개', '걸', '윷', '모'];
 export const YUT_BOOST_LIMIT = 2;
+export const YUT_BACK_VALUE = -1;
+const YUT_BACK_LABEL = '빽도', YUT_BACK_RATIO = 0.8;
 const probabilityAnchors = [[33, 35, 24, 6, 2], [25, 34, 31, 7, 3], [20, 31, 35, 10, 4]];
 export function getYutThrowProbabilities(power = 0.65, previousValue = 0, boost) {
   const strength = Math.max(0, Math.min(1, Math.round(((Number.isFinite(power) ? power : 0.65) - 0.12) / 0.88 * 1e12) / 1e12));
@@ -32,6 +34,30 @@ export function getYutThrowProbabilities(power = 0.65, previousValue = 0, boost)
     probabilities[boost - 1] += extra;
   }
   return probabilities;
+}
+// Back-do exists only for a player who already brought a piece home, while
+// another piece is on the board: it can always be played and never ends a match.
+export function canThrowYutBack(room, uid) {
+  const player = playerFor(room, uid);
+  return Boolean(player && room.rulesVersion === 2 && room.status === 'playing'
+    && player.pieces.some((piece) => piece.node === 'finish')
+    && player.pieces.some((piece) => piece.node !== 'home' && piece.node !== 'finish'));
+}
+// Always rarer than both yut and mo, whatever the power, last result or boost.
+export function getYutBackProbability(power = 0.65, previousValue = 0, boost) {
+  const probabilities = getYutThrowProbabilities(power, previousValue, boost);
+  return Math.min(probabilities[3], probabilities[4]) * YUT_BACK_RATIO;
+}
+/** The four faces, and whether the single flat one is the marked back-do stick. */
+export function sampleYutThrow(power = 0.65, random = Math.random, previousValue = 0, boost, canBack = false) {
+  let first;
+  const sticks = sampleYutSticks(power, () => {
+    const draw = random();
+    if (first === undefined) first = draw;
+    return draw;
+  }, previousValue, boost);
+  // Back-do is the start of the do range, so every other result keeps its chance.
+  return { sticks, back: Boolean(canBack) && first * 100 < getYutBackProbability(power, previousValue, boost) };
 }
 export function sampleYutSticks(power = 0.65, random = Math.random, previousValue = 0, boost) {
   const probabilities = getYutThrowProbabilities(power, previousValue, boost);
@@ -167,11 +193,13 @@ const assertTurn = (room, uid, phase, nowMs) => {
   if (nowMs < (room.phaseStartsAtMs || 0)) fail('연출이 끝나면 진행해 주세요.');
   if (nowMs >= room.turnDeadlineMs) fail('차례 시간이 지났습니다. 다음 차례로 넘겨 주세요.');
 };
-export function throwYut(source, uid, sticks, nowMs, power, boost, arrivedAtMs = nowMs) {
+export function throwYut(source, uid, sticks, nowMs, power, boost, arrivedAtMs = nowMs, back = false) {
   assertTurn(source, uid, 'throw', arrivedAtMs);
   if (!Array.isArray(sticks) || sticks.length !== 4 || sticks.some((value) => typeof value !== 'boolean')) fail('윷 결과가 올바르지 않습니다.');
   if (power !== undefined && (!Number.isFinite(power) || power < 0 || power > 1)) fail('던지는 세기를 확인해 주세요.');
-  const room = copy(source), count = sticks.filter(Boolean).length, value = count || 5;
+  const room = copy(source), count = sticks.filter(Boolean).length;
+  if (typeof back !== 'boolean' || (back && (count !== 1 || !canThrowYutBack(source, uid)))) fail('빽도를 낼 수 없는 상태입니다.');
+  const value = back ? YUT_BACK_VALUE : count || 5, label = back ? YUT_BACK_LABEL : labels[value];
   const player = playerFor(room, uid);
   if (boost !== undefined) {
     if (room.rulesVersion !== 2 || ![4, 5].includes(boost)) fail('윷 또는 모 중 하나를 선택해 주세요.');
@@ -179,11 +207,11 @@ export function throwYut(source, uid, sticks, nowMs, power, boost, arrivedAtMs =
     if (!Number.isSafeInteger(used) || used < 0 || used >= YUT_BOOST_LIMIT) fail('이번 판의 확률 올리기 기회를 모두 사용했습니다.');
     player.boostsUsed = used + 1;
   }
-  room.pendingThrow = { value, label: labels[value], sticks: [...sticks] };
-  player.lastThrow = { value, label: labels[value], atMs: nowMs, ...(power === undefined ? {} : { power }) };
+  room.pendingThrow = { value, label, sticks: [...sticks] };
+  player.lastThrow = { value, label, atMs: nowMs, ...(power === undefined ? {} : { power }) };
   beginPhase(room, 'move', nowMs, YUT_THROW_ANIMATION_MS);
   if (value >= 4) room.extraThrows += 1;
-  return event(room, 'throw', `${player.name} · ${labels[value]}`, nowMs);
+  return event(room, 'throw', `${player.name} · ${label}`, nowMs);
 }
 const routesFor = (piece) => {
   if (piece.node === 'o5') return ['outer', 'a'];
@@ -213,14 +241,32 @@ function advance(piece, steps, route) {
   }
   return { node, lane, path };
 }
+// One pad back along the way the piece came. The first pad leads back to the
+// start pad, where the piece waits until any forward throw takes it home.
+function retreat(piece) {
+  let node, lane = 'outer';
+  if (piece.lane !== 'outer' && diagonals[piece.lane]?.includes(piece.node)) {
+    const track = diagonals[piece.lane], index = track.indexOf(piece.node);
+    if (index < 1) fail('말 위치를 확인해 주세요.');
+    node = track[index - 1];
+    if (!node.startsWith('o')) lane = piece.lane;
+  } else {
+    const index = Number(piece.node.slice(1));
+    if (!/^o\d+$/.test(piece.node) || index < 1 || index > 20) fail('말 위치를 확인해 주세요.');
+    node = index === 1 ? 'o20' : `o${index - 1}`;
+  }
+  return { node, lane, path: [node] };
+}
+const travel = (piece, value, route) => (value === YUT_BACK_VALUE ? retreat(piece) : advance(piece, value, route));
 export function getLegalYutMoves(room, uid) {
   const player = playerFor(room, uid);
   if (!player || room.status !== 'playing' || room.turnUid !== uid || room.phase !== 'move' || !room.pendingThrow) return [];
   const moves = [];
   for (const piece of player.pieces) {
-    if (piece.node === 'finish') continue;
-    for (const route of routesFor(piece)) {
-      const destination = advance(piece, room.pendingThrow.value, route);
+    const back = room.pendingThrow.value === YUT_BACK_VALUE;
+    if (piece.node === 'finish' || (back && piece.node === 'home')) continue;
+    for (const route of back ? [piece.lane] : routesFor(piece)) {
+      const destination = travel(piece, room.pendingThrow.value, route);
       const group = movingGroup(room, player, piece);
       moves.push({ pieceId: piece.id, route, targetNode: destination.node, path: destination.path,
         stackSize: group.length,
@@ -244,7 +290,7 @@ export function moveYut(source, uid, pieceId, route, nowMs, stack = false, arriv
   if (!legal) fail('이동할 말과 길을 다시 선택해 주세요.');
   if (typeof stack !== 'boolean' || (source.rulesVersion === 2 && stack && !legal.canStack)) fail('업을 말을 다시 확인해 주세요.');
   const room = copy(source), player = playerFor(room, uid), piece = player.pieces.find((entry) => entry.id === pieceId);
-  const destination = advance(piece, room.pendingThrow.value, route);
+  const destination = travel(piece, room.pendingThrow.value, route);
   const moving = movingGroup(room, player, piece);
   let captured = 0;
   const capturedUids = new Set();

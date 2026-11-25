@@ -23,17 +23,10 @@
   pointer-events: none;
   filter: drop-shadow(0 18px 12px #080b09b3) drop-shadow(0 3px 2px #0009);
 }
-.yut-board-corner-glyph {
-  font:
-    600 20px "Noto Serif KR",
-    serif;
-}
 .yut-board-step-number {
   font:
-    500 11px "Pretendard",
-    "Noto Sans KR",
-    sans-serif;
-  opacity: 0.7;
+    600 32px "Noto Serif KR",
+    serif;
 }
 .yut-board-center-overlay {
   position: absolute;

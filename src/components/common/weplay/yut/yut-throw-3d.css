@@ -31,7 +31,7 @@
 
 .yut-throw-3d__fallback {
   position: absolute;
-  inset: 24% 15%;
+  inset: 30% 18% 4%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -45,9 +45,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 12%;
-  height: 70%;
-  max-height: 180px;
+  height: 64%;
+  max-height: 340px;
+  aspect-ratio: 1 / 4;
   border: 1px solid #784921;
   border-radius: 45% / 8%;
   background:
@@ -141,4 +141,13 @@
   color: #392416;
   text-align: center;
   font-style: normal;
+}
+
+.yut-throw-3d__back {
+  width: 62%;
+  aspect-ratio: 1;
+  border: 2px solid #f6e3b4;
+  border-radius: 50%;
+  background: #a5281c;
+  box-shadow: 0 0 0 3px #a5281c;
 }

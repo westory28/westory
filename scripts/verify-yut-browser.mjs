@@ -366,7 +366,7 @@ async function throwWithPower(page, duration = 420) {
 async function observeThrow(page) {
   await page.evaluate(() => {
     const seen = window.yutThrowPhases = { flight: false, result: "", prematureMove: false };
-    const board = document.querySelector(".yut-board");
+    const board = document.querySelector(".yut-match");
     const observer = new MutationObserver(() => {
       const flying = Boolean(board.querySelector(".yut-throw-3d.is-rolling"));
       const landing = board.querySelector(".yut-landing-result");

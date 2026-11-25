@@ -30,11 +30,13 @@ const source = (f) =>
       .replaceAll("\\", "/"),
   );
 const harness = `import React,{useState}from'react';import{createRoot}from'react-dom/client';import YutThrow3D from ${source("YutThrow3D.tsx")};import YutBoard from ${source("YutBoard.tsx")};import ${source("yut.css")};import{YutThrowScene,finalYutRotation,createYutGeometry,sampleYutPose,yutThrowPlan}from ${source("YutThrowScene.ts")};import{Vector3,Raycaster}from'three';
-const render=YutThrowScene.prototype.render;YutThrowScene.prototype.render=function(){render.call(this);window.qa.scene=this;window.qa.projected=this.groups.map(group=>{const p=group.position.clone().project(this.camera);return {x:(p.x+1)*this.host.clientWidth/2,y:(1-p.y)*this.host.clientHeight/2};});if(this.elapsed>=1.4&&this.result){window.qa.renderedFaces=this.groups.map(group=>{const origin=this.camera.position.clone(),direction=group.position.clone().sub(origin).normalize();const hit=new Raycaster(origin,direction).intersectObjects(group.children,false)[0];return hit?.object===group.children[1];});}};
+const render=YutThrowScene.prototype.render;YutThrowScene.prototype.render=function(){render.call(this);window.qa.scene=this;window.qa.projected=this.groups.map(group=>{const p=group.position.clone().project(this.camera);return {x:(p.x+1)*this.host.clientWidth/2,y:(1-p.y)*this.host.clientHeight/2};});if(this.elapsed>=1.4&&this.result){window.qa.renderedFaces=this.groups.map(group=>{const origin=this.camera.position.clone(),direction=group.position.clone().sub(origin).normalize();const hit=new Raycaster(origin,direction).intersectObjects(group.children.filter(child=>child.visible),false)[0];return hit?.object===group.children[1]||hit?.object===group.children[2];});}};
+window.qa.ends=()=>{const scene=window.qa.scene;return scene.groups.map(group=>[-.86,.86].map(z=>{const p=group.localToWorld(new Vector3(0,0,z)).project(scene.camera);return {x:(p.x+1)/2,y:(1-p.y)/2};}));};
+window.qa.marks=()=>window.qa.scene.marks.map(mark=>mark.visible);
 window.qa.freeze=time=>{const scene=window.qa.scene;scene.cancelFrame();scene.running=false;scene.elapsed=time;scene.pose();scene.render();const el=document.querySelector('.yut-throw-3d');el.style.opacity='1';el.style.transition='none';return {power:scene.power,camera:[scene.camera.fov,...scene.camera.position.toArray(),...scene.camera.projectionMatrix.elements],points:window.qa.projected};};
 window.qa.plan=yutThrowPlan;window.qa.pose=sampleYutPose;window.qa.finalNormal=(flat,index,power,key)=>new Vector3(0,-1,0).applyEuler(finalYutRotation(flat,index,power,key)).y;
 const room={id:'visual-qa',revision:0,lastEvent:{kind:'create',atMs:0,text:''},status:'playing',phase:'move',turnUid:'qa',pendingThrow:{value:2,label:'개',sticks:[true,false,true,false]},players:[{uid:'qa',name:'나',role:'sa',active:true,pieces:[{id:'1',node:'o5',lane:'outer'},{id:'2',node:'o6',lane:'outer'}]},{uid:'friend',name:'친구',role:'nong',active:true,pieces:[{id:'1',node:'o10',lane:'outer'},{id:'2',node:'o15',lane:'outer'}]}]};
-function App(){const[boardRoom,setBoardRoom]=useState(room);const[selectedMove,setSelectedMove]=useState(null);window.qa.board=setBoardRoom;window.qa.poses=(time,power)=>[0,1,2,3].map(i=>sampleYutPose(time,i,i%2===0,power));const[state,setState]=useState({throwKey:null,sticks:null,rolling:false});const[mounted,setMounted]=useState(true);const[selected,setSelected]=useState('1');window.qa.update=patch=>setState(old=>({...old,...patch}));window.qa.mount=setMounted;window.qa.faces=()=>[false,true].map(flat=>new Vector3(0,-1,0).applyEuler(finalYutRotation(flat,0)).y);window.qa.geometry=()=>{const g=createYutGeometry();g.computeBoundingBox();const r={count:g.getAttribute('position').count,min:g.boundingBox.min,max:g.boundingBox.max};g.dispose();return r};const moves=[{pieceId:'1',route:'outer',targetNode:'o7',stackSize:1,path:['o6','o7']},{pieceId:'1',route:'a',targetNode:'a2',stackSize:1,path:['a1','a2']},{pieceId:'2',route:'outer',targetNode:'o8',stackSize:1}];return <><div className="board yut-game"><YutBoard room={boardRoom} selectedMove={selectedMove} uid="qa" selectedPiece={selected} onSelectPiece={setSelected} moves={state.throwKey||state.rolling?[]:moves} onMove={move=>{window.qa.moves++;setSelectedMove(move)}} disabled={false}>{mounted&&<YutThrow3D {...state} onRelease={()=>window.qa.releases++} onImpact={index=>window.qa.impacts.push(index)} onComplete={()=>{window.qa.count++;window.qa.completedAt=performance.now()}}/>}</YutBoard></div><button onClick={()=>{window.qa.update({rolling:true})}}>던지기</button></>};createRoot(document.getElementById('root')).render(<App/>);`;
+function App(){const[boardRoom,setBoardRoom]=useState(room);const[selectedMove,setSelectedMove]=useState(null);window.qa.board=setBoardRoom;window.qa.poses=(time,power)=>[0,1,2,3].map(i=>sampleYutPose(time,i,i%2===0,power));const[state,setState]=useState({throwKey:null,sticks:null,rolling:false});const[mounted,setMounted]=useState(true);const[selected,setSelected]=useState('1');window.qa.update=patch=>setState(old=>({...old,...patch}));window.qa.mount=setMounted;window.qa.faces=()=>[false,true].map(flat=>new Vector3(0,-1,0).applyEuler(finalYutRotation(flat,0)).y);window.qa.geometry=()=>{const g=createYutGeometry();g.computeBoundingBox();const r={count:g.getAttribute('position').count,min:g.boundingBox.min,max:g.boundingBox.max};g.dispose();return r};const moves=[{pieceId:'1',route:'outer',targetNode:'o7',stackSize:1,path:['o6','o7']},{pieceId:'1',route:'a',targetNode:'a2',stackSize:1,path:['a1','a2']},{pieceId:'2',route:'outer',targetNode:'o8',stackSize:1}];return <><div className="board yut-game"><YutBoard room={boardRoom} selectedMove={selectedMove} uid="qa" selectedPiece={selected} onSelectPiece={setSelected} moves={state.throwKey||state.rolling?[]:moves} onMove={move=>{window.qa.moves++;setSelectedMove(move)}} disabled={false}/>{mounted&&<div className="yut-toss-stage"><YutThrow3D {...state} onRelease={()=>window.qa.releases++} onImpact={index=>window.qa.impacts.push(index)} onComplete={()=>{window.qa.count++;window.qa.completedAt=performance.now()}}/></div>}</div><button onClick={()=>{window.qa.update({rolling:true})}}>던지기</button></>};createRoot(document.getElementById('root')).render(<App/>);`;
 const bundle = await build({
   stdin: { contents: harness, loader: "tsx", resolveDir: root },
   bundle: true,
@@ -192,6 +194,97 @@ try {
     assert.ok(math.maxContact < 1.4);
     report.checks.push(
       "200 seeded events: deterministic variations, monotone power height/spread, all four final normals and contact deadlines",
+    );
+    await context.close();
+  }
+  for (const [width, height] of [
+    [1268, 660],
+    [1012, 596],
+    [838, 381],
+  ])
+    for (const power of [0.12, 0.65, 1]) {
+      const { context, page } = await fresh({ viewport: { width, height } });
+      await page.addStyleTag({
+        content: `body{padding:0}.board.yut-game{width:${width}px;height:${height}px;overflow:hidden}`,
+      });
+      for (const key of ["large-a", "large-b", "large-c"]) {
+        await page.evaluate(
+          ({ key, power }) =>
+            window.qa.update({
+              throwKey: key,
+              sticks: [true, false, true, false],
+              power,
+            }),
+          { key, power },
+        );
+        await page.waitForFunction(
+          (key) => window.qa.scene?.key === key,
+          key,
+        );
+        await page.evaluate(() => window.qa.freeze(1.4));
+        const ends = await page.evaluate(() => window.qa.ends());
+        const label = `${width}x${height} power ${power} ${key}`;
+        for (const [far, near] of ends) {
+          assert.ok(
+            Math.hypot((near.x - far.x) * width / height, near.y - far.y) > 0.3,
+            `${label}: a landed stick spans a third of the stage (${(near.y - far.y).toFixed(2)})`,
+          );
+          for (const end of [far, near])
+            assert.ok(
+              end.x > 0.02 && end.x < 0.98 && end.y > 0.3 && end.y < 0.98,
+              `${label}: landed sticks stay on the stage, below the result (${JSON.stringify(end)})`,
+            );
+        }
+        const centre =
+          ends.flat().reduce((total, end) => total + end.x, 0) / 8;
+        assert.ok(
+          Math.abs(centre - 0.5) < 0.06,
+          `${label}: the throw lands in the middle (${centre.toFixed(3)})`,
+        );
+      }
+      await context.close();
+    }
+  report.checks.push(
+    "Landed sticks are large (over 30% of the stage height), centred and whole at phone, tablet and desktop stages for weak to strong throws",
+  );
+  for (const fallback of [false, true]) {
+    const { context, page } = await fresh(
+      { viewport: { width: 1280, height: 900 } },
+      fallback,
+    );
+    for (const [marked, sticks] of [
+      [1, [false, true, false, false]],
+      [2, [true, true, false, true]],
+      [-1, [false, true, false, false]],
+    ]) {
+      const count = await page.evaluate(() => window.qa.count);
+      await page.evaluate(
+        ({ marked, sticks, count }) =>
+          window.qa.update({ throwKey: "marked-" + count, sticks, marked }),
+        { marked, sticks, count },
+      );
+      await page.waitForFunction((count) => window.qa.count > count, count);
+      if (fallback)
+        assert.deepEqual(
+          await page
+            .locator(".yut-throw-3d__wood")
+            .evaluateAll((nodes) =>
+              nodes.map((node) => !!node.querySelector(".yut-throw-3d__back")),
+            ),
+          [0, 1, 2, 3].map((index) => index === marked && sticks[index]),
+          "the mark is on a flat face only",
+        );
+      else {
+        assert.deepEqual(
+          await page.evaluate(() => window.qa.marks()),
+          [0, 1, 2, 3].map((index) => index === marked),
+        );
+        if (marked === 1)
+          await page.screenshot({ path: path.join(evidence, "back-do.png") });
+      }
+    }
+    report.checks.push(
+      `${fallback ? "CSS" : "WebGL"} back-do mark is drawn on the one marked stick and on no other`,
     );
     await context.close();
   }

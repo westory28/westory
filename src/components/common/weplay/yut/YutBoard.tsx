@@ -1,7 +1,6 @@
 import React, {
   useEffect,
   useCallback,
-  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -34,11 +33,13 @@ Object.assign(positions, {
   b5: [360, 388.33],
   finish: [360, 455],
 });
+// The rendered board (scripts/generate-yut-board.mjs) in the same view units.
+const BOARD_ART = { x: -20, y: -6, width: 760, height: 566 };
 const zones = [
-  { light: "#9d9e7b", face: "#777f59", edge: "#48523d", ink: "#303d2d" },
-  { light: "#a6a18c", face: "#838578", edge: "#555b50", ink: "#343c36" },
-  { light: "#b59474", face: "#9d7657", edge: "#70503c", ink: "#513c2b" },
-  { light: "#baaa77", face: "#a08a59", edge: "#74623e", ink: "#51492e" },
+  { face: "#72957a", well: "#22443a", edge: "#1b3129" },
+  { face: "#8193a6", well: "#283b54", edge: "#1f2b3c" },
+  { face: "#b87354", well: "#5e261c", edge: "#431c15" },
+  { face: "#c99a56", well: "#5c3814", edge: "#42290f" },
 ];
 const pointStyle = ([x, y]: [number, number]) => ({
   left: `${(x / WIDTH) * 100}%`,
@@ -52,6 +53,16 @@ const pawnStyle = (point: [number, number], moving: boolean) => ({
 const diamond = (x: number, y: number, rx: number, ry: number) =>
   `${x},${y - ry} ${x + rx},${y} ${x},${y + ry} ${x - rx},${y}`;
 // Use the board's coordinates for paint; touch targets may be larger than a pad.
+const padSize = (node: YutNode): [number, number] =>
+  node === "finish" || node === "home" || node === "o20"
+    ? [48, 33.2]
+    : node.startsWith("o")
+      ? Number(node.slice(1)) % 5 === 0
+        ? [48, 33.2]
+        : [44, 30.4]
+      : node === "center"
+        ? [36.5, 25.2]
+        : [19.7, 13.6];
 function PadHighlight({
   node,
   className,
@@ -60,16 +71,12 @@ function PadHighlight({
   className: string;
 }) {
   const [x, y] = nodePosition(node);
-  const outer = node.startsWith("o") || node === "finish" || node === "home";
-  const corner =
-    node === "finish" ||
-    node === "home" ||
-    (outer && Number(node.slice(1)) % 5 === 0);
-  return outer ? (
+  const [rx, ry] = padSize(node);
+  return node.startsWith("o") || node === "finish" || node === "home" ? (
     <polygon
       className={className}
       data-pad-node={node}
-      points={diamond(x, y - 3, corner ? 54 : 43, corner ? 37 : 30)}
+      points={diamond(x, y, rx, ry)}
     />
   ) : (
     <ellipse
@@ -77,8 +84,8 @@ function PadHighlight({
       data-pad-node={node}
       cx={x}
       cy={y}
-      rx={node === "center" ? 27 : 17}
-      ry={node === "center" ? 19 : 12}
+      rx={rx}
+      ry={ry}
     />
   );
 }
@@ -93,255 +100,89 @@ export const yutNodeLabel = (node: YutNode) =>
           ? `바깥 ${node.slice(1)}칸`
           : `지름길 ${node.slice(1)}칸`;
 
-function BoardSurface({ prefix }: { prefix: string }) {
-  const materials = `${import.meta.env.BASE_URL}assets/weplay/yut/materials.webp`;
+/** The same pads in plain shapes, far to near, until the picture can be shown. */
+function PlainBoard() {
+  return (
+    <>
+      <path
+        d="M12 255 360 14 708 255 708 278 360 520 12 278Z M132 255 360 98 588 255 360 412Z"
+        fillRule="evenodd"
+        fill="#6d4524"
+        stroke="#332a1e"
+        strokeWidth="3"
+      />
+      <path d="M143 255H577M360 109V402" stroke="#8a5f33" strokeWidth="12" />
+      {Object.keys(positions)
+        .filter((node) => node !== "finish")
+        .sort((a, b) => positions[a][1] - positions[b][1])
+        .map((node) => {
+          const [x, y] = positions[node];
+          const [rx, ry] = padSize(node as YutNode);
+          if (!node.startsWith("o"))
+            return (
+              <ellipse
+                key={node}
+                cx={x}
+                cy={y}
+                rx={rx}
+                ry={ry}
+                fill="#54401f"
+                stroke="#cbb787"
+                strokeWidth="5"
+              />
+            );
+          const number = Number(node.slice(1));
+          const zone = zones[Math.floor((number - 1) / 5)];
+          return (
+            <g key={node}>
+              <polygon points={diamond(x, y + 14, rx, ry)} fill={zone.edge} />
+              <polygon points={diamond(x, y, rx, ry)} fill={zone.face} />
+              <polygon
+                points={diamond(x, y, rx * 0.76, ry * 0.76)}
+                fill={zone.well}
+                stroke="#dca452"
+              />
+              <text
+                transform={`translate(${x} ${y + 11}) scale(.62 1)`}
+                textAnchor="middle"
+                fill="#f3bd6c"
+                className="yut-board-step-number"
+              >
+                {number === 20 ? "始" : number}
+              </text>
+            </g>
+          );
+        })}
+    </>
+  );
+}
+
+function BoardSurface() {
+  const [art, setArt] = useState<"loading" | "ready" | "plain">("loading");
+  useEffect(() => {
+    // The picture is warmed beforehand; a slow or failed load still needs a board.
+    const timer = window.setTimeout(
+      () => setArt((state) => (state === "loading" ? "plain" : state)),
+      500,
+    );
+    return () => window.clearTimeout(timer);
+  }, []);
   return (
     <svg
       viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
       preserveAspectRatio="none"
       className="yut-isometric-surface"
+      data-board-art={art}
       aria-hidden="true"
     >
-      <defs>
-        <pattern
-          id={`${prefix}-wood`}
-          width="192"
-          height="192"
-          patternUnits="userSpaceOnUse"
-          patternTransform="rotate(34)"
-          viewBox="0 0 627 627"
-        >
-          <image href={materials} width="1254" height="1254" />
-          <rect width="627" height="627" fill="#242618" opacity=".25" />
-        </pattern>
-        <pattern
-          id={`${prefix}-stone`}
-          width="37"
-          height="29"
-          patternUnits="userSpaceOnUse"
-        >
-          <path
-            d="M1 5h7m15-1h7M9 23h11m8-8h6M2 14h4"
-            stroke="#eee0b0"
-            strokeWidth="1"
-            opacity=".32"
-          />
-          <path
-            d="m17 0-3 6 4 4-2 6m21 7-8-3-4 3M0 26l7-2"
-            stroke="#313828"
-            strokeWidth=".7"
-            opacity=".4"
-            fill="none"
-          />
-          <path
-            d="M4 8h2m16 12h2m4-12h3M9 17h2m20 10h3"
-            stroke="#3b3928"
-            strokeWidth="1"
-            opacity=".25"
-          />
-        </pattern>
-        <pattern
-          id={`${prefix}-bronze`}
-          width="23"
-          height="19"
-          patternUnits="userSpaceOnUse"
-        >
-          <rect width="23" height="19" fill="#82683f" />
-          <path d="M0 3h7m7 8h9M3 17h6" stroke="#b39859" strokeWidth="1" />
-          <path
-            d="M6 7h3m8-5h4M0 14h4m12 4h4"
-            stroke="#4e553d"
-            strokeWidth="2"
-          />
-        </pattern>
-      </defs>
-      {/* Only the raised rim casts a shadow. The middle is deliberately open. */}
-      <g className="yut-board-rim">
-        <path
-          d="M12 255 360 14 708 255 708 278 360 520 12 278Z M132 255 360 98 588 255 360 412Z"
-          fillRule="evenodd"
-          fill={`url(#${prefix}-wood)`}
-          stroke="#332a1e"
-          strokeWidth="3"
-        />
-        <path d="M360 495 708 255V278L360 520Z" fill="#24251a" opacity=".36" />
-        <path
-          d="M15 266 360 505 705 266M15 274 360 513 705 274"
-          fill="none"
-          stroke="#ab8b50"
-          strokeWidth="1.4"
-          opacity=".7"
-        />
-        <path
-          d="M12 255 360 14 708 255 360 495Z M132 255 360 98 588 255 360 412Z"
-          fillRule="evenodd"
-          fill={`url(#${prefix}-wood)`}
-          stroke="#b59b61"
-          strokeWidth="2"
-        />
-        <polygon
-          points="27,255 360,25 693,255 360,485"
-          fill="none"
-          stroke="#302c1e"
-          strokeWidth="4"
-        />
-        <polygon
-          points="30,255 360,28 690,255 360,482"
-          fill="none"
-          stroke="#c2a975"
-          strokeWidth="1"
-        />
-      </g>
-      <g className="yut-board-crossing" fill="none">
-        <path d="M143 255H577M360 109V402" stroke="#392d1ddd" strokeWidth="7" />
-        <path d="M143 255H577M360 109V402" stroke="#d6bd7c" strokeWidth="3" />
-      </g>
-      {Object.entries(positions)
-        .filter(([node]) => !node.startsWith("o") && node !== "finish")
-        .map(([node, [x, y]]) => (
-          <g key={node}>
-            <ellipse
-              cx={x}
-              cy={y + 4}
-              rx={node === "center" ? 27 : 17}
-              ry={node === "center" ? 19 : 12}
-              fill="#3b402b"
-            />
-            <ellipse
-              cx={x}
-              cy={y}
-              rx={node === "center" ? 27 : 17}
-              ry={node === "center" ? 19 : 12}
-              fill="#b0a27b"
-              stroke="#ded0a4"
-              strokeWidth="1.2"
-            />
-            <ellipse
-              cx={x}
-              cy={y}
-              rx={node === "center" ? 26 : 16}
-              ry={node === "center" ? 18 : 11}
-              fill={`url(#${prefix}-stone)`}
-            />
-            <ellipse
-              cx={x}
-              cy={y}
-              rx={node === "center" ? 20 : 11}
-              ry={node === "center" ? 13 : 7}
-              fill="none"
-              stroke="#6f714e"
-              strokeWidth="1"
-            />
-            {node === "center" && (
-              <path
-                d={`M${x - 9} ${y}q9-13 18 0-9 13-18 0M${x} ${y - 9}q13 9 0 18-13-9 0-18`}
-                stroke="#605f3f"
-                fill="none"
-                strokeWidth="1.5"
-              />
-            )}
-          </g>
-        ))}
-      {Array.from({ length: 20 }, (_, index) => {
-        const number = index + 1,
-          [x, y] = positions[`o${number}`],
-          zone = zones[Math.floor(index / 5)];
-        const corner = number % 5 === 0,
-          rx = corner ? 54 : 43,
-          ry = corner ? 37 : 30,
-          depth = corner ? 15 : 11;
-        return (
-          <g key={number}>
-            <polygon
-              points={`${x - rx},${y} ${x},${y + ry} ${x + rx},${y} ${x + rx},${y + depth} ${x},${y + ry + depth} ${x - rx},${y + depth}`}
-              fill={zone.edge}
-              stroke="#343c2a"
-              strokeWidth="1"
-            />
-            <polygon
-              points={`${x},${y + ry} ${x + rx},${y} ${x + rx},${y + depth} ${x},${y + ry + depth}`}
-              fill="#20291c"
-              opacity=".23"
-            />
-            <path
-              d={`M${x - rx + 4} ${y + 5} ${x} ${y + ry + 5} ${x + rx - 4} ${y + 5}`}
-              fill="none"
-              stroke={zone.light}
-              strokeWidth=".8"
-              opacity=".55"
-            />
-            <polygon
-              points={diamond(x, y - 3, rx, ry)}
-              fill={zone.face}
-              stroke={zone.light}
-              strokeWidth="2"
-            />
-            <polygon
-              points={diamond(x, y - 3, rx - 2, ry - 2)}
-              fill={`url(#${prefix}-stone)`}
-            />
-            <polygon
-              points={diamond(x, y - 3, rx - 7, ry - 6)}
-              fill="none"
-              stroke={zone.edge}
-              strokeWidth="1.3"
-            />
-            <path
-              d={`M${x - rx + 8} ${y - 6} ${x} ${y - ry + 3} ${x + rx - 7} ${y - 6}`}
-              fill="none"
-              stroke="#d0c397"
-              strokeWidth=".8"
-              opacity=".7"
-            />
-            {corner ? (
-              <>
-                <path
-                  d={`M${x - 18} ${y - 3}q18-25 36 0-18 25-36 0`}
-                  fill={`url(#${prefix}-bronze)`}
-                  stroke="#c7b47f"
-                  strokeWidth="1"
-                />
-                {number === 20 ? (
-                  <text
-                    x={x}
-                    y={y + 3}
-                    textAnchor="middle"
-                    fill="#ede0b1"
-                    className="yut-board-corner-glyph"
-                  >
-                    始
-                  </text>
-                ) : (
-                  <path
-                    d={`m${x - 9} ${y - 3} 9-7 9 7-9 7Zm9-13v5m-18 8h5m13 0h5m-5 9v-5`}
-                    stroke="#d3c28f"
-                    strokeWidth="1.4"
-                    fill="none"
-                  />
-                )}
-              </>
-            ) : (
-              <>
-                <path
-                  d={`M${x - 7} ${y - 3}l7-5 7 5-7 5Z`}
-                  fill="none"
-                  stroke={zone.ink}
-                  strokeWidth="1.5"
-                />
-                <text
-                  x={x}
-                  y={y + 20}
-                  textAnchor="middle"
-                  fill={zone.ink}
-                  className="yut-board-step-number"
-                >
-                  {number}
-                </text>
-              </>
-            )}
-          </g>
-        );
-      })}
+      {art === "plain" && <PlainBoard />}
+      <image
+        {...BOARD_ART}
+        href={`${import.meta.env.BASE_URL}assets/weplay/yut/board.webp`}
+        preserveAspectRatio="none"
+        onLoad={() => setArt("ready")}
+        onError={() => setArt("plain")}
+      />
     </svg>
   );
 }
@@ -664,7 +505,6 @@ export default function YutBoard({
   onMotionChange?: (moving: boolean) => void;
   onStep?: (index: number) => void;
 }) {
-  const prefix = `yut-board-${useId().replace(/:/g, "")}`;
   const previous = useRef(room);
   const callback = useRef(onMotionChange);
   callback.current = onMotionChange;
@@ -967,7 +807,7 @@ export default function YutBoard({
         aria-label="윷판"
         data-selecting={destinations.length > 0}
       >
-        <BoardSurface prefix={prefix} />
+        <BoardSurface />
         {(previewPath.length > 1 || destinations.length > 0) && (
           <svg
             className="yut-route-preview"

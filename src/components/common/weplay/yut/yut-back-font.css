@@ -1,0 +1,9 @@
+/* East Sea Dokdo's result subset has no 빽; its companion brush is bundled. */
+@font-face {
+  font-family: "Yut Back";
+  src: url("../../../../assets/fonts/rhythm/Dokdo-Regular.woff2")
+    format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}

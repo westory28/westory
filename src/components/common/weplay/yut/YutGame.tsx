@@ -27,6 +27,7 @@ import {
   YUT_BOOST_LIMIT,
   YUT_ROLES,
   YUT_MOVE_ANIMATION_MS,
+  canThrowYutBack,
   addYutEmote,
   YUT_EMOTE_COOLDOWN_MS,
   YUT_EMOTE_VISIBLE_MS,
@@ -52,6 +53,7 @@ import {
 } from "./YutArt";
 import YutBoard, { yutNodeLabel } from "./YutBoard";
 import YutThrow3D from "./YutThrow3D";
+import { markedYutStick, yutStepText } from "./yutThrowResult";
 import { YutTurnGauge } from "./YutReactions";
 import YutVictoryCast from "./YutVictoryCast";
 import YutStackChoice from "./YutStackChoice";
@@ -66,6 +68,7 @@ import useYutFullscreenGestures from "./useYutFullscreenGestures";
 import { acquirePageScrollLock } from "../../../../lib/pageScrollLock";
 import "@fontsource/noto-serif-kr/600.css";
 import "./yut.css";
+import "./yut-back-font.css";
 import "./yut-feedback.css";
 import "./yut-menu-controls.css";
 
@@ -414,6 +417,13 @@ function GameDialog({
               도·개·걸·윷·모는 각각 1·2·3·4·5칸입니다. 먼저 말을 옮긴 뒤 다음
               윷을 던집니다.
             </li>
+            {rulesVersion !== 1 && (
+              <li>
+                내 말 하나가 완주하고 다른 말이 판 위에 있으면 빽도가 나올 수
+                있습니다. 윷·모보다 드물게 나오며 말을 뒤로 1칸 옮깁니다. 첫
+                칸에서는 출발 발판으로 돌아가고, 다음에 앞으로 가면 완주합니다.
+              </li>
+            )}
             <li>윷·모가 나오거나 다른 사람의 말을 잡으면 한 번 더 던집니다.</li>
             <li>
               번호가 붙은 말을 고르고, 빛나는 발판을 선택한 뒤 결정 버튼을 눌러
@@ -433,7 +443,7 @@ function GameDialog({
             <li>
               윷은 {throwSeconds}초 안에 던져 주세요. 시간이 지나면 다음 차례로
               넘어갑니다. 이동할 길은 {moveSeconds}초 안에 결정합니다. 투척·이동
-              연출은 제한 시간에 포함되지 않으며, 빽도는 없습니다.
+              연출은 제한 시간에 포함되지 않습니다.
             </li>
           </ol>
           <p className="yut-rule-note">
@@ -607,6 +617,7 @@ export default function YutGame({
       image.fetchPriority = priority;
       image.src = `${import.meta.env.BASE_URL}assets/weplay/yut/${file}`;
     };
+    warm("board.webp", "high");
     // Give the first visible/walking poses priority; short later reactions are
     // warmed during idle time so their first frame is ready when it is needed.
     YUT_CHARACTER_SHEETS.slice(0, 4).forEach((action, index) =>
@@ -1822,6 +1833,18 @@ export default function YutGame({
       (room.lastEvent.move &&
         serverClock < room.lastEvent.atMs + YUT_MOVE_ANIMATION_MS)),
   );
+  // The throw and its result own the middle of the screen until a move follows.
+  const tossVisible =
+    room?.status !== "finished" || settling || Boolean(finishing);
+  const thrown = currentToss?.room.pendingThrow;
+  // The back-do word has its own brush file: fetch it once it can be needed.
+  const backReady = Boolean(
+    room?.players.some((person) => canThrowYutBack(room, person.uid)),
+  );
+  useEffect(() => {
+    if (backReady)
+      void document.fonts?.load('96px "Yut Back"', "빽도!").catch(() => {});
+  }, [backReady]);
   const applauded = useRef(new Set<string>());
   useEffect(() => {
     if (!room || room.status !== "finished" || !room.winnerUid || finishing)
@@ -2771,6 +2794,7 @@ export default function YutGame({
                       {last && (
                         <span
                           className="yut-player-last"
+                          data-result={last.value}
                           aria-label={`마지막 윷 결과 ${last.label}`}
                         >
                           {last.label}
@@ -2808,45 +2832,7 @@ export default function YutGame({
                     !shownRoom
                   }
                 >
-                  {room.status !== "finished" || settling || finishing ? (
-                    <>
-                      {(settling || pending === "throw") && (
-                        <div className="yut-toss-dimmer" aria-hidden="true" />
-                      )}
-                      <YutThrow3D
-                        power={currentToss?.power ?? throwPower}
-                        throwKey={currentToss?.key || null}
-                        sticks={currentToss?.sticks || null}
-                        rolling={pending === "throw"}
-                        onComplete={completeToss}
-                        onRelease={() =>
-                          sounds.throw(currentToss?.power ?? throwPower)
-                        }
-                        onImpact={sounds.impact}
-                      />
-                      {celebrating &&
-                        settling &&
-                        !resultVisible &&
-                        currentToss?.room.pendingThrow && (
-                          <div
-                            className={`yut-landing-result ${currentToss.room.pendingThrow.value >= 4 ? "is-bonus" : ""}`}
-                            data-result={currentToss.room.pendingThrow.value}
-                            role="status"
-                            aria-live="assertive"
-                          >
-                            <strong>
-                              {currentToss.room.pendingThrow.label}!
-                            </strong>
-                            <span>
-                              {currentToss.room.pendingThrow.value}칸
-                              {currentToss.room.pendingThrow.value >= 4
-                                ? " · 한 번 더"
-                                : ""}
-                            </span>
-                          </div>
-                        )}
-                    </>
-                  ) : (
+                  {!tossVisible && (
                     <YutVictory
                       room={room}
                       avatars={avatars}
@@ -2902,9 +2888,11 @@ export default function YutGame({
                       </span>
                     ) : room.pendingThrow ? (
                       <>
-                        <strong>{room.pendingThrow.label}</strong>
+                        <strong data-result={room.pendingThrow.value}>
+                          {room.pendingThrow.label}
+                        </strong>
                         <span>
-                          {room.pendingThrow.value}칸
+                          {yutStepText(room.pendingThrow.value)}
                           {room.pendingThrow.value >= 4 && " · 한 번 더"}
                         </span>
                       </>
@@ -3055,6 +3043,44 @@ export default function YutGame({
                   <span>{room.lastEvent.text}</span>
                 )}
             </div>
+            {tossVisible && (
+              <div
+                className="yut-toss-stage"
+                data-cleared={
+                  resultVisible && (room.phase !== "move" || myTurn || moving)
+                }
+              >
+                {(settling || pending === "throw") && (
+                  <div className="yut-toss-dimmer" aria-hidden="true" />
+                )}
+                <YutThrow3D
+                  power={currentToss?.power ?? throwPower}
+                  throwKey={currentToss?.key || null}
+                  sticks={currentToss?.sticks || null}
+                  marked={currentToss ? markedYutStick(currentToss.room) : -1}
+                  rolling={pending === "throw"}
+                  onComplete={completeToss}
+                  onRelease={() =>
+                    sounds.throw(currentToss?.power ?? throwPower)
+                  }
+                  onImpact={sounds.impact}
+                />
+                {celebrating && settling && !resultVisible && thrown && (
+                  <div
+                    className={`yut-landing-result ${thrown.value >= 4 ? "is-bonus" : ""}`}
+                    data-result={thrown.value}
+                    role="status"
+                    aria-live="assertive"
+                  >
+                    <strong>{thrown.label}!</strong>
+                    <span>
+                      {yutStepText(thrown.value)}
+                      {thrown.value >= 4 ? " · 한 번 더" : ""}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
         {(portal === "teacher" || !preview) && (

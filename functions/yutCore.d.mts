@@ -24,6 +24,11 @@ export interface YutRoom {
 export interface YutMove { pieceId: string; route: YutRoute; targetNode: YutNode; stackSize: number; path?: YutNode[]; canStack?: boolean; stack?: boolean }
 export function getYutThrowProbabilities(power?: number, previousValue?: number, boost?: YutBoost): number[];
 export function sampleYutSticks(power?: number, random?: () => number, previousValue?: number, boost?: YutBoost): boolean[];
+/** The value of a back-do result: one pad backwards. */
+export const YUT_BACK_VALUE: -1;
+export function canThrowYutBack(room: YutRoom, uid: string): boolean;
+export function getYutBackProbability(power?: number, previousValue?: number, boost?: YutBoost): number;
+export function sampleYutThrow(power?: number, random?: () => number, previousValue?: number, boost?: YutBoost, canBack?: boolean): { sticks: boolean[]; back: boolean };
 export const YUT_TURN_MS: number;
 export const YUT_THROW_ANIMATION_MS: number;
 export const YUT_MOVE_ANIMATION_MS: number;
@@ -44,7 +49,7 @@ export function readyYutPlayer(room: YutRoom, uid: string, ready: boolean, nowMs
 export function touchYutHostActivity(room: YutRoom, uid: string, nowMs: number): YutRoom;
 export function kickYutPlayer(room: YutRoom, uid: string, targetUid: string, nowMs: number): YutRoom;
 export function startYutGame(room: YutRoom, nowMs: number): YutRoom;
-export function throwYut(room: YutRoom, uid: string, sticks: boolean[], nowMs: number, power?: number, boost?: YutBoost, arrivedAtMs?: number): YutRoom;
+export function throwYut(room: YutRoom, uid: string, sticks: boolean[], nowMs: number, power?: number, boost?: YutBoost, arrivedAtMs?: number, back?: boolean): YutRoom;
 export function getLegalYutMoves(room: YutRoom, uid: string): YutMove[];
 export function moveYut(room: YutRoom, uid: string, pieceId: string, route: YutRoute, nowMs: number, stack?: boolean, arrivedAtMs?: number): YutRoom;
 export function skipYutTurn(room: YutRoom, nowMs: number): YutRoom;

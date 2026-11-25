@@ -1197,6 +1197,140 @@ try {
     );
   }
 
+  // 9. Back-do: one piece home and one on the board, the word, the single way back and the start pad.
+  {
+    const page = await open("uid=a", {
+      layout: {
+        a: ["o2", "finish"],
+        b: ["o8", "home"],
+        c: ["o13", "home"],
+        d: ["o18", "home"],
+      },
+    });
+    await page.waitForFunction(
+      () =>
+        document.querySelector("[data-board-art]")?.dataset.boardArt ===
+        "ready",
+    );
+    const backThrow = () =>
+      page.evaluate(() => {
+        const qa = window.yutQA;
+        const turn = {
+          ...qa.room,
+          turnUid: "a",
+          phase: "throw",
+          pendingThrow: null,
+          extraThrows: 0,
+          revision: qa.room.revision + 1,
+          phaseStartsAtMs: 0,
+          turnDeadlineMs: Date.now() + 900000,
+        };
+        const thrown = qa.core.throwYut(
+          turn,
+          "a",
+          [false, false, true, false],
+          Date.now() - 10,
+          0.5,
+          undefined,
+          undefined,
+          true,
+        );
+        qa.push({ ...thrown, turnInputDeadlineMs: Date.now() + 900000 });
+      });
+    const idle = () =>
+      page.waitForFunction(
+        () => !document.querySelector(".yut-board-piece.is-moving"),
+        null,
+        { timeout: 8000 },
+      );
+    const boxes = (selector) =>
+      page.evaluate((selector) => {
+        const box = document.querySelector(selector).getBoundingClientRect();
+        return [box.x, box.y, box.width, box.height].map(Math.round);
+      }, selector);
+    for (const [from, to] of [
+      ["o2", "o1"],
+      ["o1", "o20"],
+    ]) {
+      await backThrow();
+      await page.locator('.yut-landing-result[data-result="-1"]').waitFor();
+      assert.equal(
+        await page.locator(".yut-landing-result").textContent(),
+        "빽도!뒤로 1칸",
+      );
+      assert.deepEqual(
+        await boxes(".yut-toss-stage"),
+        await boxes(".yut-match"),
+        "the throw covers the whole match, centred on the screen",
+      );
+      await shot(page, `back-do-${from}`);
+      await page.locator(".yut-isometric-destination").first().waitFor();
+      assert.equal(await page.locator(".yut-isometric-destination").count(), 1);
+      assert.equal(
+        await page
+          .locator(".yut-toss-stage")
+          .evaluate((node) => getComputedStyle(node).visibility),
+        "hidden",
+        "the sticks leave the board before the move is chosen",
+      );
+      assert.deepEqual(
+        await page
+          .locator(".yut-destination-pad")
+          .evaluateAll((nodes) => nodes.map((node) => node.dataset.padNode)),
+        [to],
+      );
+      assert.match(
+        await page.locator(".yut-throw-result").textContent(),
+        /빽도.*뒤로 1칸/,
+      );
+      await page.evaluate(() => {
+        const qa = window.yutQA;
+        const move = qa.core.getLegalYutMoves(qa.room, "a")[0];
+        qa.push(
+          qa.steady(
+            qa.core.moveYut(
+              qa.room,
+              "a",
+              move.pieceId,
+              move.route,
+              qa.room.phaseStartsAtMs + 1,
+            ),
+          ),
+        );
+      });
+      await page.waitForFunction(() =>
+        document.querySelector(
+          '.yut-board-piece.is-moving[data-motion="land"]',
+        ),
+      );
+      await idle();
+      assert.equal(
+        await page
+          .locator('.yut-board-piece[data-piece-ids="1"][aria-label*="김하늘"]')
+          .getAttribute("data-pawn-node"),
+        to,
+      );
+    }
+    // Any forward throw takes the piece on the start pad home.
+    await page.evaluate(() =>
+      window.yutQA.push(window.yutQA.play(window.yutQA.room, "a", "1", 1)),
+    );
+    await page.locator(".yut-victory").waitFor({ timeout: 8000 });
+    await page.context().close();
+    // Not eligible before a piece is home: the rule refuses the result itself.
+    const early = await open("uid=a", { layout: START });
+    assert.equal(
+      await early.evaluate(() =>
+        window.yutQA.core.canThrowYutBack(window.yutQA.room, "a"),
+      ),
+      false,
+    );
+    await early.context().close();
+    pass(
+      "Back-do appears only after one piece is home, shows 빽도! over a match-wide throw, offers the one pad back (to the start pad from the first) and the waiting piece then finishes.",
+    );
+  }
+
   assert.deepEqual(report.errors, [], "no page or console error");
   report.passed = true;
 } finally {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createYutRoom, addYutPlayer, readyYutPlayer, startYutGame, throwYut, moveYut as coreMoveYut, getLegalYutMoves, skipYutTurn, leaveYutRoom, closeYutRoom, addYutEmote, setYutSeat, kickYutPlayer, getYutThrowProbabilities, sampleYutSticks, YUT_EMOTE_KINDS, YUT_EMOTE_COOLDOWN_MS, YUT_EMOTE_VISIBLE_MS, YUT_WAITING_MS } from '../yutCore.mjs';
+import { createYutRoom, addYutPlayer, readyYutPlayer, startYutGame, throwYut, moveYut as coreMoveYut, getLegalYutMoves, skipYutTurn, leaveYutRoom, closeYutRoom, addYutEmote, setYutSeat, kickYutPlayer, getYutThrowProbabilities, sampleYutSticks, sampleYutThrow, canThrowYutBack, getYutBackProbability, YUT_BACK_VALUE, YUT_EMOTE_KINDS, YUT_EMOTE_COOLDOWN_MS, YUT_EMOTE_VISIBLE_MS, YUT_WAITING_MS } from '../yutCore.mjs';
 const now = 10000;
 function game(count = 2, pieces = 1, version = 1) {
   let room = createYutRoom({ id: 'room', code: 'ABC234', classId: 'class', classLabel: '1학년 1반', host: { uid: 'a', name: '가' }, nowMs: now });
@@ -322,7 +322,7 @@ test('emotes reject arbitrary text, nonparticipants and closed rooms; legacy roo
   assert.equal(addYutEmote(original, 'a', 'wow', 'emote_legacy1', now).syncRevision, original.revision + 1);
   assert.equal(roll(original, 2).syncRevision, original.revision + 1);
 });
-test('all 16 physical throws give correct values; no back-do; source immutable', () => {
+test('all 16 physical throws give correct values; none is a back-do by itself; source immutable', () => {
   const original = game(), frequencies = {};
   for (let bits = 0; bits < 16; bits += 1) {
     const result = throwYut(original, 'a', [0, 1, 2, 3].map((bit) => Boolean(bits & (1 << bit))), now + 1);
@@ -331,6 +331,96 @@ test('all 16 physical throws give correct values; no back-do; source immutable',
   }
   assert.deepEqual(frequencies, { 1: 4, 2: 6, 3: 4, 4: 1, 5: 1 });
   assert.equal(original.pendingThrow, null);
+});
+const throwing = (first, second = 'home', lane = 'outer') => {
+  const room = game(2, 2, 2);
+  Object.assign(room.players[0].pieces[0], { node: first, lane });
+  room.players[0].pieces[1].node = second;
+  return room;
+};
+const backThrow = (room) => throwYut(room, 'a', [false, true, false, false], now + 1, 0.5, undefined, now + 1, true);
+test('back-do needs one piece home and one on the board, in two-piece games only', () => {
+  assert.equal(canThrowYutBack(throwing('o7'), 'a'), false, 'no piece home yet');
+  assert.equal(canThrowYutBack(throwing('home', 'finish'), 'a'), false, 'nothing on the board to move back');
+  assert.equal(canThrowYutBack(throwing('o7', 'o9'), 'a'), false);
+  assert.equal(canThrowYutBack(throwing('o7', 'finish'), 'a'), true);
+  assert.equal(canThrowYutBack(throwing('center', 'finish', 'a'), 'a'), true);
+  assert.equal(canThrowYutBack(throwing('o7', 'finish'), 'b'), false, 'the other player gains nothing');
+  const legacy = throwing('o7', 'finish'); delete legacy.rulesVersion;
+  assert.equal(canThrowYutBack(legacy, 'a'), false);
+  assert.throws(() => backThrow(throwing('o7')), /빽도/);
+  assert.throws(() => throwYut(throwing('o7', 'finish'), 'a', [true, true, false, false], now + 1, 0.5, undefined, now + 1, true), /빽도/);
+  assert.throws(() => throwYut(throwing('o7', 'finish'), 'a', [true, false, false, false], now + 1, 0.5, undefined, now + 1, 'yes'), /빽도/);
+  const thrown = backThrow(throwing('o7', 'finish'));
+  assert.deepEqual(thrown.pendingThrow, { value: YUT_BACK_VALUE, label: '빽도', sticks: [false, true, false, false] });
+  assert.equal(thrown.players[0].lastThrow.value, -1);
+  assert.equal(thrown.extraThrows, 0, 'no bonus throw');
+  assert.equal(thrown.phase, 'move');
+});
+test('back-do is always rarer than yut and mo and is taken only from do', () => {
+  for (let step = 0; step <= 20; step += 1) for (const previous of [0, 1, -1, 4, 5]) for (const boost of [undefined, 4, 5]) {
+    const power = 0.12 + step * 0.044, chances = getYutThrowProbabilities(power, previous, boost), back = getYutBackProbability(power, previous, boost);
+    assert.ok(back > 0 && back < chances[3] && back < chances[4] && back < chances[0] / 2, `${power}/${previous}/${boost}: ${back} vs ${chances}`);
+    const counts = { back: 0, plain: 0 }, totals = [0, 0, 0, 0, 0];
+    for (let sample = 0; sample < 2000; sample += 1) {
+      let draws = 0;
+      const source = () => (draws++ ? 0.45 : (sample + 0.5) / 2000);
+      const result = sampleYutThrow(power, source, previous, boost, true);
+      assert.equal(draws, 4, 'the same four server draws');
+      let again = 0;
+      assert.deepEqual(result.sticks, sampleYutSticks(power, () => (again++ ? 0.45 : (sample + 0.5) / 2000), previous, boost), 'faces are unchanged');
+      const flat = result.sticks.filter(Boolean).length;
+      totals[(flat || 5) - 1] += 1;
+      if (result.back) { assert.equal(flat, 1); counts.back += 1; } else if (flat === 1) counts.plain += 1;
+    }
+    assert.ok(Math.abs(counts.back / 20 - back) < 0.1 && counts.plain > counts.back);
+    totals.forEach((total, index) => assert.ok(Math.abs(total / 20 - chances[index]) < 0.11, 'every other result keeps its chance'));
+  }
+  let calls = 0;
+  assert.equal(sampleYutThrow(0.5, () => { calls += 1; return 0; }).back, false, 'never without an eligible player');
+  assert.equal(calls, 4);
+});
+test('back-do steps one pad back along the way the piece came', () => {
+  const steps = [
+    ['o7', 'outer', 'o6', 'outer'], ['o2', 'outer', 'o1', 'outer'], ['o16', 'outer', 'o15', 'outer'], ['o15', 'outer', 'o14', 'outer'],
+    ['o5', 'outer', 'o4', 'outer'], ['o10', 'outer', 'o9', 'outer'], ['o6', 'outer', 'o5', 'outer'], ['o11', 'outer', 'o10', 'outer'],
+    ['a1', 'a', 'o5', 'outer'], ['a2', 'a', 'a1', 'a'], ['center', 'a', 'a2', 'a'], ['a4', 'a', 'center', 'a'], ['a5', 'a', 'a4', 'a'],
+    ['b1', 'b', 'o10', 'outer'], ['b2', 'b', 'b1', 'b'], ['center', 'b', 'b2', 'b'], ['b4', 'b', 'center', 'b'], ['b5', 'b', 'b4', 'b'],
+    ['o1', 'outer', 'o20', 'outer'], ['o20', 'outer', 'o19', 'outer'],
+  ];
+  for (const [node, lane, target, targetLane] of steps) {
+    const thrown = backThrow(throwing(node, 'finish', lane)), moves = getLegalYutMoves(thrown, 'a');
+    assert.deepEqual(moves.map((move) => [move.pieceId, move.route, move.targetNode, move.path]), [['1', lane, target, [target]]], node);
+    const moved = moveYut(thrown, 'a', '1', moves[0].route, now + 2);
+    assert.deepEqual([moved.players[0].pieces[0].node, moved.players[0].pieces[0].lane], [target, targetLane], node);
+    assert.equal(moved.players[0].pieces[1].node, 'finish', 'a piece already home stays home');
+    assert.equal(moved.status, 'playing');
+    assert.equal(moved.turnUid, 'b');
+    assert.equal(moved.pendingThrow, null);
+  }
+  assert.throws(() => moveYut(backThrow(throwing('o5', 'finish')), 'a', '1', 'a', now + 2), /다시 선택/, 'no shortcut backwards');
+  assert.throws(() => moveYut(backThrow(throwing('o7', 'finish')), 'a', '2', 'outer', now + 2), /다시 선택/);
+});
+test('a piece sent back to the start pad goes home with any forward throw', () => {
+  for (let value = 1; value <= 5; value += 1) {
+    const room = throwing('o20', 'finish'), rolled = roll(room, value), moves = getLegalYutMoves(rolled, 'a');
+    assert.deepEqual(moves.map((move) => move.targetNode), ['finish']);
+    const won = moveYut(rolled, 'a', '1', moves[0].route, now + 2);
+    assert.equal(won.status, 'finished');
+    assert.equal(won.winnerUid, 'a');
+  }
+});
+test('back-do catches an opponent, even on the start pad, and earns the usual extra throw', () => {
+  for (const [node, target] of [['o8', 'o7'], ['o1', 'o20']]) {
+    const room = throwing(node, 'finish');
+    Object.assign(room.players[1].pieces[0], { node: target, lane: 'outer' });
+    const moved = moveYut(backThrow(room), 'a', '1', 'outer', now + 2);
+    assert.equal(moved.lastEvent.kind, 'capture');
+    assert.equal(moved.players[1].pieces[0].node, 'home');
+    assert.equal(moved.players[0].pieces[0].node, target);
+    assert.equal(moved.turnUid, 'a');
+    assert.equal(moved.phase, 'throw');
+  }
 });
 test('diagonals only chosen from exact corners; center can choose either exit', () => {
   const base = game();

@@ -19,6 +19,7 @@ export default function YutThrow3D({
   sticks,
   rolling,
   power = 0.65,
+  marked = -1,
   onComplete,
   onRelease,
   onImpact,
@@ -30,8 +31,8 @@ export default function YutThrow3D({
   const audio = useRef({ onRelease, onImpact });
   audio.current = { onRelease, onImpact };
   const sounded = useRef(new Map<string, Set<number>>());
-  const state = useRef({ throwKey, sticks, rolling, power });
-  state.current = { throwKey, sticks, rolling, power };
+  const state = useRef({ throwKey, sticks, rolling, power, marked });
+  state.current = { throwKey, sticks, rolling, power, marked };
   const seen = useRef(new Set<string>());
   const [fallback, setFallback] = useState(false);
   const [fallbackKey, setFallbackKey] = useState<string | null>(null);
@@ -91,8 +92,8 @@ export default function YutThrow3D({
   useEffect(() => {
     if (rolling || (throwKey && !seen.current.has(throwKey))) setSettled(false);
     else if (throwKey && seen.current.has(throwKey)) setSettled(true);
-    scene.current?.update({ throwKey, sticks, rolling, power });
-  }, [throwKey, sticks, rolling, fallback, power]);
+    scene.current?.update({ throwKey, sticks, rolling, power, marked });
+  }, [throwKey, sticks, rolling, fallback, power, marked]);
 
   useEffect(() => {
     if (
@@ -200,10 +201,12 @@ export default function YutThrow3D({
                   } as CSSProperties
                 }
               >
-                {!sticks?.[index] && (
+                {!sticks?.[index] ? (
                   <i>
                     ×<br />×<br />×
                   </i>
+                ) : (
+                  index === marked && <b className="yut-throw-3d__back" />
                 )}
               </span>
             );

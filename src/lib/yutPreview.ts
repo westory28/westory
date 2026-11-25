@@ -8,7 +8,8 @@ import {
   startYutGame,
   throwYut,
   setYutSeat,
-  sampleYutSticks,
+  canThrowYutBack,
+  sampleYutThrow,
   type YutRoom,
   type YutMove,
 } from "../../functions/yutCore.mjs";
@@ -84,22 +85,31 @@ export function previewYutCommand(
   nowMs = Date.now(),
 ): YutRoom {
   if (data.action === "start") return startYutGame(room, nowMs);
-  if (data.action === "throw")
-    return throwYut(
-      room,
-      uid,
+  if (data.action === "throw") {
+    const thrown =
       room.rulesVersion === 2
-        ? sampleYutSticks(
+        ? sampleYutThrow(
             data.power ?? 0.65,
             random,
             room.players.find((player) => player.uid === uid)?.lastThrow?.value,
             data.boost,
+            canThrowYutBack(room, uid),
           )
-        : Array.from({ length: 4 }, () => random() < 0.5),
+        : {
+            sticks: Array.from({ length: 4 }, () => random() < 0.5),
+            back: false,
+          };
+    return throwYut(
+      room,
+      uid,
+      thrown.sticks,
       nowMs,
       data.power ?? 0.65,
       data.boost,
+      undefined,
+      thrown.back,
     );
+  }
   if (data.action === "move" && data.pieceId && data.route)
     return moveYut(room, uid, data.pieceId, data.route, nowMs, data.stack);
   if (data.action === "skip") return skipYutTurn(room, nowMs);

@@ -3,6 +3,7 @@ import { YUT_WAITING_MS } from "../../../../functions/yutCore.mjs";
 import { getYutManagementProgress } from "../../../../functions/yutManagement.mjs";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import YutBoard from "../../../components/common/weplay/yut/YutBoard";
+import { yutStepText } from "../../../components/common/weplay/yut/yutThrowResult";
 import {
   PROFESSIONS,
   YutPortrait,
@@ -228,7 +229,8 @@ export default function YutSpectator({
             </span>
             {room.pendingThrow && (
               <span>
-                {room.pendingThrow.label} · {room.pendingThrow.value}칸
+                {room.pendingThrow.label} ·{" "}
+                {yutStepText(room.pendingThrow.value)}
               </span>
             )}
           </>

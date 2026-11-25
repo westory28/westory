@@ -6,6 +6,8 @@ export interface YutThrowState {
   rolling: boolean;
   /** Cosmetic launch strength only; the server still determines the four faces. */
   power?: number;
+  /** The stick carrying the back-do mark on its flat face, or -1 for none. */
+  marked?: number;
 }
 
 const TAU = Math.PI * 2;
@@ -35,10 +37,10 @@ export function yutThrowPlan(index: number, power = 0.65, throwKey = "") {
     strength,
     x: ([-1.2, -0.4, 0.4, 1.2][index] + (random() - 0.5) * 0.13) * spread,
     z:
-      ([-0.24, 0.3, -0.3, 0.25][index] + (random() - 0.5) * 0.22) *
-        (0.7 + strength * 0.6) +
-      0.78 -
-      strength * 1.02,
+      ([-0.2, 0.24, -0.24, 0.2][index] + (random() - 0.5) * 0.2) *
+        (0.7 + strength * 0.5) +
+      0.22 -
+      strength * 0.26,
     yaw: (index % 2 ? 1 : -1) * (0.055 + random() * 0.07 + strength * 0.16),
     delay: random() * (0.02 + strength * 0.035),
     flight: 0.63 + random() * 0.09 + strength * 0.31,
@@ -113,6 +115,11 @@ export function finalYutRotation(
     "YXZ",
   );
 }
+
+const VIEW_TARGET = new THREE.Vector3(0, 0.74, 0);
+const VIEW_FROM = new THREE.Vector3(0, 0.67, 0.74).normalize();
+const VIEW_DISTANCE = 4.9;
+const VIEW_ASPECT = 1.55;
 
 let atlasPromise: Promise<HTMLImageElement> | undefined;
 function loadWoodAtlas() {
@@ -258,6 +265,56 @@ function woodTextures(
   return { color: texture, bump, roughness };
 }
 
+/** The painted back-do mark: a vermilion seal with an arrow that turns back. */
+function backMarkTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 256;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Canvas texture unavailable");
+  const ink = "#a5281c";
+  context.fillStyle = ink;
+  context.beginPath();
+  context.arc(128, 128, 112, 0, TAU);
+  context.fill();
+  context.strokeStyle = context.fillStyle = "#f6e3b4";
+  context.lineWidth = 9;
+  context.beginPath();
+  context.arc(128, 128, 94, 0, TAU);
+  context.stroke();
+  context.lineWidth = 24;
+  context.lineCap = "round";
+  context.beginPath();
+  context.moveTo(98, 166);
+  context.arc(136, 128, 46, Math.PI * 0.62, -Math.PI * 0.62, true);
+  context.lineTo(92, 88);
+  context.stroke();
+  context.beginPath();
+  context.moveTo(56, 92);
+  context.lineTo(108, 54);
+  context.lineTo(110, 124);
+  context.fill();
+  // Worn paint lets the wood show through, as on a set that has been played.
+  let seed = 977;
+  const random = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  context.globalCompositeOperation = "destination-out";
+  for (let chip = 0; chip < 190; chip++) {
+    context.globalAlpha = 0.16 + random() * 0.4;
+    context.fillRect(
+      random() * 256,
+      random() * 256,
+      1 + random() * 2,
+      4 + random() * 22,
+    );
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+
 /** A real beveled half-cylinder; the flat face is at local negative Y. */
 export function createYutGeometry() {
   const radius = 0.2,
@@ -327,6 +384,7 @@ export class YutThrowScene {
   private world = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(38, 1, 0.1, 40);
   private groups: THREE.Group[] = [];
+  private marks: THREE.Mesh[] = [];
   private trails: THREE.Line[] = [];
   private trailPoints: THREE.Vector3[][] = [];
   private dust: THREE.Points;
@@ -367,19 +425,14 @@ export class YutThrowScene {
       antialias: true,
       powerPreference: "low-power",
     });
-    this.renderer.setPixelRatio(
-      Math.min(window.devicePixelRatio || 1, host.clientWidth < 600 ? 1.5 : 2),
-    );
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1;
+    this.renderer.toneMappingExposure = 0.84;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.domElement.setAttribute("aria-hidden", "true");
     this.host.appendChild(this.renderer.domElement);
-    this.camera.position.set(0, 6.2, 6.8);
-    this.camera.lookAt(0, 0.75, 0);
     this.world.add(new THREE.HemisphereLight(0xfff1d6, 0x3c352b, 1.65));
     const key = new THREE.DirectionalLight(0xfff2dc, 2.8);
     key.position.set(-2, 8, 3);
@@ -456,6 +509,15 @@ export class YutThrowScene {
       });
     const bodyGeometry = createYutGeometry();
     const flatGeometry = new THREE.PlaneGeometry(0.375, 1.69);
+    const backMark = backMarkTexture();
+    this.textures.push(backMark);
+    const markMaterial = new THREE.MeshStandardMaterial({
+      map: backMark,
+      transparent: true,
+      roughness: 0.9,
+      depthWrite: false,
+    });
+    const markGeometry = new THREE.PlaneGeometry(0.3, 0.3);
     for (let index = 0; index < 4; index++) {
       const group = new THREE.Group();
       const body = new THREE.Mesh(bodyGeometry, [
@@ -469,7 +531,14 @@ export class YutThrowScene {
       face.rotation.x = Math.PI / 2;
       // The bevel extends 0.018 below the flat face; keep the pale belly outside.
       face.position.y = -0.119;
-      group.add(body, face);
+      const mark = new THREE.Mesh(markGeometry, markMaterial);
+      mark.rotation.x = Math.PI / 2;
+      // Upright for the player once the flat face is turned up.
+      mark.rotation.z = Math.PI;
+      mark.position.y = -0.1205;
+      mark.visible = false;
+      this.marks.push(mark);
+      group.add(body, face, mark);
       this.groups.push(group);
       this.world.add(group);
       const geometry = new THREE.BufferGeometry().setFromPoints(
@@ -639,6 +708,9 @@ export class YutThrowScene {
   private pose() {
     const time = this.elapsed;
     for (let index = 0; index < 4; index++) {
+      this.marks[index].visible = this.result
+        ? index === (this.state.marked ?? -1)
+        : false;
       const pose = sampleYutPose(
         time,
         index,
@@ -691,8 +763,23 @@ export class YutThrowScene {
     const width = this.host.clientWidth,
       height = this.host.clientHeight;
     if (!width || !height) return;
+    // The stage fills the game. Cap the pixels so a dense display does not have
+    // to shade four times the surface the player can tell apart.
+    this.renderer.setPixelRatio(
+      Math.min(
+        window.devicePixelRatio || 1,
+        width < 600 ? 1.5 : 2,
+        Math.max(1, Math.sqrt(1_900_000 / (width * height))),
+      ),
+    );
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
+    // Close enough that four sticks span the stage; only a canvas narrower than
+    // the widest throw moves the camera back. Throw strength never does.
+    const distance =
+      VIEW_DISTANCE * Math.max(1, VIEW_ASPECT / this.camera.aspect);
+    this.camera.position.copy(VIEW_TARGET).addScaledVector(VIEW_FROM, distance);
+    this.camera.lookAt(VIEW_TARGET);
     this.camera.updateProjectionMatrix();
     this.render();
   };

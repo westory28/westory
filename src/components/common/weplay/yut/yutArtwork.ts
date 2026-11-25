@@ -9,7 +9,7 @@ const STAGES = [
     "entry-characters.webp",
     "entry-sticks.webp",
   ],
-  ["animation-idle.webp", "animation-walk.webp"],
+  ["board.webp", "animation-idle.webp", "animation-walk.webp"],
 ];
 const warmed: HTMLImageElement[] = [];
 let started = false;

@@ -1627,16 +1627,31 @@
   white-space: nowrap;
   border: 0;
 }
+/* The throw uses the whole game canvas, above the board and player cards. */
+.yut-toss-stage {
+  position: absolute;
+  z-index: 14;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.yut-toss-stage[data-cleared="true"] {
+  visibility: hidden;
+}
+/* Emotes stay above the throw. */
+.yut-match .yut-players:has(.yut-emote-bubble) {
+  z-index: 16;
+}
 .yut-toss-dimmer {
   position: absolute;
   z-index: 0;
-  inset: -2%;
+  inset: 0;
   pointer-events: none;
   background: radial-gradient(
-    ellipse,
-    #17120de0 0%,
-    #17120d90 50%,
-    transparent 72%
+    ellipse 78% 92% at 50% 52%,
+    #17120de6 0%,
+    #17120dc4 46%,
+    #17120d66 100%
   );
 }
 .yut-landing-result {
@@ -1937,6 +1952,32 @@
   font-family: "Yut Brush", serif;
   font-size: 36px;
   font-weight: 400;
+}
+.yut-game .yut-landing-result {
+  top: 21%;
+}
+@container yut-canvas (max-height: 560px) {
+  .yut-game--rotated-fullscreen .yut-landing-result {
+    gap: 4px;
+  }
+  .yut-game--rotated-fullscreen .yut-landing-result strong {
+    font-size: 96px;
+  }
+}
+.yut-game .yut-landing-result[data-result="-1"] strong {
+  letter-spacing: -0.06em;
+}
+.yut-game .yut-landing-result[data-result="-1"] strong,
+.yut-game .yut-throw-result > strong[data-result="-1"],
+.yut-game .yut-match .yut-player-last[data-result="-1"] {
+  font-family: "Yut Back", "Noto Serif KR", serif;
+}
+.yut-game .yut-match .yut-player-last[data-result="-1"] {
+  width: auto;
+  padding: 0 7px;
+  border-radius: 16px;
+  font-size: 20px;
+  white-space: nowrap;
 }
 @keyframes yut-ink-arrive {
   from {
