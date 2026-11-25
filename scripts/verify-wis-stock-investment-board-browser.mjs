@@ -664,7 +664,7 @@ async function checkBulletinCycle(width, height) {
   await heading.filter({hasText:"신규 상장"}).waitFor();
   const initial = await popup.innerText();
   for (const term of ["새상회", "상장가", "800"]) assert(initial.includes(term), initial);
-  assert(!initial.includes("옛철도"), "a listing outside the current ten-minute slot is excluded");
+  assert(!initial.includes("옛철도"), "a listing of an earlier day is excluded");
   await page.screenshot({path:path.join(output, "board-listing-popup-" + width + ".png")});
   const pages = [];
   for (let i = 0; i < 16; i++) {

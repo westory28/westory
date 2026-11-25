@@ -74,7 +74,7 @@ try {
   assert.equal(current, null);
   rotation.clear();
   rotation.update(market([listed]), new Set());
-  assert.equal(current, null, 'a reconnect does not repeat the listings already announced');
+  assert.equal(current, null, 'a reconnect does not repeat the listings announced earlier in the day');
   now = Date.parse('2026-11-24T14:00:03+09:00');
   rotation.update(market([listed, { ...listed, id: 'new', name: '방금상장', listedAtMs: now }]), new Set(['listing:new']));
   assert.equal(current.stocks[0].id, 'new', 'a new listing is announced the moment it arrives');

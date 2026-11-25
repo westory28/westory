@@ -139,9 +139,15 @@ export function createStockBulletinRotation(
     clearTimeout(timer);
     timer = undefined;
     page = [];
-    // A reconnect announces current price moves again, not the day's listings.
+    // A reconnect announces the events of the current ten minutes again, not
+    // the listings from earlier in the day.
+    const now = Date.now();
     for (const eventKey of shown)
-      if (!eventKey.startsWith("listing:")) shown.delete(eventKey);
+      if (
+        !eventKey.startsWith("listing:") ||
+        now < nextWisStockPriceTick(Number(eventKey.split(":").at(-1)))
+      )
+        shown.delete(eventKey);
     market = null;
     publish(null);
   }
