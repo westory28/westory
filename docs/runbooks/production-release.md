@@ -10,6 +10,9 @@
 - 국내 시장 관리 7개: `node scripts/prepare-wispi-overseas-release.mjs prepare|preflight|verify`. 7개가 공유하는 운영 ZIP(262파일)에서 `wisStocks.js`·`wisStockCatalogSchedule.js`·`wisStockCatalogTimeline.mjs`만 커밋본으로 바꾸고 `wisStockVenues.js`·`wisStockFx.js`·`wisStockFx.mjs`·`wisStockOverseasCatalog.json`을 더한 266파일. 준비본에서 국내 시장 검사 82개를 통과했다. 배포 뒤 revision: `activatewisstockcatalogexits-00003-tif`, `activatewisstockcatalogplan-00008-dip`, `advancewisstockprices-00016-sit`, `getwisstockmanagement-00013-wep`, `savewisstock-00014-kiw`, `savewisstockmarketrules-00012-leg`, `setwisstockmarkethalted-00012-qom`(파일·자원 대조 일치).
 - 전광판: `scripts/prepare-function-release.mjs`로 `wisStockDisplay.js` 블록 1개만 적용, `onwisstockmarkettradingwrite-00011-zef`. 이벤트 필터 순서가 API 응답마다 달라 `preflight`가 오탐하던 비교를 집합 비교로 고쳤다.
 - 그 밖의 국내 위스피 함수(주문·체결·내역·지원금·랭킹·보고서·투자 이력)는 다시 배포하지 않았다.
+- 프런트엔드: main `7e3bfde4`의 Vercel 배포 `dpl_CGo82nZazZYxPrJhnxXDThjzLV8U`를 승격했다(운영 `main-BT7JinTV.js`). 교사 화면에서 `/teacher/points?tab=stocks` → `/teacher/wispi` 이동, 독립 위스피 메뉴, 저장된 예전 위스피 바로가기 표시, 해외 시장 탭 로드를 확인했다. 학생 화면은 학생 계정이 없어 브라우저로 확인하지 못했고 규칙 에뮬레이터 검사로 대신했다.
+- 학생 공개(사용자 확인 뒤, 11월 26일 22시 30분대): `환율 지금 받기`(1,000유스 = 1,345위스, 원/달러 1,345.4원·ECB 11-25 기준, 원본 API와 일치) → `해외 상장 일정 적용`(시작 2026-11-30(월) 16:00) → `해외 시장 열기`. 공개 문서 `overseas_current`(studentOpen true)·`overseas_market`(평일 16:00~23:00, 최소 잔액 0)을 확인했다.
+- 알려진 표시 문제: 교사 해외 시장 탭에서 일정 적용·시장 열기/닫기 직후 응답에 환율이 없어 `환율 미수신`으로 보인다. 새로 고치면 정상이고 환율 문서는 그대로다.
 
 ## 윷놀이 입장 속도·교사 모니터·아바타 말 (2026-11-25)
 
