@@ -190,6 +190,52 @@ try {
   await db.doc(statusPath).set(signal);
   checks.push('Disabled/deleted/unapproved/old/external sessions, wrong scopes, private seeds/orders/supplies/receipts, extra publication fields, enumeration and all student writes are denied.');
 
+  // Overseas venue (2026-11-26): the 유스 account copies the domestic ownership
+  // fence, the 유스 public documents copy the domestic shapes, and the daily
+  // exchange rate is one readable document.
+  const overseasAccountPath = `${prefix}/wis_stock_overseas_accounts/${accountId}`;
+  const overseasStatusPath = `${prefix}/wis_stock_public/overseas_current`;
+  const overseasPricesPath = `${prefix}/wis_stock_public/overseas_market`;
+  assert.equal((await assertSucceeds(getDoc(doc(student, overseasAccountPath)))).exists(), false);
+  await db.doc(overseasAccountPath).set(legacyAccount);
+  assert.deepEqual((await assertSucceeds(getDoc(doc(student, overseasAccountPath)))).data(), legacyAccount);
+  for (const database of [other, client('teacher'), client('reader'), env.unauthenticatedContext().firestore()])
+    await assertFails(getDoc(doc(database, overseasAccountPath)));
+  await assertFails(getDocs(collection(student, `${prefix}/wis_stock_overseas_accounts`)));
+  await db.doc(overseasAccountPath).update({ studentUid: 'other' });
+  await assertFails(getDoc(doc(client('student'), overseasAccountPath)));
+  await db.doc(overseasAccountPath).set(legacyAccount);
+  assert.equal((await assertSucceeds(getDoc(doc(student, overseasStatusPath)))).exists(), false);
+  await assertFails(getDoc(doc(student, overseasPricesPath)));
+  const overseasStatus = { schemaVersion: 1, semesterId: '2026-2', studentOpen: true, halted: false, tradingEpoch: 1, revision: 1, updatedAtMs: clock };
+  await db.doc(overseasStatusPath).set(overseasStatus);
+  await db.doc(overseasPricesPath).set({ schemaVersion: 1, semesterId: '2026-2', studentOpen: true, tradingEpoch: 1, revision: 1,
+    updatedAtMs: clock, rules: { halted: false }, stocks: [] });
+  await assertSucceeds(getDoc(doc(student, overseasStatusPath)));
+  await assertSucceeds(getDoc(doc(student, overseasPricesPath)));
+  await db.doc(overseasStatusPath).update({ studentOpen: false });
+  await assertFails(getDoc(doc(student, overseasPricesPath)));
+  await db.doc(overseasStatusPath).update({ priceSeed: 'must-never-be-readable' });
+  await assertFails(getDoc(doc(student, overseasStatusPath)));
+  await db.doc(overseasStatusPath).set(overseasStatus);
+  const fxPath = 'wis_stock_fx/current';
+  await db.doc(fxPath).set({ schemaVersion: 1, pair: 'USD/KRW', rate: 1345 });
+  await db.doc('wis_stock_fx/other').set({ schemaVersion: 1, rate: 1 });
+  await assertSucceeds(getDoc(doc(student, fxPath)));
+  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), fxPath)));
+  await assertFails(getDoc(doc(client('pending'), fxPath)));
+  await assertFails(getDoc(doc(student, 'wis_stock_fx/other')));
+  await assertFails(getDocs(collection(student, 'wis_stock_fx')));
+  for (const target of [overseasAccountPath, overseasStatusPath, overseasPricesPath, fxPath]) {
+    await assertFails(setDoc(doc(student, target), {})); await assertFails(deleteDoc(doc(student, target)));
+  }
+  for (const target of [`${prefix}/wis_stock_markets/overseas`, `${prefix}/wis_stock_overseas_orders/private`,
+    `${prefix}/wis_stock_overseas_history/private`, `${prefix}/wis_stock_overseas_supplies/private`,
+    `${prefix}/wis_stock_overseas_receipts/private`, `${prefix}/wis_stock_fx_receipts/private`,
+    'wis_stock_overseas_graduations/2026-2_private'])
+    for (const uid of ['student', 'teacher']) await assertFails(getDoc(doc(client(uid), target)));
+  checks.push('Overseas: own 유스 account readable and others/teacher/list/mismatched owner denied; 유스 public status and prices follow the domestic shapes and open latch; the daily rate is readable only as current by an active session; private overseas market/orders/history/supplies/receipts and all student writes are denied.');
+
   for (const [target, field, invalid, restored] of [
     ['semester_enrollments/enrollment-synthetic', 'enrollmentStatus', 'CLOSED', 'ACTIVE'],
     [`semester_enrollment_slots/${slotId}`, 'activeEnrollmentId', 'replacement', 'enrollment-synthetic'],

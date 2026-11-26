@@ -1034,7 +1034,9 @@ service cloud.firestore {
             '/teacher/points', '/teacher/points?tab=grant', '/teacher/points?tab=policy',
             '/teacher/points?tab=ranks', '/teacher/points?tab=hall-of-fame', '/teacher/points?tab=products',
             '/teacher/points?tab=products&shop=avatar', '/teacher/points?tab=requests',
-            '/teacher/points?tab=stocks', '/teacher/weplay', '/teacher/students',
+            '/teacher/points?tab=stocks', '/teacher/wispi', '/teacher/wispi?tab=overseas',
+            '/teacher/wispi?tab=rules', '/teacher/wispi?tab=preview', '/teacher/wispi?tab=investments',
+            '/teacher/wispi?tab=reports', '/teacher/weplay', '/teacher/students',
             '/teacher/gongsinmoongo', '/teacher/schedule', '/teacher/settings'
           ]);
       }
@@ -1342,7 +1344,7 @@ service cloud.firestore {
     // One public USD/KRW reference rate per KST day, written only by the
     // scheduled server job. It carries no student or account information.
     match /wis_stock_fx/{documentId} {
-      allow get: if request.auth != null && documentId == 'current';
+      allow get: if documentId == 'current' && canUseWestory();
       allow list, create, update, delete: if false;
     }
 

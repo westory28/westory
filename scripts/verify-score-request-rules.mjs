@@ -123,6 +123,9 @@ try {
   for (const actor of ["admin", "teacher"]) {
     await setDoc(shortcuts(actor), {items: ["/teacher/quiz", "/teacher/points?tab=stocks"]});
     assert.equal((await getDocFromServer(shortcuts(actor))).data().items.length, 2);
+    // 위스피's own menu (2026-11-26) can be saved as shortcuts.
+    await setDoc(shortcuts(actor), {items: ["/teacher/wispi", "/teacher/wispi?tab=overseas", "/teacher/wispi?tab=reports"]});
+    assert.equal((await getDocFromServer(shortcuts(actor))).data().items.length, 3);
     await setDoc(shortcuts(actor), {items: []});
     await denied(setDoc(shortcuts(actor), {items: ["/teacher/quiz", "/teacher/quiz"]}));
     await denied(setDoc(shortcuts(actor), {items: ["https://outside.invalid"]}));

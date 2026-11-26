@@ -45,18 +45,25 @@ export function parseWisStockFxRate(raw, nowMs) {
 
 /** The next stored document. Re-applying the same day is a no-op (null). */
 export function nextWisStockFxDocument(previous, { krwPerUsd, sourceDate, source, fetchedAtMs }) {
-  const rate = wisStockFxRateFromKrwPerUsd(krwPerUsd);
+  wisStockFxRateFromKrwPerUsd(krwPerUsd);
+  // The applied rate is derived from the stored (two-decimal) reference so the
+  // stored document always satisfies parseWisStockFxRate's rounding check.
+  const storedKrwPerUsd = Math.round(krwPerUsd * 100) / 100;
+  const rate = wisStockFxRateFromKrwPerUsd(storedKrwPerUsd);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(sourceDate || '') || typeof source !== 'string' || !source || !int(fetchedAtMs, 1))
     reject('WIS_STOCK_FX_SOURCE_INVALID', '환율 자료를 확인하지 못했습니다.');
   const dayKey = wisStockFxDayKey(fetchedAtMs);
   if (previous && previous.dayKey === dayKey) return null;
-  // A provider glitch must not reprice every account. A larger daily jump is
-  // held for review; the previous day's rate then stops new exchanges only.
-  if (previous && Math.abs(rate - previous.rate) * 100 > previous.rate * 15)
+  // A provider glitch must not reprice every account. A larger jump from a rate
+  // stored within the last week is held for review (new exchanges stop until a
+  // plausible rate arrives); an older stored rate no longer blocks the update.
+  const previousAgeDays = previous
+    ? (Date.parse(`${dayKey}T00:00:00Z`) - Date.parse(`${previous.dayKey}T00:00:00Z`)) / 86_400_000 : NaN;
+  if (previous && previousAgeDays <= 7 && Math.abs(rate - previous.rate) * 100 > previous.rate * 15)
     reject('WIS_STOCK_FX_JUMP', '전일 대비 환율 변동이 너무 커서 반영을 보류했습니다.');
   const history = [...(previous?.history || []).filter(point => point.dayKey !== dayKey), { dayKey, rate }]
     .slice(-WIS_STOCK_FX_HISTORY_LIMIT);
-  return { schemaVersion: 1, pair: 'USD/KRW', rate, krwPerUsd: Math.round(krwPerUsd * 100) / 100, dayKey,
+  return { schemaVersion: 1, pair: 'USD/KRW', rate, krwPerUsd: storedKrwPerUsd, dayKey,
     sourceDate, source, fetchedAtMs, history };
 }
 

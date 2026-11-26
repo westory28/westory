@@ -1,6 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import { getStudentRouteAccess } from "../../lib/studentMenuAccess";
+import {
+  STUDENT_WISPI_URL,
+  STUDENT_WISPI_VIEWS,
+  studentWispiViewSearch,
+  type StudentWispiView,
+} from "../../lib/studentWisStockTypes";
 import {
   useStudentWisStockStatus,
   useWisStockFxRate,
@@ -19,24 +26,33 @@ import { WisStockVenueContext } from "./components/wispi/wisStockVenueContext";
 import "./components/wispi/studentWisStocks.css";
 
 const money = (value: number) => value.toLocaleString("ko-KR");
-// Each view is also a sidebar submenu: /student/wispi?tab=<id>.
-export const STUDENT_WISPI_VIEWS = [
-  { id: "market", label: "국내 주식" },
-  { id: "overseas", label: "해외 주식" },
-  { id: "account", label: "주식 계좌" },
-  { id: "exchange", label: "환전" },
-  { id: "ranking", label: "투자 랭킹" },
-] as const;
-type View = (typeof STUDENT_WISPI_VIEWS)[number]["id"];
+type View = StudentWispiView;
 const isView = (value: string | null): value is View =>
   STUDENT_WISPI_VIEWS.some((view) => view.id === value);
 
 export default function StudentWisStocks() {
-  const { currentUser, authGeneration, config } = useAuth();
+  const { currentUser, authGeneration, config, menuConfig } = useAuth();
   const scope = getYearSemester(config);
   const [params, setParams] = useSearchParams();
+  // A tab hidden in the sitemap is also hidden here, so it never sends the
+  // student to the hidden-menu redirect.
+  const views = STUDENT_WISPI_VIEWS.filter(
+    (view) =>
+      getStudentRouteAccess(
+        {
+          pathname: STUDENT_WISPI_URL,
+          search: studentWispiViewSearch(view.id),
+        },
+        config,
+        menuConfig,
+      ).allowed,
+  );
   const requested = params.get("tab");
-  const tab: View = isView(requested) ? requested : "market";
+  const tab: View = isView(requested)
+    ? requested
+    : views.some((view) => view.id === "market")
+      ? "market"
+      : (views[0]?.id ?? "market");
   const go = (next: View, account?: "yus") => {
     if (next === tab && !account) return;
     const search = new URLSearchParams();
@@ -50,6 +66,21 @@ export default function StudentWisStocks() {
   const overseasOpened = overseasStatus.data?.studentOpen === true;
   const fx = useWisStockFxRate(opened && overseasOpened);
   const ownerKey = `${currentUser?.uid}:${scope.year}:${scope.semester}`;
+  // A reconnect (returning to the browser tab, network change) briefly reloads
+  // the public status. Views opened before stay mounted but hidden meanwhile,
+  // so an open ticket, search, filter or draft amount survives.
+  const keptOwner = useRef("");
+  if (opened) keptOwner.current = ownerKey;
+  else if (status.status !== "loading") keptOwner.current = "";
+  const showStage =
+    opened || (status.status === "loading" && keptOwner.current === ownerKey);
+  const keptOverseasOwner = useRef("");
+  if (overseasOpened) keptOverseasOwner.current = ownerKey;
+  else if (overseasStatus.status !== "loading") keptOverseasOwner.current = "";
+  const showOverseas =
+    overseasOpened ||
+    (overseasStatus.status === "loading" &&
+      keptOverseasOwner.current === ownerKey);
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [tab]);
@@ -84,10 +115,14 @@ export default function StudentWisStocks() {
       {status.status === "ready" && !opened && (
         <p>아직 위스피가 열리지 않았습니다.</p>
       )}
-      {opened && (
+      {showStage && (
         <>
-          <nav className="ws-page-tabs" aria-label="위스피 메뉴">
-            {STUDENT_WISPI_VIEWS.map((view) => (
+          <nav
+            className="ws-page-tabs"
+            aria-label="위스피 메뉴"
+            hidden={!opened}
+          >
+            {views.map((view) => (
               <button
                 type="button"
                 key={view.id}
@@ -99,7 +134,7 @@ export default function StudentWisStocks() {
               </button>
             ))}
           </nav>
-          <div className="student-wispi-stage">
+          <div className="student-wispi-stage" hidden={!opened}>
             <div
               className={
                 stopped
@@ -124,31 +159,41 @@ export default function StudentWisStocks() {
                   />
                 </WisStockVenueContext.Provider>
               )}
-              {tab === "overseas" &&
-                (overseasStatus.status !== "ready" ? (
-                  <StudentWisStockReadStatus
-                    loading={overseasStatus.status === "loading"}
-                    error={overseasStatus.error}
-                    label="해외 주식"
-                    retry={overseasStatus.retry}
-                  />
-                ) : !overseasOpened ? (
-                  <p className="student-wispi-muted">
-                    아직 해외 주식 시장이 열리지 않았습니다.
-                  </p>
-                ) : (
-                  <WisStockVenueContext.Provider value={OVERSEAS_STOCK_VENUE}>
-                    <StudentWisStockMarketView
-                      key={`${ownerKey}:OVERSEAS`}
-                      scope={scope}
-                      ownerKey={ownerKey}
-                      tradingEnabled={overseasTradingEnabled}
-                      tradingEpoch={overseasStatus.data.tradingEpoch}
-                      onOpenAccount={() => go("account", "yus")}
-                      onOpenExchange={() => go("exchange")}
+              {tab === "overseas" && (
+                <>
+                  {overseasStatus.status !== "ready" && (
+                    <StudentWisStockReadStatus
+                      loading={overseasStatus.status === "loading"}
+                      error={overseasStatus.error}
+                      label="해외 주식"
+                      retry={overseasStatus.retry}
                     />
-                  </WisStockVenueContext.Provider>
-                ))}
+                  )}
+                  {showOverseas ? (
+                    <div hidden={!overseasOpened}>
+                      <WisStockVenueContext.Provider
+                        value={OVERSEAS_STOCK_VENUE}
+                      >
+                        <StudentWisStockMarketView
+                          key={`${ownerKey}:OVERSEAS`}
+                          scope={scope}
+                          ownerKey={ownerKey}
+                          tradingEnabled={overseasTradingEnabled}
+                          tradingEpoch={overseasStatus.data?.tradingEpoch}
+                          onOpenAccount={() => go("account", "yus")}
+                          onOpenExchange={() => go("exchange")}
+                        />
+                      </WisStockVenueContext.Provider>
+                    </div>
+                  ) : (
+                    overseasStatus.status === "ready" && (
+                      <p className="student-wispi-muted">
+                        아직 해외 주식 시장이 열리지 않았습니다.
+                      </p>
+                    )
+                  )}
+                </>
+              )}
               {tab === "account" && (
                 <StudentWisStockAccountView
                   key={`${ownerKey}:${params.get("account") || ""}`}

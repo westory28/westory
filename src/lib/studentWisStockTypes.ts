@@ -5,6 +5,17 @@ import type {
 } from "./wisStocksClient";
 
 export const STUDENT_WISPI_URL = "/student/wispi";
+// Each view is also a sidebar submenu: /student/wispi?tab=<id>.
+export const STUDENT_WISPI_VIEWS = [
+  { id: "market", label: "국내 주식" },
+  { id: "overseas", label: "해외 주식" },
+  { id: "account", label: "주식 계좌" },
+  { id: "exchange", label: "환전" },
+  { id: "ranking", label: "투자 랭킹" },
+] as const;
+export type StudentWispiView = (typeof STUDENT_WISPI_VIEWS)[number]["id"];
+export const studentWispiViewSearch = (id: StudentWispiView) =>
+  id === "market" ? "" : `?tab=${id}`;
 export type WisStockScope = { year: string; semester: string };
 export type WisStockLoad<T> =
   | { status: "idle" | "loading"; data: null; error: "" }

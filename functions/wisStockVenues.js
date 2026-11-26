@@ -1,6 +1,6 @@
 'use strict';
 
-const { domesticSchedule, overseasSchedule } = require('./wisStockCatalogSchedule');
+const { domesticSchedule, overseasSchedule, OVERSEAS_OPEN_MINUTE_KST, OVERSEAS_CLOSE_MINUTE_KST } = require('./wisStockCatalogSchedule');
 
 // Each venue is a separate set of canonical documents. The domestic values are
 // the original literals, so its paths, triggers and receipts are unchanged.
@@ -27,8 +27,10 @@ const OVERSEAS = Object.freeze({
   historyTrend: true, specialSessions: false, forecast: false,
   board: false, displayTrades: false, displayDoc: null, transfers: false, bonus: false, enrollmentSync: false,
   // A 유스 account starts small, so the domestic 500-Wis cash floor would block
-  // every first purchase. All other limits copy the domestic market at launch.
-  ruleOverrides: Object.freeze({ minimumCashReserve: 0 }),
+  // every first purchase. Trading hours keep a time difference (KST 16:00-23:00).
+  // All other limits copy the domestic market at launch.
+  ruleOverrides: Object.freeze({ minimumCashReserve: 0,
+    openMinuteKst: OVERSEAS_OPEN_MINUTE_KST, closeMinuteKst: OVERSEAS_CLOSE_MINUTE_KST }),
 });
 const WIS_STOCK_VENUES = Object.freeze({ DOMESTIC, OVERSEAS });
 

@@ -819,21 +819,28 @@ async function sidebarChecks(page, portal, width) {
   const wis = sidebar.locator(`#${portal}-menu-points`);
   assert.equal(await sidebar.locator(`#${portal}-menu-shop`).count(), 0);
   const directWisLinks = wis.locator(":scope > .teacher-sidebar-submenu-clip > .teacher-sidebar-children > a");
-  assert.equal(await directWisLinks.count(), portal === "teacher" ? 5 : 4);
+  assert.equal(await directWisLinks.count(), 4);
   assert.deepEqual(
     await directWisLinks.allTextContents(),
     portal === "teacher"
-      ? ["위스 관리", "명예의 전당 관리", "위스 상점", "아바타 상점", "위스피(WsPI)"]
+      ? ["위스 관리", "명예의 전당 관리", "위스 상점", "아바타 상점"]
       : ["내 위스", "명예의 전당", "위스 상점", "아바타 상점"],
   );
   if (portal === "teacher") {
-    await navigateHash("#/teacher/points?tab=stocks");
-    await expanded(currentGroup, true, "WsPI belongs to Wis");
+    // WsPI is its own upper menu (2026-11-26) with the market tabs as children.
+    const wispi = sidebar.locator(`#${portal}-menu-wispi`);
+    assert.deepEqual(
+      await wispi.locator(":scope > .teacher-sidebar-submenu-clip > .teacher-sidebar-children > a").allTextContents(),
+      ["국내 종목 관리", "해외 시장", "시장 규칙", "주식 차트 관리", "학생 투자 현황", "주식 보고서"],
+    );
+    await navigateHash("#/teacher/wispi");
+    await expanded(sidebar.getByRole("button", { name: "위스피(WsPI)", exact: true }), true, "WsPI opens its own group");
     assert.equal(
-      await wis.getByRole("link", { name: "위스피(WsPI)", exact: true }).getAttribute("aria-current"),
+      await wispi.getByRole("link", { name: "국내 종목 관리", exact: true }).getAttribute("aria-current"),
       "page",
     );
-    assert.equal(await management.getAttribute('aria-current'), null);
+    // The collapsed Wis group keeps no current-page link while WsPI is open.
+    assert.equal(await wis.locator('a[aria-current="page"]').count(), 0);
     await navigateHash("#/teacher/points?tab=requests");
   } else {
     assert.equal(await sidebar.locator('a[href*="tab=stocks"]').count(), 0);

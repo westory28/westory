@@ -4,6 +4,8 @@ import { getStudentRouteAccess } from "../lib/studentMenuAccess";
 import { getYearSemester } from "../lib/semesterScope";
 import {
   STUDENT_WISPI_URL,
+  STUDENT_WISPI_VIEWS,
+  studentWispiViewSearch,
   type StudentWisStockMarket,
   type StudentWisStockStatus,
   type WisStockLoad,
@@ -55,8 +57,19 @@ function usePublic<T>(
     !!config?.year &&
     !!config?.semester &&
     menuConfigReady &&
-    getStudentRouteAccess({ pathname: STUDENT_WISPI_URL }, config, menuConfig)
-      .allowed;
+    // Any reachable WsPI tab keeps the shared status readable, so hiding one
+    // tab (including 국내 주식) in the sitemap does not blank the others.
+    STUDENT_WISPI_VIEWS.some(
+      (view) =>
+        getStudentRouteAccess(
+          {
+            pathname: STUDENT_WISPI_URL,
+            search: studentWispiViewSearch(view.id),
+          },
+          config,
+          menuConfig,
+        ).allowed,
+    );
   const scope = getYearSemester(config);
   const [retryCount, setRetryCount] = useState(0);
   const key = allowed

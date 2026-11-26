@@ -8303,18 +8303,14 @@ exports.setWisStockMarketHalted = onCall(
 exports.advanceWisStockPrices = onSchedule(
   { schedule: '*/10 * * * *', region: 'us-central1', timeZone: 'Asia/Seoul', maxInstances: 1, memory: '256MiB',
     retryCount: 2, minBackoffSeconds: 30, maxBackoffSeconds: 120 },
-  // Both venues advance on the same ten-minute tick in separate transactions.
-  // Each is idempotent per slot, so a retry after either failure is a no-op
-  // for the venue that already committed.
-  async event => {
-    const results = {}, failures = [];
-    for (const [name, handlers] of [['domestic', wisStockHandlers], ['overseas', overseasStockHandlers]]) {
-      try { results[name] = await handlers.advanceWisStockPrices(event); }
-      catch (error) { failures.push(error); }
-    }
-    if (failures.length) throw failures[0];
-    return results;
-  },
+  wisStockHandlers.advanceWisStockPrices,
+);
+// The 유스 venue advances on its own ten-minute job, so an overseas failure or
+// retry never delays or re-runs the domestic market's scheduler.
+exports.advanceWisStockOverseasPrices = onSchedule(
+  { schedule: '*/10 * * * *', region: 'us-central1', timeZone: 'Asia/Seoul', maxInstances: 1, memory: '256MiB',
+    retryCount: 2, minBackoffSeconds: 30, maxBackoffSeconds: 120 },
+  overseasStockHandlers.advanceWisStockPrices,
 );
 exports.getWisStockOverseasManagement = onCall(
   { region: 'us-central1', memory: '256MiB', maxInstances: 10 },

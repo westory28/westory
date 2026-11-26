@@ -67,6 +67,10 @@
   position: relative;
   min-height: 420px;
 }
+/* Tabs and stage stay mounted (hidden) while the status reconnects. */
+.student-wispi > [hidden] {
+  display: none;
+}
 .student-wispi-content {
   min-width: 0;
   container-type: inline-size;

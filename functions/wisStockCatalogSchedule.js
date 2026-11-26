@@ -15,8 +15,8 @@ const domesticPeriods = ['구석기~고조선', '삼국 시대', '통일신라�
 const overseasPeriods = ['신항로 개척', '절대 왕정과 중상주의', '산업 혁명', '제국주의'];
 const record = value => value && typeof value === 'object' && !Array.isArray(value);
 
-function invalidPlan() {
-  const error = new RangeError('종목 상장 시작일은 월요일 오전 9시(한국 시간)로 설정해 주세요.');
+function invalidPlan(startLabel = '오전 9시') {
+  const error = new RangeError(`종목 상장 시작일은 월요일 ${startLabel}(한국 시간)로 설정해 주세요.`);
   error.reason = 'WIS_STOCK_CATALOG_PLAN_INVALID';
   throw error;
 }
@@ -43,30 +43,31 @@ function nextTradingAtMs(rules, atMs) {
 }
 
 // One reviewed timeline per venue. The domestic exports below keep their
-// original bindings; the overseas venue reuses the same dates, listing and
-// exit rules with its own catalog and period labels.
-function createCatalogSchedule({ catalog, periods, exitsWithPlan = false }) {
+// original bindings; the overseas venue reuses the same weekly session layout,
+// listing and exit rules with its own catalog, period labels and start hour.
+function createCatalogSchedule({ catalog, periods, exitsWithPlan = false, startMinuteKst = 540, startLabel = '오전 9시' }) {
+  const invalid = () => invalidPlan(startLabel);
   function normalizeCatalogPlan(value) {
     if (value === undefined || value === null) return null;
     if (!record(value) || Object.keys(value).some(key => !['version', 'startsAtMs', 'exitsEnabledAtMs', 'exitOverrides'].includes(key))
       || value.version !== 1 || !Number.isSafeInteger(value.startsAtMs) || value.startsAtMs < 0
       || value.startsAtMs > 8_640_000_000_000_000 - KST_OFFSET - PLAN_SPAN
-      || value.startsAtMs % HOUR !== 0) invalidPlan();
+      || value.startsAtMs % HOUR !== 0) invalid();
     const session = wisStockKstSession(value.startsAtMs);
-    if (session.dayOfWeek !== 1 || session.minute !== 540) invalidPlan();
+    if (session.dayOfWeek !== 1 || session.minute !== startMinuteKst) invalid();
     const plan = { version: 1, startsAtMs: value.startsAtMs };
     if (value.exitsEnabledAtMs !== undefined) {
       if (!Number.isSafeInteger(value.exitsEnabledAtMs) || value.exitsEnabledAtMs <= 0
-        || value.exitsEnabledAtMs > 8_640_000_000_000_000 - KST_OFFSET) invalidPlan();
+        || value.exitsEnabledAtMs > 8_640_000_000_000_000 - KST_OFFSET) invalid();
       plan.exitsEnabledAtMs = value.exitsEnabledAtMs;
     }
     if (value.exitOverrides !== undefined) {
-      if (!record(value.exitOverrides)) invalidPlan();
+      if (!record(value.exitOverrides)) invalid();
       const overrides = {};
       for (const [id, atMs] of Object.entries(value.exitOverrides).sort(([a], [b]) => a.localeCompare(b))) {
         const entry = catalog.find(item => item.id === id && item.exitKind !== 'survive' && item.exitSession !== null);
         if (!entry || !Number.isSafeInteger(atMs) || atMs < catalogSessionAtMs(entry.exitSession, value.startsAtMs)
-          || atMs > 8_640_000_000_000_000 - KST_OFFSET || atMs % (30 * 60_000) !== 0) invalidPlan();
+          || atMs > 8_640_000_000_000_000 - KST_OFFSET || atMs % (30 * 60_000) !== 0) invalid();
         overrides[id] = atMs;
       }
       plan.exitOverrides = overrides;
@@ -85,7 +86,7 @@ function createCatalogSchedule({ catalog, periods, exitsWithPlan = false }) {
     // The management DTO combines both records for the shared teacher timeline.
     const exits = market.catalogExits;
     if (!plan || !record(exits) || Object.keys(exits).some(key => !['enabledAtMs', 'overrides'].includes(key))
-      || exits.enabledAtMs === undefined || exits.overrides === undefined) invalidPlan();
+      || exits.enabledAtMs === undefined || exits.overrides === undefined) invalid();
     return normalizeCatalogPlan({ ...plan, exitsEnabledAtMs: exits.enabledAtMs, exitOverrides: exits.overrides });
   }
 
@@ -193,9 +194,14 @@ function catalogHistoryTrendBps(entry, plan, atMs) {
 }
 
 const domesticSchedule = createCatalogSchedule({ catalog: domesticCatalog, periods: domesticPeriods });
-const overseasSchedule = createCatalogSchedule({ catalog: overseasCatalog, periods: overseasPeriods, exitsWithPlan: true });
+// The overseas market keeps a time difference: KST 16:00-23:00, so its seven
+// daily listing/exit sessions are 16:00-22:00.
+const OVERSEAS_OPEN_MINUTE_KST = 960;
+const OVERSEAS_CLOSE_MINUTE_KST = 1380;
+const overseasSchedule = createCatalogSchedule({ catalog: overseasCatalog, periods: overseasPeriods, exitsWithPlan: true,
+  startMinuteKst: OVERSEAS_OPEN_MINUTE_KST, startLabel: '오후 4시' });
 const { normalizeCatalogPlan, readCatalogPlan, catalogScheduleState, applyDueCatalogListings, applyDueCatalogExits } = domesticSchedule;
 
 module.exports = { normalizeCatalogPlan, readCatalogPlan, catalogScheduleState, applyDueCatalogListings, applyDueCatalogExits,
   drawListingPrice, MIN_LISTING_PRICE, MAX_LISTING_PRICE, createCatalogSchedule, domesticSchedule, overseasSchedule,
-  catalogHistoryPhase, catalogHistoryTrendBps, HISTORY_TREND };
+  catalogHistoryPhase, catalogHistoryTrendBps, HISTORY_TREND, OVERSEAS_OPEN_MINUTE_KST, OVERSEAS_CLOSE_MINUTE_KST };

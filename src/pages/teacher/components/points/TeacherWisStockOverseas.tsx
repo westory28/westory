@@ -171,7 +171,8 @@ export default function TeacherWisStockOverseas({
               {
                 items: [
                   "가격 단위는 유스이며 국내와 같은 10분 시세 주기를 사용",
-                  "일정 적용 시 국내 시장의 거래 시간·수수료·한도를 복사하고 최소 잔액만 0으로 설정",
+                  "거래 시간은 시차를 두어 평일 오후 4시~11시(한국 시간)",
+                  "일정 적용 시 국내 시장의 거래 요일·수수료·한도를 복사하고 최소 잔액만 0으로 설정",
                   "학생은 위스를 매일 고정 환율로 유스로 환전해 매수",
                   "종목별 상승·하락 회차에 맞춰 시세 추세가 바뀌고 상장 폐지·합병 회차에 마지막 가격으로 정산",
                   "해외 시장을 닫으면 해외 주문과 환전만 멈추고 국내 시장은 그대로",
@@ -277,7 +278,7 @@ export default function TeacherWisStockOverseas({
           aria-label="4주 해외 상장 일정"
           onSubmit={(event) => {
             event.preventDefault();
-            const startsAtMs = Date.parse(`${startsOn}T09:00:00+09:00`);
+            const startsAtMs = Date.parse(`${startsOn}T16:00:00+09:00`);
             if (
               !Number.isFinite(startsAtMs) ||
               new Date(startsAtMs).getUTCDay() !== 1
@@ -303,7 +304,7 @@ export default function TeacherWisStockOverseas({
             sections={[
               {
                 items: [
-                  "시작일 오전 9시부터 30개 종목을 시대 순서로 상장",
+                  "시작일 오후 4시부터 평일 오후 4시~10시 매시 30개 종목을 시대 순서로 상장",
                   "1주 신항로 개척 → 2주 절대 왕정 → 3주 산업 혁명 → 4주 제국주의",
                   "상장 폐지·합병 일정도 함께 적용되며 이미 지난 일정이 있으면 적용 불가",
                   "적용 후에는 '해외 시장 열기'를 눌러야 학생에게 공개",

@@ -27,19 +27,28 @@ export const teacherShortcutOptions = [
     icon: "M4 7h16M4 17h16M8 4v6m8 4v6",
   },
 ];
-const defaults = [
-  "/teacher/lesson",
-  "/teacher/quiz",
-  "/teacher/points?tab=stocks",
-];
+const defaults = ["/teacher/lesson", "/teacher/quiz", "/teacher/wispi"];
+// Saved shortcuts keep working after a menu moves: 위스피 left 위스 on
+// 2026-11-26. The stored list is only rewritten when the teacher saves.
+const movedShortcuts: Readonly<Record<string, string>> = {
+  "/teacher/points?tab=stocks": "/teacher/wispi",
+};
 function readItems(raw: unknown): string[] {
   if (raw === undefined) return [...defaults];
+  if (!Array.isArray(raw))
+    throw new Error("바로가기 설정을 확인하지 못했습니다.");
+  const items = [
+    ...new Set(
+      raw.map((id) =>
+        typeof id === "string" ? (movedShortcuts[id] ?? id) : id,
+      ),
+    ),
+  ];
   if (
-    !Array.isArray(raw) ||
-    !raw.every((id) => teacherShortcutOptions.some((item) => item.id === id))
+    !items.every((id) => teacherShortcutOptions.some((item) => item.id === id))
   )
     throw new Error("바로가기 설정을 확인하지 못했습니다.");
-  return raw;
+  return items;
 }
 function target(uid: string) {
   if (!uid || auth.currentUser?.uid !== uid)

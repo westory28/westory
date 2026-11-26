@@ -22,7 +22,7 @@ const fx = require('../wisStockFx');
 const hash = value => createHash('sha256').update(value).digest('hex');
 const scope = { year: '2026', semester: '2', semesterId: '2026-2' };
 const root = 'years/2026/semesters/2';
-const MONDAY = Date.parse('2026-11-30T00:00:00Z'); // 09:00 KST
+const MONDAY = Date.parse('2026-11-30T07:00:00Z'); // 16:00 KST, the overseas open
 const THURSDAY_NOON = Date.parse('2026-11-26T03:00:00Z');
 const reason = value => error => (error.details?.reason || error.reason) === value;
 
@@ -48,7 +48,7 @@ test('overseas catalog is a complete four-era history timeline with logos and li
   }
   // The student logo map is generated from both catalogs and must stay in step.
   const logoMap = fs.readFileSync(path.join(__dirname, '../../src/lib/wisStockLogos.ts'), 'utf8');
-  const stems = Object.fromEntries([...logoMap.matchAll(/^  (stock_[a-f0-9]{24}): "([a-z0-9-]+)",$/gm)].map(match => [match[1], match[2]]));
+  const stems = Object.fromEntries([...logoMap.matchAll(/^\s+(stock_[a-f0-9]{24}): "([a-z0-9-]+)",\r?$/gm)].map(match => [match[1], match[2]]));
   assert.deepEqual(stems, Object.fromEntries([...domesticCatalog, ...overseasCatalog]
     .map(entry => [entry.id, entry.logoUrl.slice('/wispi/catalog/'.length, -'.svg'.length)])));
   const delisted = overseasCatalog.filter(entry => entry.exitKind === 'delist').map(entry => entry.name);
@@ -58,7 +58,7 @@ test('overseas catalog is a complete four-era history timeline with logos and li
 test('session inverse and history phases match the reviewed preview boundaries', () => {
   for (const session of [1, 7, 8, 35, 36, 140])
     assert.equal(catalogSessionIndexAt(catalogSessionAtMs(session, MONDAY) + 30 * 60_000, MONDAY), session);
-  assert.equal(catalogSessionIndexAt(MONDAY - 60 * 60_000, MONDAY), 1); // 08:00 belongs to the first session
+  assert.equal(catalogSessionIndexAt(MONDAY - 60 * 60_000, MONDAY), 1); // 15:00 belongs to the first session
   assert.equal(catalogSessionIndexAt(MONDAY + 5 * 86_400_000, MONDAY), null); // Saturday
   const armada = overseasCatalog.find(entry => entry.name === '아르마다디펜스');
   assert.equal(catalogHistoryPhase(armada, 37), 'steady');
@@ -84,6 +84,14 @@ test('daily exchange rate math rounds down, keeps one rate per KST day and refus
   assert.throws(() => fx.nextWisStockFxDocument(first, { krwPerUsd: 1600, sourceDate: '2026-11-26', source: 'test', fetchedAtMs: THURSDAY_NOON + 86_400_000 }), reason('WIS_STOCK_FX_JUMP'));
   const second = fx.nextWisStockFxDocument(first, { krwPerUsd: 1351.6, sourceDate: '2026-11-26', source: 'test', fetchedAtMs: THURSDAY_NOON + 86_400_000 });
   assert.deepEqual(second.history.map(point => point.rate), [1345, 1352]);
+  // A reference whose fraction rounds differently before and after the stored
+  // two decimals still yields a readable document.
+  const edge = fx.nextWisStockFxDocument(null, { krwPerUsd: 1470.4951, sourceDate: '2026-11-25', source: 'test', fetchedAtMs: THURSDAY_NOON });
+  assert.equal(edge.krwPerUsd, 1470.5); assert.equal(edge.rate, 1471);
+  assert.equal(fx.parseWisStockFxRate(edge, THURSDAY_NOON).rate, 1471);
+  // A stored rate older than a week no longer blocks a large move.
+  const later = fx.nextWisStockFxDocument(first, { krwPerUsd: 1600, sourceDate: '2026-12-04', source: 'test', fetchedAtMs: THURSDAY_NOON + 8 * 86_400_000 });
+  assert.equal(later.rate, 1600);
   assert.deepEqual(fx.quoteWisStockExchange({ direction: 'WIS_TO_YUS', amount: 1345, rate: 1345, available: 2000 }),
     { direction: 'WIS_TO_YUS', debit: 1345, credit: 1000, rate: 1345, debitUnit: 'WIS', creditUnit: 'YUS' });
   assert.equal(fx.quoteWisStockExchange({ direction: 'WIS_TO_YUS', amount: 100, rate: 1345, available: 100 }).credit, 74);
@@ -130,14 +138,14 @@ function managementFixture(initialNow = THURSDAY_NOON) {
   return { db, overseas, home, req, setNow: value => { clock = value; }, now: () => clock, domestic };
 }
 
-test('overseas launch copies domestic hours, lifts the cash floor, enables history exits and keeps domestic untouched', async () => {
+test('overseas launch keeps the 16:00-23:00 time difference, lifts the cash floor, enables history exits and keeps domestic untouched', async () => {
   const f = managementFixture();
   await assert.rejects(f.overseas.activateWisStockCatalogPlan(f.req({ requestId: 'overseas-plan-past-00001', expectedRevision: 0,
-    startsAtMs: Date.parse('2026-11-16T00:00:00Z') })), reason('WIS_STOCK_CATALOG_EXIT_PAST'));
+    startsAtMs: Date.parse('2026-11-16T07:00:00Z') })), reason('WIS_STOCK_CATALOG_EXIT_PAST'));
   const result = await f.overseas.activateWisStockCatalogPlan(f.req({ requestId: 'overseas-plan-00000001', expectedRevision: 0, startsAtMs: MONDAY }));
   assert.equal(result.changed, true); assert.equal(result.venue, 'OVERSEAS'); assert.equal(result.unit, '유스');
   const stored = f.db.documents.get(marketPath(scope, OVERSEAS));
-  assert.equal(stored.rules.openMinuteKst, 480); assert.equal(stored.rules.closeMinuteKst, 1080);
+  assert.equal(stored.rules.openMinuteKst, 960); assert.equal(stored.rules.closeMinuteKst, 1380);
   assert.equal(stored.rules.minimumCashReserve, 0); assert.equal(stored.rules.halted, false);
   assert.equal(stored.studentOpen, false); assert.equal(stored.stocks.length, 0);
   assert.deepEqual(stored.catalogExits, { enabledAtMs: THURSDAY_NOON, overrides: {} });
@@ -163,7 +171,7 @@ test('opening lists due overseas stocks; ticks follow history, delist on schedul
   assert.equal(f.db.documents.get(`${root}/wis_stock_public/overseas_current`).studentOpen, true);
   assert.equal(f.db.documents.has(`${root}/wis_stock_public/market`), false);
   const domesticBefore = structuredClone(f.db.documents.get(marketPath(scope)));
-  // Every ten-minute tick from Monday 09:10 to Friday 12:00 KST.
+  // Every ten-minute tick from Monday 16:10 to Friday 19:00 KST.
   const end = MONDAY + 4 * 86_400_000 + 3 * 3_600_000;
   for (let at = MONDAY + 10 * 60_000; at <= end; at += 10 * 60_000) {
     f.setNow(at + 2000);
@@ -197,7 +205,7 @@ test('history-led drift lowers the same seeded path in a fall and lifts it in a 
     const startAt = catalogSessionAtMs(fromSession, MONDAY);
     let market = { ...blankMarket(scope, venue), revision: 1, studentOpen: true, priceSeed: 'a'.repeat(64), catalogPlan: plan,
       catalogExits: { enabledAtMs: 1, overrides: {} },
-      rules: normalizeWisStockMarketRules({ openMinuteKst: 540, closeMinuteKst: 960, dailyPriceLimitBps: 3000, circuitBreakerBps: 3000 }),
+      rules: normalizeWisStockMarketRules({ openMinuteKst: 960, closeMinuteKst: 1380, dailyPriceLimitBps: 3000, circuitBreakerBps: 3000 }),
       stocks: [{ id: entry.id, settings, price: 300, listedAtMs: startAt, dayKey: '', dayOpenPrice: 300, haltedUntilMs: 0,
         updatedAtMs: startAt, nextTickAtMs: startAt + 600_000, history: [{ atMs: startAt, price: 300 }] }] };
     const endAt = catalogSessionAtMs(toSession, MONDAY);
@@ -220,7 +228,7 @@ const stockSettings = name => ({ name, description: '', period: '시험', initia
 const stock = (id, name, atMs) => ({ id, settings: stockSettings(name), price: 200, listedAtMs: atMs, dayKey: '', dayOpenPrice: 200,
   haltedUntilMs: 0, updatedAtMs: atMs, nextTickAtMs: atMs + 600_000, history: [{ atMs, price: 200 }] });
 function tradingFixture({ rate = 1345, fxDayAtMs, overseasOpen = true, balance = 10000 } = {}) {
-  let clock = MONDAY + 3_600_000; // Monday 10:00 KST
+  let clock = MONDAY + 3_600_000; // Monday 17:00 KST, both markets in session
   const rules = normalizeWisStockMarketRules({ openMinuteKst: 480, closeMinuteKst: 1080 });
   const domesticStock = 'stock_' + 'd'.repeat(24), overseasStock = overseasCatalog[0].id;
   const db = createFakeFirestore({
@@ -241,7 +249,7 @@ function tradingFixture({ rate = 1345, fxDayAtMs, overseasOpen = true, balance =
       generalExpiresAt: Timestamp.fromMillis(MONDAY + 30 * 86_400_000), authorityModeAtOpen: 'ENFORCE' },
     [marketPath(scope)]: { ...blankMarket(scope), revision: 5, studentOpen: true, rules, stocks: [stock(domesticStock, '국내 시험 종목', clock)] },
     [marketPath(scope, OVERSEAS)]: { ...blankMarket(scope, OVERSEAS), revision: 7, studentOpen: overseasOpen,
-      rules: { ...rules, minimumCashReserve: 0 }, stocks: [stock(overseasStock, overseasCatalog[0].name, clock)] },
+      rules: { ...rules, minimumCashReserve: 0, openMinuteKst: 960, closeMinuteKst: 1380 }, stocks: [stock(overseasStock, overseasCatalog[0].name, clock)] },
     [fx.WIS_STOCK_FX_PATH]: fx.nextWisStockFxDocument(null, { krwPerUsd: rate, sourceDate: '2026-11-27', source: 'test', fetchedAtMs: fxDayAtMs ?? clock }),
   });
   const common = { db, assertSession: async () => ({ uid: UID }), now: () => clock, delaySeconds: () => 5, enqueueTask: async () => {} };

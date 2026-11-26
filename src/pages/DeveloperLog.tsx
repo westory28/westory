@@ -1031,7 +1031,7 @@ const DeveloperLog: React.FC = () => {
             <Link
               to={
                 userData?.role === "teacher"
-                  ? "/teacher/points?tab=stocks"
+                  ? "/teacher/wispi"
                   : "/student/wispi"
               }
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-bold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"

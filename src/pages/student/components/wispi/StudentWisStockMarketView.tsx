@@ -29,6 +29,9 @@ const clock = new Intl.DateTimeFormat("ko-KR", {
   minute: "2-digit",
   timeZone: "Asia/Seoul",
 });
+// Minutes after KST midnight as HH:MM (rules store trading hours this way).
+const kstClock = (minute: number) =>
+  `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
 export function dailyQuote(stock: StudentWisStockInstrument, asOfMs: number) {
   const points = stockObservations(stock);
   const at = Math.max(asOfMs, stock.updatedAtMs, points.at(-1)?.atMs || 0);
@@ -331,6 +334,13 @@ export default function StudentWisStockMarketView({
             <h2>
               {venue.label} 종목{" "}
               <span className="student-wispi-muted">{liveCount}</span>
+              {venue.id === "OVERSEAS" && (
+                <span className="student-wispi-muted">
+                  {" "}
+                  · 거래 {kstClock(market.data.rules.openMinuteKst)}~
+                  {kstClock(market.data.rules.closeMinuteKst)}
+                </span>
+              )}
             </h2>
             <div className="student-wispi-search">
               <input
