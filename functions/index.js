@@ -8257,6 +8257,11 @@ exports.executeWisCommandFast = require('./productionGateway/productionSource').
 exports.getWisCommandStatusFast = require('./productionGateway/productionSource').getWisCommandStatusFast;
 exports.getWisRankingPreview = require('./wisRankingPreview').getWisRankingPreview;
 const wisStockHandlers = require('./wisStocks').createWisStockHandlers({ db });
+// The 유스 venue shares the scheduler below; its management callables and the
+// daily exchange-rate job are separate entry points.
+const wisStockFxRefresh = require('./wisStockFxRefresh').createWisStockFxRefresh({ db });
+const overseasStockHandlers = require('./wisStocks').createWisStockHandlers({ db,
+  venue: require('./wisStockVenues').OVERSEAS, fxRefresh: wisStockFxRefresh.refreshWisStockFxRate });
 const weeklyStockExport = require('./wisStockWeeklyExport').createWisStockWeeklyExport({ db });
 exports.exportWisStockWeeklyReportData = onCall(
   { region: 'us-central1', memory: '512MiB', timeoutSeconds: 300, maxInstances: 4, concurrency: 1 },
@@ -8271,6 +8276,7 @@ exports.manageWisStockWeeklyReport = onCall(
   require('./wisStockWeeklyReport').createWisStockWeeklyReport({ db }),
 );
 Object.assign(exports, require('./wisStockTradingExports').createWisStockTradingExports({ db }));
+Object.assign(exports, require('./wisStockTradingExports').createWisStockOverseasTradingExports({ db }));
 const stockDailyRanking = require('./wisStockDailyRanking').createWisStockDailyRanking({ db });
 exports.getStudentWisStockRanking = onCall(
   { region: 'us-central1', memory: '256MiB', minInstances: 0, maxInstances: 10 }, stockDailyRanking.getStudentWisStockRanking);
@@ -8297,8 +8303,44 @@ exports.setWisStockMarketHalted = onCall(
 exports.advanceWisStockPrices = onSchedule(
   { schedule: '*/10 * * * *', region: 'us-central1', timeZone: 'Asia/Seoul', maxInstances: 1, memory: '256MiB',
     retryCount: 2, minBackoffSeconds: 30, maxBackoffSeconds: 120 },
-  wisStockHandlers.advanceWisStockPrices,
+  // Both venues advance on the same ten-minute tick in separate transactions.
+  // Each is idempotent per slot, so a retry after either failure is a no-op
+  // for the venue that already committed.
+  async event => {
+    const results = {}, failures = [];
+    for (const [name, handlers] of [['domestic', wisStockHandlers], ['overseas', overseasStockHandlers]]) {
+      try { results[name] = await handlers.advanceWisStockPrices(event); }
+      catch (error) { failures.push(error); }
+    }
+    if (failures.length) throw failures[0];
+    return results;
+  },
 );
+exports.getWisStockOverseasManagement = onCall(
+  { region: 'us-central1', memory: '256MiB', maxInstances: 10 },
+  overseasStockHandlers.getWisStockManagement,
+);
+exports.saveWisStockOverseasMarketRules = onCall(
+  { region: 'us-central1', memory: '256MiB', maxInstances: 10 },
+  overseasStockHandlers.saveWisStockMarketRules,
+);
+exports.setWisStockOverseasMarketHalted = onCall(
+  { region: 'us-central1', memory: '256MiB', maxInstances: 10 },
+  overseasStockHandlers.setWisStockMarketHalted,
+);
+exports.activateWisStockOverseasCatalogPlan = onCall(
+  { region: 'us-central1', memory: '256MiB', maxInstances: 10 },
+  overseasStockHandlers.activateWisStockCatalogPlan,
+);
+exports.refreshWisStockFxRateNow = onCall(
+  { region: 'us-central1', memory: '256MiB', maxInstances: 2, timeoutSeconds: 60 },
+  overseasStockHandlers.refreshWisStockFx,
+);
+// One public USD/KRW reference rate per KST day before the 08:00 market open.
+exports.refreshWisStockFxRate = onSchedule({
+  region: 'us-central1', memory: '256MiB', maxInstances: 1, timeoutSeconds: 60,
+  schedule: '5 7 * * *', timeZone: 'Asia/Seoul', retryCount: 5, minBackoffSeconds: 60, maxBackoffSeconds: 600,
+}, () => wisStockFxRefresh.refreshWisStockFxRate());
 exports.activateWisStockCatalogPlan = onCall(
   { region: 'us-central1', memory: '256MiB', maxInstances: 10 },
   wisStockHandlers.activateWisStockCatalogPlan,

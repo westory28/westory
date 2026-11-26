@@ -26,3 +26,18 @@ export function catalogExitAtMs(entry, plan) {
   }
   return catalogSessionAtMs(entry.exitSession, plan.startsAtMs);
 }
+
+// Inverse of catalogSessionAtMs for live pricing: the 1-based session whose
+// hour contains atMs. Before 09:00 or after 15:59 KST on a weekday the nearest
+// session of that day applies; weekends and dates before the plan return null.
+export function catalogSessionIndexAt(atMs, startsAtMs) {
+  if (!Number.isSafeInteger(atMs) || !Number.isSafeInteger(startsAtMs) || startsAtMs < 0 || atMs < startsAtMs - 60 * 60_000)
+    return null;
+  const kstDay = Math.floor((atMs + 9 * HOUR) / DAY), startDay = Math.floor((startsAtMs + 9 * HOUR) / DAY);
+  const days = kstDay - startDay, week = Math.floor(days / 7), weekday = days % 7;
+  if (days < 0 || weekday > 4) return null;
+  const minute = Math.floor(((atMs + 9 * HOUR) % DAY) / 60_000);
+  const hour = Math.max(0, Math.min(6, Math.floor((minute - 540) / 60)));
+  const session = (week * 5 + weekday) * 7 + hour + 1;
+  return session <= 210 ? session : null;
+}

@@ -38,4 +38,36 @@ function createWisStockTradingExports({ db,
   }, handlers.recoverWisStockOrders);
   return result;
 }
-module.exports = { createWisStockTradingExports };
+// The 유스 venue: separate accounts, orders, supplies, history and task queue.
+// The exchange command lives on a domestic instance paired with this venue.
+function createWisStockOverseasTradingExports({ db,
+  settlementServiceAccount = '177587430482-compute@developer.gserviceaccount.com' }) {
+  const { createWisStockTrading } = require('./wisStockTrading');
+  const { OVERSEAS } = require('./wisStockVenues');
+  const handlers = createWisStockTrading({ db, venue: OVERSEAS });
+  const exchange = createWisStockTrading({ db, exchangeVenue: OVERSEAS });
+  const runtime = { region: 'us-central1', memory: '256MiB', minInstances: 0, maxInstances: 10,
+    timeoutSeconds: 60, concurrency: 40 };
+  return {
+    getStudentWisStockOverseasState: onCall(runtime, handlers.getStudentWisStockState),
+    getStudentWisStockOverseasHistory: onCall(runtime, handlers.getStudentWisStockHistory),
+    placeStudentWisStockOverseasOrder: onCall(runtime, handlers.placeStudentWisStockOrder),
+    cancelStudentWisStockOverseasOrder: onCall(runtime, handlers.cancelStudentWisStockOrder),
+    exchangeStudentWisStockCurrency: onCall(runtime, exchange.exchangeStudentWisStockCurrency),
+    settleWisStockOverseasOrderTask: onTaskDispatched({ ...runtime, maxInstances: 5,
+      retryConfig: { maxAttempts: 10, minBackoffSeconds: 5, maxBackoffSeconds: 60, maxDoublings: 4 },
+      rateLimits: { maxConcurrentDispatches: 20, maxDispatchesPerSecond: 20 },
+      invoker: [settlementServiceAccount],
+    }, handlers.settleWisStockOrderTask),
+    onWisStockOverseasOrderCreated: onDocumentCreated({ ...runtime, retry: true,
+      document: `years/{year}/semesters/{semester}/${OVERSEAS.orders}/{orderId}`,
+    }, handlers.onWisStockOrderCreated),
+    onWisStockOverseasMarketTradingWrite: onDocumentWritten({ ...runtime, retry: true,
+      document: `years/{year}/semesters/{semester}/wis_stock_markets/${OVERSEAS.marketDoc}`,
+    }, handlers.onWisStockMarketTradingWrite),
+    recoverWisStockOverseasOrders: onSchedule({ ...runtime, maxInstances: 1,
+      schedule: 'every 10 minutes', timeZone: 'Asia/Seoul',
+    }, handlers.recoverWisStockOrders),
+  };
+}
+module.exports = { createWisStockTradingExports, createWisStockOverseasTradingExports };

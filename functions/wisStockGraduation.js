@@ -3,11 +3,13 @@
 // deletion of positions. Account, supply, order, board and receipt commit once.
 const { isDeepStrictEqual } = require('node:util');
 const { tagWisStockBonusOrder, applyWisStockBonusOrder } = require('./wisStockBonusAccounting');
+const { DOMESTIC } = require('./wisStockVenues');
 function createWisStockGraduation(deps) {
   const { db, now, mutate, scopeOf, rootPath, accountPath, orderPath, hash, fail, sum, multiply,
     validateAccount, readMarket, supplyFor, portfolioFor, reservationsFor, applyOrder,
-    cancelWisStockOrder, prepareBoard, history, enqueue, FieldPath } = deps;
-  const jobRefFor = (scope, stockId) => db.doc(`wis_stock_graduations/${scope.semesterId}_${stockId}`);
+    cancelWisStockOrder, prepareBoard, history, enqueue, FieldPath, venue = DOMESTIC } = deps;
+  // Venue collections: the domestic values are the original literals.
+  const jobRefFor = (scope, stockId) => db.doc(`${venue.graduations}/${scope.semesterId}_${stockId}`);
   const validJob = (job, scope, stockId) => job?.schemaVersion === 1 && job.semesterId === scope.semesterId
     && job.year === scope.year && job.semester === scope.semester && job.stockId === stockId
     && Number.isSafeInteger(job.unitPrice) && job.unitPrice >= 1 && job.unitPrice <= 1000000
@@ -15,10 +17,10 @@ function createWisStockGraduation(deps) {
 
   async function settleAccount(scope, stockId, accountId) {
     return mutate(scope, async tx => {
-      const accountRef = db.doc(`${rootPath(scope)}/wis_stock_accounts/${accountId}`);
-      const receiptRef = db.doc(`${rootPath(scope)}/wis_stock_graduation_receipts/${hash(`${stockId}\n${accountId}`)}`);
+      const accountRef = db.doc(`${rootPath(scope)}/${venue.accounts}/${accountId}`);
+      const receiptRef = db.doc(`${rootPath(scope)}/${venue.graduationReceipts}/${hash(`${stockId}\n${accountId}`)}`);
       const [jobSnap, accountSnap, marketSnap, receiptSnap] = await tx.getAll(jobRefFor(scope, stockId), accountRef,
-        db.doc(`${rootPath(scope)}/wis_stock_markets/current`), receiptRef);
+        db.doc(`${rootPath(scope)}/wis_stock_markets/${venue.marketDoc}`), receiptRef);
       const job = jobSnap.data();
       if (!validJob(job, scope, stockId)) fail('WIS_STOCK_GRADUATION_INVALID');
       if (receiptSnap.exists) {
@@ -35,7 +37,7 @@ function createWisStockGraduation(deps) {
         || stock.graduation?.unitPrice !== job.unitPrice || stock.graduation?.atMs !== job.atMs)
         fail('WIS_STOCK_GRADUATION_INVALID');
       if (!(previous.positions[stockId]?.quantity > 0)) return { changed: false };
-      const supplyRef = db.doc(`${rootPath(scope)}/wis_stock_supplies/${stockId}`);
+      const supplyRef = db.doc(`${rootPath(scope)}/${venue.supplies}/${stockId}`);
       let nextSupply = supplyFor(await tx.get(supplyRef), stock, scope), next = structuredClone(previous);
       if (nextSupply.holders[next.studentKey] !== next.positions[stockId].quantity) fail('WIS_STOCK_SUPPLY_INVALID');
       const pending = Object.values(next.pendingOrders).filter(order => order.stockId === stockId);
@@ -105,7 +107,7 @@ function createWisStockGraduation(deps) {
     if (!validJob(job, scope, stockId)) fail('WIS_STOCK_GRADUATION_INVALID');
     if (job.status === 'COMPLETE') return { changed: 0, complete: true };
     const field = `positions.${stockId}.quantity`;
-    let query = db.collection(`${rootPath(scope)}/wis_stock_accounts`).where(field, '>', 0)
+    let query = db.collection(`${rootPath(scope)}/${venue.accounts}`).where(field, '>', 0)
       .orderBy(field).orderBy(FieldPath.documentId()).limit(10);
     if (after) {
       if (!Number.isSafeInteger(after.quantity) || after.quantity <= 0 || !/^[A-Za-z0-9_-]{8,160}$/.test(after.id || '')) fail('WIS_STOCK_TASK_INVALID');
@@ -124,7 +126,7 @@ function createWisStockGraduation(deps) {
       // A final transactional supply check also catches failed accounts from
       // earlier pages. A later scheduler pass starts at the beginning again.
       await mutate(scope, async tx => {
-        const [latest, supply] = await tx.getAll(jobRefFor(scope, stockId), db.doc(`${rootPath(scope)}/wis_stock_supplies/${stockId}`));
+        const [latest, supply] = await tx.getAll(jobRefFor(scope, stockId), db.doc(`${rootPath(scope)}/${venue.supplies}/${stockId}`));
         if (!validJob(latest.data(), scope, stockId)) fail('WIS_STOCK_GRADUATION_INVALID');
         const value = supply.data();
         if ((!value || (Object.keys(value.holders || {}).length === 0 && value.reservedBuyQuantity === 0)) && latest.data().status !== 'COMPLETE')
@@ -138,7 +140,7 @@ function createWisStockGraduation(deps) {
     const generation = Math.floor(now() / 300000);
     let cursor = null, queued = 0;
     do {
-      let query = db.collection('wis_stock_graduations').where('status', '==', 'PENDING').orderBy(FieldPath.documentId()).limit(20);
+      let query = db.collection(venue.graduations).where('status', '==', 'PENDING').orderBy(FieldPath.documentId()).limit(20);
       if (cursor) query = query.startAfter(cursor);
       const pending = await query.get();
       for (const doc of pending.docs) {

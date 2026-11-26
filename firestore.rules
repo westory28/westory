@@ -1339,6 +1339,13 @@ service cloud.firestore {
       }
     }
 
+    // One public USD/KRW reference rate per KST day, written only by the
+    // scheduled server job. It carries no student or account information.
+    match /wis_stock_fx/{documentId} {
+      allow get: if request.auth != null && documentId == 'current';
+      allow list, create, update, delete: if false;
+    }
+
     // 학년도/학기 범위 컬렉션 권한
     match /years/{year}/semesters/{semester} {
       function stockCurrentScope(checkInterfaceScope) {
@@ -1411,6 +1418,17 @@ service cloud.firestore {
               && resource.data.keys().hasOnly(['schemaVersion', 'semesterId', 'studentOpen', 'tradingEpoch', 'revision', 'updatedAtMs', 'rules', 'stocks'])
               && resource.data.schemaVersion == 1 && resource.data.semesterId == year + '-' + semester
               && resource.data.studentOpen == true && resource.data.rules is map && resource.data.stocks is list
+              && resource.data.stocks.size() <= 100)
+            // The 유스 venue publishes the same two safe shapes under its own IDs.
+            || (documentId == 'overseas_current' && (resource == null ||
+              (resource.data.keys().hasOnly(['schemaVersion', 'semesterId', 'studentOpen', 'halted', 'tradingEpoch', 'revision', 'updatedAtMs'])
+                && resource.data.schemaVersion == 1 && resource.data.semesterId == year + '-' + semester
+                && resource.data.studentOpen is bool && resource.data.halted is bool)))
+            || (documentId == 'overseas_market' && resource != null
+              && get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/wis_stock_public/overseas_current).data.studentOpen == true
+              && resource.data.keys().hasOnly(['schemaVersion', 'semesterId', 'studentOpen', 'tradingEpoch', 'revision', 'updatedAtMs', 'rules', 'stocks'])
+              && resource.data.schemaVersion == 1 && resource.data.semesterId == year + '-' + semester
+              && resource.data.studentOpen == true && resource.data.rules is map && resource.data.stocks is list
               && resource.data.stocks.size() <= 100);
         }
         allow get: if stockReadFence(true)
@@ -1451,6 +1469,33 @@ service cloud.firestore {
         // Never allow broad probes, collection enumeration or client writes.
         // Personal asset history stays readable when the market/menu is stopped.
         allow get: if stockReadFence(false) && stockActiveStudent() && ownActiveStockAccount();
+        allow list, create, update, delete: if false;
+      }
+      // The 유스 account: an exact copy of the ownership fence above (same
+      // canonical account ID and the same ten-read budget). Server writes only.
+      match /wis_stock_overseas_accounts/{accountId} {
+        function ownActiveOverseasStockAccount() {
+          let wallet = get(/databases/$(database)/documents/semester_wis_accounts/$(accountId)).data;
+          let slotId = accountId.replace('^wisacct_', 'slot_').replace('[a-f0-9]{24}$', '');
+          let enrollment = get(/databases/$(database)/documents/semester_enrollments/$(wallet.enrollmentId)).data;
+          let slot = get(/databases/$(database)/documents/semester_enrollment_slots/$(slotId)).data;
+          let classroom = get(/databases/$(database)/documents/semester_classes/$(wallet.classId)).data;
+          return accountId.matches('^wisacct_[a-f0-9]{64}$')
+            && wallet.accountId == accountId && wallet.studentUid == request.auth.uid && wallet.semesterId == year + '-' + semester
+            && wallet.schemaVersion == 1 && wallet.policyVersion == 'w7-v1'
+            && wallet.status == 'ACTIVE' && wallet.get('readOnly', false) == false
+            && (resource == null || (resource.data.schemaVersion == 1
+              && resource.data.studentUid == request.auth.uid && resource.data.semesterId == year + '-' + semester
+              && resource.data.accountId == accountId))
+            && [enrollment.enrollmentId, enrollment.studentUid, enrollment.semesterId, enrollment.enrollmentStatus,
+                enrollment.get('readOnly', false), enrollment.classId, slot.studentUid, slot.semesterId,
+                slot.activeEnrollmentId, slot.get('status', 'ACTIVE'), classroom.classId, classroom.semesterId,
+                classroom.status, classroom.get('readOnly', false)]
+              == [wallet.enrollmentId, request.auth.uid, year + '-' + semester, 'ACTIVE', false,
+                wallet.classId, request.auth.uid, year + '-' + semester, wallet.enrollmentId, 'ACTIVE',
+                wallet.classId, year + '-' + semester, 'ACTIVE', false];
+        }
+        allow get: if stockReadFence(false) && stockActiveStudent() && ownActiveOverseasStockAccount();
         allow list, create, update, delete: if false;
       }
       // Teacher-only complete projections. No raw market/seed, student account,

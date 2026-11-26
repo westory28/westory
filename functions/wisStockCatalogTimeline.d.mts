@@ -9,3 +9,4 @@ export function catalogExitAtMs(
   entry: { id: string; exitSession: number | null },
   plan: WisStockCatalogPlan | null | undefined,
 ): number | null;
+export function catalogSessionIndexAt(atMs: number, startsAtMs: number): number | null;

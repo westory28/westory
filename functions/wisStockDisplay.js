@@ -19,8 +19,13 @@ function marketDisplay(market) {
       // Older stocks have no listing timestamp. A truncated series cannot establish an IPO date.
       const listedAtMs = stock.listedAtMs ?? (stock.history.length < HISTORY_LIMIT
         && first?.price === stock.settings.initialPrice ? first.atMs : undefined);
+      // A trading end (scheduled delisting/merger or a manual close) is news
+      // for its day on the display; manual ends carry no catalog kind.
+      const graduation = stock.settings.tradingStatus === 'GRADUATED' ? stock.graduation : null;
       return { id: stock.id, name: stock.settings.name, price: stock.price, previousClose,
         ...(listedAtMs !== undefined ? { listedAtMs, listingPrice: stock.settings.initialPrice } : {}),
+        ...(Number.isSafeInteger(graduation?.atMs) ? { exitedAtMs: graduation.atMs,
+          exitKind: ['merge', 'delist'].includes(graduation.exitKind) ? graduation.exitKind : 'close' } : {}),
         ...(last?.price === stock.price ? { priceAtMs: last.atMs,
           ...(previous && previous.atMs < last.atMs ? { previousPrice: previous.price } : {}) } : {}) };
     }),

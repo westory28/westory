@@ -18,6 +18,8 @@ const { buildWisStockInvestmentBoard, parseWisStockInvestmentBoardSnapshot, norm
 const { getDepositBonusStatus, createDepositBonusReceipt, receiptPath: campaignReceiptPath } = require('./wisStockDepositCampaign');
 const { createWisStockGraduation } = require('./wisStockGraduation');
 const { buildWisStockInvestmentHistorySeries } = require('./wisStockInvestmentHistorySeries.mjs');
+const { DOMESTIC } = require('./wisStockVenues');
+const { WIS_STOCK_FX_PATH, parseWisStockFxRate, quoteWisStockExchange, WIS_STOCK_FX_DIRECTIONS, wisStockFxDayKey } = require('./wisStockFx');
 const { validateWisStockBonusAccount, assertWisStockBonusReady, wisStockBonusFunding,
   grantWisStockRestrictedBonus, tagWisStockBonusOrder, applyWisStockBonusOrder } = require('./wisStockBonusAccounting');
 
@@ -40,8 +42,8 @@ const validateInput = (input, fields) => {
 };
 const requestIdValid = value => typeof value === 'string' && /^[A-Za-z0-9_-]{16,80}$/.test(value);
 const orderIdValid = value => typeof value === 'string' && /^stockord_[a-f0-9]{64}$/.test(value);
-const accountPath = (scope, uid) => `${rootPath(scope)}/wis_stock_accounts/${accountIdFor(scope.semesterId, uid)}`;
-const orderPath = (scope, id) => `${rootPath(scope)}/wis_stock_orders/${id}`;
+const accountPathFor = (scope, uid, venue = DOMESTIC) => `${rootPath(scope)}/${venue.accounts}/${accountIdFor(scope.semesterId, uid)}`;
+const orderPathFor = (scope, id, venue = DOMESTIC) => `${rootPath(scope)}/${venue.orders}/${id}`;
 const studentKeyFor = uid => `student_${hash(uid).slice(0, 24)}`;
 const emptyPosition = () => ({ quantity: 0, principal: 0, costBasis: 0, reservedBuyQuantity: 0,
   reservedSellQuantity: 0, reservedSellPrincipal: 0, reservedSellCostBasis: 0 });
@@ -146,8 +148,18 @@ function applyOrder(account, supply, transition) {
 function safeOrder(order) { return Object.fromEntries(['id', 'stockId', 'side', 'quantity', 'unitPrice', 'gross', 'fee', 'cashDebit', 'cashCredit',
   'acceptedAtMs', 'dueAtMs', 'status', 'revision', 'settledAtMs', 'cancellationReason'].filter(key => order[key] !== undefined).map(key => [key, order[key]])); }
 
-function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession, now = Date.now, delaySeconds = createWisStockOrderDelaySeconds,
-  enqueueTask = (data, options) => getFunctions().taskQueue('locations/us-central1/functions/settleWisStockOrderTask').enqueue(data, options) }) {
+function createWisStockTrading({ db, venue = DOMESTIC, exchangeVenue = null, assertSession = assertScoreWorkflowSession, now = Date.now,
+  delaySeconds = createWisStockOrderDelaySeconds,
+  enqueueTask = (data, options) => getFunctions().taskQueue(`locations/us-central1/functions/${venue.taskFunction}`).enqueue(data, options) }) {
+  // Every canonical path below belongs to this venue. The domestic values are
+  // the original literals; a 유스 venue keeps its accounts, orders, supplies and
+  // history separate and never reaches the general Wis wallet directly.
+  const accountPath = (scope, uid) => accountPathFor(scope, uid, venue);
+  const orderPath = (scope, id) => orderPathFor(scope, id, venue);
+  const marketDocPath = scope => `${rootPath(scope)}/wis_stock_markets/${venue.marketDoc}`;
+  const supplyPath = (scope, stockId) => `${rootPath(scope)}/${venue.supplies}/${stockId}`;
+  const historyPath = scope => `${rootPath(scope)}/${venue.history}`;
+  const readVenueMarket = (snapshot, scope) => readMarket(snapshot, scope, venue);
   // A process-local admission queue reduces bursts contending on the complete
   // board/supply projection. It is not an authority lock: all money/reservations
   // remain protected by Firestore across instances, retries and cold starts.
@@ -187,11 +199,11 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
     let loaded, eligible = true;
     try { loaded = await adapter.read(tx, scope, actor.uid); }
     catch (error) { if (!task || error.code !== 'failed-precondition') throw error; eligible = false; }
-    const paths = ['site_settings/config', `${rootPath(scope)}/wis_stock_markets/current`, accountPath(scope, actor.uid),
+    const paths = ['site_settings/config', marketDocPath(scope), accountPath(scope, actor.uid),
       `application_sessions/${actor.uid}/sessions/${actor.authTime}`, 'site_settings/student_maintenance'];
     const snapshots = await tx.getAll(...paths.map(path => db.doc(path)));
     const [config, marketSnapshot, accountSnapshot, sessionSnapshot, maintenanceSnapshot] = snapshots;
-    const settings = config.data() || {}, market = readMarket(marketSnapshot, scope);
+    const settings = config.data() || {}, market = readVenueMarket(marketSnapshot, scope);
     const active = String(settings.year) === scope.year && String(settings.semester) === scope.semester;
     const authorized = sessionValid(sessionSnapshot.data(), actor.uid, actor.authTime, actor.revision, atMs)
       && evaluateStudentMaintenanceAccess({ auth: { uid: actor.uid, token: { email: profile?.email || '' } },
@@ -226,10 +238,16 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
             reservedBuyQuantity: p.reservedBuyQuantity, reservedSellQuantity: p.reservedSellQuantity,
             reservedSellPrincipal: p.reservedSellPrincipal, reservedSellCostBasis: p.reservedSellCostBasis })),
         pendingOrders: Object.values(account.pendingOrders).map(safeOrder), recentOrders: account.recentOrders.map(safeOrder) },
-      funding: getWisStockFundingLimits({ mainCash, stockCash: account.stockCash, reservedCash: account.reservedCash,
-        outstandingPrincipal: account.outstandingPrincipal, lastDepositAtMs: account.lastDepositAtMs, ...wisStockBonusFunding(account) }, context.atMs) };
+      // A 유스 account is funded only by exchange; its "withdrawal" is the
+      // unreserved balance that may be exchanged back into Wis.
+      ...(!venue.transfers ? { venue: venue.id, unit: venue.unit, funding: { maximumDeposit: 0,
+        maximumWithdrawal: account.stockCash - account.reservedCash, nextDepositAtMs: 0 } } : {}),
+      ...(venue.transfers ? { funding: getWisStockFundingLimits({ mainCash, stockCash: account.stockCash, reservedCash: account.reservedCash,
+        outstandingPrincipal: account.outstandingPrincipal, lastDepositAtMs: account.lastDepositAtMs, ...wisStockBonusFunding(account) }, context.atMs) } : {}) };
   }
   async function prepareBoard(tx, scope, market, previous, next, supplyChanges = new Map()) {
+    // Only the domestic venue projects the teacher investment board.
+    if (!venue.board) return next ? () => {} : null;
     const allRef = db.doc(`${rootPath(scope)}/wis_stock_investment_boards/all`), metaRef = db.doc(`${rootPath(scope)}/wis_stock_trade_state/current`);
     const [allSnap, metaSnap] = await tx.getAll(allRef, metaRef);
     if (!allSnap.exists && !next) return null;
@@ -262,7 +280,7 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
     for (const stock of changed) {
       if (marketSupplies && !marketSupplies.has(stock.id)) continue;
       const supply = supplyChanges.get(stock.id) || supplyFor(marketSupplies?.get(stock.id)
-        ?? await tx.get(db.doc(`${rootPath(scope)}/wis_stock_supplies/${stock.id}`)), stock, scope);
+        ?? await tx.get(db.doc(supplyPath(scope, stock.id))), stock, scope);
       for (const [key, quantity] of Object.entries(supply.holders)) {
         // The changed account is replaced from its complete current positions below.
         if (key === next?.studentKey || excluded.has(key)) continue;
@@ -297,7 +315,7 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
     const id = `stockhist_${hash(`${next.accountId}\n${kind}\n${reference}`)}`;
     const entry = { schemaVersion: 1, id, accountId: next.accountId, studentUid: next.studentUid, semesterId: context.scope.semesterId,
       sequence: next.revision, kind, atMs: context.atMs, stockCashDelta: 0, mainCashDelta: 0, earnedDelta: 0, ...detail };
-    tx.create(db.doc(`${rootPath(context.scope)}/wis_stock_history/${id}`), entry);
+    tx.create(db.doc(`${historyPath(context.scope)}/${id}`), entry);
   }
   function postGeneralTransfer(tx, context, transfer) {
     const { wallet, economy } = context.loaded, delta = transfer.effects.mainCashDelta, timestamp = Timestamp.fromMillis(context.atMs);
@@ -345,7 +363,9 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
     const scope = scopeOf(request.data), actor = await actorFor(request);
     return db.runTransaction(async tx => state(await load(tx, scope, actor, now())), { readOnly: true });
   });
+  const venueFeature = enabled => { if (!enabled) fail('WIS_STOCK_VENUE_UNSUPPORTED', '이 주식 계좌에서는 사용할 수 없는 기능입니다.'); };
   const getStudentWisStockBonus = checked(async request => {
+    venueFeature(venue.bonus);
     validateInput(request.data, []);
     const scope = scopeOf(request.data), actor = await actorFor(request);
     return db.runTransaction(async tx => {
@@ -366,6 +386,7 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
         outstandingPrincipalDelta: 0, eventBonusRestrictedCashDelta: bonus.amount, eventBonusRestrictionVersion: 1 });
   }
   const claimStudentWisStockBonus = checked(async request => {
+    venueFeature(venue.bonus);
     validateInput(request.data, ['requestId']);
     const scope = scopeOf(request.data), actor = await actorFor(request), requestId = request.data.requestId;
     if (!requestIdValid(requestId)) fail('WIS_STOCK_INPUT_INVALID', undefined, 'invalid-argument');
@@ -399,7 +420,7 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
       const accountId = accountIdFor(scope.semesterId, uid), accountRef = db.doc(accountPath(scope, uid));
       const receiptRef = db.doc(`${rootPath(scope)}/wis_stock_bonus_restriction_receipts/${accountId}`);
       const [accountSnap, marketSnap, campaignSnap, receiptSnap] = await tx.getAll(accountRef,
-        db.doc(`${rootPath(scope)}/wis_stock_markets/current`), db.doc(campaignReceiptPath(uid)), receiptRef);
+        db.doc(marketDocPath(scope)), db.doc(campaignReceiptPath(uid)), receiptRef);
       if (!accountSnap.exists || !campaignSnap.exists) fail('WIS_STOCK_BONUS_MIGRATION_INVALID');
       const account = validateAccount(accountSnap.data(), scope, uid);
       const summary = next => ({ restrictedCash: next.eventBonusRestrictedCash || 0,
@@ -411,19 +432,20 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
         return { eligible: false, changed: false, duplicate: true, skipped: !receiptSnap.exists, ...summary(account) };
       }
       if (receiptSnap.exists) fail('WIS_STOCK_BONUS_MIGRATION_INVALID');
-      const ledger = await tx.get(db.collection(`${rootPath(scope)}/wis_stock_history`).where('accountId', '==', accountId)
+      const ledger = await tx.get(db.collection(historyPath(scope)).where('accountId', '==', accountId)
         .select('accountId', 'studentUid', 'semesterId', 'sequence', 'atMs', 'kind', 'stockCashDelta', 'amount', 'campaignId', 'principalReturned'));
       const { planWisStockBonusMigration } = require('./wisStockBonusMigration');
       const plan = planWisStockBonusMigration({ account, campaignReceipt: campaignSnap.data(), history: ledger.docs.map(doc => doc.data()), atMs: now() });
       if (dryRun) return { changed: false, eligible: plan.changed, digest: plan.digest, ...summary(plan.next) };
       if (!/^[a-f0-9]{64}$/.test(expectedDigest || '') || expectedDigest !== plan.digest) fail('WIS_STOCK_BONUS_MIGRATION_CHANGED');
       validateAccount(plan.next, scope, uid);
-      const market = readMarket(marketSnap, scope), writeBoards = await prepareBoard(tx, scope, market, account, plan.next);
+      const market = readVenueMarket(marketSnap, scope), writeBoards = await prepareBoard(tx, scope, market, account, plan.next);
       tx.set(accountRef, plan.next); tx.create(receiptRef, plan.receipt); writeBoards();
       return { changed: true, digest: plan.digest, ...summary(plan.next) };
     });
   };
   const transferStudentWisStock = checked(async request => {
+    venueFeature(venue.transfers);
     const input = request.data;
     validateInput(input, ['requestId', 'direction', 'amount']);
     const scope = scopeOf(input), actor = await actorFor(request);
@@ -457,6 +479,85 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
       return { changed: true, duplicate: false, receipt: transfer.receipt, bonusAmount: 0, state: state(context, next, mainCash, true) };
     });
   });
+  // Currency exchange between this venue's Wis stock account and the paired
+  // 유스 account. One transaction re-reads the daily rate, both markets, both
+  // accounts and the receipt, so a retry, a rate change or a concurrent order
+  // can never double-credit or spend reserved/bonus cash.
+  const exchangeStudentWisStockCurrency = checked(async request => {
+    const input = request.data;
+    validateInput(input, ['requestId', 'direction', 'amount', 'rate']);
+    const scope = scopeOf(input), actor = await actorFor(request);
+    if (!exchangeVenue || !requestIdValid(input.requestId) || !WIS_STOCK_FX_DIRECTIONS.includes(input.direction)
+      || !safe(input.amount, 1) || !safe(input.rate, 1)) fail('WIS_STOCK_INPUT_INVALID', undefined, 'invalid-argument');
+    const id = `stockfx_${hash(`${scope.semesterId}\n${actor.uid}\n${input.requestId}`)}`;
+    const payloadHash = hash(JSON.stringify(['exchangeStudentWisStockCurrency', input.direction, input.amount, input.rate]));
+    const publicReceipt = value => Object.fromEntries(['id', 'direction', 'debit', 'credit', 'rate', 'fxDayKey', 'appliedAtMs']
+      .map(key => [key, value[key]]));
+    const peerSummary = value => value ? { revision: value.revision, stockCash: value.stockCash, reservedCash: value.reservedCash } : null;
+    return mutate(scope, async tx => {
+      const context = await load(tx, scope, actor, now()), account = context.account;
+      const peerAccountRef = db.doc(accountPathFor(scope, actor.uid, exchangeVenue));
+      const receiptRef = db.doc(`${rootPath(scope)}/wis_stock_fx_receipts/${id}`);
+      const [fxSnap, peerMarketSnap, peerAccountSnap, receiptSnap] = await tx.getAll(db.doc(WIS_STOCK_FX_PATH),
+        db.doc(`${rootPath(scope)}/wis_stock_markets/${exchangeVenue.marketDoc}`), peerAccountRef, receiptRef);
+      const peerAccount = peerAccountSnap.exists ? validateAccount(peerAccountSnap.data(), scope, actor.uid)
+        : blankAccount(scope, actor.uid, context.loaded.wallet, context.atMs);
+      if (receiptSnap.exists) {
+        const saved = receiptSnap.data();
+        if (saved.studentUid !== actor.uid || saved.accountId !== account.accountId || saved.payloadHash !== payloadHash)
+          fail('WIS_STOCK_REQUEST_CONFLICT');
+        return { changed: false, duplicate: true, receipt: publicReceipt(saved), state: state(context), peer: peerSummary(peerAccountSnap.exists ? peerAccount : null) };
+      }
+      assertOpen(context);
+      const peerMarket = readMarket(peerMarketSnap, scope, exchangeVenue);
+      if (!peerMarket.studentOpen || peerMarket.rules.halted)
+        fail('WIS_STOCK_MARKET_CLOSED', '지금은 해외 주식 거래가 중지되어 있어 환전할 수 없습니다.');
+      let fx = null;
+      try { fx = fxSnap.exists ? parseWisStockFxRate(fxSnap.data(), context.atMs) : null; } catch { fx = null; }
+      if (!fx?.current) fail('WIS_STOCK_FX_UNAVAILABLE', '오늘의 환율을 아직 받지 못했습니다. 잠시 후 다시 시도해 주세요.');
+      if (fx.rate !== input.rate) fail('WIS_STOCK_FX_RATE_CHANGED', '오늘의 환율이 바뀌었습니다. 새 환율을 확인한 뒤 다시 환전해 주세요.');
+      assertWisStockBonusReady(account);
+      const out = input.direction === 'WIS_TO_YUS';
+      if (out && !context.accountExists) fail('WIS_STOCK_ACCOUNT_REQUIRED', '먼저 주식 계좌에 위스를 입금해 주세요.');
+      // Domestic availability is exactly the transfer-out limit: reserved buy
+      // cash and the restricted event-bonus principal are never exchanged.
+      const available = out ? getWisStockFundingLimits({ mainCash: context.loaded.wallet.balance, stockCash: account.stockCash,
+        reservedCash: account.reservedCash, outstandingPrincipal: account.outstandingPrincipal,
+        lastDepositAtMs: account.lastDepositAtMs, ...wisStockBonusFunding(account) }, context.atMs).maximumWithdrawal
+        : peerAccount.stockCash - peerAccount.reservedCash;
+      let quote;
+      try { quote = quoteWisStockExchange({ direction: input.direction, amount: input.amount, rate: fx.rate, available }); }
+      catch (error) { fail(error.reason || 'WIS_STOCK_FX_INPUT_INVALID', error.message); }
+      const next = structuredClone(account), nextPeer = structuredClone(peerAccount);
+      next.stockCash = sum([next.stockCash, out ? -quote.debit : quote.credit]);
+      nextPeer.stockCash = sum([nextPeer.stockCash, out ? quote.credit : -quote.debit]);
+      // The 유스 account's principal is what was exchanged in. Exchanging out
+      // returns principal first, exactly like a Wis stock-account withdrawal.
+      nextPeer.outstandingPrincipal = out ? sum([nextPeer.outstandingPrincipal, quote.credit])
+        : sum([nextPeer.outstandingPrincipal, -Math.min(quote.debit, nextPeer.outstandingPrincipal)]);
+      next.revision = sum([next.revision, 1]); nextPeer.revision = sum([nextPeer.revision, 1]);
+      updateRoster(next, context);
+      Object.assign(nextPeer, rosterFor(context.loaded.wallet, scope, actor.uid), { boardEligible: true, updatedAtMs: context.atMs });
+      validateAccount(nextPeer, scope, actor.uid);
+      const writeBoards = await prepareBoard(tx, scope, context.market, account, next);
+      const receipt = { schemaVersion: 1, id, semesterId: scope.semesterId, accountId: account.accountId, studentUid: actor.uid,
+        direction: input.direction, debit: quote.debit, credit: quote.credit, rate: fx.rate, fxDayKey: fx.dayKey,
+        fxSourceDate: fx.sourceDate, fxSource: fx.source, payloadHash, appliedAtMs: context.atMs, status: 'APPLIED' };
+      tx.set(db.doc(accountPath(scope, actor.uid)), next);
+      tx.set(peerAccountRef, nextPeer);
+      tx.create(receiptRef, receipt);
+      history(tx, context, next, 'EXCHANGE', id, { direction: input.direction, amount: out ? quote.debit : quote.credit,
+        counterAmount: out ? quote.credit : quote.debit, fxRate: fx.rate, stockCashDelta: out ? -quote.debit : quote.credit });
+      const peerHistoryId = `stockhist_${hash(`${nextPeer.accountId}\nEXCHANGE\n${id}`)}`;
+      tx.create(db.doc(`${rootPath(scope)}/${exchangeVenue.history}/${peerHistoryId}`), { schemaVersion: 1, id: peerHistoryId,
+        accountId: nextPeer.accountId, studentUid: actor.uid, semesterId: scope.semesterId, sequence: nextPeer.revision,
+        kind: 'EXCHANGE', atMs: context.atMs, direction: input.direction, amount: out ? quote.credit : quote.debit,
+        counterAmount: out ? quote.debit : quote.credit, fxRate: fx.rate, stockCashDelta: out ? quote.credit : -quote.debit,
+        mainCashDelta: 0, earnedDelta: 0 });
+      writeBoards();
+      return { changed: true, duplicate: false, receipt: publicReceipt(receipt), state: state(context, next), peer: peerSummary(nextPeer) };
+    });
+  });
   const placeStudentWisStockOrder = checked(async request => {
     const input = request.data;
     validateInput(input, ['requestId', 'stockId', 'side', 'quantity', 'quote']);
@@ -481,11 +582,12 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
       }
       assertOpen(context);
       assertWisStockBonusReady(account);
-      if (!context.accountExists) fail('WIS_STOCK_ACCOUNT_REQUIRED', '먼저 주식 계좌에 위스를 입금해 주세요.');
+      if (!context.accountExists) fail('WIS_STOCK_ACCOUNT_REQUIRED', venue.transfers
+        ? '먼저 주식 계좌에 위스를 입금해 주세요.' : '먼저 위스를 유스로 환전해 주세요.');
       if (Object.keys(account.pendingOrders).length >= MAX_PENDING) fail('WIS_STOCK_PENDING_LIMIT');
       const stock = context.market.stocks.find(item => item.id === input.stockId);
       if (!stock) fail('WIS_STOCK_NOT_FOUND');
-      const supplyRef = db.doc(`${rootPath(scope)}/wis_stock_supplies/${stock.id}`), supply = supplyFor(await tx.get(supplyRef), stock, scope);
+      const supplyRef = db.doc(supplyPath(scope, stock.id)), supply = supplyFor(await tx.get(supplyRef), stock, scope);
       if ((supply.holders[account.studentKey] || 0) !== (account.positions[stock.id]?.quantity || 0)) fail('WIS_STOCK_SUPPLY_INVALID');
       if (input.quote.atMs > context.atMs + 5000) fail('WIS_STOCK_QUOTE_EXPIRED');
       const transition = acceptWisStockOrder({ orderId: id, accountId: account.accountId, semesterId: scope.semesterId,
@@ -514,7 +616,7 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
       || account.pendingOrders[rawOrder.id].requestKey !== rawOrder.requestKey) fail('WIS_STOCK_RESERVATION_INVALID');
     const stock = context.market.stocks.find(item => item.id === rawOrder.stockId);
     if (!stock) fail('WIS_STOCK_NOT_FOUND');
-    const supplyRef = db.doc(`${rootPath(scope)}/wis_stock_supplies/${stock.id}`), supply = supplyFor(await tx.get(supplyRef), stock, scope);
+    const supplyRef = db.doc(supplyPath(scope, stock.id)), supply = supplyFor(await tx.get(supplyRef), stock, scope);
     if ((supply.holders[account.studentKey] || 0) !== (account.positions[stock.id]?.quantity || 0)) fail('WIS_STOCK_SUPPLY_INVALID');
     const pureOrder = account.pendingOrders[rawOrder.id];
     if (Object.keys(pureOrder).some(key => !isDeepStrictEqual(pureOrder[key], rawOrder[key]))) fail('WIS_STOCK_RESERVATION_INVALID');
@@ -532,7 +634,7 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
     const resultOrder = { ...rawOrder, ...transition.order };
     tx.set(db.doc(accountPath(scope, context.actor.uid)), next); tx.set(supplyRef, nextSupply);
     tx.set(db.doc(orderPath(scope, rawOrder.id)), resultOrder);
-    if (resultOrder.status === 'FILLED') {
+    if (venue.displayTrades && resultOrder.status === 'FILLED') {
       tx.create(db.doc(`${rootPath(scope)}/wis_stock_display_trades/${resultOrder.id}`),
         tradeDisplay(scope.semesterId, next, stock.settings.name, resultOrder, context.atMs));
     }
@@ -564,7 +666,7 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
     assertOpen(context);
     const { account, scope, market, atMs: asOfMs } = context;
     // Old fills set the cost basis of positions that are still held today.
-    const snapshot = await tx.get(db.collection(`${rootPath(scope)}/wis_stock_history`)
+    const snapshot = await tx.get(db.collection(historyPath(scope))
       .where('accountId', '==', account.accountId).where('kind', '==', 'ORDER_FILLED')
       .select('accountId', 'studentUid', 'semesterId', 'sequence', 'atMs', 'stockId', 'side', 'quantity', 'unitPrice', 'fee', 'stockCashDelta', 'realizedPnl'));
     const fills = snapshot.docs.map(doc => {
@@ -597,7 +699,7 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
     return db.runTransaction(async tx => {
       const context = await load(tx, scope, actor, now());
       if (returns) return readWalletReturns(tx, context);
-      let query = db.collection(`${rootPath(scope)}/wis_stock_history`).where('accountId', '==', context.account.accountId)
+      let query = db.collection(historyPath(scope)).where('accountId', '==', context.account.accountId)
         .orderBy('sequence', 'desc').orderBy(FieldPath.documentId(), 'desc').limit(limit + 1);
       if (cursor) query = query.startAfter(cursor.sequence, cursor.id);
       const snapshot = await tx.get(query), hasMore = snapshot.docs.length > limit, docs = snapshot.docs.slice(0, limit);
@@ -605,7 +707,8 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
         const row = doc.data();
         if (row.studentUid !== actor.uid || row.semesterId !== scope.semesterId || row.accountId !== context.account.accountId) fail('WIS_STOCK_HISTORY_INVALID');
         return Object.fromEntries(['id', 'kind', 'atMs', 'stockId', 'side', 'quantity', 'unitPrice', 'amount', 'fee', 'orderId',
-          'stockCashDelta', 'mainCashDelta', 'earnedDelta', 'realizedPnl', 'principalReturned', 'withdrawnProfit', 'cancellationReason', 'campaignId', 'automaticSettlement']
+          'stockCashDelta', 'mainCashDelta', 'earnedDelta', 'realizedPnl', 'principalReturned', 'withdrawnProfit', 'cancellationReason', 'campaignId', 'automaticSettlement',
+          'direction', 'fxRate', 'counterAmount']
           .filter(key => row[key] !== undefined).map(key => [key, row[key]]));
       });
       const last = docs.at(-1);
@@ -633,7 +736,7 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
   }
   async function sweep(scope, afterId = '', generation = 0) {
     if (afterId && !orderIdValid(afterId)) fail('WIS_STOCK_TASK_INVALID');
-    let query = db.collection(`${rootPath(scope)}/wis_stock_orders`).where('status', '==', 'PENDING').orderBy(FieldPath.documentId()).limit(50);
+    let query = db.collection(`${rootPath(scope)}/${venue.orders}`).where('status', '==', 'PENDING').orderBy(FieldPath.documentId()).limit(50);
     if (afterId) query = query.startAfter(afterId);
     const snapshot = await query.get();
     const results = [], failures = [];
@@ -651,8 +754,8 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
     if (failures.length) console.error('Wis stock sweep retained failed orders for recovery.', { count: failures.length, reasons: [...new Set(failures)] });
     return { examined: snapshot.size, changed: results.filter(result => result.changed).length, ...(failures.length ? { failed: failures.length } : {}) };
   }
-  const graduation = createWisStockGraduation({ db, now, mutate, scopeOf, rootPath, accountPath, orderPath,
-    hash, fail, sum, multiply, validateAccount, readMarket, supplyFor, portfolioFor, reservationsFor,
+  const graduation = createWisStockGraduation({ db, venue, now, mutate, scopeOf, rootPath, accountPath, orderPath,
+    hash, fail, sum, multiply, validateAccount, readMarket: readVenueMarket, supplyFor, portfolioFor, reservationsFor,
     applyOrder, cancelWisStockOrder, prepareBoard, history, enqueue, FieldPath });
   const settleWisStockOrderTask = checked(async request => {
     const data = request.data, scope = scopeOf(data);
@@ -683,10 +786,12 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
       await enqueue({ kind: 'GRADUATION', year: scope.year, semester: scope.semester, stockId: stock.id, generation },
         `grad_${hash(`${scope.semesterId}\n${stock.id}\n${generation}\nMARKET`)}`, now());
     }
+    // A venue without board or display projections has nothing more to write.
+    if (!venue.board && !venue.displayDoc) return { changed: false };
     return mutate(scope, async tx => {
-      const market = readMarket(await tx.get(db.doc(`${rootPath(scope)}/wis_stock_markets/current`)), scope);
+      const market = readVenueMarket(await tx.get(db.doc(marketDocPath(scope))), scope);
       // Events can arrive out of order. Project the canonical transaction read.
-      const displayRef = db.doc(`${rootPath(scope)}/wis_stock_display/market`);
+      const displayRef = db.doc(`${rootPath(scope)}/wis_stock_display/${venue.displayDoc}`);
       let display = null;
       if (!isDeepStrictEqual(before.stocks, after.stocks) || before.studentOpen !== after.studentOpen
         || before.rules?.halted !== after.rules?.halted || !isDeepStrictEqual(before.marketIndex, after.marketIndex)) {
@@ -700,7 +805,7 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
     });
   }
   async function recoverWisStockOrders() {
-    const snapshot = await db.collectionGroup('wis_stock_orders').where('status', '==', 'PENDING')
+    const snapshot = await db.collectionGroup(venue.orders).where('status', '==', 'PENDING')
       .where('dueAtMs', '<=', now()).orderBy('dueAtMs', 'asc').limit(50).get();
     let changed = 0; const failures = [];
     // Bounded fallback for a failed enqueue/trigger. Durable orders remain for
@@ -718,6 +823,7 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
     return { examined: snapshot.size, changed, graduationJobsQueued: graduated.queued, ...(failures.length ? { failed: failures.length } : {}) };
   }
   async function onWisStockEnrollmentSlotWritten(event) {
+    if (!venue.enrollmentSync) return { changed: false };
     const candidate = event.data?.after?.data() || event.data?.before?.data();
     if (!candidate || !/^20\d{2}-[12]$/.test(candidate.semesterId || '') || !/^[A-Za-z0-9_-]{1,128}$/.test(candidate.studentUid || '')) return { changed: false };
     const [year, semester] = candidate.semesterId.split('-'), scope = scopeOf({ year, semester }), uid = candidate.studentUid;
@@ -741,7 +847,7 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
       const metadata = ['studentKey', 'grade', 'classNumber', 'studentNumber', 'displayName', 'enrollmentId', 'enrollmentSlotId', 'classId'];
       if ((previous.boardEligible !== false) === eligible && metadata.every(key => next[key] === previous[key])) return { changed: false };
       next.revision = sum([next.revision, 1]); next.updatedAtMs = now();
-      const market = readMarket(await tx.get(db.doc(`${rootPath(scope)}/wis_stock_markets/current`)), scope);
+      const market = readVenueMarket(await tx.get(db.doc(marketDocPath(scope))), scope);
       const writeBoards = await prepareBoard(tx, scope, market, previous, next);
       tx.set(db.doc(accountPath(scope, uid)), next); writeBoards();
       return { changed: true };
@@ -749,6 +855,7 @@ function createWisStockTrading({ db, assertSession = assertScoreWorkflowSession,
   }
   return { getStudentWisStockState, getStudentWisStockBonus, claimStudentWisStockBonus, transferStudentWisStock, placeStudentWisStockOrder, cancelStudentWisStockOrder,
     getStudentWisStockHistory, settleWisStockOrderTask, onWisStockOrderCreated, onWisStockMarketTradingWrite, recoverWisStockOrders,
-    onWisStockEnrollmentSlotWritten, grantWisStockDepositBonus, migrateWisStockBonusRestriction };
+    onWisStockEnrollmentSlotWritten, grantWisStockDepositBonus, migrateWisStockBonusRestriction,
+    ...(exchangeVenue ? { exchangeStudentWisStockCurrency } : {}) };
 }
 module.exports = { createWisStockTrading, createWisStockTradingHandlers: createWisStockTrading };

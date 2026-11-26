@@ -6,10 +6,10 @@ const { createForecastReader, specialSessions, specialPrice, planWindow } = requ
 const { normalizeWisStockMarketRules, normalizeWisStockTradingSettings,
   isWisStockTradingSession, wisStockKstSession, wisStockDailyBounds,
   WIS_STOCK_PRICE_INTERVAL_MS, wisStockPriceSlot, nextWisStockPriceTick } = require('./wisStockMarketRules');
-const { normalizeCatalogPlan, readCatalogPlan, catalogScheduleState, applyDueCatalogListings, applyDueCatalogExits,
-  drawListingPrice, MIN_LISTING_PRICE, MAX_LISTING_PRICE } = require('./wisStockCatalogSchedule');
+const { drawListingPrice, MIN_LISTING_PRICE, MAX_LISTING_PRICE, catalogHistoryTrendBps } = require('./wisStockCatalogSchedule');
 const { catalogExitAtMs } = require('./wisStockCatalogTimeline');
-const stockCatalog = require('./wisStockCatalog.json');
+const { DOMESTIC } = require('./wisStockVenues');
+const { WIS_STOCK_FX_PATH, parseWisStockFxRate } = require('./wisStockFx');
 const { INDEX_HISTORY_LIMIT, emptyIndex, validWisStockIndex, updateWisStockIndex, wisStockIndexState } = require('./wisStockIndex');
 
 // Teacher market administration. Student orders remain separate server commands.
@@ -29,12 +29,12 @@ const scopeInput = input => {
   if (!record(input) || !/^20\d{2}$/.test(input.year) || !/^[12]$/.test(input.semester)) invalid();
   return { year: input.year, semester: input.semester, semesterId: `${input.year}-${input.semester}` };
 };
-const marketPath = ({ year, semester }) => `years/${year}/semesters/${semester}/wis_stock_markets/current`;
+const marketPath = ({ year, semester }, venue = DOMESTIC) => `years/${year}/semesters/${semester}/wis_stock_markets/${venue.marketDoc}`;
 const publicStockPath = ({ year, semester }, documentId) => `years/${year}/semesters/${semester}/wis_stock_public/${documentId}`;
-const receiptPath = (scope, uid, requestId) => `years/${scope.year}/semesters/${scope.semester}/wis_stock_receipts/${hash(`${uid}\n${requestId}`)}`;
-const blankMarket = scope => ({ schemaVersion: 1, semesterId: scope.semesterId, revision: 0, studentOpen: false,
+const receiptPath = (scope, uid, requestId, venue = DOMESTIC) => `years/${scope.year}/semesters/${scope.semester}/${venue.receipts}/${hash(`${uid}\n${requestId}`)}`;
+const blankMarket = (scope, venue = DOMESTIC) => ({ schemaVersion: 1, semesterId: scope.semesterId, revision: 0, studentOpen: false,
   tradingEpoch: 0, publicationRevision: 0, publicationUpdatedAtMs: 0,
-  rules: normalizeWisStockMarketRules(), stocks: [], updatedAtMs: 0 });
+  rules: normalizeWisStockMarketRules(venue.ruleOverrides || {}), stocks: [], updatedAtMs: 0 });
 // Firestore's documented storage calculation, not JSON/wire byte length. Maps
 // include 32 bytes; UTF-8 strings and field names include one terminator byte.
 // Reserve a full history now so later price ticks never outgrow the document.
@@ -47,13 +47,13 @@ const fieldBytes = value => {
   if (record(value)) return 32 + Object.entries(value).reduce((sum, [key, item]) => sum + fieldBytes(key) + fieldBytes(item), 0);
   return Infinity;
 };
-function reservedMarketBytes(market, scope) {
+function reservedMarketBytes(market, scope, venue = DOMESTIC) {
   const { stocks, marketIndex, ...fields } = market;
   const reservedIndex = { ...emptyIndex(), ...(marketIndex || {}), dayKey: '0000-00-00', history: [] };
   const indexBytes = fieldBytes('marketIndex') + fieldBytes(reservedIndex)
     + INDEX_HISTORY_LIMIT * fieldBytes({ atMs: Number.MAX_SAFE_INTEGER, value: 1000 });
   const pointSize = fieldBytes({ atMs: Number.MAX_SAFE_INTEGER, price: MAX_PRICE });
-  return marketPath(scope).split('/').reduce((sum, part) => sum + fieldBytes(part), 16)
+  return marketPath(scope, venue).split('/').reduce((sum, part) => sum + fieldBytes(part), 16)
     + fieldBytes({ ...fields, lastPriceSlot: 0, lastTenMinutePriceSlot: 0 }) + indexBytes + fieldBytes('stocks') + stocks.reduce((sum, stock) => {
       const { history, ...data } = stock;
       // Also reserve the model anchor for seedless legacy instruments.
@@ -63,19 +63,19 @@ function reservedMarketBytes(market, scope) {
       return sum + fieldBytes({ ...data, autoEnabledAtMs: 0 }) + fieldBytes('history') + HISTORY_LIMIT * pointSize;
     }, 0);
 }
-function assertMarketCapacity(market, scope) {
-  if (reservedMarketBytes(market, scope) > MAX_MARKET_BYTES) {
+function assertMarketCapacity(market, scope, venue = DOMESTIC) {
+  if (reservedMarketBytes(market, scope, venue) > MAX_MARKET_BYTES) {
     fail('resource-exhausted', '가격 기록을 보관할 공간이 부족합니다. 종목 설명을 줄이거나 등록할 종목 수를 조정해 주세요.', 'WIS_STOCK_STORAGE_CAPACITY');
   }
 }
-function assertCatalogCapacity(market, scope) {
-  const plan = normalizeCatalogPlan(market.catalogPlan);
-  const reserved = plan ? applyDueCatalogListings({ ...market, studentOpen: true,
+function assertCatalogCapacity(market, scope, venue = DOMESTIC) {
+  const plan = venue.schedule.normalizeCatalogPlan(market.catalogPlan);
+  const reserved = plan ? venue.schedule.applyDueCatalogListings({ ...market, studentOpen: true,
     rules: { ...market.rules, halted: false, tradingDays: [0, 1, 2, 3, 4, 5, 6], openMinuteKst: 0, closeMinuteKst: 1440 } },
   plan.startsAtMs + 42 * 24 * HOUR, () => MAX_LISTING_PRICE).market : market;
   if (reserved.stocks.length > MAX_STOCKS)
     fail('resource-exhausted', '상장 예정 종목을 포함하면 등록 한도를 초과합니다.', 'WIS_STOCK_CAPACITY');
-  assertMarketCapacity(reserved, scope);
+  assertMarketCapacity(reserved, scope, venue);
 }
 const TRADING_SETTINGS = ['issuedShares', 'lotSize', 'tradingStatus'];
 const SETTINGS = ['name', 'description', 'period', 'initialPrice', 'minimumPrice', 'maximumPrice', 'volatilityBps', 'trendBps', 'intervalHours', 'automatic', ...TRADING_SETTINGS, 'growthProfile'];
@@ -107,8 +107,8 @@ function priceDueAt(stock) {
   const since = Math.max(stock.updatedAtMs, stock.autoEnabledAtMs || 0, (stock.haltedUntilMs || 0) - 1);
   return Math.min(stock.nextTickAtMs, nextWisStockPriceTick(since));
 }
-function readMarket(snapshot, scope) {
-  if (!snapshot.exists) return blankMarket(scope);
+function readMarket(snapshot, scope, venue = DOMESTIC) {
+  if (!snapshot.exists) return blankMarket(scope, venue);
   const value = snapshot.data();
   const validStock = stock => {
     try { normalizeSettings(stock.settings); } catch { return false; }
@@ -122,7 +122,7 @@ function readMarket(snapshot, scope) {
       && stock.history.every(point => safeInt(point.atMs, 0, Number.MAX_SAFE_INTEGER) && safeInt(point.price, 1, MAX_PRICE));
   };
   let rules;
-  try { rules = normalizeWisStockMarketRules(value.rules); readCatalogPlan(value); } catch { rules = null; }
+  try { rules = normalizeWisStockMarketRules(value.rules); venue.schedule.readCatalogPlan(value); } catch { rules = null; }
   if (value.schemaVersion !== 1 || value.semesterId !== scope.semesterId || typeof value.studentOpen !== 'boolean'
     || !rules || (value.priceSeed !== undefined && !/^[a-f0-9]{64}$/.test(value.priceSeed))
     || (value.marketIndex !== undefined && !validWisStockIndex(value.marketIndex))
@@ -152,9 +152,10 @@ function readMarket(snapshot, scope) {
   return { ...value, rules, stocks, tradingEpoch: value.tradingEpoch ?? 0,
     publicationRevision: value.publicationRevision ?? 0, publicationUpdatedAtMs: value.publicationUpdatedAtMs ?? 0 };
 }
-const state = (market, atMs) => ({ semesterId: market.semesterId, revision: market.revision, studentOpen: market.studentOpen,
-  specialSessions: planWindow(market, atMs).specialSessions,
-  catalogSchedule: catalogScheduleState(market, atMs),
+const state = (market, atMs, venue = DOMESTIC) => ({ semesterId: market.semesterId, revision: market.revision, studentOpen: market.studentOpen,
+  ...(venue === DOMESTIC ? {} : { venue: venue.id, unit: venue.unit }),
+  specialSessions: venue.specialSessions ? planWindow(market, atMs).specialSessions : [],
+  catalogSchedule: venue.schedule.catalogScheduleState(market, atMs),
   marketIndex: wisStockIndexState(market, atMs),
   tradingEpoch: market.tradingEpoch ?? 0,
   rules: market.rules,
@@ -172,20 +173,25 @@ const publicStockSettings = settings => {
 const publicStockMarket = market => ({ schemaVersion: 1, semesterId: market.semesterId,
   studentOpen: true, tradingEpoch: market.tradingEpoch ?? 0, revision: market.revision,
   updatedAtMs: market.updatedAtMs, rules: market.rules,
-  stocks: market.stocks.map(({ id, settings, price, updatedAtMs, nextTickAtMs, history, dayKey, dayOpenPrice, haltedUntilMs }) =>
+  stocks: market.stocks.map(({ id, settings, price, updatedAtMs, nextTickAtMs, history, dayKey, dayOpenPrice, haltedUntilMs, listedAtMs, graduation }) =>
     ({ id, settings: publicStockSettings(settings), price, updatedAtMs, nextTickAtMs,
       history: history.map(({ atMs, price: observedPrice }) => ({ atMs, price: observedPrice })),
-      dayKey: dayKey || '', dayOpenPrice: dayOpenPrice ?? price, haltedUntilMs: haltedUntilMs ?? 0 })) });
-function publishStudentMarket(tx, db, scope, previous, updated) {
+      dayKey: dayKey || '', dayOpenPrice: dayOpenPrice ?? price, haltedUntilMs: haltedUntilMs ?? 0,
+      // Student alerts: listing time and a trading end. A teacher's manual end
+      // has no catalog kind; the student screen reads it as an ordinary close.
+      ...(Number.isSafeInteger(listedAtMs) ? { listedAtMs } : {}),
+      ...(settings.tradingStatus === 'GRADUATED' && record(graduation) && Number.isSafeInteger(graduation.atMs)
+        ? { exit: { atMs: graduation.atMs, kind: ['merge', 'delist'].includes(graduation.exitKind) ? graduation.exitKind : 'close' } } : {}) })) });
+function publishStudentMarket(tx, db, scope, previous, updated, venue = DOMESTIC) {
   // No synthetic first publication, extra reads, or menu wakeups on price ticks.
   // A first open installs both safe documents in the same canonical transaction.
   if (!updated.studentOpen) return;
-  tx.set(db.doc(publicStockPath(scope, 'market')), publicStockMarket(updated));
+  tx.set(db.doc(publicStockPath(scope, venue.publicMarketDoc)), publicStockMarket(updated));
   if (!previous.studentOpen || previous.publicationRevision !== updated.publicationRevision)
-    tx.set(db.doc(publicStockPath(scope, 'current')), publicStockStatus(updated));
+    tx.set(db.doc(publicStockPath(scope, venue.publicStatusDoc)), publicStockStatus(updated));
 }
-function queueCatalogGraduations(tx, db, scope, exited) {
-  for (const exit of exited) tx.create(db.doc(`wis_stock_graduations/${scope.semesterId}_${exit.stockId}`), {
+function queueCatalogGraduations(tx, db, scope, exited, venue = DOMESTIC) {
+  for (const exit of exited) tx.create(db.doc(`${venue.graduations}/${scope.semesterId}_${exit.stockId}`), {
     schemaVersion: 1, ...scope, ...exit, status: 'PENDING',
   });
 }
@@ -257,7 +263,8 @@ function priceStock(stock, market, atMs, { dayKey, minute }, event, modelContext
   const bounds = wisStockDailyBounds(dayOpenPrice, rules.dailyPriceLimitBps);
   const price = event ? specialPrice(event, minute, rules, dayOpenPrice)
     : Math.max(settings.minimumPrice, bounds.minimum, Math.min(settings.maximumPrice, bounds.maximum,
-      nextPrice(stock, market.semesterId, slot, market.priceSeed, rules.dailyPriceLimitBps, { ...modelContext, atMs: boundary, dayOpenPrice }, samples)));
+      nextPrice(modelStock(stock, modelContext, boundary), market.semesterId, slot, market.priceSeed, rules.dailyPriceLimitBps,
+        { ...modelContext, atMs: boundary, dayOpenPrice }, samples)));
   if (!event && (price < settings.minimumPrice || price > settings.maximumPrice || price < bounds.minimum || price > bounds.maximum)) return stock;
   // The first large move pauses discovery. Once that pause expires, admit one
   // freshly calculated, bounded price; otherwise a sustained correction could
@@ -278,29 +285,45 @@ function priceStock(stock, market, atMs, { dayKey, minute }, event, modelContext
   return { ...stock, settings: effectiveSettings, price, priceModel: wisStockPriceModelAnchor(stock), dayKey, dayOpenPrice, haltedUntilMs: 0, updatedAtMs: atMs, nextTickAtMs: nextWisStockPriceTick(atMs),
     history: [...stock.history, { atMs, price }].slice(-HISTORY_LIMIT) };
 }
-function advanceMarket(market, atMs, samples) {
+// A catalog venue with history-led pricing replaces only the model's drift for
+// this tick. The stored settings, bounds and teacher-visible trend never change.
+function modelStock(stock, modelContext, atMs) {
+  const trendBps = modelContext?.trendFor?.(stock, atMs);
+  return Number.isSafeInteger(trendBps) && trendBps !== stock.settings.trendBps
+    ? { ...stock, settings: { ...stock.settings, trendBps: Math.max(-300, Math.min(300, trendBps)) } } : stock;
+}
+function advanceMarket(market, atMs, samples, venue = DOMESTIC) {
   const rules = normalizeWisStockMarketRules(market.rules);
   const slot = wisStockPriceSlot(atMs);
   const previousSlot = Math.max(market.lastTenMinutePriceSlot ?? -1, (market.lastPriceSlot ?? -1) * 3);
   if (!rules.automaticPrices || rules.halted || slot <= previousSlot || !isWisStockTradingSession(rules, atMs)) return market;
   const session = wisStockKstSession(slot * WIS_STOCK_PRICE_INTERVAL_MS);
-  const event = specialSessions.find(item => item.dayKey === session.dayKey);
+  const event = venue.specialSessions ? specialSessions.find(item => item.dayKey === session.dayKey) : undefined;
   const current = { ...market, rules };
+  const plan = venue.historyTrend ? venue.schedule.readCatalogPlan(market) : null;
   const modelContext = { priorMarketReturnBps: wisStockPreviousMarketReturn(market.marketIndex, atMs),
-    marketStress: wisStockMarketStress(market.marketIndex, atMs), sectorFactors: new Map() };
+    marketStress: wisStockMarketStress(market.marketIndex, atMs), sectorFactors: new Map(),
+    ...(plan ? { trendFor: (stock, boundary) => catalogHistoryTrendBps(venue.schedule.catalogEntry(stock.id), plan, boundary) } : {}) };
   const stocks = market.stocks.map(stock => priceStock(stock, current, atMs, session, event, modelContext, samples));
   return stocks.some((stock, i) => stock !== market.stocks[i]) ? { ...current, stocks,
     lastPriceSlot: Math.floor(slot / 3), lastTenMinutePriceSlot: slot, revision: market.revision + 1, updatedAtMs: atMs } : market;
 }
-function advanceScheduledSlot(current, atMs, samples) {
-  const { market: listed, addedIds } = applyDueCatalogListings(current, atMs);
-  const { market: ended, exited } = applyDueCatalogExits(listed, atMs);
-  const priced = advanceMarket(ended, atMs, samples);
+function advanceScheduledSlot(current, atMs, samples, venue = DOMESTIC) {
+  const { market: listed, addedIds } = venue.schedule.applyDueCatalogListings(current, atMs);
+  const { market: ended, exited } = venue.schedule.applyDueCatalogExits(listed, atMs);
+  const priced = advanceMarket(ended, atMs, samples, venue);
   const changed = addedIds.length || exited.length ? { ...priced, revision: current.revision + 1, updatedAtMs: atMs } : priced;
   return { updated: changed === current ? current : updateWisStockIndex(current, changed, atMs), addedIds, exited };
 }
-function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession, now = Date.now, openingPrice = drawListingPrice }) {
-  const managementState = market => state(market, now());
+function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession, now = Date.now, openingPrice = drawListingPrice,
+  venue = DOMESTIC, fxRefresh = null }) {
+  const managementState = market => state(market, now(), venue);
+  // The daily public rate shown beside a 유스 venue. An invalid or missing
+  // document is reported as unavailable instead of blocking management reads.
+  const readFx = async tx => {
+    const snapshot = await tx.get(db.doc(WIS_STOCK_FX_PATH));
+    try { return snapshot.exists ? parseWisStockFxRate(snapshot.data(), now()) : null; } catch { return null; }
+  };
   const forecastStock = createForecastReader(advanceScheduledSlot);
   const identity = async (request, write = false) => {
     const session = await assertSession(request, write ? { highRisk: true, recentAuth: true } : {});
@@ -333,14 +356,15 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
   const getWisStockManagement = async request => {
     const actor = await identity(request), input = request.data;
     if (!allowed(input, ['year', 'semester', '_session', 'forecastStockId'])
-      || (Object.hasOwn(input, 'forecastStockId') && (typeof input.forecastStockId !== 'string' || !/^stock_[a-f0-9]{24}$/.test(input.forecastStockId)))) invalid();
+      || (Object.hasOwn(input, 'forecastStockId') && (!venue.forecast || typeof input.forecastStockId !== 'string' || !/^stock_[a-f0-9]{24}$/.test(input.forecastStockId)))) invalid();
     const scope = scopeInput(input);
-    const market = await db.runTransaction(async tx => {
+    const { market, fx } = await db.runTransaction(async tx => {
       await authority(tx, actor, false);
       await activeScope(tx, scope);
-      return readMarket(await tx.get(db.doc(marketPath(scope))), scope);
+      const market = readMarket(await tx.get(db.doc(marketPath(scope, venue))), scope, venue);
+      return { market, fx: venue === DOMESTIC ? undefined : await readFx(tx) };
     }, { readOnly: true });
-    if (!input.forecastStockId) return managementState(market);
+    if (!input.forecastStockId) return { ...managementState(market), ...(fx !== undefined ? { fx } : {}) };
     const forecast = await forecastStock(market, input.forecastStockId, now());
     if (!forecast) fail('not-found', '해당 종목을 찾을 수 없습니다.', 'WIS_STOCK_NOT_FOUND');
     return forecast;
@@ -363,9 +387,9 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
     return db.runTransaction(async tx => {
       await authority(tx, actor, true);
       await activeScope(tx, scope);
-      const marketRef = db.doc(marketPath(scope)), receiptRef = db.doc(receiptPath(scope, actor.uid, input.requestId));
+      const marketRef = db.doc(marketPath(scope, venue)), receiptRef = db.doc(receiptPath(scope, actor.uid, input.requestId, venue));
       const [marketSnapshot, receipt] = await Promise.all([tx.get(marketRef), tx.get(receiptRef)]);
-      const market = readMarket(marketSnapshot, scope);
+      const market = readMarket(marketSnapshot, scope, venue);
       if (receipt.exists) {
         const saved = receipt.data();
         const legacyReplay = legacyPayloadHash && !saved.commandType && record(saved.settings)
@@ -426,9 +450,9 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       const updated = updateWisStockIndex(market, { ...market, priceSeed: market.priceSeed || newPriceSeed,
         stocks: previous ? market.stocks.map(item => item.id === id ? stock : item) : [...market.stocks, stock],
         revision: market.revision + 1, updatedAtMs: atMs }, atMs);
-      assertCatalogCapacity(updated, scope);
+      assertCatalogCapacity(updated, scope, venue);
       tx.set(marketRef, updated);
-      publishStudentMarket(tx, db, scope, market, updated);
+      publishStudentMarket(tx, db, scope, market, updated, venue);
       tx.create(receiptRef, { schemaVersion: 1, semesterId: scope.semesterId, actorUid: actor.uid, stockId: id,
         payloadHash, revision: updated.revision, previousSettings: previous?.settings || null, settings, createdAtMs: atMs });
       return { ...managementState(updated), savedStockId: id, duplicate: false, changed: true };
@@ -445,9 +469,9 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
     return db.runTransaction(async tx => {
       await authority(tx, actor, true);
       await activeScope(tx, scope);
-      const marketRef = db.doc(marketPath(scope)), receiptRef = db.doc(receiptPath(scope, actor.uid, input.requestId));
+      const marketRef = db.doc(marketPath(scope, venue)), receiptRef = db.doc(receiptPath(scope, actor.uid, input.requestId, venue));
       const [snapshot, receipt] = await Promise.all([tx.get(marketRef), tx.get(receiptRef)]);
-      const market = readMarket(snapshot, scope);
+      const market = readMarket(snapshot, scope, venue);
       if (receipt.exists) {
         if (receipt.data().payloadHash !== payloadHash) fail('already-exists', '같은 저장 요청의 내용이 달라졌습니다. 화면을 다시 열어 주세요.', 'WIS_STOCK_REQUEST_CONFLICT');
         return { ...managementState(market), duplicate: true, changed: false };
@@ -460,7 +484,7 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       const updated = { ...market, rules: effectiveRules, priceSeed: market.priceSeed || newPriceSeed,
         revision: market.revision + 1, updatedAtMs: atMs };
       tx.set(marketRef, updated);
-      publishStudentMarket(tx, db, scope, market, updated);
+      publishStudentMarket(tx, db, scope, market, updated, venue);
       tx.create(receiptRef, { schemaVersion: 1, commandType: 'saveWisStockMarketRules', semesterId: scope.semesterId,
         actorUid: actor.uid, payloadHash, revision: updated.revision, previousRules: market.rules, rules: effectiveRules, createdAtMs: atMs });
       return { ...managementState(updated), duplicate: false, changed: true };
@@ -476,9 +500,9 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
     return db.runTransaction(async tx => {
       await authority(tx, actor, true);
       await activeScope(tx, scope);
-      const marketRef = db.doc(marketPath(scope)), receiptRef = db.doc(receiptPath(scope, actor.uid, input.requestId));
+      const marketRef = db.doc(marketPath(scope, venue)), receiptRef = db.doc(receiptPath(scope, actor.uid, input.requestId, venue));
       const [snapshot, receipt] = await Promise.all([tx.get(marketRef), tx.get(receiptRef)]);
-      const market = readMarket(snapshot, scope);
+      const market = readMarket(snapshot, scope, venue);
       if (receipt.exists) {
         if (receipt.data().commandType !== 'setWisStockMarketHalted' || receipt.data().payloadHash !== payloadHash)
           fail('already-exists', '같은 거래 정지 요청의 내용이 달라졌습니다. 화면을 다시 열어 주세요.', 'WIS_STOCK_REQUEST_CONFLICT');
@@ -497,18 +521,18 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
         tradingEpoch: market.tradingEpoch + (input.halted ? 1 : 0),
         publicationRevision: market.publicationRevision + 1, publicationUpdatedAtMs: atMs,
         ...(!input.halted && !market.priceSeed ? { priceSeed: newPriceSeed } : {}) };
-      const { market: listed, addedIds } = applyDueCatalogListings(resumed, atMs);
-      const { market: ended, exited } = applyDueCatalogExits(listed, atMs);
+      const { market: listed, addedIds } = venue.schedule.applyDueCatalogListings(resumed, atMs);
+      const { market: ended, exited } = venue.schedule.applyDueCatalogExits(listed, atMs);
       const instrumentsChanged = addedIds.length || exited.length;
       const updated = instrumentsChanged ? updateWisStockIndex(market, ended, atMs) : ended;
-      if (instrumentsChanged) assertCatalogCapacity(updated, scope);
+      if (instrumentsChanged) assertCatalogCapacity(updated, scope, venue);
       if (snapshot.exists) tx.update(marketRef, { 'rules.halted': input.halted, studentOpen: updated.studentOpen,
         tradingEpoch: updated.tradingEpoch, publicationRevision: updated.publicationRevision, publicationUpdatedAtMs: atMs,
         ...(updated.priceSeed ? { priceSeed: updated.priceSeed } : {}),
         ...(instrumentsChanged ? { stocks: updated.stocks, marketIndex: updated.marketIndex } : {}), revision: updated.revision, updatedAtMs: atMs });
       else tx.set(marketRef, updated);
-      publishStudentMarket(tx, db, scope, market, updated);
-      queueCatalogGraduations(tx, db, scope, exited);
+      publishStudentMarket(tx, db, scope, market, updated, venue);
+      queueCatalogGraduations(tx, db, scope, exited, venue);
       tx.create(receiptRef, { schemaVersion: 1, commandType: 'setWisStockMarketHalted', semesterId: scope.semesterId,
         actorUid: actor.uid, payloadHash, revision: updated.revision, previousHalted: market.rules.halted,
         halted: input.halted, studentOpen: updated.studentOpen, tradingEpoch: updated.tradingEpoch,
@@ -523,7 +547,7 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       || typeof input.requestId !== 'string' || !/^[A-Za-z0-9_-]{16,80}$/.test(input.requestId)) invalid();
     const scope = scopeInput(input), atMs = now();
     let plan;
-    try { plan = normalizeCatalogPlan({ version: 1, startsAtMs: input.startsAtMs }); }
+    try { plan = venue.schedule.normalizeCatalogPlan({ version: 1, startsAtMs: input.startsAtMs }); }
     catch (error) { fail('invalid-argument', error.message, 'WIS_STOCK_CATALOG_PLAN_INVALID'); }
     if (String(new Date(plan.startsAtMs + 9 * HOUR).getUTCFullYear()) !== scope.year) invalid();
     const newPriceSeed = randomBytes(32).toString('hex');
@@ -531,9 +555,9 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
     return db.runTransaction(async tx => {
       await authority(tx, actor, true);
       await activeScope(tx, scope);
-      const marketRef = db.doc(marketPath(scope)), receiptRef = db.doc(receiptPath(scope, actor.uid, input.requestId));
+      const marketRef = db.doc(marketPath(scope, venue)), receiptRef = db.doc(receiptPath(scope, actor.uid, input.requestId, venue));
       const [snapshot, receipt] = await Promise.all([tx.get(marketRef), tx.get(receiptRef)]);
-      const market = readMarket(snapshot, scope);
+      const market = readMarket(snapshot, scope, venue);
       if (receipt.exists) {
         if (receipt.data().commandType !== 'activateWisStockCatalogPlan' || receipt.data().payloadHash !== payloadHash)
           fail('already-exists', '같은 일정 적용 요청의 내용이 달라졌습니다.', 'WIS_STOCK_REQUEST_CONFLICT');
@@ -542,19 +566,32 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       if (market.revision !== input.expectedRevision)
         fail('aborted', '시장 상태가 변경되었습니다. 최신 자료를 확인해 주세요.', 'WIS_STOCK_REVISION_CONFLICT');
       if (market.catalogPlan) {
-        if (JSON.stringify(normalizeCatalogPlan(market.catalogPlan)) !== JSON.stringify(plan))
+        if (JSON.stringify(venue.schedule.normalizeCatalogPlan(market.catalogPlan)) !== JSON.stringify(plan))
           fail('failed-precondition', '이미 적용한 상장 일정의 시작일은 변경할 수 없습니다.', 'WIS_STOCK_CATALOG_PLAN_LOCKED');
         return { ...managementState(market), duplicate: false, changed: false };
       }
-      const planned = { ...market, catalogPlan: plan, priceSeed: market.priceSeed || newPriceSeed };
+      // A new venue starts from the domestic market's reviewed limits and hours.
+      // This read precedes every write in the same transaction.
+      const launchRules = !snapshot.exists && venue !== DOMESTIC
+        ? normalizeWisStockMarketRules({ ...readMarket(await tx.get(db.doc(marketPath(scope, DOMESTIC))), scope, DOMESTIC).rules,
+          ...(venue.ruleOverrides || {}), halted: false }) : market.rules;
+      // Venues whose catalog delists with history apply exits with the plan;
+      // a plan whose first exit has already passed would liquidate at once.
+      const exits = venue.schedule.exitsWithPlan ? { enabledAtMs: atMs, overrides: {} } : null;
+      if (exits) for (const entry of venue.schedule.catalog) {
+        if (entry.exitKind !== 'survive' && entry.exitSession !== null && catalogExitAtMs(entry, plan) <= atMs)
+          fail('failed-precondition', '이미 지난 상장 폐지 일정이 있는 시작일입니다. 더 늦은 월요일을 선택해 주세요.', 'WIS_STOCK_CATALOG_EXIT_PAST');
+      }
+      const planned = { ...market, rules: launchRules, catalogPlan: plan, ...(exits ? { catalogExits: exits } : {}),
+        priceSeed: market.priceSeed || newPriceSeed };
       // Reserve the complete plan before accepting it. This in-memory projection
       // is only a capacity check; future stocks/history are never persisted.
-      assertCatalogCapacity(planned, scope);
-      const { market: listed, addedIds } = applyDueCatalogListings(planned, atMs);
+      assertCatalogCapacity(planned, scope, venue);
+      const { market: listed, addedIds } = venue.schedule.applyDueCatalogListings(planned, atMs);
       const updated = updateWisStockIndex(market, { ...listed,
         revision: market.revision + 1, updatedAtMs: atMs }, atMs);
       tx.set(marketRef, updated);
-      publishStudentMarket(tx, db, scope, market, updated);
+      publishStudentMarket(tx, db, scope, market, updated, venue);
       tx.create(receiptRef, { schemaVersion: 1, commandType: 'activateWisStockCatalogPlan', semesterId: scope.semesterId,
         actorUid: actor.uid, payloadHash, plan, addedIds, revision: updated.revision, createdAtMs: atMs });
       return { ...managementState(updated), duplicate: false, changed: true };
@@ -571,9 +608,9 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
     return db.runTransaction(async tx => {
       await authority(tx, actor, true);
       await activeScope(tx, scope);
-      const marketRef = db.doc(marketPath(scope)), receiptRef = db.doc(receiptPath(scope, actor.uid, input.requestId));
+      const marketRef = db.doc(marketPath(scope, venue)), receiptRef = db.doc(receiptPath(scope, actor.uid, input.requestId, venue));
       const [snapshot, receipt] = await Promise.all([tx.get(marketRef), tx.get(receiptRef)]);
-      const market = readMarket(snapshot, scope);
+      const market = readMarket(snapshot, scope, venue);
       if (receipt.exists) {
         if (receipt.data().commandType !== 'activateWisStockCatalogExits' || receipt.data().payloadHash !== payloadHash)
           fail('already-exists', '같은 종료 일정 요청의 내용이 달라졌습니다.', 'WIS_STOCK_REQUEST_CONFLICT');
@@ -582,16 +619,16 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       if (market.revision !== input.expectedRevision)
         fail('aborted', '시장 상태가 변경되었습니다. 최신 자료를 확인해 주세요.', 'WIS_STOCK_REVISION_CONFLICT');
       if (!market.catalogPlan) fail('failed-precondition', '상장 일정을 먼저 적용해 주세요.', 'WIS_STOCK_CATALOG_PLAN_REQUIRED');
-      const previousPlan = readCatalogPlan(market);
+      const previousPlan = venue.schedule.readCatalogPlan(market);
       let plan;
-      try { plan = normalizeCatalogPlan({ ...previousPlan, exitsEnabledAtMs: previousPlan.exitsEnabledAtMs || atMs, exitOverrides: overrides }); }
+      try { plan = venue.schedule.normalizeCatalogPlan({ ...previousPlan, exitsEnabledAtMs: previousPlan.exitsEnabledAtMs || atMs, exitOverrides: overrides }); }
       catch { fail('invalid-argument', '종목별 종료일은 원래 예정일 이후의 정각 또는 30분으로 설정해 주세요.', 'WIS_STOCK_CATALOG_EXITS_INVALID'); }
       if (previousPlan.exitsEnabledAtMs) {
         if (JSON.stringify(plan) !== JSON.stringify(previousPlan))
           fail('failed-precondition', '이미 적용한 종료 일정은 변경할 수 없습니다.', 'WIS_STOCK_CATALOG_EXITS_LOCKED');
         return { ...managementState(market), duplicate: false, changed: false };
       }
-      for (const entry of stockCatalog) {
+      for (const entry of venue.schedule.catalog) {
         if (entry.exitKind === 'survive' || entry.exitSession === null) continue;
         const stock = market.stocks.find(item => item.id === entry.id);
         if (stock?.settings.tradingStatus === 'GRADUATED') continue;
@@ -602,9 +639,9 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       // historical quote. The existing half-hour scheduler applies due exits.
       const updated = { ...market, catalogExits: { enabledAtMs: plan.exitsEnabledAtMs, overrides: plan.exitOverrides },
         revision: market.revision + 1, updatedAtMs: atMs };
-      assertCatalogCapacity(updated, scope);
+      assertCatalogCapacity(updated, scope, venue);
       tx.set(marketRef, updated);
-      publishStudentMarket(tx, db, scope, market, updated);
+      publishStudentMarket(tx, db, scope, market, updated, venue);
       tx.create(receiptRef, { schemaVersion: 1, commandType: 'activateWisStockCatalogExits', semesterId: scope.semesterId,
         actorUid: actor.uid, payloadHash, plan, revision: updated.revision, createdAtMs: atMs });
       return { ...managementState(updated), duplicate: false, changed: true };
@@ -619,12 +656,12 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       const config = await tx.get(db.doc('site_settings/config'));
       if (!config.exists) return { changed: false };
       const scope = scopeInput({ year: String(config.data().year), semester: String(config.data().semester) });
-      const marketRef = db.doc(marketPath(scope)), snapshot = await tx.get(marketRef);
+      const marketRef = db.doc(marketPath(scope, venue)), snapshot = await tx.get(marketRef);
       if (!snapshot.exists) return { changed: false };
-      const current = readMarket(snapshot, scope);
+      const current = readMarket(snapshot, scope, venue);
       if (current.updatedAtMs > atMs || !isWisStockTradingSession(current.rules, slot * WIS_STOCK_PRICE_INTERVAL_MS)
         || !isWisStockTradingSession(current.rules, atMs)) return { changed: false };
-      const { updated, addedIds, exited } = advanceScheduledSlot(current, atMs, new Map());
+      const { updated, addedIds, exited } = advanceScheduledSlot(current, atMs, new Map(), venue);
       if (updated === current) return { changed: false };
 
       // Only a real mutation needs both active-semester guards. They remain in
@@ -637,25 +674,41 @@ function createWisStockHandlers({ db, assertSession = assertScoreWorkflowSession
       const checkedAtMs = now();
       if (wisStockPriceSlot(checkedAtMs) !== slot || !isWisStockTradingSession(current.rules, checkedAtMs)) return { changed: false };
       if (updated.stocks.length > MAX_STOCKS) fail('resource-exhausted', '종목 등록 한도를 초과합니다.', 'WIS_STOCK_CAPACITY');
-      assertMarketCapacity(updated, scope);
+      assertMarketCapacity(updated, scope, venue);
       tx.set(marketRef, updated);
-      publishStudentMarket(tx, db, scope, current, updated);
-      queueCatalogGraduations(tx, db, scope, exited);
+      publishStudentMarket(tx, db, scope, current, updated, venue);
+      queueCatalogGraduations(tx, db, scope, exited, venue);
       if (addedIds.length) tx.create(db.doc(receiptPath(scope, 'scheduler',
-        hash(JSON.stringify([current.catalogPlan, addedIds])))), {
+        hash(JSON.stringify([current.catalogPlan, addedIds])), venue)), {
         schemaVersion: 1, commandType: 'applyWisStockCatalogListings', semesterId: scope.semesterId,
         actorUid: 'scheduler', plan: current.catalogPlan, addedIds, revision: updated.revision, createdAtMs: atMs,
       });
       if (exited.length) tx.create(db.doc(receiptPath(scope, 'scheduler',
-        hash(JSON.stringify(['catalogExits', current.catalogPlan, current.catalogExits, exited.map(exit => exit.stockId)])))), {
+        hash(JSON.stringify(['catalogExits', current.catalogPlan, current.catalogExits, exited.map(exit => exit.stockId)])), venue)), {
         schemaVersion: 1, commandType: 'applyWisStockCatalogExits', semesterId: scope.semesterId,
-        actorUid: 'scheduler', plan: readCatalogPlan(current), exited, revision: updated.revision, createdAtMs: atMs,
+        actorUid: 'scheduler', plan: venue.schedule.readCatalogPlan(current), exited, revision: updated.revision, createdAtMs: atMs,
       });
       return { changed: true, revision: updated.revision };
     });
   };
+  // Teacher fallback for the daily job (e.g. the first day after deployment).
+  // The same once-per-KST-day rule applies, so repeated clicks cost one read.
+  const refreshWisStockFx = async request => {
+    const actor = await identity(request, true), input = request.data;
+    if (!fxRefresh || !allowed(input, ['year', 'semester', '_session'])) invalid();
+    const scope = scopeInput(input);
+    await db.runTransaction(async tx => { await authority(tx, actor, true); await activeScope(tx, scope); }, { readOnly: true });
+    let result;
+    try { result = await fxRefresh(); }
+    catch (error) {
+      fail('unavailable', error?.reason === 'WIS_STOCK_FX_JUMP' ? error.message : '환율 자료를 받지 못했습니다. 잠시 후 다시 시도해 주세요.',
+        error?.reason || 'WIS_STOCK_FX_UNAVAILABLE');
+    }
+    const fx = await db.runTransaction(tx => readFx(tx), { readOnly: true });
+    return { changed: result.changed === true, fx };
+  };
   return { getWisStockManagement, saveWisStock, saveWisStockMarketRules, setWisStockMarketHalted,
-    activateWisStockCatalogPlan, activateWisStockCatalogExits, advanceWisStockPrices };
+    activateWisStockCatalogPlan, activateWisStockCatalogExits, advanceWisStockPrices, refreshWisStockFx };
 }
 module.exports = { createWisStockHandlers, MAX_STOCKS, HISTORY_LIMIT, MAX_PRICE, marketPath, receiptPath,
   publicStockPath, publicStockStatus, publicStockMarket, publicStockSettings, readMarket,
