@@ -1,5 +1,16 @@
 # 운영 배포 절차
 
+## 위스피 해외 주식·환전·독립 메뉴 (2026-11-26)
+
+설계·검증·남은 한계는 [출시 기록](../reviews/wispi-overseas-launch-20261126.md)을 따른다. 해외 장은 평일 16:00~23:00(한국 시각)이고 시세는 별도 예약 작업이 갱신한다. 운영 위스피 함수 27개가 11가지 다른 판의 공용 모듈을 싣고 있고 다수는 어떤 커밋과도 일치하지 않으므로, 저장소 전체를 기존 함수에 배포하지 않았다.
+
+11월 26일 반영 결과(기준 커밋 `57777732`):
+- Firestore 규칙: `node scripts/release-firestore-rules.mjs release`로 세트 `a819acb9`(이전 `0b8ae18e`, 배포 전 운영 규칙이 `d13c9cd1`과 동일함을 확인). 색인은 `firestore:indexes` 전체 배포 대신 `gcloud firestore indexes composite create`로 `wis_stock_overseas_orders`(컬렉션 그룹, status·dueAtMs)와 `wis_stock_overseas_history`(accountId·sequence desc) 2개만 만들고 READY를 확인했다.
+- 새 함수 16개: 저장소에서 `firebase deploy --only functions:<이름들> --non-interactive --force`. `--force`는 새 Firestore 트리거 2개(`onWisStockOverseasOrderCreated`, `onWisStockOverseasMarketTradingWrite`)의 재시도 정책 승인에 필요했다(국내와 같은 코드·같은 멱등 키). `settleWisStockOverseasOrderTask`는 새 빈 큐의 invoker 설정 단계에서 실패해, 국내 큐와 같은 `roles/cloudtasks.enqueuer`(런타임 서비스 계정 하나)를 큐에 붙인 뒤 그 함수만 재배포했다. Cloud Run invoker는 국내와 같이 런타임 계정 하나만이다. 새 Scheduler 3개(`advanceWisStockOverseasPrices` 10분, `recoverWisStockOverseasOrders` 10분, `refreshWisStockFxRate` 매일 07:05)가 ENABLED이고 익명 호출은 HTTP 401이다.
+- 국내 시장 관리 7개: `node scripts/prepare-wispi-overseas-release.mjs prepare|preflight|verify`. 7개가 공유하는 운영 ZIP(262파일)에서 `wisStocks.js`·`wisStockCatalogSchedule.js`·`wisStockCatalogTimeline.mjs`만 커밋본으로 바꾸고 `wisStockVenues.js`·`wisStockFx.js`·`wisStockFx.mjs`·`wisStockOverseasCatalog.json`을 더한 266파일. 준비본에서 국내 시장 검사 82개를 통과했다. 배포 뒤 revision: `activatewisstockcatalogexits-00003-tif`, `activatewisstockcatalogplan-00008-dip`, `advancewisstockprices-00016-sit`, `getwisstockmanagement-00013-wep`, `savewisstock-00014-kiw`, `savewisstockmarketrules-00012-leg`, `setwisstockmarkethalted-00012-qom`(파일·자원 대조 일치).
+- 전광판: `scripts/prepare-function-release.mjs`로 `wisStockDisplay.js` 블록 1개만 적용, `onwisstockmarkettradingwrite-00011-zef`. 이벤트 필터 순서가 API 응답마다 달라 `preflight`가 오탐하던 비교를 집합 비교로 고쳤다.
+- 그 밖의 국내 위스피 함수(주문·체결·내역·지원금·랭킹·보고서·투자 이력)는 다시 배포하지 않았다.
+
 ## 윷놀이 입장 속도·교사 모니터·아바타 말 (2026-11-25)
 
 윷놀이 서버 변경은 `functions/yut.js` 한 파일이다. 운영의 윷놀이 함수들은 서로 다른 시점의 `yut.js`를 싣고 있으므로 함수마다 운영 ZIP에서 준비한다(11월 25일 확인: `commandYutRoomFast`·`commandYutRoom`은 기준 커밋에서 `getYutPublication`만 빠진 판, `getYutManagement`·`cleanupWaitingYutRooms`는 10월 27일 판, `getYutPublication`·`getYutLobby`·`saveYutSettings`는 각각 다른 이전 판).

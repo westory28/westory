@@ -85,8 +85,15 @@ const configuration = (value) => ({
   allTrafficOnLatestRevision: value.serviceConfig.allTrafficOnLatestRevision,
   environmentHash: sha(JSON.stringify(value.serviceConfig.environmentVariables || {})),
   secretHash: sha(JSON.stringify(value.serviceConfig.secretEnvironmentVariables || [])),
-  eventTrigger: value.eventTrigger || null,
+  eventTrigger: sortedTrigger(value.eventTrigger),
 });
+// The API lists event filters in no fixed order; compare them as a set.
+function sortedTrigger(trigger) {
+  if (!trigger) return null;
+  if (!trigger.eventFilters) return trigger;
+  return { ...trigger, eventFilters: [...trigger.eventFilters]
+    .sort((a, b) => (JSON.stringify(a) < JSON.stringify(b) ? -1 : 1)) };
+}
 
 const mode = process.argv[2];
 assert.ok(['prepare', 'preflight', 'verify'].includes(mode), 'Choose prepare, preflight, or verify');
@@ -137,7 +144,8 @@ if (mode === 'prepare') {
     addedToLive: linesOf(1).length, removedFromLive: linesOf(-1).length, productionDataReads: 0, productionWrites: 0 }));
 } else {
   const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
-  assert.deepEqual(configuration(metadata), manifest.configuration, 'Runtime configuration changed');
+  assert.deepEqual(configuration(metadata), { ...manifest.configuration,
+    eventTrigger: sortedTrigger(manifest.configuration.eventTrigger) }, 'Runtime configuration changed');
   assert.deepEqual(iam, manifest.iam, 'Invocation permissions changed');
   assert.deepEqual(await inventory(path.join(release, 'functions')), manifest.expected, 'Prepared source changed');
   if (mode === 'preflight') {
