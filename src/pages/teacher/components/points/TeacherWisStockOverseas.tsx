@@ -109,7 +109,14 @@ export default function TeacherWisStockOverseas({
     try {
       const result = await action(market.revision);
       if (owner.current !== key) return;
-      setMarket(result);
+      // Plan and open/close responses carry no exchange rate; keep the one
+      // already shown instead of reporting it as missing.
+      const responseFx = (result as Partial<WisStockOverseasManagement>).fx;
+      setMarket((current) =>
+        responseFx === undefined
+          ? { ...result, fx: current?.fx ?? null }
+          : result,
+      );
       showToast({ tone: "success", title: success });
     } catch (failure) {
       if (owner.current !== key) return;
