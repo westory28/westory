@@ -8257,8 +8257,8 @@ exports.executeWisCommandFast = require('./productionGateway/productionSource').
 exports.getWisCommandStatusFast = require('./productionGateway/productionSource').getWisCommandStatusFast;
 exports.getWisRankingPreview = require('./wisRankingPreview').getWisRankingPreview;
 const wisStockHandlers = require('./wisStocks').createWisStockHandlers({ db });
-// The 유스 venue shares the scheduler below; its management callables and the
-// daily exchange-rate job are separate entry points.
+// The 유스 venue has its own price scheduler (advanceWisStockOverseasPrices),
+// management callables and daily exchange-rate job below.
 const wisStockFxRefresh = require('./wisStockFxRefresh').createWisStockFxRefresh({ db });
 const overseasStockHandlers = require('./wisStocks').createWisStockHandlers({ db,
   venue: require('./wisStockVenues').OVERSEAS, fxRefresh: wisStockFxRefresh.refreshWisStockFxRate });
