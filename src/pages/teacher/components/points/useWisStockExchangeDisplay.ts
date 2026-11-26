@@ -116,6 +116,8 @@ export function useWisStockExchangeDisplay(
             quote.listedAtMs ??= source.updatedAtMs;
             priority.add("listing:" + stock.id);
           }
+          if (continuous && old && !old.exitedAtMs && stock.exitedAtMs)
+            priority.add("exit:" + stock.id);
           if (changed) {
             moves.set(stock.id, {
               from: old.price,

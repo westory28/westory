@@ -23,6 +23,9 @@ export type ExchangeQuote = {
   listingPrice?: number;
   previousPrice?: number;
   priceAtMs?: number;
+  /** When trading ended: a scheduled delisting or merger, or a manual close. */
+  exitedAtMs?: number;
+  exitKind?: "delist" | "merge" | "close";
 };
 export type ExchangeMarket = {
   updatedAtMs: number;
@@ -74,6 +77,9 @@ function parseMarket(
         (stock.previousPrice !== undefined &&
           !positiveInt(stock.previousPrice)) ||
         (stock.priceAtMs !== undefined && !date(stock.priceAtMs)) ||
+        (stock.exitedAtMs !== undefined &&
+          (!date(stock.exitedAtMs) ||
+            !["delist", "merge", "close"].includes(stock.exitKind ?? ""))) ||
         (stock.previousClose !== null && !positiveInt(stock.previousClose)),
     )
   )

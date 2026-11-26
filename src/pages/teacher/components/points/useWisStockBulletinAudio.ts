@@ -5,10 +5,15 @@ import type {
 } from "./wisStockDisplayBulletins";
 import { stockBulletinExpiresAt } from "./wisStockDisplayBulletins";
 
+export function exitLabel(exit: "delist" | "merge" | "close") {
+  return { delist: "상장 폐지", merge: "합병", close: "거래 종료" }[exit];
+}
+
 export function stockBulletinSpeech(items: StockBulletinItem[]) {
   return items
     .map((item) => {
       if (item.kind === "listing") return `${item.name}, 신규 상장.`;
+      if (item.kind === "exit") return `${item.name}, ${exitLabel(item.exit)}.`;
       return `${item.name}, ${item.percent > 0 ? "급등" : "급락"}.`;
     })
     .join(" ");
@@ -294,7 +299,7 @@ export function useWisStockBulletinAudio(
     }
     // Rotation counters restart on reconnect; include the actual event identity
     // so a new price event is never muted by an earlier session's counter.
-    const eventKey = `${bulletin.id}:${bulletin.stocks.map((item) => `${item.kind}:${item.id}:${item.atMs}:${item.kind === "listing" ? item.price : item.percent}`).join("|")}`;
+    const eventKey = `${bulletin.id}:${bulletin.stocks.map((item) => `${item.kind}:${item.id}:${item.atMs}:${"percent" in item ? item.percent : item.price}`).join("|")}`;
     if (
       sound &&
       context.current?.state === "running" &&
@@ -380,7 +385,7 @@ export function useWisStockBulletinAudio(
     // The actual speak call stays inside the tap/click. When no bulletin is
     // visible, this confirmation also initializes and checks the device engine.
     if (bulletin) {
-      played.current.speech = `${bulletin.id}:${bulletin.stocks.map((item) => `${item.kind}:${item.id}:${item.atMs}:${item.kind === "listing" ? item.price : item.percent}`).join("|")}`;
+      played.current.speech = `${bulletin.id}:${bulletin.stocks.map((item) => `${item.kind}:${item.id}:${item.atMs}:${"percent" in item ? item.percent : item.price}`).join("|")}`;
       speak(
         stockBulletinSpeech(bulletin.stocks),
         Math.min(

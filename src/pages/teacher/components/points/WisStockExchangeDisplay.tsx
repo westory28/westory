@@ -10,15 +10,18 @@ import WisStockFlapFaces from "./WisStockFlapFaces";
 import type { StockBulletinItem } from "./wisStockDisplayBulletins";
 import { useWisStockDisplayRows } from "./useWisStockDisplayRows";
 import { useWisStockExchangeDisplay } from "./useWisStockExchangeDisplay";
-import { useWisStockBulletinAudio } from "./useWisStockBulletinAudio";
+import {
+  exitLabel,
+  useWisStockBulletinAudio,
+} from "./useWisStockBulletinAudio";
 import "./WisStockExchangeDisplay.css";
 
 function bulletinHeading(stocks: StockBulletinItem[]) {
-  if (stocks[0].kind === "listing") return "신규 상장";
-  const up = stocks.some((item) => item.kind !== "listing" && item.percent > 0);
-  const down = stocks.some(
-    (item) => item.kind !== "listing" && item.percent < 0,
-  );
+  const lead = stocks[0];
+  if (lead.kind === "listing") return "신규 상장";
+  if (lead.kind === "exit") return exitLabel(lead.exit);
+  const up = stocks.some((item) => "percent" in item && item.percent > 0);
+  const down = stocks.some((item) => "percent" in item && item.percent < 0);
   return up && down ? "급등·급락 속보" : up ? "급등 속보" : "급락 속보";
 }
 function surgeList(stocks: StockBulletinItem[]) {
@@ -30,13 +33,21 @@ function surgeList(stocks: StockBulletinItem[]) {
           className={
             stock.kind === "listing"
               ? "is-listing"
-              : "is-" + direction(stock.percent)
+              : stock.kind === "exit"
+                ? "is-exit"
+                : "is-" + direction(stock.percent)
           }
         >
           <b>{stock.name}</b>
           {stock.kind === "listing" ? (
             <strong>
               <small>{stock.hasListingPrice ? "상장가" : "현재가"} </small>
+              {quoteNumber(stock.price)}
+              <small> 위스</small>
+            </strong>
+          ) : stock.kind === "exit" ? (
+            <strong>
+              <small>마지막 가격 </small>
               {quoteNumber(stock.price)}
               <small> 위스</small>
             </strong>
@@ -55,7 +66,9 @@ function surgeList(stocks: StockBulletinItem[]) {
               ? stock.hasListingPrice
                 ? "상장"
                 : "상장 확인"
-              : "시세"}
+              : stock.kind === "exit"
+                ? exitLabel(stock.exit)
+                : "시세"}
           </time>
         </li>
       ))}
@@ -417,6 +430,7 @@ export default function WisStockExchangeDisplay({
                   {
                     {
                       listing: "오늘",
+                      exit: "오늘 거래 종료",
                       previous: "직전 시세 대비",
                       received: "직전 수신 시세 대비",
                     }[bulletin.stocks[0].kind]

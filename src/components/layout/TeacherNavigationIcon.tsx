@@ -8,6 +8,7 @@ export type TeacherIconName =
   | "assessment"
   | "score"
   | "wis"
+  | "stocks"
   | "students"
   | "calendar"
   | "notice"
@@ -106,6 +107,7 @@ const paths: Record<Exclude<TeacherIconName, "wis">, React.ReactNode> = {
     </>
   ),
   history: <path d="M3 4v5h5M3 9a9 9 0 1 1 0 6m9-9v6l4 2" />,
+  stocks: <path d="M4 19h16M6 16l4-5 3 3 5-7M15 7h3v3" />,
   school: (
     <>
       <path d="m7 7 5-4 5 4v14H7Zm0 3H3v11h18V10h-4M10 21v-5h4v5" />

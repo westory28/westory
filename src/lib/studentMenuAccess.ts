@@ -49,10 +49,9 @@ export const buildStudentMenuVisibility = (menuConfig: MenuConfig) => {
       childVisible("/student/mypage?menu=profile"),
     avatar: mypage && childVisible("/student/mypage?menu=avatar"),
     avatar_shop: avatarShop,
-    wispi:
-      parentVisible("/student/points") &&
-      childVisible("/student/wispi") &&
-      parentVisible("/student/wispi"),
+    // WsPI is its own top-level menu (2026-11-26). Hiding one of its tabs
+    // hides only that tab; hiding the menu closes WsPI for students.
+    wispi: parentVisible("/student/wispi"),
     score: mypage && childVisible("/student/mypage?menu=score"),
     wrong_note: mypage && childVisible("/student/mypage?menu=wrong_note"),
   };
@@ -319,6 +318,7 @@ export const getStudentVisibleMenuItems = (
       return [];
     if (item.url === "/student/weplay" && visibility?.weplay === false)
       return [];
+    if (item.url === "/student/wispi" && visibility?.wispi === false) return [];
     if (isMenuUrlBlockedBySystemConfig(item.url, config)) return [];
 
     const originalChildren = item.children || [];

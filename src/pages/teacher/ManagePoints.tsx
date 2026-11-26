@@ -9,7 +9,7 @@ import {
   getCanonicalPointWalletPage,
   getCanonicalPointWallet,
 } from "../../lib/pointEconomyAdapter";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { TEACHER_POINT_TAB_LABELS } from "../../constants/pointLabels";
 import { useAppToast } from "../../components/common/AppToastProvider";
 import { InlineLoading } from "../../components/common/LoadingState";
@@ -66,7 +66,6 @@ import PointProductsTab from "./components/points/PointProductsTab";
 import PointRequestsTab from "./components/points/PointRequestsTab";
 import PointsOverviewTab from "./components/points/PointsOverviewTab";
 import HallOfFameManagementTab from "./components/points/HallOfFameManagementTab";
-import TeacherWisStocks from "./components/points/TeacherWisStocks";
 import TeacherAvatarShopPage from "./components/points/TeacherAvatarShopPage";
 import TeacherPointManagementLayout from "./components/points/TeacherPointManagementLayout";
 import PortalSubNavigation from "../../components/common/PortalSubNavigation";
@@ -2160,6 +2159,10 @@ const ManagePoints: React.FC = () => {
     }
   };
 
+  // 위스피 moved to its own top-level menu; keep old bookmarks working.
+  if (requestedTab === "stocks")
+    return <Navigate to="/teacher/wispi" replace />;
+
   if (!canRead) {
     return (
       <div className="flex min-h-screen flex-col bg-gray-50">
@@ -2233,9 +2236,6 @@ const ManagePoints: React.FC = () => {
                 </button>
               </div>
             )}
-          {activeTab === "stocks" && scopeReady && (
-            <TeacherWisStocks config={config} canManage={canManage} />
-          )}
           {activeTab === "overview" && (
             <PointsOverviewTab
               wallets={loading ? [] : paginatedWallets}

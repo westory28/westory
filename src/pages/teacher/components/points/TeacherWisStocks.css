@@ -168,3 +168,24 @@
 .wis-stocks .wis-stock-order__cancel { margin-top: 20px; }
 @media (max-width: 600px) { .wis-stock-order__balances { grid-template-columns: repeat(2,minmax(0,1fr)); } .wis-stock-order__transfer { grid-template-columns: minmax(0,1fr) minmax(0,1fr); } .wis-stock-order__transfer button { grid-column: 1/-1; } }
 @media (max-width: 359px) { .wis-stock-preview__order { grid-template-columns: minmax(0,1fr); } }
+/* 해외 시장(유스) 관리: 기존 목록·차트·요약 클래스를 재사용하고 시대 진행만 추가 */
+.wis-stocks__overseas { min-width: 0; margin-top: 16px; }
+.wis-stocks__fx b { color: var(--ws-text-strong, #111827); font-variant-numeric: tabular-nums; }
+.wis-stocks__overseas-plan { margin-top: 8px; }
+.wis-stocks__overseas-eras { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 16px 0 0; }
+.wis-stocks__overseas-eras > div { min-width: 0; padding: 12px 0; border-top: 3px solid var(--ws-border, #e5e7eb); }
+.wis-stocks__overseas-eras dt { color: var(--ws-text-muted, #6b7280); font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+.wis-stocks__overseas-eras dd { margin: 4px 0 0; font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.wis-stocks__overseas-exits h3 { font-size: 16px; }
+.wis-stocks__overseas-exits ul { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 8px 0 0; padding: 0; list-style: none; font-size: 14px; }
+.wis-stocks__overseas-exits li { display: grid; gap: 2px; }
+.wis-stocks__overseas-exits li span { color: var(--ws-text-muted, #6b7280); font-size: 12px; }
+.wis-stocks__overseas-story { display: grid; gap: 12px; margin: 16px 0 0; font-size: 14px; line-height: 1.7; }
+.wis-stocks__overseas-story dt { color: var(--ws-text-muted, #6b7280); font-size: 12px; font-weight: 700; }
+.wis-stocks__overseas-story dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.wis-stocks__overseas .is-up { color: var(--ws-danger-text, #b91c1c); }
+.wis-stocks__overseas .is-down { color: var(--ws-primary, #2563eb); }
+.wis-stocks__overseas .is-flat { color: var(--ws-text-muted, #6b7280); }
+@container wis-stocks (max-width: 760px) {
+  .wis-stocks__overseas-eras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

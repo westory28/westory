@@ -36,6 +36,7 @@ const ROUTE_CODE: Record<string, RouteCodeLoader> = {
   "/teacher/quiz": () => import("../pages/teacher/ManageQuiz"),
   "/teacher/students": () => import("../pages/teacher/StudentList"),
   "/teacher/points": () => import("../pages/teacher/ManagePoints"),
+  "/teacher/wispi": () => import("../pages/teacher/ManageWispi"),
   "/teacher/exam": () => import("../pages/teacher/ManageExam"),
 };
 

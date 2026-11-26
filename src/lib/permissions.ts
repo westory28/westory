@@ -153,6 +153,9 @@ export const canAccessTeacherPath = (
     return canReadStudentList(userData, email);
   if (pathname.startsWith("/teacher/points"))
     return canReadPoints(userData, email);
+  // WsPI is managed with the same point permissions as before its own menu.
+  if (pathname.startsWith("/teacher/wispi"))
+    return canReadPoints(userData, email);
   if (pathname.startsWith("/teacher/exam")) return isAdminUser(userData, email);
   if (pathname.startsWith("/teacher/schedule"))
     return isAdminUser(userData, email);

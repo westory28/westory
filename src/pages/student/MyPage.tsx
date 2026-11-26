@@ -955,7 +955,7 @@ const MyPage: React.FC = () => {
   const leftMenus: Array<{ key: MainMenu; title: string; icon: string }> = [
     { key: "profile", title: "나의 기본 정보", icon: "fa-id-card" },
     { key: "avatar", title: "아바타 옷장", icon: "fa-shirt" },
-    { key: "wispi", title: "위스·주식 지갑", icon: "fa-wallet" },
+    { key: "wispi", title: "위스·주식 계좌", icon: "fa-wallet" },
     { key: "score", title: "나의 성적표", icon: "fa-chart-column" },
     { key: "wrong_note", title: "오답 노트", icon: "fa-book-open" },
   ];

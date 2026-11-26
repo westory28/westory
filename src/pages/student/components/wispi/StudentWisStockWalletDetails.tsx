@@ -12,6 +12,7 @@ import type {
 } from "../../../../lib/studentWisStockTypes";
 import StudentWisStockReadStatus from "./StudentWisStockReadStatus";
 import StudentWisStockWalletChart from "./StudentWisStockWalletChart";
+import { useWisStockVenue } from "./wisStockVenueContext";
 
 const PAGE_SIZE = 20;
 const views = {
@@ -27,6 +28,7 @@ const historyLabels: Record<StudentWisStockHistoryEntry["kind"], string> = {
   ORDER_ACCEPTED: "주문 접수",
   ORDER_FILLED: "체결",
   ORDER_CANCELLED: "주문 취소",
+  EXCHANGE: "환전",
 };
 const money = (n: number) => n.toLocaleString("ko-KR");
 const signed = (n: number) => (n > 0 ? "+" : "") + money(n);
@@ -69,6 +71,8 @@ function WalletTable({
   const started = useRef(false);
   const pending = useRef(false);
   const { year, semester } = scope;
+  const venue = useWisStockVenue();
+  const unit = venue.unit;
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -86,6 +90,7 @@ function WalletTable({
         const next = await getStudentWisStockHistory(
           { year, semester },
           cursor,
+          venue,
         );
         if (mounted.current)
           setHistory((previous) =>
@@ -103,7 +108,7 @@ function WalletTable({
         if (mounted.current) setBusy(false);
       }
     },
-    [year, semester],
+    [year, semester, venue],
   );
   useEffect(() => {
     if (view === "history" && !started.current) void load("");
@@ -147,7 +152,7 @@ function WalletTable({
   const rows = investing ? holdings : history?.entries;
   const columns = investing
     ? ["종목·보유량", "현재가", "평가 금액"]
-    : ["거래·일시", "종목·수량", "지갑 증감"];
+    : ["거래·일시", "종목·수량", "계좌 증감"];
   const nextCursor = history?.nextCursor || "";
   return (
     <>
@@ -156,19 +161,19 @@ function WalletTable({
           <div>
             <dt>평가 금액</dt>
             <dd>
-              {value === null ? "—" : money(value)} <small>위스</small>
+              {value === null ? "—" : money(value)} <small>{unit}</small>
             </dd>
           </div>
           <div>
             <dt>매수 금액</dt>
             <dd>
-              {money(cost)} <small>위스</small>
+              {money(cost)} <small>{unit}</small>
             </dd>
           </div>
           <div>
             <dt>평가 손익</dt>
             <dd className={tone(profit)}>
-              {profit === null ? "—" : signed(profit)} <small>위스</small>
+              {profit === null ? "—" : signed(profit)} <small>{unit}</small>
               {profit !== null && cost > 0 && (
                 <small className="student-wispi-balance-note">
                   {profit > 0 ? "+" : ""}
@@ -240,14 +245,16 @@ function WalletTable({
                     </th>
                     <td>
                       {position.stock
-                        ? `${money(position.stock.price)} 위스`
+                        ? `${money(position.stock.price)} ${unit}`
                         : "시세 확인 중"}
                     </td>
                     <td>
                       {position.value === null
                         ? "—"
-                        : `${money(position.value)} 위스`}
-                      <small>매수 {money(position.costBasis)} 위스</small>
+                        : `${money(position.value)} ${unit}`}
+                      <small>
+                        매수 {money(position.costBasis)} {unit}
+                      </small>
                     </td>
                   </tr>
                 ))
@@ -255,8 +262,11 @@ function WalletTable({
                   <tr key={entry.id}>
                     <th scope="row">
                       {entry.automaticSettlement === "GRADUATION"
-                        ? "종목 졸업 정산"
+                        ? "거래 종료 정산"
                         : historyLabels[entry.kind] || "거래 내역"}
+                      {entry.kind === "EXCHANGE" &&
+                        entry.direction &&
+                        ` · ${entry.direction === "WIS_TO_YUS" ? "위스→유스" : "유스→위스"}`}
                       {entry.side &&
                         ` · ${entry.side === "BUY" ? "매수" : "매도"}`}
                       <small>{date.format(entry.atMs)}</small>
@@ -265,16 +275,29 @@ function WalletTable({
                       {entry.stockId
                         ? stocks.get(entry.stockId)?.settings.name ||
                           "이전 종목"
-                        : "—"}
+                        : entry.kind === "EXCHANGE" && entry.fxRate
+                          ? `1,000유스 = ${money(entry.fxRate)}위스`
+                          : "—"}
                       {!!entry.quantity && (
                         <small>{money(entry.quantity)}주</small>
                       )}
                     </td>
                     <td>
-                      {signed(entry.stockCashDelta)} 위스
+                      {signed(entry.stockCashDelta)} {unit}
                       {entry.earnedDelta > 0 && (
                         <small>
                           출금 수익 +{money(entry.earnedDelta)} 위스
+                        </small>
+                      )}
+                      {entry.kind === "EXCHANGE" && !!entry.counterAmount && (
+                        <small>
+                          {entry.direction === "WIS_TO_YUS"
+                            ? unit === "유스"
+                              ? `${money(entry.counterAmount)} 위스에서`
+                              : `${money(entry.counterAmount)} 유스로`
+                            : unit === "유스"
+                              ? `${money(entry.counterAmount)} 위스로`
+                              : `${money(entry.counterAmount)} 유스에서`}
                         </small>
                       )}
                     </td>
@@ -354,7 +377,7 @@ export default function StudentWisStockWalletDetails({
           </time>
           <button
             type="button"
-            aria-label="주식 지갑 새로고침"
+            aria-label="주식 계좌 새로고침"
             disabled={refreshDisabled}
             onClick={onRefresh}
           >

@@ -122,7 +122,7 @@ export default function StudentWisStockAccountPanel({
         error: false,
         text:
           direction === "DEPOSIT"
-            ? `${money(parsed)} 위스를 주식 지갑에 입금했습니다.`
+            ? `${money(parsed)} 위스를 주식 계좌에 입금했습니다.`
             : `${money(parsed)} 위스를 출금했습니다.${result.receipt?.withdrawnProfit ? ` 누적 위스에 수익 ${money(result.receipt.withdrawnProfit)} 위스가 반영되었습니다.` : ""}`,
       });
     } catch (error) {
@@ -138,12 +138,12 @@ export default function StudentWisStockAccountPanel({
     <section
       hidden={!active}
       className="student-wispi-account"
-      aria-label="주식 지갑"
+      aria-label="위스 계좌"
     >
       <StudentWisStockReadStatus
         loading={account.status === "loading"}
         error={account.error}
-        label="주식 지갑"
+        label="주식 계좌"
         retry={account.retry}
       />
       <StudentWisStockWalletOrders
@@ -173,7 +173,7 @@ export default function StudentWisStockAccountPanel({
             <h2>계좌 입출금</h2>
             <dl className="student-wispi-balances">
               <div>
-                <dt>주식 지갑</dt>
+                <dt>계좌 잔액</dt>
                 <dd>
                   {money(state.account.stockCash)} <small>위스</small>
                   {state.account.reservedCash > 0 && (
@@ -240,7 +240,7 @@ export default function StudentWisStockAccountPanel({
                       </button>
                     ))}
                   </div>
-                  <InfoHelp label="주식 지갑 입출금 기준">
+                  <InfoHelp label="주식 계좌 입출금 기준">
                     <p>
                       입금은 일반 위스의 절반까지 할 수 있으며, 입금한 뒤
                       24시간이 지나야 다시 입금할 수 있습니다. 출금한 금액은
@@ -275,7 +275,7 @@ export default function StudentWisStockAccountPanel({
                   {busy
                     ? "처리 중"
                     : direction === "DEPOSIT"
-                      ? "주식 지갑에 입금"
+                      ? "주식 계좌에 입금"
                       : "일반 위스로 출금"}
                 </button>
               </form>

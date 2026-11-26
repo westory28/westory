@@ -46,6 +46,11 @@ test('overseas catalog is a complete four-era history timeline with logos and li
     assert.ok(entry.fact.length > 30 && entry.tagline.length > 0);
     assert.ok(fs.existsSync(path.join(__dirname, '../../public', entry.logoUrl)), entry.logoUrl);
   }
+  // The student logo map is generated from both catalogs and must stay in step.
+  const logoMap = fs.readFileSync(path.join(__dirname, '../../src/lib/wisStockLogos.ts'), 'utf8');
+  const stems = Object.fromEntries([...logoMap.matchAll(/^  (stock_[a-f0-9]{24}): "([a-z0-9-]+)",$/gm)].map(match => [match[1], match[2]]));
+  assert.deepEqual(stems, Object.fromEntries([...domesticCatalog, ...overseasCatalog]
+    .map(entry => [entry.id, entry.logoUrl.slice('/wispi/catalog/'.length, -'.svg'.length)])));
   const delisted = overseasCatalog.filter(entry => entry.exitKind === 'delist').map(entry => entry.name);
   assert.ok(delisted.includes('암스테르담동인도홀딩스') && delisted.includes('파나마캐널컴퍼니'));
 });

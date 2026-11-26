@@ -130,7 +130,7 @@ export default function StudentWisStockBonusClaim({
       showToast({
         tone: result.changed ? "reward" : "info",
         title: result.changed
-          ? `${result.depositBonus!.amount.toLocaleString("ko-KR")}위스를 주식 지갑에 받았습니다.`
+          ? `${result.depositBonus!.amount.toLocaleString("ko-KR")}위스를 주식 계좌에 받았습니다.`
           : "이미 지원금을 받았습니다.",
       });
     } catch (error) {
@@ -165,7 +165,7 @@ export default function StudentWisStockBonusClaim({
           <strong>위스피 지원금</strong>
           <InfoHelp label="위스피 지원금 기준">
             <p>
-              주식 지갑에 누적 500위스를 입금한 뒤 지원금을 한 번 받을 수
+              주식 계좌에 누적 500위스를 입금한 뒤 지원금을 한 번 받을 수
               있습니다. 지원금 원금은 위스피 매수에만 사용할 수 있으며,
               지원금으로 얻은 수익은 손실을 만회한 뒤 출금할 수 있습니다.
             </p>

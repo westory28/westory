@@ -92,16 +92,19 @@ export default function WisStockPriceChart({
   days,
   kind = "price",
   variant = "line",
+  priceUnit = "위스",
 }: {
   stock: WisStockPriceSeries;
   days: number;
   kind?: "price" | "index";
   variant?: "line" | "candlestick";
+  /** Currency of a price series: 위스 at home, 유스 abroad. */
+  priceUnit?: "위스" | "유스";
 }) {
   const candlestick = variant === "candlestick";
   const [interval, setInterval] = useState<WisStockCandleInterval>("day");
   const label = kind === "index" ? "지수" : "가격";
-  const unit = kind === "index" ? "pt" : "위스";
+  const unit = kind === "index" ? "pt" : priceUnit;
   const formatValue = (value: number) =>
     kind === "index"
       ? value.toLocaleString("ko-KR", { maximumFractionDigits: 2 })

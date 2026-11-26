@@ -12,6 +12,7 @@ type Item = { id: string; name: string; atMs: number };
 export type StockBulletinItem = Item &
   (
     | { kind: "listing"; price: number; hasListingPrice: boolean }
+    | { kind: "exit"; exit: "delist" | "merge" | "close"; price: number }
     | { kind: "previous" | "received"; percent: number }
   );
 export type StockBulletin = {
@@ -23,11 +24,15 @@ const KST_OFFSET_MS = 9 * 3_600_000;
 const DAY_MS = 24 * 3_600_000;
 // A display computer whose clock runs a little slow must not miss an event.
 const CLOCK_SKEW_MS = 120_000;
-/** A price move is news until the next quote; a listing is news all its day. */
+/** Listings and trading ends are news all their day. */
+export function isDayLongStockBulletin(kind: StockBulletinItem["kind"]) {
+  return kind === "listing" || kind === "exit";
+}
+/** A price move is news until the next quote; a listing or exit, all its day. */
 export function stockBulletinExpiresAt(
   item: Pick<StockBulletinItem, "kind" | "atMs">,
 ) {
-  return item.kind === "listing"
+  return isDayLongStockBulletin(item.kind)
     ? (Math.floor((item.atMs + KST_OFFSET_MS) / DAY_MS) + 1) * DAY_MS -
         KST_OFFSET_MS
     : nextWisStockPriceTick(item.atMs);
@@ -42,6 +47,7 @@ function eligibleItems(
   market: BulletinMarket,
   now: number,
 ): StockBulletinItem[] {
+  const exits: StockBulletinItem[] = [];
   const listings: StockBulletinItem[] = [];
   const movements: Extract<StockBulletinItem, { percent: number }>[] = [];
   const current = (
@@ -55,6 +61,18 @@ function eligibleItems(
     now < stockBulletinExpiresAt({ kind, atMs: time });
   for (const stock of market.stocks) {
     const { id, name, price, listedAtMs, priceAtMs, previousPrice } = stock;
+    if (stock.exitKind && current("exit", stock.exitedAtMs)) {
+      exits.push({
+        kind: "exit",
+        id,
+        name,
+        atMs: stock.exitedAtMs,
+        exit: stock.exitKind,
+        price,
+      });
+      // A closed stock has no further listing or price news.
+      continue;
+    }
     if (current("listing", listedAtMs)) {
       listings.push({
         kind: "listing",
@@ -81,13 +99,15 @@ function eligibleItems(
       });
     }
   }
+  exits.sort((a, b) => b.atMs - a.atMs);
   listings.sort((a, b) => b.atMs - a.atMs);
   movements.sort((a, b) => Math.abs(b.percent) - Math.abs(a.percent));
-  return [...listings, ...movements];
+  return [...exits, ...listings, ...movements];
 }
 
 // Each confirmed event is announced once: a price move within its ten-minute
-// quote interval, a listing once a day while this display stays open.
+// quote interval, a listing or trading end once a day while this display
+// stays open.
 export function createStockBulletinRotation(
   publish: (value: StockBulletin | null) => void,
 ) {
@@ -140,11 +160,13 @@ export function createStockBulletinRotation(
     timer = undefined;
     page = [];
     // A reconnect announces the events of the current ten minutes again, not
-    // the listings from earlier in the day.
+    // the listings or trading ends from earlier in the day.
     const now = Date.now();
     for (const eventKey of shown)
       if (
-        !eventKey.startsWith("listing:") ||
+        !isDayLongStockBulletin(
+          eventKey.split(":")[0] as StockBulletinItem["kind"],
+        ) ||
         now < nextWisStockPriceTick(Number(eventKey.split(":").at(-1)))
       )
         shown.delete(eventKey);

@@ -30,6 +30,9 @@ export type MenuConfig = Record<PortalType, MenuItem[]> & {
   orderVersion?: number;
 };
 
+// Rising line chart: WsPI became its own top-level menu (2026-11-26).
+const WISPI_MENU_ICON = "M4 19h16M6 16l4-5 3 3 5-7M15 7h3v3";
+
 export const MENUS: MenuConfig = {
   orderVersion: 1,
   student: [
@@ -87,8 +90,19 @@ export const MENUS: MenuConfig = {
         { name: "명예의 전당", url: "/student/points?tab=hall-of-fame" },
         { name: "위스 상점", url: "/student/points?tab=shop" },
         { name: "아바타 상점", url: STUDENT_AVATAR_SHOP_URL },
-        { name: "위스피(WsPI)", url: "/student/wispi" },
         { name: "구매 내역", url: "/student/points?tab=orders" },
+      ],
+    },
+    {
+      name: "위스피(WsPI)",
+      url: "/student/wispi",
+      icon: WISPI_MENU_ICON,
+      children: [
+        { name: "국내 주식", url: "/student/wispi" },
+        { name: "해외 주식", url: "/student/wispi?tab=overseas" },
+        { name: "주식 계좌", url: "/student/wispi?tab=account" },
+        { name: "환전", url: "/student/wispi?tab=exchange" },
+        { name: "투자 랭킹", url: "/student/wispi?tab=ranking" },
       ],
     },
     {
@@ -151,7 +165,19 @@ export const MENUS: MenuConfig = {
         { name: "위스 상점", url: "/teacher/points?tab=products" },
         { name: "아바타 상점", url: TEACHER_AVATAR_SHOP_URL },
         { name: "구매 요청 관리", url: "/teacher/points?tab=requests" },
-        { name: "위스피(WsPI)", url: "/teacher/points?tab=stocks" },
+      ],
+    },
+    {
+      name: "위스피(WsPI)",
+      url: "/teacher/wispi",
+      icon: WISPI_MENU_ICON,
+      children: [
+        { name: "국내 종목 관리", url: "/teacher/wispi" },
+        { name: "해외 시장", url: "/teacher/wispi?tab=overseas" },
+        { name: "시장 규칙", url: "/teacher/wispi?tab=rules" },
+        { name: "주식 차트 관리", url: "/teacher/wispi?tab=preview" },
+        { name: "학생 투자 현황", url: "/teacher/wispi?tab=investments" },
+        { name: "주식 보고서", url: "/teacher/wispi?tab=reports" },
       ],
     },
     {
@@ -423,8 +449,39 @@ export const sanitizeMenuConfig = (raw: unknown): MenuConfig => {
           "",
       }));
 
+    // 위스피 used to be a child of 위스 (2026-11-17). Saved menus keep their
+    // own order and custom links, but that child moves to the new top-level
+    // menu; a hidden old child or 위스 parent keeps WsPI hidden for students.
+    const wispiUrl = portal === "student" ? "/student/wispi" : "/teacher/wispi";
+    const isLegacyWispiChild = (url: string) =>
+      portal === "student"
+        ? url.split("?")[0] === "/student/wispi"
+        : url === "/teacher/points?tab=stocks";
+    let legacyWispiHidden = false;
+    let legacyWispiName = "";
+    const relocated = sanitized.map((item) => {
+      const children = item.children || [];
+      if (
+        item.url === wispiUrl ||
+        !children.some((child) => isLegacyWispiChild(child.url))
+      )
+        return item;
+      legacyWispiHidden ||=
+        item.hidden === true ||
+        children.some(
+          (child) => isLegacyWispiChild(child.url) && child.hidden === true,
+        );
+      legacyWispiName ||=
+        children.find(
+          (child) => isLegacyWispiChild(child.url) && child.nameCustomized,
+        )?.name || "";
+      return {
+        ...item,
+        children: children.filter((child) => !isLegacyWispiChild(child.url)),
+      };
+    });
     const withFallbackChildren = mergeFallbackChildren(
-      sanitized,
+      relocated,
       fallback[portal],
     );
     const missingParents = fallback[portal].filter(
@@ -433,6 +490,24 @@ export const sanitizeMenuConfig = (raw: unknown): MenuConfig => {
     );
 
     const merged = [...withFallbackChildren, ...missingParents];
+    if (!sanitized.some((item) => item.url === wispiUrl)) {
+      // First load after the move: place WsPI right after 위스, not last.
+      const index = merged.findIndex((item) => item.url === wispiUrl);
+      if (index >= 0) {
+        const [wispi] = merged.splice(index, 1);
+        const pointsUrl =
+          portal === "student" ? "/student/points" : "/teacher/points";
+        const after = merged.findIndex((item) => item.url === pointsUrl);
+        merged.splice(after >= 0 ? after + 1 : merged.length, 0, {
+          ...wispi,
+          // A label the teacher gave the old child stays on the new menu.
+          ...(legacyWispiName
+            ? { name: legacyWispiName, nameCustomized: true }
+            : {}),
+          ...(legacyWispiHidden ? { hidden: true } : {}),
+        });
+      }
+    }
     // Migrate only the previous default order. Saved custom orders and all
     // subsequent moves (including a deliberate return to the old order) survive.
     const previousStudentOrder = [
@@ -443,11 +518,14 @@ export const sanitizeMenuConfig = (raw: unknown): MenuConfig => {
       "/student/mypage",
       "/student/weplay",
     ];
+    const withoutWispi = merged.filter((item) => item.url !== wispiUrl);
     if (
       portal === "student" &&
       !(Number((raw as Record<string, unknown>).orderVersion) >= 1) &&
-      merged.length === previousStudentOrder.length &&
-      merged.every((item, index) => item.url === previousStudentOrder[index])
+      withoutWispi.length === previousStudentOrder.length &&
+      withoutWispi.every(
+        (item, index) => item.url === previousStudentOrder[index],
+      )
     ) {
       return fallback.student.map(
         (item) => merged.find((entry) => entry.url === item.url)!,

@@ -9,6 +9,7 @@ import type {
 } from "../../../../lib/studentWisStockTypes";
 import StudentWisStockReadStatus from "./StudentWisStockReadStatus";
 import ReturnChart, { dateTime, percent } from "./StudentWisStockReturnChart";
+import { useWisStockVenue } from "./wisStockVenueContext";
 
 export default function StudentWisStockWalletChart({
   scope: { year, semester },
@@ -18,6 +19,7 @@ export default function StudentWisStockWalletChart({
   active: boolean;
 }) {
   // The parent keys this view by session, semester, account and quote revision.
+  const venue = useWisStockVenue();
   const [attempt, setAttempt] = useState(0);
   const [data, setData] = useState<StudentWisStockReturns | null>(null);
   const [error, setError] = useState("");
@@ -28,7 +30,7 @@ export default function StudentWisStockWalletChart({
     if (!attempt) return;
     let current = true;
     setError("");
-    void getStudentWisStockReturns({ year, semester }).then(
+    void getStudentWisStockReturns({ year, semester }, venue).then(
       (result) => {
         if (current) setData(result);
       },
@@ -39,7 +41,7 @@ export default function StudentWisStockWalletChart({
     return () => {
       current = false;
     };
-  }, [year, semester, attempt]);
+  }, [year, semester, attempt, venue]);
   if (!active) return null;
   const latest = data?.points.at(-1)?.returnPercent;
   return (

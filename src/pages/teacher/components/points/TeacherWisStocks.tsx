@@ -48,6 +48,20 @@ import "./WisStockEmergencyControl.css";
 const WisStockWeeklyReports = React.lazy(
   () => import("./WisStockWeeklyReports"),
 );
+const TeacherWisStockOverseas = React.lazy(
+  () => import("./TeacherWisStockOverseas"),
+);
+
+/** Submenus of the top-level WsPI menu, in sidebar order (`?tab=<key>`). */
+export const TEACHER_WISPI_TABS = [
+  { key: "stocks", label: "국내 종목 관리" },
+  { key: "overseas", label: "해외 시장" },
+  { key: "rules", label: "시장 규칙" },
+  { key: "preview", label: "주식 차트 관리" },
+  { key: "investments", label: "학생 투자 현황" },
+  { key: "reports", label: "주식 보고서" },
+] as const;
+export type TeacherWispiTab = (typeof TEACHER_WISPI_TABS)[number]["key"];
 
 const emptySettings = (): WisStockSettings => ({
   name: "",
@@ -84,9 +98,14 @@ const tomorrowKst = () =>
 export default function TeacherWisStocks({
   config,
   canManage,
+  tab: routedTab,
+  onTabChange,
 }: {
   config: WisStockConfig;
   canManage: boolean;
+  /** Controlled by the WsPI page's URL; local state otherwise. */
+  tab?: TeacherWispiTab;
+  onTabChange?: (tab: TeacherWispiTab) => void;
 }) {
   const { currentUser, userData, authGeneration } = useAuth();
   const { showToast } = useAppToast();
@@ -95,7 +114,10 @@ export default function TeacherWisStocks({
   const generation = useRef(0);
   const owner = useRef(ownerKey);
   owner.current = ownerKey;
-  const [tab, setTab] = useState("stocks");
+  const [localTab, setLocalTab] = useState<TeacherWispiTab>("stocks");
+  const tab: TeacherWispiTab = routedTab ?? localTab;
+  const setTab = (next: TeacherWispiTab) =>
+    onTabChange ? onTabChange(next) : setLocalTab(next);
   const [conflict, setConflict] = useState(false);
   const [storedMarket, setMarket] = useState<WisStockManagement | null>(null);
   const [marketOwner, setMarketOwner] = useState("");
@@ -193,7 +215,7 @@ export default function TeacherWisStocks({
     haltFlight.current = false;
     setHaltError("");
     setHaltConflict(false);
-    setTab("stocks");
+    setLocalTab("stocks");
     let started = false;
     const start = () => {
       if (!started && !document.hidden) {
@@ -549,56 +571,47 @@ export default function TeacherWisStocks({
       <PortalSubNavigation
         title="위스피(WsPI)"
         activeLabel={
-          {
-            stocks: "종목 관리",
-            rules: "시장 규칙",
-            preview: "주식 차트 관리",
-            investments: "학생 투자 현황",
-            reports: "주식 보고서",
-          }[tab] || "종목 관리"
+          TEACHER_WISPI_TABS.find((item) => item.key === tab)?.label ||
+          "국내 종목 관리"
         }
         variant="tabs"
         actions={
-          <>
-            <span className="wis-stocks__closed" role="status">
-              {marketOpen ? "거래 중" : "거래 중지"}
-            </span>
-            <InfoHelp label="주식 운영 기준">
-              <p>
-                시장을 열면 학생이 거래할 수 있습니다. 닫으면 거래만 중지하며,
-                학생 메뉴 숨김은 설정의 인터페이스에서 변경합니다. 종목은 학기당{" "}
-                {market?.maxStocks || 100}
-                개까지, 가격 기록은 종목별 최근 {market?.historyLimit || 120}
-                건까지 보관합니다. 설명과 가격 기록을 포함한 저장 용량을 넘으면
-                등록을 중단합니다.
-              </p>
-            </InfoHelp>
-            <div className="wis-stock-emergency" aria-label="시장 거래 제어">
-              <button
-                type="button"
-                className={`wis-stock-emergency__button${marketOpen ? "" : " wis-stock-emergency__button--open"}`}
-                disabled={!canManage || halting || !market}
-                onClick={() => void changeHalted(marketOpen)}
-              >
-                {halting
-                  ? "처리 중…"
-                  : marketOpen
-                    ? "주식 시장 닫기"
-                    : "주식 시장 열기"}
-              </button>
-            </div>
-          </>
+          tab === "overseas" ? undefined : (
+            <>
+              <span className="wis-stocks__closed" role="status">
+                {marketOpen ? "거래 중" : "거래 중지"}
+              </span>
+              <InfoHelp label="주식 운영 기준">
+                <p>
+                  시장을 열면 학생이 거래할 수 있습니다. 닫으면 거래만 중지하며,
+                  학생 메뉴 숨김은 설정의 인터페이스에서 변경합니다. 종목은
+                  학기당 {market?.maxStocks || 100}
+                  개까지, 가격 기록은 종목별 최근 {market?.historyLimit || 120}
+                  건까지 보관합니다. 설명과 가격 기록을 포함한 저장 용량을
+                  넘으면 등록을 중단합니다.
+                </p>
+              </InfoHelp>
+              <div className="wis-stock-emergency" aria-label="시장 거래 제어">
+                <button
+                  type="button"
+                  className={`wis-stock-emergency__button${marketOpen ? "" : " wis-stock-emergency__button--open"}`}
+                  disabled={!canManage || halting || !market}
+                  onClick={() => void changeHalted(marketOpen)}
+                >
+                  {halting
+                    ? "처리 중…"
+                    : marketOpen
+                      ? "주식 시장 닫기"
+                      : "주식 시장 열기"}
+                </button>
+              </div>
+            </>
+          )
         }
       >
-        {[
-          { key: "stocks", label: "종목 관리" },
-          { key: "rules", label: "시장 규칙" },
-          { key: "preview", label: "주식 차트 관리" },
-          { key: "investments", label: "학생 투자 현황" },
-          ...(userData?.role === "teacher"
-            ? [{ key: "reports", label: "주식 보고서" }]
-            : []),
-        ].map((item) => (
+        {TEACHER_WISPI_TABS.filter(
+          (item) => item.key !== "reports" || userData?.role === "teacher",
+        ).map((item) => (
           <button
             key={item.key}
             type="button"
@@ -1269,6 +1282,16 @@ export default function TeacherWisStocks({
             }
           }}
         />
+      )}
+      {tab === "overseas" && (
+        <React.Suspense fallback={<InlineLoading />}>
+          <TeacherWisStockOverseas
+            key={ownerKey}
+            year={year}
+            semester={semester}
+            canManage={canManage}
+          />
+        </React.Suspense>
       )}
       {tab === "reports" && userData?.role === "teacher" && (
         <React.Suspense fallback={<InlineLoading />}>

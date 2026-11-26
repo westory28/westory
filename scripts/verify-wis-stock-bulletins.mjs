@@ -93,6 +93,25 @@ try {
   assert.equal(current.stocks[0].id, '느린시계');
   advance(3_000);
   rotation.clear();
+  // A scheduled delisting or merger is news for its day and leads the page.
+  now = Date.parse('2026-11-25T13:10:00+09:00');
+  const delisted = { id: 'gone', name: '폐지종목', price: 120, previousClose: 300, previousPrice: 300, priceAtMs: now - 60_000, exitedAtMs: now - 60_000, exitKind: 'delist' };
+  const merged = { id: 'merged', name: '합병종목', price: 500, previousClose: 480, exitedAtMs: Date.parse('2026-11-25T12:00:00+09:00'), exitKind: 'merge' };
+  const yesterday = { id: 'old-exit', name: '어제폐지', price: 90, previousClose: 100, exitedAtMs: Date.parse('2026-11-24T15:00:00+09:00'), exitKind: 'delist' };
+  rotation.update(market([stock('급등락', now), merged, delisted, yesterday]), new Set());
+  assert.deepEqual(current.stocks.map(item => [item.kind, item.id]), [['exit', 'gone']], 'the latest trading end leads, not its price move');
+  assert.equal(current.stocks[0].exit, 'delist');
+  assert.equal(current.stocks[0].price, 120, 'the last traded price is announced');
+  advance(3_000);
+  assert.deepEqual([current.stocks[0].kind, current.stocks[0].id, current.stocks[0].exit], ['exit', 'merged', 'merge']);
+  advance(3_000);
+  assert.equal(current.stocks[0].id, '급등락', 'a closed stock produces no separate price headline');
+  advance(3_000);
+  assert.equal(current, null, 'a trading end of an earlier day is not news');
+  rotation.clear();
+  rotation.update(market([merged, delisted]), new Set());
+  assert.equal(current, null, 'a reconnect does not repeat the trading ends announced earlier in the day');
+  rotation.clear();
   now = baseline;
   rotation.update(market(Array.from({ length: 6 }, (_, i) => stock('종목' + i))), new Set());
   const reached = new Set(current.stocks.map(item => item.id));
@@ -123,7 +142,8 @@ try {
   assert.equal(timers.size, 0);
   assert.equal(stockBulletinExpiresAt({ kind: 'previous', atMs: baseline }), baseline + 600_000);
   assert.equal(stockBulletinExpiresAt({ kind: 'listing', atMs: baseline }), Date.parse('2026-11-24T00:00:00+09:00'));
-  console.log('PASS: inclusive ±10% boundaries, three-second bulletins, ten-minute expiry, dismissal/new-event recovery, duplicate/stale/legacy suppression, complete paging and cleanup; no network calls.');
+  assert.equal(stockBulletinExpiresAt({ kind: 'exit', atMs: baseline }), Date.parse('2026-11-24T00:00:00+09:00'));
+  console.log('PASS: inclusive ±10% boundaries, three-second bulletins, ten-minute expiry, day-long listing/delisting/merger notices, dismissal/new-event recovery, duplicate/stale/legacy suppression, complete paging and cleanup; no network calls.');
 } finally {
   rotation.clear();
   Date.now = originals.now;

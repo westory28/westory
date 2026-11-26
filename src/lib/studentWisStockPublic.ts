@@ -94,14 +94,17 @@ type Entry<T> = {
   retry: () => void;
   dispose: () => void;
 };
+type PublicKind = "current" | "market" | "overseas_current" | "overseas_market";
 const stores = {
   current: new Map<string, Entry<StudentWisStockStatus>>(),
   market: new Map<string, Entry<StudentWisStockMarket>>(),
+  overseas_current: new Map<string, Entry<StudentWisStockStatus>>(),
+  overseas_market: new Map<string, Entry<StudentWisStockMarket>>(),
 };
 
 /** Active subscriptions only: no local-storage cache, polling, or data retained after the last viewer leaves. */
 function subscribe<T>(
-  kind: "current" | "market",
+  kind: PublicKind,
   scope: WisStockScope,
   parse: (raw: unknown, scope: WisStockScope) => T,
   listener: Listener<T>,
@@ -331,4 +334,27 @@ export const watchStudentWisStockMarket = (
     parseStudentWisStockMarket,
     listener,
     stores.market,
+  );
+/** The 유스 venue's two safe public documents, watched only by its own view. */
+export const watchStudentWisStockOverseasStatus = (
+  scope: WisStockScope,
+  listener: Listener<StudentWisStockStatus>,
+) =>
+  subscribe(
+    "overseas_current",
+    scope,
+    parseStudentWisStockStatus,
+    listener,
+    stores.overseas_current,
+  );
+export const watchStudentWisStockOverseasMarket = (
+  scope: WisStockScope,
+  listener: Listener<StudentWisStockMarket>,
+) =>
+  subscribe(
+    "overseas_market",
+    scope,
+    parseStudentWisStockMarket,
+    listener,
+    stores.overseas_market,
   );

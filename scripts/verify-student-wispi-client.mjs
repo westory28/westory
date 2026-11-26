@@ -306,4 +306,41 @@ await check('bonus deterministic rejection clears receipt and malformed grant re
   }
   const {qa,api,storage}=await setup();qa.handler=async()=>({changed:true,state:state(2),depositBonus:{...bonus(),qualifyingDepositAmount:501}});await assert.rejects(api.claimStudentWisStockBonus(scope),/지원금/);assert.equal(storage.size,1);assert.equal(qa.pointsEvents,0);
 });
+const overseas={id:'OVERSEAS',unit:'유스',label:'해외',accountCollection:'wis_stock_overseas_accounts',stateCallable:'getStudentWisStockOverseasState',
+  historyCallable:'getStudentWisStockOverseasHistory',placeCallable:'placeStudentWisStockOverseasOrder',cancelCallable:'cancelStudentWisStockOverseasOrder'};
+const overseasState=(revision=1)=>({...state(revision),venue:'OVERSEAS',unit:'유스',accountPath:'years/2026/semesters/2/wis_stock_overseas_accounts/wisacct_'+'a'.repeat(64)});
+await check('overseas venue reads its own state, listens to its own account and never shares the domestic entry',async()=>{
+  const {qa,api}=await setup();qa.handler=async name=>name==='getStudentWisStockOverseasState'?overseasState():state();
+  const home=[],abroad=[],stopHome=api.watchStudentWisStockState(scope,s=>home.push(s)),stopAbroad=api.watchStudentWisStockState(scope,s=>abroad.push(s),overseas);
+  await eventually(()=>home.at(-1)?.status==='ready'&&abroad.at(-1)?.status==='ready');
+  assert.deepEqual(qa.calls.map(c=>c.name).sort(),['getStudentWisStockOverseasState','getStudentWisStockState']);
+  assert.deepEqual([...qa.observers].map(o=>o.path).sort(),[overseasState().accountPath,state().accountPath].sort());
+  assert.equal(abroad.at(-1).data.venue,'OVERSEAS');stopHome();stopAbroad();
+});
+await check('a domestic-shaped response for the overseas venue is rejected',async()=>{
+  const {qa,api}=await setup();qa.handler=async()=>state();
+  const values=[],stop=api.watchStudentWisStockState(scope,s=>values.push(s),overseas);await eventually(()=>values.at(-1)?.status==='error');stop();
+});
+await check('overseas orders use overseas commands; exchange refreshes the open 유스 account once',async()=>{
+  const {qa,api}=await setup();let reads=0;
+  qa.handler=async(name)=>{
+    if(name==='getStudentWisStockOverseasState'){reads++;return overseasState(reads)}
+    if(name==='placeStudentWisStockOverseasOrder')return {changed:true,duplicate:false,state:overseasState(5)};
+    if(name==='exchangeStudentWisStockCurrency')return {changed:true,duplicate:false,state:state(3),receipt:{id:'stockfx_x',direction:'WIS_TO_YUS',debit:1345,credit:1000,rate:1345,fxDayKey:'2026-11-26',appliedAtMs:1},peer:{revision:2,stockCash:1000,reservedCash:0}};
+    return state();
+  };
+  const abroad=[],stop=api.watchStudentWisStockState(scope,s=>abroad.push(s),overseas);await eventually(()=>abroad.at(-1)?.status==='ready');
+  await api.placeStudentWisStockOrder(scope,{stockId:'stock-b',side:'BUY',quantity:1,quote:{price:100,atMs:1,marketRevision:1}},overseas);
+  assert.equal(qa.calls.at(-1).name,'placeStudentWisStockOverseasOrder');
+  const before=reads;const result=await api.exchangeStudentWisStockCurrency(scope,{direction:'WIS_TO_YUS',amount:1345,rate:1345});
+  assert.equal(result.receipt.credit,1000);assert.equal(qa.calls.find(c=>c.name==='exchangeStudentWisStockCurrency').data.rate,1345);
+  await eventually(()=>reads===before+1);assert.equal(qa.pointsEvents,0);stop();
+});
+await check('exchange rate change clears the receipt so a new rate makes a new request',async()=>{
+  const {qa,api,storage}=await setup();let failure=true;
+  qa.handler=async()=>{if(failure){failure=false;throw Object.assign(Error('rate'),{details:{reason:'WIS_STOCK_FX_RATE_CHANGED'}})}return {changed:true,state:state(2),receipt:{},peer:null}};
+  await assert.rejects(api.exchangeStudentWisStockCurrency(scope,{direction:'WIS_TO_YUS',amount:1345,rate:1345}));assert.equal(storage.size,0);
+  await api.exchangeStudentWisStockCurrency(scope,{direction:'WIS_TO_YUS',amount:1345,rate:1350});
+  assert.notEqual(qa.calls[0].data.requestId,qa.calls[1].data.requestId);
+});
 console.log(JSON.stringify({passed:true,checks,network:0,productionWrites:0},null,2));

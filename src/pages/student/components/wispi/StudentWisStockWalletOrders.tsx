@@ -15,6 +15,7 @@ import type {
   WisStockScope,
 } from "../../../../lib/studentWisStockTypes";
 import StudentWisStockReadStatus from "./StudentWisStockReadStatus";
+import { useWisStockVenue } from "./wisStockVenueContext";
 
 export type WalletOrderTarget = {
   stockId: string;
@@ -58,6 +59,8 @@ export default function StudentWisStockWalletOrders({
   onClose: () => void;
 }) {
   const { showToast } = useAppToast();
+  const venue = useWisStockVenue();
+  const unit = venue.unit;
   const position = account.data?.account.positions.find(
     (item) => item.stockId === target?.stockId,
   );
@@ -67,6 +70,7 @@ export default function StudentWisStockWalletOrders({
     tradingEnabled &&
       !!target &&
       (account.status !== "ready" || ownershipMatches),
+    venue,
   );
   const selected = market.data?.stocks.find(
     (stock) => stock.id === target?.stockId,
@@ -179,14 +183,14 @@ export default function StudentWisStockWalletOrders({
       if (market.data.tradingEpoch !== tradingEpoch)
         return "거래 상태가 바뀌어 최신 시세를 확인하고 있습니다.";
       if (account.status === "error") return account.error;
-      return "주식 지갑을 확인하고 있습니다.";
+      return "주식 계좌를 확인하고 있습니다.";
     }
     if (!ownershipMatches)
       return "보유 수량이 변경되었습니다. 주문할 종목을 다시 선택해 주세요.";
     if (!selected) return "주문할 종목을 선택해 주세요.";
     if (!instrumentReady) {
       if (selected.settings.tradingStatus === "GRADUATED")
-        return "졸업한 종목입니다. 보유 주식은 마지막 가격으로 정산됩니다.";
+        return "거래가 끝난 종목입니다. 보유 주식은 마지막 가격으로 정산됩니다.";
       if (selected.settings.tradingStatus === "SELL_ONLY" && side === "BUY")
         return "이 종목은 매도만 가능합니다.";
       if (selected.settings.tradingStatus === "HALTED")
@@ -210,7 +214,7 @@ export default function StudentWisStockWalletOrders({
       const reserve = market.data?.rules.minimumCashReserve || 0;
       const reserved = account.data?.account.reservedCash || 0;
       const shortage = Math.max(0, estimate.total + reserve - available);
-      return `${reserved ? `지갑 ${money(account.data!.account.stockCash)} 위스 중 ${money(reserved)} 위스가 대기 주문에 예약되어 있습니다. ` : ""}수수료 포함 결제 ${money(estimate.total)} 위스${reserve ? ` 후 최소 잔액 ${money(reserve)} 위스를 남겨야 하므로` : "에"} ${money(shortage)} 위스가 부족합니다.`;
+      return `${reserved ? `계좌 ${money(account.data!.account.stockCash)} ${unit} 중 ${money(reserved)} ${unit}가 대기 주문에 예약되어 있습니다. ` : ""}수수료 포함 결제 ${money(estimate.total)} ${unit}${reserve ? ` 후 최소 잔액 ${money(reserve)} ${unit}를 남겨야 하므로` : "에"} ${money(shortage)} ${unit}가 부족합니다.`;
     }
     return "";
   })();
@@ -230,16 +234,20 @@ export default function StudentWisStockWalletOrders({
     );
     setNotice("");
     try {
-      const result = await placeStudentWisStockOrder(scope, {
-        stockId: selected.id,
-        side,
-        quantity: parsed,
-        quote: {
-          price: selected.price,
-          atMs: studentWisStockNow(account.data),
-          marketRevision: market.data.revision,
+      const result = await placeStudentWisStockOrder(
+        scope,
+        {
+          stockId: selected.id,
+          side,
+          quantity: parsed,
+          quote: {
+            price: selected.price,
+            atMs: studentWisStockNow(account.data),
+            marketRevision: market.data.revision,
+          },
         },
-      });
+        venue,
+      );
       if (mounted.current && result.duplicate)
         showToast({ title: "기존 주문 상태를 확인했습니다.", tone: "info" });
     } catch (error) {
@@ -259,7 +267,7 @@ export default function StudentWisStockWalletOrders({
     setBusy(orderId);
     setNotice("");
     try {
-      const result = await cancelStudentWisStockOrder(scope, orderId);
+      const result = await cancelStudentWisStockOrder(scope, orderId, venue);
       if (mounted.current)
         showToast({
           tone: "info",
@@ -297,7 +305,7 @@ export default function StudentWisStockWalletOrders({
                 <strong>{name}</strong>
                 <small>
                   {order.side === "BUY" ? "매수" : "매도"}{" "}
-                  {money(order.quantity)}주 · {money(order.unitPrice)} 위스
+                  {money(order.quantity)}주 · {money(order.unitPrice)} {unit}
                 </small>
                 <span
                   className="student-wispi-countdown"
@@ -372,7 +380,9 @@ export default function StudentWisStockWalletOrders({
               <dl className="student-wispi-rule-help">
                 <div>
                   <dt>최소 잔액</dt>
-                  <dd>{money(market.data.rules.minimumCashReserve)} 위스</dd>
+                  <dd>
+                    {money(market.data.rules.minimumCashReserve)} {unit}
+                  </dd>
                 </div>
                 <div>
                   <dt>매수 / 매도 수수료</dt>
@@ -384,7 +394,8 @@ export default function StudentWisStockWalletOrders({
                 <div>
                   <dt>하루 매수 한도</dt>
                   <dd>
-                    {money(market.data.rules.dailyBuyLimit)} 위스 (수수료 포함)
+                    {money(market.data.rules.dailyBuyLimit)} {unit} (수수료
+                    포함)
                   </dd>
                 </div>
                 <div>
@@ -419,7 +430,7 @@ export default function StudentWisStockWalletOrders({
         retry={market.retry}
       />
       <StudentWisStockReadStatus
-        label="주식 지갑"
+        label="주식 계좌"
         loading={account.status === "loading" && market.status !== "loading"}
         error={account.error}
         retry={account.retry}
@@ -443,7 +454,10 @@ export default function StudentWisStockWalletOrders({
             }}
           >
             <p className="student-wispi-ticket-quote">
-              현재가 <strong>{money(selected.price)} 위스</strong>
+              현재가{" "}
+              <strong>
+                {money(selected.price)} {unit}
+              </strong>
               {owned && <> · 보유 {money(position!.quantity)}주</>}
             </p>
             <div className="student-wispi-inline">
@@ -468,7 +482,7 @@ export default function StudentWisStockWalletOrders({
               </div>
               <span className="student-wispi-muted">
                 {side === "BUY"
-                  ? `사용 가능 ${money(available)} 위스`
+                  ? `사용 가능 ${money(available)} ${unit}`
                   : `매도 가능 ${money(availableShares)}주`}
               </span>
             </div>
@@ -514,10 +528,12 @@ export default function StudentWisStockWalletOrders({
             </div>
             <div className="student-wispi-order-estimate">
               <span>{side === "BUY" ? "예상 결제" : "예상 수령"}</span>
-              <strong>{estimate ? money(estimate.total) : "—"} 위스</strong>
+              <strong>
+                {estimate ? money(estimate.total) : "—"} {unit}
+              </strong>
               {estimate && (
                 <small className="student-wispi-muted">
-                  (수수료 {money(estimate.fee)} 위스
+                  (수수료 {money(estimate.fee)} {unit}
                   {side === "BUY" ? " 포함" : " 제외"})
                 </small>
               )}

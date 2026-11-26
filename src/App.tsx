@@ -151,6 +151,10 @@ const ManagePoints = lazyWithRetry(
   () => import("./pages/teacher/ManagePoints"),
   "manage-points",
 );
+const ManageWispi = lazyWithRetry(
+  () => import("./pages/teacher/ManageWispi"),
+  "manage-wispi",
+);
 const ManageWeplay = lazyWithRetry(
   () => import("./pages/teacher/ManageWeplay"),
   "teacher-weplay",
@@ -452,6 +456,13 @@ const App: React.FC = () => {
                   element={renderWithLayout(
                     <ManagePoints />,
                     "위스 관리 화면을 준비하는 중입니다.",
+                  )}
+                />
+                <Route
+                  path="/teacher/wispi"
+                  element={renderWithLayout(
+                    <ManageWispi />,
+                    "위스피 관리 화면을 준비하는 중입니다.",
                   )}
                 />
                 <Route

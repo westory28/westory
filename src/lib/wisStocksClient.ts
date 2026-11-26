@@ -292,3 +292,105 @@ export function wisStockErrorMessage(error: unknown): string {
     return "위스피(WsPI) 관리 권한을 확인해 주세요.";
   return "주식 자료를 처리하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.";
 }
+
+// ---- 해외 시장(유스) 관리: 국내와 같은 명령 형식, 별도 시장 문서 ----
+export interface WisStockFxSnapshot {
+  rate: number;
+  krwPerUsd: number;
+  dayKey: string;
+  sourceDate: string;
+  source: string;
+  fetchedAtMs: number;
+  history: { dayKey: string; rate: number }[];
+  current: boolean;
+}
+export type WisStockOverseasManagement = WisStockManagement & {
+  venue: "OVERSEAS";
+  unit: "유스";
+  fx: WisStockFxSnapshot | null;
+};
+const overseasFlights = new Map<string, Promise<WisStockOverseasManagement>>();
+function acceptOverseas(
+  value: WisStockOverseasManagement,
+  scope: { year: string; semester: string },
+) {
+  if (
+    value?.venue !== "OVERSEAS" ||
+    value.semesterId !== `${scope.year}-${scope.semester}` ||
+    !Number.isSafeInteger(value.revision) ||
+    !Array.isArray(value.stocks)
+  )
+    throw new Error(
+      "해외 시장 자료를 확인하지 못했습니다. 다시 조회해 주세요.",
+    );
+  return value;
+}
+export async function getWisStockOverseasManagement(config: WisStockConfig) {
+  const scope = getYearSemester(config);
+  const owner = auth.currentUser;
+  if (!owner) throw changedOwner();
+  const epoch = Number((await owner.getIdTokenResult()).claims.auth_time);
+  if (auth.currentUser !== owner || !Number.isFinite(epoch))
+    throw changedOwner();
+  const key = `${owner.uid}:${epoch}:${scope.year}:${scope.semester}`;
+  const existing = overseasFlights.get(key);
+  if (existing) return existing;
+  const task = service<WisStockOverseasManagement>(
+    "getWisStockOverseasManagement",
+    scope,
+  )
+    .then((value) => acceptOverseas(value, scope))
+    .finally(() => {
+      if (overseasFlights.get(key) === task) overseasFlights.delete(key);
+    });
+  overseasFlights.set(key, task);
+  return task;
+}
+type OverseasCommandResult = WisStockOverseasManagement & {
+  changed: boolean;
+  duplicate: boolean;
+};
+export const setWisStockOverseasMarketHalted = (
+  config: WisStockConfig,
+  expectedRevision: number,
+  halted: boolean,
+) =>
+  saveManagement<OverseasCommandResult>(
+    "setWisStockOverseasMarketHalted",
+    config,
+    expectedRevision,
+    { halted },
+  );
+export const activateWisStockOverseasCatalogPlan = (
+  config: WisStockConfig,
+  expectedRevision: number,
+  startsAtMs: number,
+) =>
+  saveManagement<OverseasCommandResult>(
+    "activateWisStockOverseasCatalogPlan",
+    config,
+    expectedRevision,
+    { startsAtMs },
+  );
+export const saveWisStockOverseasMarketRules = (
+  config: WisStockConfig,
+  expectedRevision: number,
+  rules: WisStockMarketRules,
+) =>
+  saveManagement<OverseasCommandResult>(
+    "saveWisStockOverseasMarketRules",
+    config,
+    expectedRevision,
+    { rules },
+  );
+/** Fallback for the daily 07:05 job; once a KST day, later calls only read. */
+export async function refreshWisStockFxRateNow(config: WisStockConfig) {
+  const owner = auth.currentUser;
+  if (!owner) throw changedOwner();
+  await ensureSensitiveOperation();
+  if (auth.currentUser !== owner) throw changedOwner();
+  return service<{ changed: boolean; fx: WisStockFxSnapshot | null }>(
+    "refreshWisStockFxRateNow",
+    getYearSemester(config),
+  );
+}

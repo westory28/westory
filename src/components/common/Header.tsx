@@ -242,7 +242,7 @@ const Header: React.FC<{
             return canReadQuizManagement(userData, currentUser?.email || "");
           if (item.url === "/teacher/students")
             return canReadStudentList(userData, currentUser?.email || "");
-          if (item.url === "/teacher/points")
+          if (item.url === "/teacher/points" || item.url === "/teacher/wispi")
             return canReadPoints(userData, currentUser?.email || "");
           if (item.url === "/teacher/exam")
             return canManageSettings(userData, currentUser?.email || "");
@@ -250,19 +250,27 @@ const Header: React.FC<{
             return canAccessTeacherPath(item.url, userData, currentUser?.email);
           return false;
         })
-      : baseMenuItems;
+      : baseMenuItems.filter(
+          // Students see WsPI only while the teacher keeps the market open.
+          (item) =>
+            item.url !== "/student/wispi" ||
+            wisStockStatus.data?.studentOpen === true,
+        );
   const getVisibleChildren = (item: { children?: MenuChild[] }) => {
     if (!item.children?.length) return [];
     return isTeacherPortal
       ? item.children.filter(
           (child) =>
-            getWisShopMenuKey(child.url, "teacher") !== "avatar" ||
-            canManageSettings(userData, currentUser?.email),
+            (getWisShopMenuKey(child.url, "teacher") !== "avatar" ||
+              canManageSettings(userData, currentUser?.email)) &&
+            // Weekly stock reports stay teacher-only, as inside the page.
+            (child.url !== "/teacher/wispi?tab=reports" ||
+              userData?.role === "teacher"),
         )
       : item.children.filter(
           (child) =>
             child.hidden !== true &&
-            (getWisShopMenuKey(child.url, "student") !== "stocks" ||
+            (child.url.split("?")[0] !== "/student/wispi" ||
               wisStockStatus.data?.studentOpen === true) &&
             (getWisShopMenuKey(child.url, "student") !== "avatar" ||
               (getStudentRouteAccess(
@@ -397,6 +405,7 @@ const Header: React.FC<{
     "/teacher/quiz": "assessment",
     "/teacher/exam": "score",
     "/teacher/points": "wis",
+    "/teacher/wispi": "stocks",
     "/teacher/students": "students",
     "/teacher/weplay": "game",
   };
@@ -609,6 +618,7 @@ const Header: React.FC<{
     "history-classroom": "assessment",
     score: "score",
     points: "wis",
+    wispi: "stocks",
     mypage: "students",
     calendar: "calendar",
     history: "history",

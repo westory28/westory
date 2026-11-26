@@ -140,7 +140,23 @@ const updated = sanitizeMenuConfig(previous);
 assert.deepEqual(Array.from(updated.student, item => item.url), Array.from(MENUS.student, item => item.url), 'Previous default order becomes Weplay, Wis, MyPage');
 assert.equal(updated.student.find(item => item.url === '/student/weplay').children.filter(child => child.url.includes('gungdeok-rock')).length, 1, 'Rhythm game gains exactly one menu entry');
 updated.student.sort((left, right) => previousStudentOrder.indexOf(left.url) - previousStudentOrder.indexOf(right.url));
-assert.deepEqual(Array.from(sanitizeMenuConfig(updated).student, item => item.url), previousStudentOrder, 'An explicit saved order is never migrated again');
+assert.deepEqual(Array.from(sanitizeMenuConfig(updated).student, item => item.url), Array.from(updated.student, item => item.url), 'An explicit saved order is never migrated again');
+// A menu saved while WsPI was a child of 위스: the child leaves 위스 and the
+// top-level WsPI lands right after 위스, keeping a saved hidden state.
+const beforeWispi = cloneDefaultMenus();
+const legacyWispiChild = { student: '/student/wispi', teacher: '/teacher/points?tab=stocks' };
+for (const portal of ['student', 'teacher']) {
+  beforeWispi[portal] = beforeWispi[portal].filter(item => item.url !== `/${portal}/wispi`);
+  beforeWispi[portal].find(item => item.url === `/${portal}/points`).children.push({ name: '위스피(WsPI)', url: legacyWispiChild[portal], hidden: portal === 'student' });
+}
+const afterWispi = sanitizeMenuConfig(beforeWispi);
+for (const portal of ['student', 'teacher']) {
+  const urls = Array.from(afterWispi[portal], item => item.url);
+  assert.equal(urls.indexOf(`/${portal}/wispi`), urls.indexOf(`/${portal}/points`) + 1, `${portal} WsPI moves right after 위스`);
+  assert(!afterWispi[portal].find(item => item.url === `/${portal}/points`).children.some(child => child.url === legacyWispiChild[portal]), `${portal} 위스 no longer lists WsPI`);
+  assert.equal(afterWispi[portal].find(item => item.url === `/${portal}/wispi`).hidden === true, portal === 'student', `${portal} WsPI keeps the saved hidden state`);
+  assert.deepEqual(Array.from(sanitizeMenuConfig(afterWispi)[portal], item => item.url), urls, `${portal} WsPI placement is stable once saved`);
+}
 const studentMarkup = renderNavigation('student', 'student@fixture.invalid');
 assert(studentMarkup.indexOf('aria-label="위플레이"') < studentMarkup.indexOf('aria-label="위스"'), 'Weplay precedes Wis by default');
 assert.match(studentMarkup, /teacher-sidebar-bottom[\s\S]*<a(?=[^>]*href="#\/student\/mypage")(?=[^>]*aria-label="마이페이지")[^>]*>/, 'MyPage is a direct bottom link');
@@ -158,4 +174,4 @@ for (const portal of ['teacher', 'student']) {
   const group = html.slice(html.indexOf(`id="${portal}-menu-points"`));
   assert(group.indexOf(`href="#${shop.url}"`) < group.indexOf(`href="#/${portal}/points"`), `${portal} Wis children respect the saved order after consolidation`);
 }
-console.log('PASS: default menu migration, saved custom order, rhythm entry, bottom MyPage and both portals\' configured sidebar order.');
+console.log('PASS: default menu migration, saved custom order, WsPI top-level move, rhythm entry, bottom MyPage and both portals\' configured sidebar order.');

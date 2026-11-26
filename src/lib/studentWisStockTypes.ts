@@ -29,7 +29,14 @@ export interface StudentWisStockMarket {
   rules: WisStockMarketRules;
   stocks: StudentWisStockInstrument[];
 }
+/** A scheduled delisting or merger, or a teacher's ordinary close ("close"). */
+export interface StudentWisStockExit {
+  atMs: number;
+  kind: "merge" | "delist" | "close";
+}
 export type StudentWisStockInstrument = Omit<WisStock, "settings"> & {
+  listedAtMs?: number;
+  exit?: StudentWisStockExit;
   settings: Pick<
     WisStockSettings,
     | "name"
@@ -72,6 +79,9 @@ export interface StudentWisStockState {
     >
   >;
   mainCash: number;
+  /** Present only on the 유스 venue's state. */
+  venue?: "OVERSEAS";
+  unit?: "유스";
   accountPath: string | null;
   /** Local response receipt time; never sent as an execution timestamp. */
   clientReceivedAtMs?: number;
@@ -106,7 +116,8 @@ export interface StudentWisStockHistoryEntry {
     | "WITHDRAW"
     | "ORDER_ACCEPTED"
     | "ORDER_FILLED"
-    | "ORDER_CANCELLED";
+    | "ORDER_CANCELLED"
+    | "EXCHANGE";
   atMs: number;
   stockId?: string;
   side?: "BUY" | "SELL";
@@ -119,6 +130,10 @@ export interface StudentWisStockHistoryEntry {
   earnedDelta: number;
   campaignId?: string;
   automaticSettlement?: "GRADUATION";
+  /** Exchange rows: the converted counter-amount and the day's rate. */
+  direction?: "WIS_TO_YUS" | "YUS_TO_WIS";
+  counterAmount?: number;
+  fxRate?: number;
 }
 export interface StudentWisStockHistoryPage {
   semesterId: string;
@@ -139,6 +154,21 @@ export interface StudentWisStockMutation {
   state: StudentWisStockState;
   order?: StudentWisStockOrder;
   receipt?: { withdrawnProfit?: number; principalReturned?: number };
+}
+export interface StudentWisStockExchangeResult {
+  changed: boolean;
+  duplicate: boolean;
+  receipt: {
+    id: string;
+    direction: "WIS_TO_YUS" | "YUS_TO_WIS";
+    debit: number;
+    credit: number;
+    rate: number;
+    fxDayKey: string;
+    appliedAtMs: number;
+  };
+  state: StudentWisStockState;
+  peer: { revision: number; stockCash: number; reservedCash: number } | null;
 }
 export interface StudentWisStockBonus {
   campaignId: string;

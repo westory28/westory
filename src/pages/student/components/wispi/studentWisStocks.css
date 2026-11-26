@@ -734,3 +734,318 @@
   .student-wispi-ranking-layout { grid-template-columns: minmax(0, 1fr); }
   .student-wispi-rank-detail { padding: 24px 0 0; border-left: 0; border-top: 1px solid var(--ws-border, #e5e7eb); }
 }
+
+/* 2026-11-26 위스피 개편: 해외 주식·주식 계좌·환전. 기존 토큰·간격·44px 조작 영역을 재사용한다. */
+.student-wispi-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.student-wispi-fx-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+}
+.student-wispi-fx-chip strong {
+  color: var(--ws-text-strong, #111827);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.student-wispi-logo {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--ws-surface, #fff);
+  box-shadow: inset 0 0 0 1px var(--ws-border, #e5e7eb);
+  object-fit: contain;
+  padding: 2px;
+  box-sizing: border-box;
+}
+.student-wispi-logo.is-initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+  font-weight: 800;
+}
+.student-wispi-instruments li > button > .student-wispi-logo {
+  margin-right: 4px;
+}
+.student-wispi-instruments li > button > .student-wispi-list-name {
+  flex: 1 1 auto;
+}
+.student-wispi-instruments li.is-ended > button {
+  opacity: 0.72;
+}
+.student-wispi-list-group {
+  margin: 0;
+  padding: 16px 8px 8px;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+}
+.student-wispi-price-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.student-wispi-price-title .student-wispi-logo {
+  width: 48px;
+  height: 48px;
+  margin-top: 4px;
+}
+.student-wispi-price p.student-wispi-ended-note {
+  flex: 1 1 220px;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.6;
+}
+.student-wispi-alerts {
+  margin-bottom: 16px;
+}
+.student-wispi-alerts h2 {
+  margin-bottom: 8px;
+  font-size: 16px;
+}
+.student-wispi-alerts ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.student-wispi button.student-wispi-alert {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  text-align: left;
+}
+.student-wispi-alert strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+.student-wispi-alert time {
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.student-wispi-alert-kind {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ws-primary-soft, #eff6ff);
+  color: var(--ws-primary-text, #1e3a8a);
+  font-size: 12px;
+  font-weight: 700;
+}
+.student-wispi-alert.is-delist .student-wispi-alert-kind {
+  background: var(--ws-danger-soft, #fef2f2);
+  color: var(--ws-danger-text, #b91c1c);
+}
+.student-wispi-alert:is(.is-merge, .is-close) .student-wispi-alert-kind {
+  background: var(--ws-bg, #f3f4f6);
+  color: var(--ws-text, #1f2937);
+}
+.student-wispi-asset-summary {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  margin-bottom: 24px;
+}
+.student-wispi-asset-total > span {
+  justify-content: flex-start;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+}
+.student-wispi-asset-total > strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--ws-text-strong, #111827);
+  font-size: 32px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.student-wispi-asset-total small,
+.student-wispi-asset-summary dd small {
+  font-size: 16px;
+  font-weight: 500;
+}
+.student-wispi-asset-summary dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  margin: 0;
+}
+.student-wispi-asset-summary dt {
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+}
+.student-wispi-asset-summary dd {
+  margin: 4px 0 0;
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.student-wispi-asset-summary .student-wispi-balance-note {
+  display: block;
+  margin-top: 4px;
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+}
+.student-wispi-account-switch {
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.student-wispi-exchange-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.student-wispi-fx-rate .student-wispi-inline {
+  justify-content: flex-start;
+}
+.student-wispi-fx-rate h2 {
+  margin: 0;
+}
+.student-wispi-fx-main {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 16px 0 4px;
+  font-variant-numeric: tabular-nums;
+}
+.student-wispi-fx-main > span {
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 16px;
+}
+.student-wispi-fx-main strong {
+  color: var(--ws-text-strong, #111827);
+  font-size: 32px;
+  font-weight: 800;
+}
+.student-wispi-fx-main small {
+  font-size: 16px;
+  font-weight: 500;
+}
+.student-wispi-fx-history {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--ws-border, #e5e7eb);
+  font-variant-numeric: tabular-nums;
+}
+.student-wispi-fx-history li {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+  font-size: 14px;
+}
+.student-wispi-fx-history .student-wispi-change {
+  justify-content: flex-end;
+}
+.student-wispi-exchange-form {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding-left: 24px;
+  border-left: 1px solid var(--ws-border, #e5e7eb);
+}
+.student-wispi-exchange-form h2 {
+  margin: 0;
+}
+.student-wispi-exchange-form .student-wispi-balances {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+.student-wispi-exchange-form .student-wispi-balances dd {
+  font-size: 20px;
+}
+.student-wispi-exchange-amount {
+  display: grid;
+  gap: 8px;
+}
+.student-wispi-exchange-amount > span {
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+}
+.student-wispi-exchange-amount input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 12px;
+  border: 1px solid var(--ws-border, #e5e7eb);
+  border-radius: 8px;
+  background: var(--ws-surface, #fff);
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.student-wispi-quick-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.student-wispi-quick-amounts button {
+  min-width: 64px;
+}
+.student-wispi-exchange-preview {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 16px 0;
+  border-block: 1px solid var(--ws-border, #e5e7eb);
+}
+.student-wispi-exchange-preview > span {
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+}
+.student-wispi-exchange-preview strong {
+  color: var(--ws-text-strong, #111827);
+  font-size: 24px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.student-wispi-exchange-preview small {
+  font-size: 16px;
+  font-weight: 500;
+}
+.student-wispi-exchange-form > p {
+  margin: 0;
+}
+@container (max-width: 760px) {
+  .student-wispi-exchange-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .student-wispi-exchange-form {
+    padding: 24px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--ws-border, #e5e7eb);
+  }
+}
+@media (max-width: 767px) {
+  .student-wispi-asset-total > strong,
+  .student-wispi-fx-main strong {
+    font-size: 28px;
+  }
+}

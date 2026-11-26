@@ -9,8 +9,14 @@ import {
   watchStudentWisStockSession,
 } from "./studentWisStockSession";
 import { withStudentWisStockReadRetry } from "./studentWisStockReadRetry";
+import {
+  DOMESTIC_STOCK_VENUE,
+  OVERSEAS_STOCK_VENUE,
+  type StudentWisStockVenue,
+} from "./studentWisStockVenue";
 import type {
   StudentWisStockBonus,
+  StudentWisStockExchangeResult,
   StudentWisStockHistoryPage,
   StudentWisStockMutation,
   StudentWisStockReturns,
@@ -24,7 +30,12 @@ type Boundary = {
   epoch: number;
   key: string;
   scope: WisStockScope;
+  venue: StudentWisStockVenue;
 };
+// The domestic key is unchanged; each other venue has its own suffix so its
+// account listener, reads and command flights never share domestic entries.
+const venueKey = (key: string, venue: StudentWisStockVenue) =>
+  venue.id === "DOMESTIC" ? key : `${key}:${venue.id}`;
 type StateListener = (value: WisStockLoad<StudentWisStockState>) => void;
 type StateEntry = {
   boundary: Boundary;
@@ -58,7 +69,10 @@ type PendingCommand = { requestId: string; fields: Record<string, unknown> };
 const requestIds = new Map<string, PendingCommand>();
 const changed = () =>
   new Error("로그인 상태가 바뀌었습니다. 화면을 다시 열어 주세요.");
-async function boundary(scope: WisStockScope): Promise<Boundary> {
+async function boundary(
+  scope: WisStockScope,
+  venue: StudentWisStockVenue = DOMESTIC_STOCK_VENUE,
+): Promise<Boundary> {
   const owner = auth.currentUser;
   if (!owner) throw changed();
   const epoch = Number((await owner.getIdTokenResult()).claims.auth_time);
@@ -74,7 +88,11 @@ async function boundary(scope: WisStockScope): Promise<Boundary> {
     owner,
     epoch,
     scope,
-    key: `${owner.uid}:${epoch}:${scope.year}:${scope.semester}`,
+    venue,
+    key: venueKey(
+      `${owner.uid}:${epoch}:${scope.year}:${scope.semester}`,
+      venue,
+    ),
   };
 }
 async function check(b: Boundary) {
@@ -114,12 +132,13 @@ function accept(value: StudentWisStockState, b: Boundary) {
     !Array.isArray(value.stocks) ||
     !Number.isSafeInteger(value.serverNowMs)
   )
-    throw new Error("주식 지갑을 확인하지 못했습니다. 다시 시도해 주세요.");
+    throw new Error("주식 계좌를 확인하지 못했습니다. 다시 시도해 주세요.");
   if (
-    value.accountPath !== null &&
-    !new RegExp(
-      `^years/${b.scope.year}/semesters/${b.scope.semester}/wis_stock_accounts/wisacct_[a-f0-9]{64}$`,
-    ).test(value.accountPath)
+    (b.venue.id === "OVERSEAS") !== (value.venue === "OVERSEAS") ||
+    (value.accountPath !== null &&
+      !new RegExp(
+        `^years/${b.scope.year}/semesters/${b.scope.semester}/${b.venue.accountCollection}/wisacct_[a-f0-9]{64}$`,
+      ).test(value.accountPath))
   )
     throw changed();
   return { ...value, clientReceivedAtMs: Date.now() };
@@ -131,7 +150,7 @@ async function readState(b: Boundary) {
   const existing = ownerReads.get(b.key);
   if (existing) return existing;
   const task = withStudentWisStockReadRetry(
-    () => invoke<StudentWisStockState>(b, "getStudentWisStockState"),
+    () => invoke<StudentWisStockState>(b, b.venue.stateCallable),
     undefined,
     () =>
       auth.currentUser === b.owner &&
@@ -155,7 +174,7 @@ export function studentWisStockError(error: unknown) {
   if (e.details?.reason === "WIS_STOCK_MARKET_CLOSED")
     return "위스피의 거래가 중지되었습니다.";
   if (e.details?.reason === "WIS_STOCK_CAMPAIGN_INELIGIBLE")
-    return "주식 지갑에 누적 500위스를 입금한 뒤 받아 주세요.";
+    return "주식 계좌에 누적 500위스를 입금한 뒤 받아 주세요.";
   if (e.details?.reason === "WIS_STOCK_CAMPAIGN_DISABLED")
     return "현재 이벤트 지원금을 받을 수 없습니다.";
   if (e.details?.reason === "WIS_STOCK_BONUS_RESTRICTION_PENDING")
@@ -178,8 +197,11 @@ export const studentWisStockNow = (state: StudentWisStockState) =>
   state.serverNowMs +
   Math.max(0, Date.now() - (state.clientReceivedAtMs ?? Date.now()));
 
-export async function refreshStudentWisStockState(scope: WisStockScope) {
-  const b = await boundary(scope);
+export async function refreshStudentWisStockState(
+  scope: WisStockScope,
+  venue: StudentWisStockVenue = DOMESTIC_STOCK_VENUE,
+) {
+  const b = await boundary(scope, venue);
   const entry = entries.get(b.key);
   if (!entry || entry.boundary.owner !== b.owner) return false;
   entry.refresh();
@@ -190,11 +212,12 @@ export async function refreshStudentWisStockState(scope: WisStockScope) {
 export function watchStudentWisStockState(
   scope: WisStockScope,
   listener: StateListener,
+  venue: StudentWisStockVenue = DOMESTIC_STOCK_VENUE,
 ) {
   let cancelled = false,
     detach = () => {};
   listener({ status: "loading", data: null, error: "" });
-  void boundary(scope)
+  void boundary(scope, venue)
     .then((b) => {
       if (cancelled) return;
       let entry = entries.get(b.key);
@@ -267,12 +290,12 @@ export function watchStudentWisStockState(
                   current.state.status !== "ready" ||
                   current.state.data.account.revision !== 0
                 )
-                  fail(new Error("주식 지갑을 다시 확인해 주세요."));
+                  fail(new Error("주식 계좌를 다시 확인해 주세요."));
                 return;
               }
               const revision = Number(snapshot.data().revision);
               if (!Number.isSafeInteger(revision)) {
-                fail(new Error("주식 지갑을 확인하지 못했습니다."));
+                fail(new Error("주식 계좌를 확인하지 못했습니다."));
                 return;
               }
               current.seenRevision = Math.max(current.seenRevision, revision);
@@ -461,27 +484,32 @@ export function watchStudentWisStockState(
   };
 }
 const commandSignature = (name: string, value: Record<string, unknown>) =>
-  name === "placeStudentWisStockOrder"
+  name === DOMESTIC_STOCK_VENUE.placeCallable ||
+  name === OVERSEAS_STOCK_VENUE.placeCallable
     ? { stockId: value.stockId, side: value.side, quantity: value.quantity }
     : value;
-async function mutate(
+async function mutate<
+  T extends StudentWisStockMutation = StudentWisStockMutation,
+>(
   scope: WisStockScope,
   name: string,
   fields: Record<string, unknown>,
   withRequestId = true,
-) {
+  venue: StudentWisStockVenue = DOMESTIC_STOCK_VENUE,
+): Promise<T> {
   const owner = auth.currentUser;
   if (!owner) throw changed();
   const flightKey = JSON.stringify([
     scope.year,
     scope.semester,
+    venue.id,
     name,
     commandSignature(name, fields),
   ]);
   const ownerCommands = commands.get(owner) || new Map<string, CommandEntry>();
   commands.set(owner, ownerCommands);
   const command = ownerCommands.get(flightKey) || {};
-  if (command.flight) return command.flight;
+  if (command.flight) return command.flight as Promise<T>;
   ownerCommands.set(flightKey, command);
   // Acquire before the first await: a renewed session must not overtake an
   // identical order while its receipt is being prepared or the call is pending.
@@ -492,13 +520,14 @@ async function mutate(
     withRequestId,
     owner,
     command,
+    venue,
   ).finally(() => {
     if (command.flight !== task) return;
     command.flight = undefined;
     if (!command.pendingKey) ownerCommands.delete(flightKey);
   });
   command.flight = task;
-  return task;
+  return task as Promise<T>;
 }
 async function prepareMutation(
   scope: WisStockScope,
@@ -507,8 +536,9 @@ async function prepareMutation(
   withRequestId: boolean,
   owner: User,
   command: CommandEntry,
+  venue: StudentWisStockVenue,
 ) {
-  const b = await boundary(scope);
+  const b = await boundary(scope, venue);
   if (b.owner !== owner) throw changed();
   // Student trades use the existing application session proof and App Check.
   await ensureWestoryAppCheck();
@@ -580,6 +610,15 @@ async function prepareMutation(
           : {}),
       };
       entries.get(b.key)?.apply(result.state);
+      // An exchange also changed the paired 유스 account; its open view
+      // re-reads once (its own account listener may race this harmlessly).
+      if (name === "exchangeStudentWisStockCurrency" && result.changed) {
+        const peer = entries.get(venueKey(b.key, OVERSEAS_STOCK_VENUE));
+        if (peer) {
+          invalidateDetails(peer);
+          peer.refresh();
+        }
+      }
       command.pendingKey = undefined;
       requestIds.delete(key);
       try {
@@ -619,6 +658,11 @@ async function prepareMutation(
           "WIS_STOCK_UNSAFE_TOTAL",
           "WIS_STOCK_CAMPAIGN_DISABLED",
           "WIS_STOCK_CAMPAIGN_INELIGIBLE",
+          "WIS_STOCK_FX_RATE_CHANGED",
+          "WIS_STOCK_FX_UNAVAILABLE",
+          "WIS_STOCK_FX_INSUFFICIENT",
+          "WIS_STOCK_FX_TOO_SMALL",
+          "WIS_STOCK_FX_INPUT_INVALID",
         ].includes(reason)
       ) {
         command.pendingKey = undefined;
@@ -690,16 +734,33 @@ export const placeStudentWisStockOrder = (
     quantity: number;
     quote: { price: number; atMs: number; marketRevision: number };
   },
-) => mutate(scope, "placeStudentWisStockOrder", input);
+  venue: StudentWisStockVenue = DOMESTIC_STOCK_VENUE,
+) => mutate(scope, venue.placeCallable, input, true, venue);
 export const cancelStudentWisStockOrder = (
   scope: WisStockScope,
   orderId: string,
-) => mutate(scope, "cancelStudentWisStockOrder", { orderId }, false);
+  venue: StudentWisStockVenue = DOMESTIC_STOCK_VENUE,
+) => mutate(scope, venue.cancelCallable, { orderId }, false, venue);
+/** Wis ↔ 유스 at the confirmed daily rate; the server re-checks every value. */
+export const exchangeStudentWisStockCurrency = (
+  scope: WisStockScope,
+  input: {
+    direction: "WIS_TO_YUS" | "YUS_TO_WIS";
+    amount: number;
+    rate: number;
+  },
+) =>
+  mutate<StudentWisStockMutation & StudentWisStockExchangeResult>(
+    scope,
+    "exchangeStudentWisStockCurrency",
+    input,
+  );
 export async function getStudentWisStockHistory(
   scope: WisStockScope,
   cursor = "",
+  venue: StudentWisStockVenue = DOMESTIC_STOCK_VENUE,
 ) {
-  const b = await boundary(scope);
+  const b = await boundary(scope, venue);
   const entry = entries.get(b.key);
   // Share only overlapping reads under the same live account/session revision.
   // Completed pages are never cached; pause, revision changes and commands
@@ -715,11 +776,10 @@ export async function getStudentWisStockHistory(
       : undefined;
   const existing = pending?.get(cursor);
   if (existing) return existing;
-  const task = invoke<StudentWisStockHistoryPage>(
-    b,
-    "getStudentWisStockHistory",
-    { cursor, limit: 20 },
-  )
+  const task = invoke<StudentWisStockHistoryPage>(b, b.venue.historyCallable, {
+    cursor,
+    limit: 20,
+  })
     .then((result) => {
       if (
         result?.semesterId !== `${scope.year}-${scope.semester}` ||
@@ -737,13 +797,16 @@ export async function getStudentWisStockHistory(
   return task;
 }
 
-export async function getStudentWisStockReturns(scope: WisStockScope) {
-  const b = await boundary(scope);
+export async function getStudentWisStockReturns(
+  scope: WisStockScope,
+  venue: StudentWisStockVenue = DOMESTIC_STOCK_VENUE,
+) {
+  const b = await boundary(scope, venue);
   const entry = entries.get(b.key);
   if (entry?.boundary.owner !== b.owner || entry.state.status !== "ready")
     throw changed();
   if (entry.returnsRead) return entry.returnsRead;
-  const task = invoke<StudentWisStockReturns>(b, "getStudentWisStockHistory", {
+  const task = invoke<StudentWisStockReturns>(b, b.venue.historyCallable, {
     view: "returns",
   })
     .then((data) => {

@@ -141,10 +141,12 @@ for (const small of [false, true]) {
   assert(html.includes('aria-label="수업 용어 사전"'));
   assert(html.includes('class="teacher-sidebar-compact-label" aria-hidden="true">우리 학교 학생</span>'));
 
-  setup("teacher", "/teacher/points", "?tab=stocks");
+  // A menu saved while WsPI was a child of 위스 (before 2026-11-26).
+  setup("teacher", "/teacher/points", "");
+  auth.menuConfig.teacher = auth.menuConfig.teacher.filter(item => item.url !== "/teacher/wispi");
   const legacyWis = auth.menuConfig.teacher.find(item => item.url === "/teacher/points");
   legacyWis.name = "위스 관리";
-  legacyWis.children.find(child => child.url.endsWith("tab=stocks")).name = "위스 주식";
+  legacyWis.children.push({ name: "위스 주식", url: "/teacher/points?tab=stocks" });
   legacyWis.children.find(child => child.url.endsWith("tab=products")).name = "상품 관리";
   legacyWis.children.find(child => child.url.endsWith("shop=avatar")).name = "아바타 아이템 관리";
   auth.menuConfig = sanitizeMenuConfig(sanitizeMenuConfig(auth.menuConfig));
@@ -153,30 +155,36 @@ for (const small of [false, true]) {
   assert(html.includes('aria-label="위스"'));
   assert(!html.includes('aria-label="위스 마을"') && !html.includes('id="teacher-menu-shop"'));
   assert.match(wis, /<a[^>]*href="#\/teacher\/points"[^>]*>위스 관리<\/a>/, "Management is one direct link inside Wis");
-  assert.equal(urls(wis).length, 5, "Wis contains management, hall and three shops");
-  assert(wis.includes("위스 상점") && wis.includes("아바타 상점") && wis.includes("위스피(WsPI)"));
-  assert.equal(urls(wis).filter(url => url === "/teacher/points?tab=stocks").length, 1);
+  assert.equal(urls(wis).length, 4, "Wis contains management, hall and two shops");
+  assert(wis.includes("위스 상점") && wis.includes("아바타 상점") && !wis.includes("위스피") && !wis.includes("tab=stocks"), "WsPI left Wis");
   assert(!wis.includes('class="teacher-sidebar-nested-menu"'), "Management leaves are shown in the page sidebar");
   for (const tab of ["overview", "grant", "policy", "ranks"]) {
     location.search = `?tab=${tab}`;
     assert.match(submenu(render("teacher"), "teacher", "points"), /<a(?=[^>]*href="#\/teacher\/points")(?=[^>]*aria-current="page")[^>]*>/, `${tab} bookmark selects management`);
   }
-  location.search = "?tab=stocks";
   assert(!wis.includes("tab=requests"), "Purchase requests are an internal shop tab");
-  assert.match(wis, /<a(?=[^>]*href="#\/teacher\/points\?tab=stocks")(?=[^>]*aria-current="page")[^>]*>/);
   location.search = "?tab=requests";
   assert.match(submenu(render("teacher"), "teacher", "points"), /<a(?=[^>]*href="#\/teacher\/points\?tab=products")(?=[^>]*aria-current="page")[^>]*>/, "Old request bookmark selects the shop parent");
-  const stockMenu = auth.menuConfig.teacher.find(item => item.url === "/teacher/points").children.find(child => child.url.endsWith("tab=stocks"));
-  Object.assign(stockMenu, { name: "우리 반 투자실", nameCustomized: true });
+  location = { pathname: "/teacher/wispi", search: "?tab=overseas" };
+  html = render("teacher");
+  const wispi = submenu(html, "teacher", "wispi");
+  assert.deepEqual(urls(wispi), ["/teacher/wispi", "/teacher/wispi?tab=overseas", "/teacher/wispi?tab=rules", "/teacher/wispi?tab=preview", "/teacher/wispi?tab=investments", "/teacher/wispi?tab=reports"], "WsPI is its own group of tabs");
+  assert.match(wispi, /<a(?=[^>]*href="#\/teacher\/wispi\?tab=overseas")(?=[^>]*aria-current="page")[^>]*>/);
+  assert.doesNotMatch(wispi, /<a(?=[^>]*href="#\/teacher\/wispi")(?=[^>]*aria-current="page")[^>]*>/, "Domestic tab is not current on another tab");
+  const renamed = JSON.parse(JSON.stringify(auth.menuConfig));
+  renamed.teacher = renamed.teacher.filter(item => item.url !== "/teacher/wispi");
+  renamed.teacher.find(item => item.url === "/teacher/points").children.push({ name: "우리 반 투자실", nameCustomized: true, url: "/teacher/points?tab=stocks" });
+  auth.menuConfig = sanitizeMenuConfig(renamed);
+  assert(render("teacher").includes('aria-label="우리 반 투자실"'), "A custom label on the old WsPI child carries over to the new menu");
   auth.menuConfig = sanitizeMenuConfig(auth.menuConfig);
-  assert(submenu(render("teacher"), "teacher", "points").includes("우리 반 투자실"), "Explicit custom labels survive migration");
   auth.currentUser.email = "staff@fixture.invalid";
   auth.userData = { role: "staff", teacherPortalEnabled: true, staffPermissions: ["point_read"] };
   html = render("teacher");
-  assert(urls(html).includes("/teacher/points?tab=stocks"));
+  assert(urls(html).includes("/teacher/wispi?tab=overseas"));
+  assert(!urls(html).includes("/teacher/wispi?tab=reports"), "Weekly stock reports stay teacher-only");
   assert(!urls(html).some(url => url.includes("shop=avatar")), "Avatar administration stays restricted");
   auth.userData.staffPermissions = ["lesson_read"];
-  assert(!urls(render("teacher")).some(url => url.includes("/teacher/points")), "Staff without point access cannot see Wis destinations");
+  assert(!urls(render("teacher")).some(url => url.includes("/teacher/points") || url.includes("/teacher/wispi")), "Staff without point access cannot see Wis or WsPI destinations");
 
   setup("student", "/student/points", "?tab=orders");
   html = render("student");
@@ -188,7 +196,7 @@ for (const small of [false, true]) {
   assert.match(studentWis, /<a[^>]*href="#\/student\/points"[^>]*>내 위스<\/a>/, "Students open their wallet directly inside Wis");
   assert.equal(urls(studentWis).length, 4, "Student Wis has own wallet, hall and the currently released shops");
   assert(studentWis.includes("위스 상점") && studentWis.includes("아바타 상점"));
-  assert(!html.includes("tab=stocks") && !html.includes("위스피"), "Renaming never publishes student WsPI");
+  assert(!html.includes("/student/wispi") && !html.includes("위스피"), "A closed market never shows student WsPI");
   assert.match(studentWis, /<a(?=[^>]*href="#\/student\/points\?tab=shop")(?=[^>]*aria-current="page")[^>]*>/, "Order history bookmark selects the shop parent");
   const visibleMenus = auth.menuConfig;
   auth.menuConfig = JSON.parse(JSON.stringify(visibleMenus));
@@ -202,9 +210,12 @@ for (const small of [false, true]) {
   assert.deepEqual(urls(shopsOnly), ["/student/points?tab=shop", "/student/points?tab=shop&amp;shop=avatar"]);
   auth.menuConfig = visibleMenus;
   marketPublished = true;
-  assert(urls(render('student')).includes('/student/wispi'), 'Published WsPI remains in the menu while trading is halted');
+  html = render('student');
+  assert(urls(html).includes('/student/wispi'), 'Published WsPI remains in the menu while trading is halted');
+  assert(!urls(submenu(html, 'student', 'points')).some(url => url.includes('wispi')), 'Student WsPI is its own menu, not inside Wis');
+  assert.deepEqual(urls(submenu(html, 'student', 'wispi')), ['/student/wispi', '/student/wispi?tab=overseas', '/student/wispi?tab=account', '/student/wispi?tab=exchange', '/student/wispi?tab=ranking']);
   auth.config.studentMenuVisibility = { wispi: false };
   assert(!urls(render('student')).includes('/student/wispi'), 'Only interface visibility hides an already published market');
   marketPublished = false;
 }
-console.log("PASS: student/teacher route separation, configured labels, unified Wis with direct teacher management and student wallet, preserved bookmarks, point/avatar permissions, closed student WsPI, mobile/desktop/collapsed navigation; no backend calls.");
+console.log("PASS: student/teacher route separation, configured labels, unified Wis with direct teacher management and student wallet, preserved bookmarks, point/avatar permissions, closed student WsPI, top-level WsPI tabs, mobile/desktop/collapsed navigation; no backend calls.");
