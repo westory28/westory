@@ -38,6 +38,14 @@ const RELEASES = {
         'nextPrice, advanceMarket, blankMarket'),
     },
   },
+  // A dated drift premium (2026-11-30 08:00 KST) in the shared price model.
+  'drift-20261127': {
+    baseline: 'd13c9cd13b2fe93b59a30be984a2b0c2d035b168',
+    out: 'output/wispi-drift-20261127/release',
+    replaced: ['wisStockPriceModel.mjs'],
+    added: [],
+    liveFromBaseline: {},
+  },
   // Weeks 1-5 "survive" catalog stocks merge at the end of the following week.
   'catalog-exits-20261127': {
     baseline: 'd13c9cd13b2fe93b59a30be984a2b0c2d035b168',
