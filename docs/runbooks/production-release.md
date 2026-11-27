@@ -1,5 +1,14 @@
 # 운영 배포 절차
 
+## 위스피 전광판·해외 탭·존속 종목 정리·상승 추세 (2026-11-27)
+
+사용자 요청: 전광판에 남은 상폐·합병 종목 제거와 속보 노출, 해외 화면을 국내처럼, 탭 이름을 반복하는 제목 제거, 1주차 존속 종목 당일 정리(끝까지 존속 금지), 시간봉의 휴장 구간 생략, 전광판 버튼을 탭 줄로, 6주 기획안을 가격 엔진 예정가와 일치, 보통 종목이 약 20% 더 오르게.
+
+- 원인 조사(읽기 전용): 전광판 속보는 거래 종료를 3초씩 하루 한 번만 보여 놓치기 쉬웠다. 상폐·합병은 기획안 시각대로 일어났고 지연된 종목은 없었다. 국내 엔진은 기획안의 종목별 상승·하락 구간을 쓰지 않으며(`DOMESTIC.historyTrend: false`), 기획안 화면의 '미상장 모의 시세'는 실제 엔진과 다른 계산이었다. '운영 예정 시세'는 11/24~27 실제 기록과 30종목 모두 일치했다. 거래 학생 71%의 손실은 11/24 이전 왕복 10% 수수료와 잦은 매매가 주원인이었다.
+- `b60ec06a`: 규칙 세트 `1b53cb8b`(이전 `a819acb9`, 해외 공개 문서에만 `upcoming` 허용) → 저장소에서 해외 게시 함수 4개(`advanceWisStockOverseasPrices`, `setWisStockOverseasMarketHalted`, `saveWisStockOverseasMarketRules`, `activateWisStockOverseasCatalogPlan`) → 해외 공개 문서 `upcoming` 한 필드를 같은 투영 코드로 계산해 `currentDocument.updateTime` 조건으로 채움(첫 상장 전에는 서버 쓰기가 없어서) → Vercel `dpl_7GzQKdgjUAuRAeSvL59ZTaP3nkCU` 승격. 운영에서 해외 탭 목록·제목 줄 상태, 탭 줄 전광판 버튼, 전광판의 거래 종료 종목 제외와 10초 속보, 시간봉 연속 표시를 확인했다.
+- `534e74e0`: 국내 1~5주차 `survive` 30종목을 다음 주 금요일 15:00 회차 합병으로 바꿈(1주차 11/27, 2주차 12/4, 3주차 12/11, 4주차 12/18, 5주차 12/25). `node scripts/prepare-wispi-overseas-release.mjs prepare|preflight|verify --release catalog-exits-20261127`로 국내 시장 7개 함수의 운영 ZIP에서 `wisStockCatalog.json`만 교체. 배포 전 운영 시장 문서로 다음 회차 정리 대상을 계산해 1주차 5종목만 나오는 것을 확인했고, 15:40 회차에 움집홈즈 37·첫밭푸드 183·실잇텍스 305·여덟줄리걸 116·거푸집랩 187위스로 합병, 5건 정산 작업 COMPLETE.
+- `3fbee8da`: 가격 모델에 2026-11-30 08:00 이후 회차에만 drift +4bp(`WIS_STOCK_DRIFT_PREMIUM`). 실시간과 운영 예정 시세가 같은 시각을 넘기므로 계속 일치하고 지난 기록은 바뀌지 않는다. 국내 시장 7개(`--release drift-20261127`)와 주간 보고서 예정가 `exportWisStockWeeklyReportData`(`prepare-function-release.mjs --file wisStockPriceModel.mjs`)는 운영 ZIP에서 모델 파일만 교체, 해외는 저장소에서 `advanceWisStockOverseasPrices`. 6주 기획안은 종목 선택 시 운영 예정 시세를 바로 불러와 상장 종목은 실제 기록에 이어 그린다.
+
 ## 위스피 해외 주식·환전·독립 메뉴 (2026-11-26)
 
 설계·검증·남은 한계는 [출시 기록](../reviews/wispi-overseas-launch-20261126.md)을 따른다. 해외 장은 평일 16:00~23:00(한국 시각)이고 시세는 별도 예약 작업이 갱신한다. 운영 위스피 함수 27개가 11가지 다른 판의 공용 모듈을 싣고 있고 다수는 어떤 커밋과도 일치하지 않으므로, 저장소 전체를 기존 함수에 배포하지 않았다.

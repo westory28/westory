@@ -60,7 +60,11 @@ assert.deepEqual(simulate(rules, '2026-2', plan), examples, 'Stable rules produc
 assert.throws(() => simulate({ ...rules, dailyPriceLimitBps: 6001 }, '2026-2', plan));
 const exitEntry = { id: bipa.id, exitSession: 34 };
 const extendedAt = Date.parse('2026-11-24T14:00:00+09:00');
-const extended = { ...plan, exitsEnabledAtMs: startsAtMs, exitOverrides: { [bipa.id]: extendedAt } };
+// 움집홈즈 merges on 11/27 in the catalog (2026-11-27); the fixture extends it
+// past the December special sessions whose closes this check verifies.
+const umjipId = examples.find(stock => stock.settings.name === '움집홈즈').id;
+const extended = { ...plan, exitsEnabledAtMs: startsAtMs,
+  exitOverrides: { [bipa.id]: extendedAt, [umjipId]: Date.parse('2026-12-25T15:00:00+09:00') } };
 assert.equal(catalogSessionAtMs(34, startsAtMs), Date.parse('2026-11-20T14:00:00+09:00'));
 assert.equal(catalogExitAtMs(exitEntry, extended), extendedAt);
 assert.equal(catalogExitAtMs({ ...exitEntry, exitSession: null }, extended), null);
@@ -177,11 +181,12 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.equal(await page.locator('.wis-stock-preview__heading').evaluate(el => getComputedStyle(el).backgroundColor), 'rgba(0, 0, 0, 0)');
     await page.screenshot({ path: path.join(evidence, `registered-plan-${width}.png`), fullPage: true });
-    await page.getByRole('button', {name:/움집홈즈/}).click();
     const forecastButton = page.getByRole('button', {name:'운영 예정 시세',exact:true});
     const chart = page.getByRole('region', {name:'운영 예정 시세',exact:true});
+    // The 6-week plan opens on the engine forecast of a trading stock (one read
+    // on selection); a failed read offers an explicit retry.
     await page.evaluate(()=>window.forecastQa.fail=true);
-    await forecastButton.press('Enter');
+    await page.getByRole('button', {name:/움집홈즈/}).click();
     await chart.getByText('합성 조회 오류', {exact:true}).waitFor();
     await chart.getByRole('button',{name:'다시 조회',exact:true}).click();
     const closings = chart.locator('.wis-stock-catalog__event-prices');
@@ -201,12 +206,14 @@ try {
     assert.equal(await page.evaluate(()=>window.forecastQa.calls.length),2);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
     await page.screenshot({path:path.join(evidence,`forecast-${width}.png`), fullPage:true});
+    // 서인발전 is week 6's first stock: choosing the week selects and loads it.
+    await page.evaluate(()=>window.forecastQa.hold=true);
     await page.getByLabel('공개 차수', {exact:true}).selectOption('6');
     await page.getByRole('button', {name:/서인발전/}).click();
     assert.deepEqual(await page.evaluate(()=>window.forecastQa.examples.map(({id,count})=>[id,count])),[[future.id,1]]);
     entryTimes.at(-1).selectedExampleMs = Math.round(await page.evaluate(()=>window.forecastQa.examples[0].ms));
-    await page.evaluate(()=>window.forecastQa.hold=true);
-    await forecastButton.click();
+    // An unlisted stock offers only the engine forecast, not a local illustration.
+    assert.equal(await forecastButton.count(), 0);
     await chart.getByRole('status').waitFor();
     await page.evaluate(()=>window.forecastQa.release());
     await chart.getByRole('heading',{name:'서인발전 예정 시세',exact:true}).waitFor();
@@ -216,10 +223,8 @@ try {
     await page.getByLabel('공개 차수',{exact:true}).selectOption('1');
     await page.getByRole('button', { name: /돌끝테크/ }).click();
     await page.getByText('6주 기획안 · 상장 예정 종목', { exact: true }).waitFor();
-    await page.evaluate(() => window.qa.setValue(value => ({ ...value, rules: { ...value.rules, automaticPrices: false } })));
-    await page.waitForFunction(() => window.qa.value.rules.automaticPrices === false);
-    await page.waitForFunction(() => document.querySelectorAll('.wispi-price-chart__candle').length === 1);
-    assert.equal(await page.locator('.wispi-price-chart__candle').count(), 1);
+    await chart.waitFor();
+    assert.equal(await forecastButton.count(), 0, 'An upcoming stock shows the engine forecast, not a local illustration');
     await page.evaluate(() => window.qa.setValue(value => ({ ...value, stocks: value.stocks.map(stock => stock.settings.name === '비파메탈' ? { ...stock, id: 'stock_000000000000000000000999' } : stock) })));
     await page.getByRole('button', { name: /비파메탈/ }).click();
     await page.getByText('6주 기획안 · 등록 종목', { exact: true }).waitFor();
@@ -235,7 +240,7 @@ try {
   }
   assert.deepEqual(errors, []);
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
-const report = { status: 'PASS', calculationMs, checks: ['Registered observations are the same objects in both views, including legacy IDs; no synthetic append or mutation.', 'Unlisted examples use saved days/hours, ten-minute slots, daily bounds, circuit stop/resume, automatic/market stop and 100–500 opening examples.', 'Shared session and extended exit dates remain identical across server/client; null exits and invalid dates tested.', '390/768/1280/1440 browser: three dated events are visible before any forecast read. Registered and upcoming quotes use actual handler projections. A 1,000-Wis manual instrument closes at 800/880/968 and every displayed 10-minute slot agrees with the response. Upcoming prices begin at listing. One scoped forecast request uses 5 reads and zero writes in the synthetic database.', 'No fetch on selection, one per explicit attempt, local toggle restores the result. Past 431-Wis observations survive, no external service request (existing font stylesheet blocked).'], evidence };
+const report = { status: 'PASS', calculationMs, checks: ['Registered observations are the same objects in both views, including legacy IDs; no synthetic append or mutation.', 'Unlisted examples use saved days/hours, ten-minute slots, daily bounds, circuit stop/resume, automatic/market stop and 100–500 opening examples.', 'Shared session and extended exit dates remain identical across server/client; null exits and invalid dates tested.', '390/768/1280/1440 browser: three dated events are visible before any forecast read. Registered and upcoming quotes use actual handler projections. A 1,000-Wis manual instrument closes at 800/880/968 and every displayed 10-minute slot agrees with the response. Upcoming prices begin at listing. One scoped forecast request uses 5 reads and zero writes in the synthetic database.', 'The 6-week plan opens a trading or upcoming stock on the engine forecast with one read per selection and an explicit retry; a closed stock opens on its records without a read; the recorded-price toggle restores the result. Past 431-Wis observations survive, no external service request (existing font stylesheet blocked).'], evidence };
 report.browserTimings = entryTimes;
 await fs.writeFile(path.join(evidence, 'summary.json'), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));

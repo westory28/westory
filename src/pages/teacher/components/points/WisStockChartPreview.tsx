@@ -314,7 +314,13 @@ export default function WisStockChartPreview({
               stockId={selected.id}
               stockName={selected.settings.name}
               currentLabel={registered ? "등록 시세" : undefined}
-              initialShowPlan={isPlan}
+              // A delisted, merged or halted stock has no forecast to load.
+              initialShowPlan={
+                isPlan &&
+                !["GRADUATED", "HALTED"].includes(
+                  selected.settings.tradingStatus,
+                )
+              }
               observedHistory={
                 isPlan && registered ? selected.history : undefined
               }
