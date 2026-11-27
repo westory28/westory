@@ -17,23 +17,44 @@ import { accessToken, readCloud, functionUrl, sourceUrl, zipInventory, inventory
 //   node scripts/prepare-wispi-overseas-release.mjs prepare    (writes output/wispi-overseas-20261126/release)
 //   node scripts/prepare-wispi-overseas-release.mjs preflight  (live archive unchanged since prepare)
 //   node scripts/prepare-wispi-overseas-release.mjs verify     (deployed archive equals the package)
+// A later market-package release adds `--release <id>` (see RELEASES); each
+// replaces only its listed files, checking the live copy against the reviewed
+// version first.
 const mode = process.argv[2];
 assert.ok(['prepare', 'preflight', 'verify'].includes(mode), 'prepare | preflight | verify');
-const baseline = 'd13c9cd13b2fe93b59a30be984a2b0c2d035b168';
-const out = path.join(root, 'output/wispi-overseas-20261126/release');
+const releaseIndex = process.argv.indexOf('--release');
+const releaseId = releaseIndex > 0 ? process.argv[releaseIndex + 1] : 'overseas-20261126';
+const RELEASES = {
+  'overseas-20261126': {
+    baseline: 'd13c9cd13b2fe93b59a30be984a2b0c2d035b168',
+    out: 'output/wispi-overseas-20261126/release',
+    replaced: ['wisStocks.js', 'wisStockCatalogSchedule.js', 'wisStockCatalogTimeline.mjs'],
+    added: ['wisStockVenues.js', 'wisStockFx.js', 'wisStockFx.mjs', 'wisStockOverseasCatalog.json'],
+    // The only reviewed difference between the live market files and the baseline:
+    // the live wisStocks.js predates the advanceScheduledSlot export used by the
+    // weekly report functions (which carry their own copy).
+    liveFromBaseline: {
+      'wisStocks.js': text => text.replace('nextPrice, advanceMarket, advanceScheduledSlot, blankMarket',
+        'nextPrice, advanceMarket, blankMarket'),
+    },
+  },
+  // Weeks 1-5 "survive" catalog stocks merge at the end of the following week.
+  'catalog-exits-20261127': {
+    baseline: 'd13c9cd13b2fe93b59a30be984a2b0c2d035b168',
+    out: 'output/wispi-catalog-exits-20261127/release',
+    replaced: ['wisStockCatalog.json'],
+    added: [],
+    liveFromBaseline: {},
+  },
+};
+const release = RELEASES[releaseId];
+assert.ok(release, `Unknown --release ${releaseId}`);
+const { baseline, replaced, added, liveFromBaseline } = release;
+const out = path.join(root, release.out);
 const packageRoot = path.join(out, 'market');
 const manifestPath = path.join(out, 'market-manifest.json');
 const marketFunctions = ['activateWisStockCatalogExits', 'activateWisStockCatalogPlan', 'advanceWisStockPrices',
   'getWisStockManagement', 'saveWisStock', 'saveWisStockMarketRules', 'setWisStockMarketHalted'];
-const replaced = ['wisStocks.js', 'wisStockCatalogSchedule.js', 'wisStockCatalogTimeline.mjs'];
-const added = ['wisStockVenues.js', 'wisStockFx.js', 'wisStockFx.mjs', 'wisStockOverseasCatalog.json'];
-// The only reviewed difference between the live market files and the baseline:
-// the live wisStocks.js predates the advanceScheduledSlot export used by the
-// weekly report functions (which carry their own copy).
-const liveFromBaseline = {
-  'wisStocks.js': text => text.replace('nextPrice, advanceMarket, advanceScheduledSlot, blankMarket',
-    'nextPrice, advanceMarket, blankMarket'),
-};
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 const token = accessToken();
 
