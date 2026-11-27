@@ -355,7 +355,7 @@ export default function WisStockWeeklyReports(scope: ReportScope) {
   const [version, setVersion] = useState(0);
   return (
     <section className="wis-report" aria-label="주식 보고서">
-      <h2>주식 보고서</h2>
+      <h2 className="sr-only">주식 보고서</h2>
       <div className="wis-report__toolbar">
         <label>
           보고서 주차

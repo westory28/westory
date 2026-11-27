@@ -39,6 +39,15 @@ export interface StudentWisStockMarket {
   updatedAtMs: number;
   rules: WisStockMarketRules;
   stocks: StudentWisStockInstrument[];
+  /** Overseas only: catalog stocks not listed yet, in listing order. */
+  upcoming?: StudentWisStockUpcoming[];
+}
+export interface StudentWisStockUpcoming {
+  id: string;
+  name: string;
+  period: string;
+  tagline: string;
+  listingAtMs: number;
 }
 /** A scheduled delisting or merger, or a teacher's ordinary close ("close"). */
 export interface StudentWisStockExit {

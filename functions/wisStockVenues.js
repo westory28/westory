@@ -15,6 +15,7 @@ const DOMESTIC = Object.freeze({
   taskFunction: 'settleWisStockOrderTask', schedule: domesticSchedule,
   historyTrend: false, specialSessions: true, forecast: true,
   board: true, displayTrades: true, displayDoc: 'market', transfers: true, bonus: true, enrollmentSync: true,
+  publishUpcoming: false,
 });
 const OVERSEAS = Object.freeze({
   id: 'OVERSEAS', unit: '유스', label: '해외',
@@ -26,6 +27,8 @@ const OVERSEAS = Object.freeze({
   taskFunction: 'settleWisStockOverseasOrderTask', schedule: overseasSchedule,
   historyTrend: true, specialSessions: false, forecast: false,
   board: false, displayTrades: false, displayDoc: null, transfers: false, bonus: false, enrollmentSync: false,
+  // Students see the not-yet-listed catalog (name, era, tagline, listing time).
+  publishUpcoming: true,
   // A 유스 account starts small, so the domestic 500-Wis cash floor would block
   // every first purchase. Trading hours keep a time difference (KST 16:00-23:00).
   // All other limits copy the domestic market at launch.

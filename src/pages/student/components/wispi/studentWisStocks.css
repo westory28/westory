@@ -788,6 +788,32 @@
 .student-wispi-instruments li.is-ended > button {
   opacity: 0.72;
 }
+/* Overseas catalog stocks not listed yet: same row layout, not selectable. */
+.student-wispi-upcoming {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px 8px;
+  border-bottom: 1px solid var(--ws-border, #e5e7eb);
+}
+.student-wispi-upcoming > .student-wispi-logo {
+  margin-right: 4px;
+  opacity: 0.72;
+}
+.student-wispi-upcoming > .student-wispi-list-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.student-wispi-upcoming .student-wispi-list-quote > strong {
+  color: var(--ws-text-muted, #6b7280);
+  font-size: 14px;
+}
+.student-wispi-upcoming-tagline {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .student-wispi-list-group {
   margin: 0;
   padding: 16px 8px 8px;

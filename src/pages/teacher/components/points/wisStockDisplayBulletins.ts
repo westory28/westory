@@ -1,4 +1,7 @@
-import { nextWisStockPriceTick } from "../../../../../functions/wisStockMarketRules.mjs";
+import {
+  nextWisStockPriceTick,
+  wisStockPriceSlot,
+} from "../../../../../functions/wisStockMarketRules.mjs";
 import type {
   ExchangeMarket,
   ExchangeQuote,
@@ -24,6 +27,9 @@ const KST_OFFSET_MS = 9 * 3_600_000;
 const DAY_MS = 24 * 3_600_000;
 // A display computer whose clock runs a little slow must not miss an event.
 const CLOCK_SKEW_MS = 120_000;
+// A price move flashes briefly; a delisting or merger stays readable.
+const BULLETIN_MS = 3_000;
+const EXIT_BULLETIN_MS = 10_000;
 /** Listings and trading ends are news all their day. */
 export function isDayLongStockBulletin(kind: StockBulletinItem["kind"]) {
   return kind === "listing" || kind === "exit";
@@ -106,8 +112,9 @@ function eligibleItems(
 }
 
 // Each confirmed event is announced once: a price move within its ten-minute
-// quote interval, a listing or trading end once a day while this display
-// stays open.
+// quote interval and a listing once a day while this display stays open. A
+// delisting or merger is announced again in every later ten-minute quote
+// interval of its day, so a board that was not being watched still shows it.
 export function createStockBulletinRotation(
   publish: (value: StockBulletin | null) => void,
 ) {
@@ -116,8 +123,10 @@ export function createStockBulletinRotation(
   let sequence = 0;
   let page: StockBulletinItem[] = [];
   const shown = new Set<string>();
-  const key = (item: StockBulletinItem) =>
-    `${item.kind}:${item.id}:${item.atMs}`;
+  // kind:id:atMs, plus the current quote slot for a trading end.
+  const key = (item: StockBulletinItem, now: number) =>
+    `${item.kind}:${item.id}:${item.atMs}` +
+    (item.kind === "exit" ? `:${wisStockPriceSlot(now)}` : "");
 
   function show(priority = new Set<string>()) {
     clearTimeout(timer);
@@ -129,11 +138,11 @@ export function createStockBulletinRotation(
     }
     const now = Date.now();
     const items = eligibleItems(market, now);
-    const activeKeys = new Set(items.map(key));
+    const activeKeys = new Set(items.map((item) => key(item, now)));
     for (const eventKey of shown.keys())
       if (!activeKeys.has(eventKey)) shown.delete(eventKey);
     const available = items
-      .filter((item) => !shown.has(key(item)))
+      .filter((item) => !shown.has(key(item, now)))
       .sort(
         (a, b) =>
           Number(priority.has(`${b.kind}:${b.id}`)) -
@@ -143,10 +152,10 @@ export function createStockBulletinRotation(
     if (lead) {
       const before = page.filter((item) => now < stockBulletinExpiresAt(item));
       page = [lead];
-      shown.add(key(lead));
+      shown.add(key(lead, now));
       publish({ id: ++sequence, before, stocks: page });
       const deadline = Math.min(
-        now + 3_000,
+        now + (lead.kind === "exit" ? EXIT_BULLETIN_MS : BULLETIN_MS),
         ...page.map((item) => stockBulletinExpiresAt(item)),
       );
       timer = setTimeout(() => show(priority), Math.max(0, deadline - now));
@@ -160,14 +169,14 @@ export function createStockBulletinRotation(
     timer = undefined;
     page = [];
     // A reconnect announces the events of the current ten minutes again, not
-    // the listings or trading ends from earlier in the day.
+    // the listings or trading ends already shown earlier in the day.
     const now = Date.now();
     for (const eventKey of shown)
       if (
         !isDayLongStockBulletin(
           eventKey.split(":")[0] as StockBulletinItem["kind"],
         ) ||
-        now < nextWisStockPriceTick(Number(eventKey.split(":").at(-1)))
+        now < nextWisStockPriceTick(Number(eventKey.split(":")[2]))
       )
         shown.delete(eventKey);
     market = null;
@@ -178,7 +187,7 @@ export function createStockBulletinRotation(
     dismiss() {
       if (!market || page.length === 0) return;
       const now = Date.now();
-      for (const item of eligibleItems(market, now)) shown.add(key(item));
+      for (const item of eligibleItems(market, now)) shown.add(key(item, now));
       page = [];
       show();
     },
@@ -191,7 +200,7 @@ export function createStockBulletinRotation(
       const now = Date.now();
       const hasNewPriority = eligibleItems(next, now).some(
         (item) =>
-          priority.has(`${item.kind}:${item.id}`) && !shown.has(key(item)),
+          priority.has(`${item.kind}:${item.id}`) && !shown.has(key(item, now)),
       );
       if (hasNewPriority || timer === undefined) show(priority);
     },

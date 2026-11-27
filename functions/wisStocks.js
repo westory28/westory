@@ -7,7 +7,7 @@ const { normalizeWisStockMarketRules, normalizeWisStockTradingSettings,
   isWisStockTradingSession, wisStockKstSession, wisStockDailyBounds,
   WIS_STOCK_PRICE_INTERVAL_MS, wisStockPriceSlot, nextWisStockPriceTick } = require('./wisStockMarketRules');
 const { drawListingPrice, MIN_LISTING_PRICE, MAX_LISTING_PRICE, catalogHistoryTrendBps } = require('./wisStockCatalogSchedule');
-const { catalogExitAtMs } = require('./wisStockCatalogTimeline');
+const { catalogExitAtMs, catalogSessionAtMs } = require('./wisStockCatalogTimeline');
 const { DOMESTIC } = require('./wisStockVenues');
 const { WIS_STOCK_FX_PATH, parseWisStockFxRate } = require('./wisStockFx');
 const { INDEX_HISTORY_LIMIT, emptyIndex, validWisStockIndex, updateWisStockIndex, wisStockIndexState } = require('./wisStockIndex');
@@ -170,9 +170,25 @@ const publicStockSettings = settings => {
   return Object.fromEntries(['name', 'description', 'period', 'issuedShares', 'lotSize', 'tradingStatus']
     .map(key => [key, normalized[key]]));
 };
-const publicStockMarket = market => ({ schemaVersion: 1, semesterId: market.semesterId,
+// Venues that publish their catalog list the entries not yet listed: name,
+// era, one-line tagline and listing time only. Scenario reasons (future rises,
+// falls and exits) stay server-side. The domestic projection is unchanged.
+function publicUpcomingListings(market, venue) {
+  if (!venue.publishUpcoming) return {};
+  let plan;
+  try { plan = venue.schedule.readCatalogPlan(market); } catch { return {}; }
+  if (!plan) return {};
+  const ids = new Set(market.stocks.map(stock => stock.id));
+  const names = new Set(market.stocks.map(stock => stock.settings.name.trim()));
+  return { upcoming: venue.schedule.catalog.filter(entry => !ids.has(entry.id) && !names.has(entry.name))
+    .map(entry => ({ id: entry.id, name: entry.name, period: venue.schedule.periods[entry.week - 1] || '',
+      tagline: entry.tagline, listingAtMs: catalogSessionAtMs(entry.listingSession, plan.startsAtMs) }))
+    .sort((a, b) => a.listingAtMs - b.listingAtMs || (a.id < b.id ? -1 : 1)) };
+}
+const publicStockMarket = (market, venue = DOMESTIC) => ({ schemaVersion: 1, semesterId: market.semesterId,
   studentOpen: true, tradingEpoch: market.tradingEpoch ?? 0, revision: market.revision,
   updatedAtMs: market.updatedAtMs, rules: market.rules,
+  ...publicUpcomingListings(market, venue),
   stocks: market.stocks.map(({ id, settings, price, updatedAtMs, nextTickAtMs, history, dayKey, dayOpenPrice, haltedUntilMs, listedAtMs, graduation }) =>
     ({ id, settings: publicStockSettings(settings), price, updatedAtMs, nextTickAtMs,
       history: history.map(({ atMs, price: observedPrice }) => ({ atMs, price: observedPrice })),
@@ -186,7 +202,7 @@ function publishStudentMarket(tx, db, scope, previous, updated, venue = DOMESTIC
   // No synthetic first publication, extra reads, or menu wakeups on price ticks.
   // A first open installs both safe documents in the same canonical transaction.
   if (!updated.studentOpen) return;
-  tx.set(db.doc(publicStockPath(scope, venue.publicMarketDoc)), publicStockMarket(updated));
+  tx.set(db.doc(publicStockPath(scope, venue.publicMarketDoc)), publicStockMarket(updated, venue));
   if (!previous.studentOpen || previous.publicationRevision !== updated.publicationRevision)
     tx.set(db.doc(publicStockPath(scope, venue.publicStatusDoc)), publicStockStatus(updated));
 }

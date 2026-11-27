@@ -186,7 +186,7 @@ export default function WisStockChartPreview({
   return (
     <div ref={root} className="wis-stock-preview">
       <div className="wis-stock-preview__heading">
-        <h2>주식 차트 미리보기</h2>
+        <h2 className="sr-only">주식 차트 미리보기</h2>
         <span className="wis-stocks__closed">
           {isPlan
             ? `6주 기획안 · ${registered ? "등록 종목" : readForecast && catalogPlan ? "상장 예정 종목" : "미상장 모의 시세"}`

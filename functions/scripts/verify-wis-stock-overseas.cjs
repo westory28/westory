@@ -168,6 +168,16 @@ test('opening lists due overseas stocks; ticks follow history, delist on schedul
   assert.equal(opened.stocks[0].settings.period, '신항로 개척');
   const publicMarket = f.db.documents.get(`${root}/wis_stock_public/overseas_market`);
   assert.equal(publicMarket.stocks.length, 1); assert.equal(publicMarket.stocks[0].listedAtMs, MONDAY + 5 * 60_000);
+  // The rest of the catalog is published as upcoming listings in listing
+  // order, without the scenario reasons that reveal future price moves.
+  assert.equal(publicMarket.upcoming.length, 29);
+  assert.deepEqual(Object.keys(publicMarket.upcoming[0]).sort(), ['id', 'listingAtMs', 'name', 'period', 'tagline']);
+  assert.ok(publicMarket.upcoming.every((item, index, list) => index === 0 || list[index - 1].listingAtMs <= item.listingAtMs));
+  assert.ok(!publicMarket.upcoming.some(item => item.id === publicMarket.stocks[0].id));
+  const second = overseasCatalog.find(entry => entry.id === publicMarket.upcoming[0].id);
+  assert.equal(publicMarket.upcoming[0].listingAtMs, catalogSessionAtMs(second.listingSession, MONDAY));
+  assert.equal(publicMarket.upcoming[0].period, '신항로 개척');
+  assert.ok(!JSON.stringify(publicMarket.upcoming).includes('게임 설정'));
   assert.equal(f.db.documents.get(`${root}/wis_stock_public/overseas_current`).studentOpen, true);
   assert.equal(f.db.documents.has(`${root}/wis_stock_public/market`), false);
   const domesticBefore = structuredClone(f.db.documents.get(marketPath(scope)));

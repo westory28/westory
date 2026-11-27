@@ -29,6 +29,14 @@ const clock = new Intl.DateTimeFormat("ko-KR", {
   minute: "2-digit",
   timeZone: "Asia/Seoul",
 });
+const listingTime = new Intl.DateTimeFormat("ko-KR", {
+  month: "numeric",
+  day: "numeric",
+  weekday: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "Asia/Seoul",
+});
 // Minutes after KST midnight as HH:MM (rules store trading hours this way).
 const kstClock = (minute: number) =>
   `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
@@ -82,7 +90,11 @@ export function StudentWisStockChange({
 const exitLabels = { delist: "상장 폐지", merge: "합병", close: "거래 종료" };
 const ended = (stock: StudentWisStockInstrument) =>
   stock.settings.tradingStatus === "GRADUATED";
-function StockLogo({ stock }: { stock: StudentWisStockInstrument }) {
+function StockLogo({
+  stock,
+}: {
+  stock: { id: string; settings: { name: string } };
+}) {
   const url = wisStockLogoUrl(stock.id);
   return url ? (
     <img
@@ -213,6 +225,19 @@ export default function StudentWisStockMarketView({
       ...matching.filter(ended),
     ];
   }, [stocks, quotes, search, filter]);
+  // Overseas: catalog stocks not listed yet, after the listed ones. They have
+  // no price, so the rise/fall filters leave them out.
+  const visibleUpcoming = useMemo(() => {
+    if (filter !== "all") return [];
+    const query = search.trim().toLocaleLowerCase("ko-KR");
+    return (market.data?.upcoming ?? []).filter(
+      (item) =>
+        !query ||
+        `${item.name} ${item.period}`
+          .toLocaleLowerCase("ko-KR")
+          .includes(query),
+    );
+  }, [market.data, search, filter]);
   const liveCount = visibleStocks.filter((stock) => !ended(stock)).length;
   const selected = selectedId
     ? stocks?.find((stock) => stock.id === selectedId)
@@ -373,11 +398,12 @@ export default function StudentWisStockMarketView({
               <span>종목명</span>
               <span>현재가 · 전일 대비</span>
             </div>
-            {market.data.stocks.length === 0 ? (
+            {market.data.stocks.length === 0 &&
+            !market.data.upcoming?.length ? (
               <p className="student-wispi-muted">
                 아직 상장한 종목이 없습니다.
               </p>
-            ) : visibleStocks.length === 0 ? (
+            ) : visibleStocks.length === 0 && visibleUpcoming.length === 0 ? (
               <p className="student-wispi-muted">
                 조건에 맞는 종목이 없습니다.
               </p>
@@ -431,6 +457,31 @@ export default function StudentWisStockMarketView({
                         )}
                       </span>
                     </button>
+                  </li>
+                ))}
+                {visibleUpcoming.map((item, index) => (
+                  <li key={item.id} className="is-upcoming">
+                    {index === 0 && (
+                      <p className="student-wispi-list-group">상장 예정</p>
+                    )}
+                    <div className="student-wispi-upcoming">
+                      <StockLogo
+                        stock={{ id: item.id, settings: { name: item.name } }}
+                      />
+                      <span className="student-wispi-list-name">
+                        <strong>{item.name}</strong>
+                        <small>{item.period}</small>
+                        {item.tagline && (
+                          <small className="student-wispi-upcoming-tagline">
+                            {item.tagline}
+                          </small>
+                        )}
+                      </span>
+                      <span className="student-wispi-list-quote">
+                        <strong>상장 예정</strong>
+                        <small>{listingTime.format(item.listingAtMs)}</small>
+                      </span>
+                    </div>
                   </li>
                 ))}
               </ul>

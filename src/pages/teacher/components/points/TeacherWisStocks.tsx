@@ -14,6 +14,7 @@ import PortalSubNavigation from "../../../../components/common/PortalSubNavigati
 import WisStockChartPreview from "./WisStockChartPreview";
 import WisStockMarketRules from "./WisStockMarketRules";
 import WisStockInvestmentBoard from "./WisStockInvestmentBoard";
+import WisStockExchangeDisplay from "./WisStockExchangeDisplay";
 import WisStockMarketOverview from "./WisStockMarketOverview";
 import { catalogExitAtMs } from "../../../../../functions/wisStockCatalogTimeline.mjs";
 import {
@@ -118,6 +119,20 @@ export default function TeacherWisStocks({
   const tab: TeacherWispiTab = routedTab ?? localTab;
   const setTab = (next: TeacherWispiTab) =>
     onTabChange ? onTabChange(next) : setLocalTab(next);
+  // The overseas tab renders its status and open/close control into the page
+  // title row, where the domestic market shows its own.
+  const [overseasActions, setOverseasActions] = useState<HTMLDivElement | null>(
+    null,
+  );
+  // The exchange display opens from the tab row on every tab. Its trade feed
+  // follows the class chosen on the investment board.
+  const [displayOpen, setDisplayOpen] = useState(false);
+  const [boardClassKey, setBoardClassKey] = useState("all");
+  const canDisplay = isAdminUser(userData, currentUser?.email);
+  useEffect(() => {
+    setDisplayOpen(false);
+    setBoardClassKey("all");
+  }, [ownerKey]);
   const [conflict, setConflict] = useState(false);
   const [storedMarket, setMarket] = useState<WisStockManagement | null>(null);
   const [marketOwner, setMarketOwner] = useState("");
@@ -539,15 +554,21 @@ export default function TeacherWisStocks({
       current !== null && !periods.includes(current) ? null : current,
     );
   }, [periods]);
-  const visibleStocks = useMemo(
-    () =>
+  const visibleStocks = useMemo(() => {
+    const matching =
       selectedPeriod === null
         ? typeStocks
         : typeStocks.filter(
             (stock) => stock.settings.period.trim() === selectedPeriod,
-          ),
-    [typeStocks, selectedPeriod],
-  );
+          );
+    // Delisted and merged stocks stay for reference after the trading ones.
+    const ended = (stock: WisStock) =>
+      stock.settings.tradingStatus === "GRADUATED";
+    return [
+      ...matching.filter((stock) => !ended(stock)),
+      ...matching.filter(ended),
+    ];
+  }, [typeStocks, selectedPeriod]);
   const marketOpen = market?.studentOpen === true && !market.rules.halted;
   const activeViewId =
     viewId === null
@@ -576,7 +597,9 @@ export default function TeacherWisStocks({
         }
         variant="tabs"
         actions={
-          tab === "overseas" ? undefined : (
+          tab === "overseas" ? (
+            <div ref={setOverseasActions} className="wis-stocks__header-slot" />
+          ) : (
             <>
               <span className="wis-stocks__closed" role="status">
                 {marketOpen ? "거래 중" : "거래 중지"}
@@ -625,6 +648,15 @@ export default function TeacherWisStocks({
             {item.label}
           </button>
         ))}
+        {market && canDisplay && (
+          <button
+            type="button"
+            className="wis-stocks__display-button"
+            onClick={() => setDisplayOpen(true)}
+          >
+            전광판 보기
+          </button>
+        )}
       </PortalSubNavigation>
       {haltError && (
         <div className="wis-stocks__error" role="alert">
@@ -874,7 +906,20 @@ export default function TeacherWisStocks({
                       >
                         <span className="wis-stocks__row-name">
                           <strong>{stock.settings.name}</strong>
-                          <span>{stock.settings.period || "시대 미지정"}</span>
+                          <span>
+                            {stock.settings.tradingStatus === "GRADUATED"
+                              ? (
+                                  {
+                                    merge: "합병",
+                                    delist: "상장 폐지",
+                                  } as const
+                                )[
+                                  wisStockCatalog.find(
+                                    (entry) => entry.id === stock.id,
+                                  )?.exitKind as "merge" | "delist"
+                                ] || "거래 종료"
+                              : stock.settings.period || "시대 미지정"}
+                          </span>
                         </span>
                         <span className="wis-stocks__row-price">
                           <strong>{stock.price.toLocaleString()}</strong>
@@ -1290,6 +1335,7 @@ export default function TeacherWisStocks({
             year={year}
             semester={semester}
             canManage={canManage}
+            headerActions={overseasActions}
           />
         </React.Suspense>
       )}
@@ -1307,9 +1353,18 @@ export default function TeacherWisStocks({
           key={ownerKey}
           year={year}
           semester={semester}
-          displayMarket={
-            isAdminUser(userData, currentUser?.email) ? market : null
-          }
+          classKey={boardClassKey}
+          onClassKeyChange={setBoardClassKey}
+          displayOpen={displayOpen && canDisplay}
+        />
+      )}
+      {displayOpen && market && canDisplay && (
+        <WisStockExchangeDisplay
+          year={year}
+          semester={semester}
+          classKey={boardClassKey}
+          initialMarket={market}
+          onClose={() => setDisplayOpen(false)}
         />
       )}
     </section>

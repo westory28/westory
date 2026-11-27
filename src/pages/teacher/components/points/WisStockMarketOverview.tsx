@@ -23,16 +23,21 @@ export default function WisStockMarketOverview({
   stock,
   asOfMs,
   actions,
+  unit = "위스",
+  indexName = "전체 위스피",
 }: {
   index?: WisStockMarketIndex;
   stock?: WisStock;
   asOfMs: number;
   actions?: ReactNode;
+  /** Price unit of the venue (the overseas market quotes in 유스). */
+  unit?: "위스" | "유스";
+  indexName?: string;
 }) {
   const series = useMemo(
     () => ({
       id: "wispi-market-index",
-      settings: { name: "전체 위스피" },
+      settings: { name: indexName },
       price: index?.value || 1000,
       updatedAtMs: index?.updatedAtMs || 0,
       history:
@@ -41,7 +46,7 @@ export default function WisStockMarketOverview({
           price: point.value,
         })) || [],
     }),
-    [index],
+    [index, indexName],
   );
   const quote = stock ? wisStockQuote(stock, asOfMs) : null;
   const change = stock
@@ -55,11 +60,11 @@ export default function WisStockMarketOverview({
       ? (change / index.previousClose) * 100
       : null;
   const updatedAtMs = stock?.updatedAtMs || index?.updatedAtMs || 0;
-  const name = stock?.settings.name || "전체 위스피";
+  const name = stock?.settings.name || indexName;
   return (
     <section
       className="wis-stocks__market-index"
-      aria-label={stock ? `${name} 시세` : "전체 위스피 지수"}
+      aria-label={stock ? `${name} 시세` : `${indexName} 지수`}
     >
       <div className="wis-stocks__index-quote">
         <div className="wis-stocks__index-title">
@@ -82,7 +87,7 @@ export default function WisStockMarketOverview({
             : index?.history.length
               ? number(index.value)
               : "—"}
-          <small>{stock ? "위스" : "pt"}</small>
+          <small>{stock ? unit : "pt"}</small>
         </strong>
         {change !== null && percent !== null && (
           <span className={quoteDirection(change)}>
@@ -107,6 +112,7 @@ export default function WisStockMarketOverview({
           stock={stock}
           days={Infinity}
           variant="candlestick"
+          priceUnit={unit}
         />
       ) : index?.history.length ? (
         <WisStockPriceChart

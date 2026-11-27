@@ -1428,7 +1428,8 @@ service cloud.firestore {
                 && resource.data.studentOpen is bool && resource.data.halted is bool)))
             || (documentId == 'overseas_market' && resource != null
               && get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/wis_stock_public/overseas_current).data.studentOpen == true
-              && resource.data.keys().hasOnly(['schemaVersion', 'semesterId', 'studentOpen', 'tradingEpoch', 'revision', 'updatedAtMs', 'rules', 'stocks'])
+              && resource.data.keys().hasOnly(['schemaVersion', 'semesterId', 'studentOpen', 'tradingEpoch', 'revision', 'updatedAtMs', 'rules', 'stocks', 'upcoming'])
+              && resource.data.get('upcoming', []) is list && resource.data.get('upcoming', []).size() <= 100
               && resource.data.schemaVersion == 1 && resource.data.semesterId == year + '-' + semester
               && resource.data.studentOpen == true && resource.data.rules is map && resource.data.stocks is list
               && resource.data.stocks.size() <= 100);

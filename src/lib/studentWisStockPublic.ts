@@ -83,7 +83,27 @@ export function parseStudentWisStockMarket(
       throw invalid();
     ids.add(stock.id);
   }
-  return { ...value, rules: normalizeWisStockMarketRules(value.rules) };
+  // Upcoming listings are display-only; a malformed entry is dropped rather
+  // than making the whole market unreadable.
+  const upcoming = Array.isArray(value.upcoming)
+    ? value.upcoming
+        .slice(0, 100)
+        .filter(
+          (item) =>
+            /^stock_[a-f0-9]{24}$/.test(item?.id) &&
+            !ids.has(item.id) &&
+            typeof item.name === "string" &&
+            Boolean(item.name.trim()) &&
+            typeof item.period === "string" &&
+            typeof item.tagline === "string" &&
+            safe(item.listingAtMs),
+        )
+    : undefined;
+  return {
+    ...value,
+    upcoming,
+    rules: normalizeWisStockMarketRules(value.rules),
+  };
 }
 type Listener<T> = (state: WisStockLoad<T>) => void;
 type Entry<T> = {

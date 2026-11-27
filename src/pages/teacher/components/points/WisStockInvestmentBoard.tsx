@@ -1,7 +1,5 @@
 import { InlineLoading } from "../../../../components/common/LoadingState";
 import { useEffect, useMemo, useRef, useState } from "react";
-import WisStockExchangeDisplay from "./WisStockExchangeDisplay";
-import type { WisStockManagement } from "../../../../lib/wisStocksClient";
 import { animate, createScope } from "animejs";
 import InfoHelp from "../../../../components/common/InfoHelp";
 import RefreshButton from "../../../../components/common/RefreshButton";
@@ -63,11 +61,17 @@ const percent = (value: number | null) =>
 export default function WisStockInvestmentBoard({
   year,
   semester,
-  displayMarket,
+  classKey,
+  onClassKeyChange,
+  displayOpen,
 }: {
   year: string;
   semester: string;
-  displayMarket: WisStockManagement | null;
+  /** Class scope, shared with the exchange display opened from the tab row. */
+  classKey: string;
+  onClassKeyChange: (next: string) => void;
+  /** The exchange display is open: this board pauses its own live reads. */
+  displayOpen: boolean;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const [snapshot, setData] = useState<WisStockInvestmentBoardState | null>(
@@ -80,7 +84,6 @@ export default function WisStockInvestmentBoard({
     useState<WisStockBoardConnection>("CONNECTING");
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
-  const [classKey, setClassKey] = useState("all");
   // A scope change renders before the watcher effect clears its old snapshot.
   // Gate that snapshot synchronously so old students never enter the new request.
   const data =
@@ -92,9 +95,22 @@ export default function WisStockInvestmentBoard({
       : null;
   const [sort, setSort] = useState("class");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const [displayOpen, setDisplayOpen] = useState(false);
   const displayActive = useRef(false);
-  displayActive.current = displayOpen && !!displayMarket;
+  displayActive.current = displayOpen;
+  const connectionNow = useRef(connection);
+  connectionNow.current = connection;
+  // Closing the display resumes a board that paused while it was open.
+  const displayWasOpen = useRef(displayOpen);
+  useEffect(() => {
+    if (
+      displayWasOpen.current &&
+      !displayOpen &&
+      connectionNow.current === "PAUSED" &&
+      !document.hidden
+    )
+      setRetry((value) => value + 1);
+    displayWasOpen.current = displayOpen;
+  }, [displayOpen]);
   const [histories, setHistories] = useState<WisStockInvestmentHistory[]>([]);
   const [historyError, setHistoryError] = useState("");
   const [historyStale, setHistoryStale] = useState(false);
@@ -532,7 +548,7 @@ export default function WisStockInvestmentBoard({
             aria-label="투자 현황 학급"
             value={classKey}
             onChange={(event) => {
-              setClassKey(event.target.value);
+              onClassKeyChange(event.target.value);
               setVisibleCount(PAGE_SIZE);
             }}
           >
@@ -560,15 +576,6 @@ export default function WisStockInvestmentBoard({
           loading={connection === "CONNECTING" && !error}
           onClick={() => setRetry((value) => value + 1)}
         />
-        {displayMarket && (
-          <button
-            type="button"
-            className="wis-investment-board__screen"
-            onClick={() => setDisplayOpen(true)}
-          >
-            전광판 보기
-          </button>
-        )}
       </div>
       <div className="wis-investment-board__status" role="status">
         <span className={live ? "is-live" : ""}>{status}</span>
@@ -917,22 +924,5 @@ export default function WisStockInvestmentBoard({
       </div>
     </div>
   );
-  return (
-    <>
-      {content}
-      {displayOpen && displayMarket && (
-        <WisStockExchangeDisplay
-          year={year}
-          semester={semester}
-          classKey={classKey}
-          initialMarket={displayMarket}
-          onClose={() => {
-            setDisplayOpen(false);
-            if (connection === "PAUSED" && !document.hidden)
-              setRetry((value) => value + 1);
-          }}
-        />
-      )}
-    </>
-  );
+  return content;
 }

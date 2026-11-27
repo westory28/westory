@@ -85,28 +85,32 @@ function initialQuotes(market: WisStockManagement): ExchangeMarket {
     updatedAtMs,
     halted: !market.studentOpen || market.rules.halted,
     index: market.marketIndex?.history.length ? market.marketIndex : null,
-    stocks: market.stocks.map((stock) => {
-      const { change } = wisStockQuote(stock, updatedAtMs);
-      const latest = stock.history.at(-1);
-      const previous = stock.history.at(-2);
-      const first = stock.history[0];
-      return {
-        id: stock.id,
-        name: stock.settings.name,
-        price: stock.price,
-        previousClose: change === null ? null : stock.price - change,
-        ...(previous &&
-        latest?.price === stock.price &&
-        previous.atMs < latest.atMs
-          ? { previousPrice: previous.price, priceAtMs: latest.atMs }
-          : {}),
-        ...(first &&
-        stock.history.length < market.historyLimit &&
-        first.price === stock.settings.initialPrice
-          ? { listedAtMs: first.atMs, listingPrice: first.price }
-          : {}),
-      };
-    }),
+    // A stock whose trading has ended is no longer quoted on the board; its
+    // delisting or merger is announced from the live display document.
+    stocks: market.stocks
+      .filter((stock) => stock.settings.tradingStatus !== "GRADUATED")
+      .map((stock) => {
+        const { change } = wisStockQuote(stock, updatedAtMs);
+        const latest = stock.history.at(-1);
+        const previous = stock.history.at(-2);
+        const first = stock.history[0];
+        return {
+          id: stock.id,
+          name: stock.settings.name,
+          price: stock.price,
+          previousClose: change === null ? null : stock.price - change,
+          ...(previous &&
+          latest?.price === stock.price &&
+          previous.atMs < latest.atMs
+            ? { previousPrice: previous.price, priceAtMs: latest.atMs }
+            : {}),
+          ...(first &&
+          stock.history.length < market.historyLimit &&
+          first.price === stock.settings.initialPrice
+            ? { listedAtMs: first.atMs, listingPrice: first.price }
+            : {}),
+        };
+      }),
   };
 }
 
@@ -191,8 +195,14 @@ export default function WisStockExchangeDisplay({
   const market = state.status === "ready" ? (state.market ?? initial) : null;
   const index = market?.index;
   const trades = state.status === "ready" ? state.trades : null;
+  // Delisted and merged stocks leave the quote board and the breadth count;
+  // the bulletin still announces the trading end on its day.
+  const quotedStocks = useMemo(
+    () => market?.stocks.filter((stock) => stock.exitedAtMs === undefined),
+    [market],
+  );
   const breadth = { up: 0, flat: 0, down: 0 };
-  for (const stock of market?.stocks ?? []) {
+  for (const stock of quotedStocks ?? []) {
     if (stock.previousClose !== null)
       breadth[direction(stock.price - stock.previousClose)]++;
   }
@@ -322,7 +332,7 @@ export default function WisStockExchangeDisplay({
             </button>
           </div>
           <WisStockQuotePages
-            stocks={market?.stocks}
+            stocks={quotedStocks}
             flips={flips}
             rows={rows.quotes}
             active={

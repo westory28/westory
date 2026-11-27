@@ -102,15 +102,30 @@ try {
   assert.deepEqual(current.stocks.map(item => [item.kind, item.id]), [['exit', 'gone']], 'the latest trading end leads, not its price move');
   assert.equal(current.stocks[0].exit, 'delist');
   assert.equal(current.stocks[0].price, 120, 'the last traded price is announced');
-  advance(3_000);
+  advance(9_999);
+  assert.equal(current.stocks[0].id, 'gone', 'a trading end stays on screen for ten seconds');
+  advance(1);
   assert.deepEqual([current.stocks[0].kind, current.stocks[0].id, current.stocks[0].exit], ['exit', 'merged', 'merge']);
-  advance(3_000);
+  advance(10_000);
   assert.equal(current.stocks[0].id, '급등락', 'a closed stock produces no separate price headline');
   advance(3_000);
   assert.equal(current, null, 'a trading end of an earlier day is not news');
   rotation.clear();
   rotation.update(market([merged, delisted]), new Set());
-  assert.equal(current, null, 'a reconnect does not repeat the trading ends announced earlier in the day');
+  assert.equal(current, null, 'a reconnect in the same ten minutes does not repeat the trading ends');
+  // The next ten-minute quote of the same day announces them again.
+  now = Date.parse('2026-11-25T13:20:00+09:00');
+  rotation.update(market([merged, delisted, yesterday]), new Set());
+  assert.deepEqual([current.stocks[0].id, current.stocks[0].exit], ['gone', 'delist'], 'a later quote repeats today\'s trading ends');
+  advance(10_000);
+  assert.equal(current.stocks[0].id, 'merged');
+  advance(10_000);
+  assert.equal(current, null, 'each trading end appears once per quote interval');
+  rotation.update(market([merged, delisted]), new Set());
+  assert.equal(current, null, 'a repeated snapshot in the same interval does not repeat them');
+  now = Date.parse('2026-11-26T09:00:00+09:00');
+  rotation.update(market([merged, delisted]), new Set());
+  assert.equal(current, null, 'trading ends are not repeated on a later day');
   rotation.clear();
   now = baseline;
   rotation.update(market(Array.from({ length: 6 }, (_, i) => stock('종목' + i))), new Set());
@@ -143,7 +158,7 @@ try {
   assert.equal(stockBulletinExpiresAt({ kind: 'previous', atMs: baseline }), baseline + 600_000);
   assert.equal(stockBulletinExpiresAt({ kind: 'listing', atMs: baseline }), Date.parse('2026-11-24T00:00:00+09:00'));
   assert.equal(stockBulletinExpiresAt({ kind: 'exit', atMs: baseline }), Date.parse('2026-11-24T00:00:00+09:00'));
-  console.log('PASS: inclusive ±10% boundaries, three-second bulletins, ten-minute expiry, day-long listing/delisting/merger notices, dismissal/new-event recovery, duplicate/stale/legacy suppression, complete paging and cleanup; no network calls.');
+  console.log('PASS: inclusive ±10% boundaries, three-second price bulletins, ten-minute expiry, day-long listing notices, ten-second delisting/merger notices repeated once per quote interval of their day, dismissal/new-event recovery, duplicate/stale/legacy suppression, complete paging and cleanup; no network calls.');
 } finally {
   rotation.clear();
   Date.now = originals.now;

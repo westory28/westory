@@ -164,30 +164,52 @@ export default function WisStockPriceChart({
         candle,
       }))
     : visible.map((point) => ({ ...point, candle: undefined }));
-  const points = displayPoints.map((point) => ({
+  // Hourly candles exist only while the market trades. Placed by clock time,
+  // nights and weekends become empty gaps, so they sit side by side instead
+  // and each axis label shows its own candle's time.
+  const sequential = candlestick && interval === "hour" && candles.length > 0;
+  const slotX = (index: number) =>
+    left + ((index + 0.5) / Math.max(1, candles.length)) * plotWidth;
+  const points = displayPoints.map((point, index) => ({
     ...point,
-    x: x(point.atMs),
+    x: sequential ? slotX(index) : x(point.atMs),
     y: y(point.price),
   }));
-  const candleWidth = Math.max(
-    1,
-    Math.min(
-      20,
-      ((WIS_STOCK_CANDLE_INTERVALS.find((item) => item.key === interval)!
-        .duration *
-        plotWidth) /
-        Math.max(1, span)) *
-        0.65,
-    ),
-  );
+  const candleWidth = sequential
+    ? Math.max(
+        1,
+        Math.min(20, (plotWidth / Math.max(1, candles.length)) * 0.65),
+      )
+    : Math.max(
+        1,
+        Math.min(
+          20,
+          ((WIS_STOCK_CANDLE_INTERVALS.find((item) => item.key === interval)!
+            .duration *
+            plotWidth) /
+            Math.max(1, span)) *
+            0.65,
+        ),
+      );
   const tickCount = width < 500 ? 3 : 5;
-  const timeTicks = !visible.length
+  const candleTicks = Math.min(tickCount, candles.length);
+  const timeTicks: { atMs: number; x: number }[] = !visible.length
     ? []
-    : span === 0
-      ? [start]
-      : Array.from({ length: tickCount }, (_, i) =>
-          Math.round(start + (span * i) / (tickCount - 1)),
-        );
+    : sequential
+      ? candleTicks === 1
+        ? [{ atMs: candles[0].startAtMs, x: slotX(0) }]
+        : Array.from({ length: candleTicks }, (_, i) => {
+            const index = Math.round(
+              (i * (candles.length - 1)) / (candleTicks - 1),
+            );
+            return { atMs: candles[index].startAtMs, x: slotX(index) };
+          })
+      : span === 0
+        ? [{ atMs: start, x: x(start) }]
+        : Array.from({ length: tickCount }, (_, i) => {
+            const atMs = Math.round(start + (span * i) / (tickCount - 1));
+            return { atMs, x: x(atMs) };
+          });
   const active = selection?.key === key ? points[selection.index] : null;
   const tooltipWidth = Math.max(120, Math.min(244, width - 24));
   const select = (index: number) =>
@@ -267,7 +289,8 @@ export default function WisStockPriceChart({
               한국 시각 기준으로 기록된 관측값을 묶습니다. 각 봉의 시가·종가는
               첫·마지막 관측값이며 고가·저가는 해당 구간의 최고·최저
               관측값입니다. 선택한 조회 기간 안의 기록만 사용하며 기록이 없는
-              구간은 표시하지 않습니다. 주봉은 월요일에 시작합니다.
+              구간은 표시하지 않습니다. 시간봉은 장이 닫힌 시간을 건너뛰고 이어
+              붙입니다. 주봉은 월요일에 시작합니다.
             </p>
           </InfoHelp>
         </div>
@@ -415,11 +438,11 @@ export default function WisStockPriceChart({
                   </text>
                 </g>
               ))}
-              {timeTicks.map((atMs, index) => (
+              {timeTicks.map(({ atMs, x: tickX }, index) => (
                 <g key={`${atMs}-${index}`}>
-                  <line x1={x(atMs)} y1={bottom} x2={x(atMs)} y2={bottom + 5} />
+                  <line x1={tickX} y1={bottom} x2={tickX} y2={bottom + 5} />
                   <text
-                    x={x(atMs)}
+                    x={tickX}
                     y={bottom + 20}
                     textAnchor={
                       timeTicks.length === 1
@@ -431,8 +454,8 @@ export default function WisStockPriceChart({
                             : "middle"
                     }
                   >
-                    <tspan x={x(atMs)}>{shortDate.format(atMs)}</tspan>
-                    <tspan x={x(atMs)} dy="14">
+                    <tspan x={tickX}>{shortDate.format(atMs)}</tspan>
+                    <tspan x={tickX} dy="14">
                       {shortTime.format(atMs)}
                     </tspan>
                   </text>

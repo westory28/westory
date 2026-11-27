@@ -210,8 +210,13 @@ try {
   const overseasStatus = { schemaVersion: 1, semesterId: '2026-2', studentOpen: true, halted: false, tradingEpoch: 1, revision: 1, updatedAtMs: clock };
   await db.doc(overseasStatusPath).set(overseasStatus);
   await db.doc(overseasPricesPath).set({ schemaVersion: 1, semesterId: '2026-2', studentOpen: true, tradingEpoch: 1, revision: 1,
-    updatedAtMs: clock, rules: { halted: false }, stocks: [] });
+    updatedAtMs: clock, rules: { halted: false }, stocks: [],
+    upcoming: [{ id: 'stock_' + 'c'.repeat(24), name: '합성 예정 종목', period: '합성 시대', tagline: '합성 소개', listingAtMs: clock }] });
   await assertSucceeds(getDoc(doc(student, overseasStatusPath)));
+  assert.equal((await assertSucceeds(getDoc(doc(student, overseasPricesPath)))).data().upcoming.length, 1);
+  await db.doc(overseasPricesPath).update({ upcoming: 'not-a-list' });
+  await assertFails(getDoc(doc(student, overseasPricesPath)));
+  await db.doc(overseasPricesPath).update({ upcoming: [] });
   await assertSucceeds(getDoc(doc(student, overseasPricesPath)));
   await db.doc(overseasStatusPath).update({ studentOpen: false });
   await assertFails(getDoc(doc(student, overseasPricesPath)));

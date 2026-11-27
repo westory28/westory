@@ -873,6 +873,8 @@ test('first opening atomically publishes safe prices and a permanent launch latc
   assert.equal(f.documents.get(pricesPath).revision, opened.revision);
   assert(!JSON.stringify(f.documents.get(pricesPath)).includes('priceSeed'));
   assert(!JSON.stringify(f.documents.get(pricesPath)).includes('priceModel'));
+  // Only the overseas venue publishes upcoming listings.
+  assert.equal(Object.hasOwn(f.documents.get(pricesPath), 'upcoming'), false);
   assert.equal((await f.api.setWisStockMarketHalted(open)).duplicate, true); assert.equal(f.writes.length, 4);
   const close = req({ halted: true, expectedRevision: 0, requestId: 'first-public-close01' });
   const closed = await f.api.setWisStockMarketHalted(close);
