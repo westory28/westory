@@ -1,8 +1,9 @@
 import { InlineLoading } from "../../../../components/common/LoadingState";
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import InfoHelp from "../../../../components/common/InfoHelp";
 import StockChart from "../../../../components/common/WisStockPriceChart";
 import type {
+  WisStock,
   WisStockForecast,
   WisStockSpecialSession,
 } from "../../../../lib/wisStocksClient";
@@ -82,21 +83,31 @@ export function WisStockSpecialSessions({
   );
 }
 
-/** Remounted on scope, selection and management revision changes. One request per click. */
+/**
+ * Remounted on scope, selection and management revision changes. One request
+ * per click, or one on mount when the forecast is the default view.
+ */
 export default function WisStockForecastPreview({
   stockId,
   stockName,
   currentLabel,
   readForecast,
+  initialShowPlan = false,
+  observedHistory,
   children,
 }: {
   stockId: string;
   stockName: string;
-  currentLabel: string;
+  /** The other view's label; without it only the forecast is offered. */
+  currentLabel?: string;
   readForecast: (stockId: string) => Promise<WisStockForecast>;
+  /** Open on the forecast (the 6-week plan follows the price engine). */
+  initialShowPlan?: boolean;
+  /** Recorded prices drawn before the forecast, so one chart spans the plan. */
+  observedHistory?: WisStock["history"];
   children: ReactNode;
 }) {
-  const [showPlan, setShowPlan] = useState(false);
+  const [showPlan, setShowPlan] = useState(initialShowPlan || !currentLabel);
   const [forecast, setForecast] = useState<WisStockForecast | null>(null);
   const [error, setError] = useState("");
   const [day, setDay] = useState("");
@@ -118,7 +129,20 @@ export default function WisStockForecastPreview({
       inFlight.current = false;
     }
   };
+  useEffect(() => {
+    if (showPlan) void load();
+    // Only the first view decides; later loads are explicit clicks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const last = forecast?.history.at(-1);
+  const chartHistory = useMemo(() => {
+    if (!forecast) return [];
+    const firstAtMs = forecast.history[0]?.atMs ?? forecast.asOfMs;
+    return [
+      ...(observedHistory ?? []).filter((point) => point.atMs < firstAtMs),
+      ...forecast.history,
+    ];
+  }, [forecast, observedHistory]);
   const byDay = useMemo(() => {
     const map = new Map<string, WisStockForecast["history"]>();
     for (const point of forecast?.history ?? []) {
@@ -133,26 +157,28 @@ export default function WisStockForecastPreview({
     day || (forecast?.history[0] ? kstDayKey(forecast.history[0].atMs) : "");
   return (
     <>
-      <div
-        className="wis-stock-catalog__filters"
-        role="group"
-        aria-label="시세 보기"
-      >
-        <button
-          type="button"
-          aria-pressed={!showPlan}
-          onClick={() => setShowPlan(false)}
+      {currentLabel && (
+        <div
+          className="wis-stock-catalog__filters"
+          role="group"
+          aria-label="시세 보기"
         >
-          {currentLabel}
-        </button>
-        <button
-          type="button"
-          aria-pressed={showPlan}
-          onClick={() => void load()}
-        >
-          운영 예정 시세
-        </button>
-      </div>
+          <button
+            type="button"
+            aria-pressed={!showPlan}
+            onClick={() => setShowPlan(false)}
+          >
+            {currentLabel}
+          </button>
+          <button
+            type="button"
+            aria-pressed={showPlan}
+            onClick={() => void load()}
+          >
+            운영 예정 시세
+          </button>
+        </div>
+      )}
       {!showPlan ? (
         children
       ) : (
@@ -182,8 +208,10 @@ export default function WisStockForecastPreview({
           ) : (
             <>
               <p className="wis-stock-catalog__range">
-                {kstTime.format(forecast.asOfMs)} 조회 · 계획 종료{" "}
-                {kstTime.format(forecast.endsAtMs)}
+                {kstTime.format(forecast.asOfMs)} 조회
+                {chartHistory.length > forecast.history.length &&
+                  " · 이전은 실제 기록"}{" "}
+                · 계획 종료 {kstTime.format(forecast.endsAtMs)}
               </p>
               {last ? (
                 <>
@@ -193,7 +221,7 @@ export default function WisStockForecastPreview({
                       settings: { name: stockName + " 예정 시세" },
                       price: last.price,
                       updatedAtMs: last.atMs,
-                      history: forecast.history,
+                      history: chartHistory,
                     }}
                     days={Infinity}
                     variant="candlestick"

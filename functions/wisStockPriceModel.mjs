@@ -7,6 +7,15 @@ const HOUR = 3_600_000;
 const DAY = HOUR * 24;
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 const smooth = value => value * value * (3 - 2 * value);
+// Teacher decision (2026-11-27): students were losing too much, so from Monday
+// 2026-11-30 08:00 KST every model-priced stock gets a small upward drift — a
+// typical historical stock ends about 20% higher by the end of the six weeks.
+// It applies only to steps observed at or after that time (the live engine and
+// the 운영 예정 시세 forecast both pass the step time), so recorded prices are
+// never recomputed, and falls, shocks and special sessions keep their meaning.
+export const WIS_STOCK_DRIFT_PREMIUM = Object.freeze({ fromMs: Date.parse('2026-11-30T08:00:00+09:00'), bps: 4 });
+const driftPremiumBps = atMs => (Number.isFinite(atMs) && atMs >= WIS_STOCK_DRIFT_PREMIUM.fromMs
+  ? WIS_STOCK_DRIFT_PREMIUM.bps : 0);
 
 export function wisStockPriceModelAnchor(stock) {
   if (stock.priceModel) return { ...stock.priceModel };
@@ -59,7 +68,7 @@ export function sampleWisStockPriceStep(stock, semesterId, slot, priceSeed = '',
   const slowNoise = blend('noise', 4, bell);
   const fastNoise = source.tick ? (source.tick(slot, 0) + source.tick(slot, 1) + source.tick(slot, 2)) * 2 / 3 - 1 : bell(`detail:${slot}`);
   const vol = settings.volatilityBps;
-  let referencePrice = null, pull = 0, drift = settings.trendBps;
+  let referencePrice = null, pull = 0, drift = settings.trendBps + driftPremiumBps(marketContext?.atMs);
   if (settings.growthProfile === 'VALUE') {
     const anchor = wisStockPriceModelAnchor(stock);
     if (anchor.version !== 1 || !Number.isSafeInteger(anchor.anchorAtMs) || anchor.anchorAtMs < 0

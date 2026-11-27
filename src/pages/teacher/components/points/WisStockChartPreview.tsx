@@ -199,11 +199,11 @@ export default function WisStockChartPreview({
         )}
         <InfoHelp label="미리보기 자료">
           <p>
-            등록된 종목은 두 보기에서 같은 실제 가격 기록을 표시합니다. 미상장
-            종목은 저장된 거래 요일·시간, 10분 주기, 가격 제한폭과 서킷
-            브레이커를 적용한 모의 시세입니다. 규칙을 저장하거나 새로고침하면
-            반영되며, 실제 상장가와 미래 수익을 뜻하지 않습니다. 계좌 이체와
-            주문은 미리보기 안에서만 처리합니다.
+            6주 기획안 차트는 실제 가격 엔진이 계산한 운영 예정 시세입니다.
+            상장한 종목은 지금까지의 실제 기록에 이어 그립니다. 이후 규칙 변경,
+            거래 중지나 시세 갱신 지연에 따라 실제 가격이 달라질 수 있습니다.
+            상장 일정을 적용하기 전의 미상장 종목과 주문 미리보기는 예시 시세를
+            씁니다. 계좌 이체와 주문은 미리보기 안에서만 처리합니다.
           </p>
           {customCatalogStock && (
             <p>이름이 같은 개별 등록 종목은 자동 종료 대상에서 제외됩니다.</p>
@@ -306,11 +306,18 @@ export default function WisStockChartPreview({
         </div>
         <div className="wis-stock-preview__detail">
           {readForecast && (registered || catalogPlan) ? (
+            // The 6-week plan follows the price engine (2026-11-27): it opens
+            // on the engine forecast, after the recorded prices of a listed
+            // stock. An unlisted stock offers no separate local illustration.
             <WisStockForecastPreview
               key={JSON.stringify([semesterId, revision, source, selected.id])}
               stockId={selected.id}
               stockName={selected.settings.name}
-              currentLabel={registered ? "등록 시세" : "미상장 모의 시세"}
+              currentLabel={registered ? "등록 시세" : undefined}
+              initialShowPlan={isPlan}
+              observedHistory={
+                isPlan && registered ? selected.history : undefined
+              }
               readForecast={readForecast}
             >
               {observedChart}

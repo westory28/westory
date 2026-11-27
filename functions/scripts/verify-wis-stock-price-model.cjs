@@ -314,3 +314,26 @@ test('CommonJS production bridge and ESM browser import expose the same pure pri
   assert.equal(esm.nextWisStockModelPrice, nextWisStockModelPrice);
   assert.equal(esm.sampleWisStockMarketFactors, sampleWisStockMarketFactors);
 });
+test('the 2026-11-30 drift premium lifts only steps observed from its effective time', () => {
+  const { WIS_STOCK_DRIFT_PREMIUM } = require('../wisStockPriceModel');
+  assert.equal(WIS_STOCK_DRIFT_PREMIUM.fromMs, Date.parse('2026-11-30T08:00:00+09:00'));
+  const before = WIS_STOCK_DRIFT_PREMIUM.fromMs - 600_000, after = WIS_STOCK_DRIFT_PREMIUM.fromMs;
+  const s = stock(), sampler = shaSampler('drift-premium');
+  let lifted = 0;
+  for (let slot = 0; slot < 500; slot++) {
+    // Same market factors for every call, so only the premium can differ.
+    const factors = sampleWisStockMarketFactors(s, '2026-2', slot, '', { atMs: after });
+    const none = sampleWisStockPriceStep(s, '2026-2', slot, '', sampler, 6000, undefined, factors);
+    const early = sampleWisStockPriceStep(s, '2026-2', slot, '', sampler, 6000, { atMs: before }, factors);
+    const late = sampleWisStockPriceStep(s, '2026-2', slot, '', sampler, 6000, { atMs: after }, factors);
+    assert.equal(early.movementBps, none.movementBps, 'no change before the effective time or without a step time');
+    if (Math.abs(late.movementBps) < 6000) {
+      assert.equal(late.movementBps - early.movementBps, WIS_STOCK_DRIFT_PREMIUM.bps * 6, 'premium scales with the 60% market limit');
+      lifted++;
+    }
+  }
+  assert.ok(lifted > 400);
+  // Explicit zero volatility keeps the teacher's exact constant drift.
+  const manual = stock({ volatilityBps: 0, trendBps: 7 });
+  assert.equal(sampleWisStockPriceStep(manual, '2026-2', 3, '', sampler, 6000, { atMs: after }).movementBps, 7);
+});
