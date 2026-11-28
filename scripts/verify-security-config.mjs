@@ -24,8 +24,13 @@ assert.deepEqual(config.rewrites, [{
 assert.equal(headers("/assets/westory-:file*")["Cache-Control"], "public, max-age=31536000, immutable");
 // Vite's content-hashed build files sit directly under /assets; unhashed public
 // files live in subfolders (for example /assets/weplay/...) and must not match.
+// Vercel also sends this header on a missing file's 404, so keep it to one day:
+// a 404 cached from a stale tab must heal by itself if a rollback revives the name.
 const hashedAssetSource = "/assets/:file([^/]+-[A-Za-z0-9_-]{8}\\.[a-z0-9]+)";
-assert.equal(headers(hashedAssetSource)["Cache-Control"], "public, max-age=31536000, immutable");
+assert.equal(headers(hashedAssetSource)["Cache-Control"], "public, max-age=86400, immutable");
+// The older westory-* rule comes later so its one-year value still wins for those files.
+const sources = config.headers.map((entry) => entry.source);
+assert.ok(sources.indexOf(hashedAssetSource) < sources.indexOf("/assets/westory-:file*"));
 const hashedAssetPattern = new RegExp(`^/assets/(${hashedAssetSource.match(/\((.*)\)$/)[1]})$`);
 for (const path of ["/assets/main-JdGZQ6q9.js", "/assets/main-B-QB0Ehw.css", "/assets/wisEconomyClient-Dk0Y7MB-.js", "/assets/pretendard-subset-a1B2_c3D.woff2"]) {
   assert.match(path, hashedAssetPattern);
