@@ -22,6 +22,17 @@ assert.deepEqual(config.rewrites, [{
   destination: "https://history-quiz-yongsin.firebaseapp.com/__/auth/:path*",
 }]);
 assert.equal(headers("/assets/westory-:file*")["Cache-Control"], "public, max-age=31536000, immutable");
+// Vite's content-hashed build files sit directly under /assets; unhashed public
+// files live in subfolders (for example /assets/weplay/...) and must not match.
+const hashedAssetSource = "/assets/:file([^/]+-[A-Za-z0-9_-]{8}\\.[a-z0-9]+)";
+assert.equal(headers(hashedAssetSource)["Cache-Control"], "public, max-age=31536000, immutable");
+const hashedAssetPattern = new RegExp(`^/assets/(${hashedAssetSource.match(/\((.*)\)$/)[1]})$`);
+for (const path of ["/assets/main-JdGZQ6q9.js", "/assets/main-B-QB0Ehw.css", "/assets/wisEconomyClient-Dk0Y7MB-.js", "/assets/pretendard-subset-a1B2_c3D.woff2"]) {
+  assert.match(path, hashedAssetPattern);
+}
+for (const path of ["/", "/index.html", "/manifest.webmanifest", "/assets/weplay/naval/plume-frame-1.webp", "/assets/weplay/rhythm/v2/bg-stage.png", "/avatar/minimi-v2/body-01.png"]) {
+  assert.doesNotMatch(path, hashedAssetPattern);
+}
 
 const sentinel = "westory-security-test-not-a-secret";
 const previous = process.env.GEMINI_API_KEY;
